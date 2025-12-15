@@ -1,0 +1,25 @@
+# .gitignore
+
+# 1. 忽略 Python 編譯檔 (垃圾)
+__pycache__/
+*.py[cod]
+
+# 2. 忽略環境變數 (這是機密，絕對不能上傳!)
+.env
+config.py  # 如果裡面有密碼，建議忽略，改傳 config_example.py
+
+# 3. 忽略虛擬環境
+venv/
+.venv/
+
+# 4. 忽略資料與模型 (因為它們太大，且每台電腦可以自己算)
+ML_Data/
+*.csv
+*.pkl
+
+# 5. 忽略資料庫暫存檔
+mysql_data/
+*.sql
+
+*.png
+*.md

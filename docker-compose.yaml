@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: stock_ai_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: my_secret_password  # 設定您的密碼
+      MYSQL_DATABASE: stock_ai_db            # 自動建立資料庫
+      TZ: Asia/Taipei                        # 設定時區
+    ports:
+      - "3306:3306"  # 左邊是本機 Port，右邊是容器 Port
+    volumes:
+      - mysql_data:/var/lib/mysql  # 讓資料持久化，重啟不會不見
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  mysql_data:

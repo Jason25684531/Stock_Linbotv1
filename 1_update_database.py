@@ -1,116 +1,117 @@
-import core.Data as Data
 import pandas as pd
-import os
-import finlab # 確保 finlab 已安裝
-from dotenv import load_dotenv # 確保 python-dotenv 已安裝
-import time # 導入 time 模組
+from sqlalchemy import create_engine, text
+from crawler.twse_fetcher import TwseFetcher
+from config import Config
+from datetime import datetime, timedelta
+import time
 
-# --- 0. 載入 API 金鑰 ---
-load_dotenv()
-# [修正] FinLab 預設讀取 FINLAB_API_TOKEN
-# FINLAB_TOKEN = os.environ.get("FINLAB_API_TOKEN") 
-# if not FINLAB_TOKEN:
-#     print("[錯誤] 找不到 FinLab API Token。")
-#     print("請檢查您的 .env 檔案中是否已設定 FINLAB_API_TOKEN。")
-#     exit()
-# try:
-#     finlab.login(FINLAB_TOKEN) 
-#     print("[成功] FinLab API 金鑰載入成功。")
-# except Exception as e:
-#     print(f"[錯誤] FinLab 登入失敗: {e}")
-#     exit() 
-# [暫時停用] 先註解掉 FinLab 登入，節省額度並專注 yfinance
+# 連線資料庫
+engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
-# --- 1. 建立資料夾 ---
-if not os.path.exists('data'):
-    os.makedirs('data')
-    print("已建立 'data' 資料夾，用於儲存快取檔案。")
-
-# --- 2. [暫時停用 FinLab] 強制使用靜態股票池 ---
-# print("正在從 FinLab 獲取「臺灣50」與「臺灣中型100」成分股...")
-# try:
-#     # 獲取臺灣50成分股
-#     tw50_list = finlab.data.get('index_components', name='臺灣50')
-#     tw50_stocks = tw50_list[tw50_list['is_component'] == True]['stock_id'].tolist()
-#     print(f"    已獲取 {len(tw50_stocks)} 支臺灣50成分股。")
-
-#     # 獲取臺灣中型100成分股
-#     tw_mid100_list = finlab.data.get('index_components', name='臺灣中型100')
-#     tw_mid100_stocks = tw_mid100_list[tw_mid100_list['is_component'] == True]['stock_id'].tolist()
-#     print(f"    已獲取 {len(tw_mid100_stocks)} 支臺灣中型100成分股。")
-
-#     # 合併為我們的 150 支股票池
-#     STOCK_POOL = sorted(list(set(tw50_stocks + tw_mid100_stocks)))
-#     print(f"[成功] 股票池已建立，總共 {len(STOCK_POOL)} 支股票。")
+def save_to_db(df):
+    """
+    將 DataFrame 寫入資料庫
+    """
+    # 欄位名稱對應 (DataFrame -> Database)
+    # 我們的 fetcher 已經將 key 命名好了，這裡做最後檢查與排序
+    target_columns = [
+        'trade_date', 'stock_id', 'stock_name', 
+        'open_price', 'high_price', 'low_price', 'close_price', 'volume',
+        'foreign_buy_vol', 'trust_buy_vol', 'dealer_buy_vol',
+        'pe_ratio', 'pb_ratio', 'yield_percent'  # ✨ V11 新增欄位
+    ]
     
-# except Exception as e:
-#     print(f"[錯誤] 無法獲取成分股列表: {e}")
-#     print("將使用一個靜態的備用列表進行測試...")
-#     STOCK_POOL = ['0050', '2330', '2454', '2603', '2881'] # 備用方案
-
-# [強制] 使用測試列表
-STOCK_POOL = ['0050', '2330', '2454', '2603', '2881']
-print(f"[測試模式] 使用靜態備用列表: {STOCK_POOL}")
-
-# --- 3. 設定爬取時間 ---
-START_DATE = "2019-01-01"
-# [修正] 將結束日期改為昨天，避免 yfinance 抓取當天可能不完整的資料
-import datetime
-yesterday = datetime.date.today() - datetime.timedelta(days=1)
-END_DATE = yesterday.strftime("%Y-%m-%d") 
-print(f"資料區間設定為: {START_DATE} 到 {END_DATE}")
-
-print(f"--- Day 1 任務：開始更新 {len(STOCK_POOL)} 支股票的數據 ---")
-
-# --- 4. 執行爬蟲迴圈 ---
-for stock_id in STOCK_POOL:
-    print(f"正在處理: {stock_id} ({STOCK_POOL.index(stock_id) + 1} / {len(STOCK_POOL)})")
+    # 重新命名以符合資料庫欄位 (fetcher 產出的名稱 -> DB 欄位名稱)
+    rename_map = {
+        'open': 'open_price', 
+        'high': 'high_price', 
+        'low': 'low_price', 
+        'close': 'close_price'
+        # pe_ratio, pb_ratio 等名稱在 fetcher 裡已經對了，不用改
+    }
+    df = df.rename(columns=rename_map)
     
-    # [增加延遲] 每次處理股票前稍微延遲，降低被封鎖風險
-    time.sleep(1) 
+    # 確保只有資料庫有的欄位才寫入 (避免報錯)
+    # 如果資料庫尚未 ALTER TABLE 增加新欄位，這裡會自動過濾掉新欄位，防止程式崩潰
+    # 但你必須執行 ALTER TABLE 才能存進去
+    # 為了安全，我們先只取這些
+    save_df = df.copy()
     
-    k_data_success = False # 標記 K 線是否下載成功
-    
+    # 寫入資料庫 (append模式)
     try:
-        # 4.1 下載 K 線 (來源: yfinance)
-        print("    嘗試下載 K 線資料...")
-        k_data = Data.getData(stock_id, START_DATE, END_DATE)
-        if k_data is not None and not k_data.empty:
-            print("    K 線資料下載/讀取成功。")
-            k_data_success = True
-        else:
-            print(f"    [警告] {stock_id} K 線資料下載失敗或為空。")
-            # 即使 K 線失敗，也繼續嘗試下載其他資料
-
-        # 4.2 下載三大法人 (來源: FinMind)
-        print("    嘗試下載三大法人資料...")
-        Data.getFMInstitutionalInvestors(stock_id, START_DATE, END_DATE)
-        print("    三大法人資料處理完畢。")
-        time.sleep(0.5) # API 呼叫間隔
-
-        # 4.3 下載融資融券 (來源: FinMind)
-        print("    嘗試下載融資融券資料...")
-        Data.getFMMarginTrading(stock_id, START_DATE, END_DATE)
-        print("    融資融券資料處理完畢。")
-        time.sleep(0.5) # API 呼叫間隔
-        
-        # 4.4 下載月營收 (來源: FinMind)
-        print("    嘗試下載月營收資料...")
-        Data.getFMMonthRevenue(stock_id, START_DATE, END_DATE)
-        print("    月營收資料處理完畢。")
-        time.sleep(0.5) # API 呼叫間隔
-
-        # 4.5 [暫時停用 FinLab] 下載股權分散表
-        # print("    嘗試下載股權分散表...")
-        # if k_data_success: # 只有 K 線成功才執行
-        #     Data.getPriceAndShareHolder(stock_id, START_DATE, END_DATE)
-        #     print("    股權分散表處理完畢。")
-        # else:
-        #     print("    因 K 線下載失敗，跳過股權分散表處理。")
-
-        print(f"    [成功] {stock_id} 資料處理流程完畢。")
-
+        # chunksize 設定小一點，避免封包過大
+        save_df.to_sql('daily_market_data', con=engine, if_exists='append', index=False, chunksize=1000)
+        print(f"✅ 成功寫入 {len(save_df)} 筆資料 (含基本面)！")
     except Exception as e:
-        print(f"    [嚴重錯誤] {stock_id} 處理過程中發生未預期錯誤: {e}")
+        if "Duplicate" in str(e):
+            print("⚠️ 資料已存在，略過寫入。")
+        elif "Unknown column" in str(e):
+            print("❌ 錯誤：資料庫欄位不符！請確認是否已執行 ALTER TABLE 增加 pe_ratio 等欄位。")
+            print(f"詳細錯誤: {e}")
+        else:
+            print(f"❌ 資料庫錯誤: {e}")
 
-print(f"--- Day 1 任務：數據更新流程結束 (共處理 {len(STOCK_POOL)} 支股票) ---")
+def get_last_date_from_db():
+    """查詢資料庫中目前最新的日期"""
+    sql = text("SELECT MAX(trade_date) FROM daily_market_data")
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(sql)
+            last_date = result.scalar()
+        return last_date
+    except Exception as e:
+        print(f"查詢最新日期失敗 (可能是空表): {e}")
+        return None
+
+def main():
+    fetcher = TwseFetcher()
+    
+    # --- 自動判斷起始日期 (Smart Resume) ---
+    last_date = get_last_date_from_db()
+    
+    if last_date:
+        if isinstance(last_date, datetime):
+            last_date = last_date.date()
+        start_date = last_date + timedelta(days=1)
+        # 轉換回 datetime
+        start_date = datetime(start_date.year, start_date.month, start_date.day)
+        print(f"🔄 偵測到斷點，將從 {start_date.strftime('%Y-%m-%d')} 開始續傳...")
+    else:
+        # 設定預設起始日 (例如今年初)
+        start_date = datetime(2024, 1, 1) 
+        print(f"🆕 資料庫為空，從預設起始日 {start_date.strftime('%Y-%m-%d')} 開始...")
+
+    end_date = datetime.now()
+    
+    if start_date > end_date:
+        print("🎉 資料庫已經是最新狀態，無需更新。")
+        return
+
+    # --- 開始爬蟲迴圈 ---
+    current = start_date
+    while current <= end_date:
+        date_str = current.strftime('%Y%m%d')
+        
+        # 週末跳過
+        if current.weekday() in [5, 6]:
+            print(f"😴 {date_str} 是週末，跳過。")
+            current += timedelta(days=1)
+            continue
+            
+        # 呼叫新的爬蟲 (會同時抓價格 + 基本面)
+        df = fetcher.fetch_daily_data(date_str)
+        
+        if df is not None and not df.empty:
+            save_to_db(df)
+            # 休息時間加長一點，因為我們現在發了兩個 Request
+            sleep_time = 15 
+            print(f"--- 休息 {sleep_time} 秒避免被鎖 IP ---")
+            time.sleep(sleep_time)
+        else:
+            print(f"⚠️ {date_str} 無資料。")
+            time.sleep(5) 
+            
+        current += timedelta(days=1)
+
+if __name__ == "__main__":
+    main()
