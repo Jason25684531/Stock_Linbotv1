@@ -83,7 +83,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 pytz==2024.2
 pyzmq==26.2.0
-requests==2.32.3
+requests>=2.19.0
 scikit-learn==1.6.0
 scipy==1.13.1
 seaborn==0.13.2
@@ -113,15 +113,11 @@ xgboost==2.1.3
 yfinance
 zipp==3.21.0
 FinMind
-
-# --- 新增套件 (Day 1 & 5) ---
-line-bot-sdk
+line-bot-sdk==3.5.0
 flask
 mplfinance
 
-# --- 資料庫連線 (Day 1 重點) ---
 SQLAlchemy==2.0.23      # ORM 框架 (讓 Python 跟資料庫溝通)
 PyMySQL==1.1.0          # MySQL 的驅動程式 (Driver)
 cryptography==41.0.5    # 加密套件 (MySQL 8.0+ 連線認證需要)
 
-pip install flask line-bot-sdk==3.5.0 pyngrok

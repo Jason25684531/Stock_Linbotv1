@@ -2,188 +2,118 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
 from config import Config
-import talib
-from tqdm import tqdm
-import warnings
-import os  # ✨ 新增這行
+import os
 
-# 忽略警告
-warnings.filterwarnings('ignore')
-
-# --- 設定參數 ---
-PREDICT_DAYS = 20       # 預測未來 20 天
-TARGET_RETURN = 0.10    # 目標漲幅 10%
+# 1. 連線資料庫
+engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
 def calculate_technical_indicators(df):
-    """計算技術指標 (含 V11 所需的 ROE 與基本面處理)"""
-    # 確保是數值
+    """計算 V11 策略所需的所有指標"""
+    df = df.sort_values('trade_date')
+    
+    # ----------------------------------------------------
+    # A. 基礎整理
+    # ----------------------------------------------------
+    # 確保數值型態
+    cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio', 'pb_ratio', 'yield_percent']
+    for col in cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # 填補基本面缺失值 (避免當機)
+    df['pe_ratio'] = df['pe_ratio'].fillna(0)
+    df['pb_ratio'] = df['pb_ratio'].fillna(0)
+    df['yield_percent'] = df['yield_percent'].fillna(0)
+
+    # ----------------------------------------------------
+    # B. V11 核心：基本面特徵 (Fundamental)
+    # ----------------------------------------------------
+    # 1. 隱含 ROE = (P/B) / (P/E)
+    # 防呆：如果 PE 是 0 或負的，ROE 就設為 0
+    df['implied_roe'] = df.apply(lambda row: (row['pb_ratio'] / row['pe_ratio']) if row['pe_ratio'] > 0 else 0, axis=1)
+    
+    # ----------------------------------------------------
+    # C. 技術指標 (Technical) - 使用 Pandas 實作 (免安裝 TA-Lib)
+    # ----------------------------------------------------
     close = df['close_price']
-    high = df['high_price']
-    low = df['low_price']
-    volume = df['volume']
     
-    # --- 技術面 ---
-    # 1. 均線
-    df['MA5'] = talib.SMA(close, timeperiod=5)
-    df['MA20'] = talib.SMA(close, timeperiod=20)
-    df['MA60'] = talib.SMA(close, timeperiod=60)
+    # 1. 移動平均線 (MA)
+    df['MA5'] = close.rolling(window=5).mean()
+    df['MA20'] = close.rolling(window=20).mean()
+    df['MA60'] = close.rolling(window=60).mean()
     
-    # 2. 動能
-    df['RSI'] = talib.RSI(close, timeperiod=14)
-    df['MACD'], df['MACD_signal'], _ = talib.MACD(close)
+    # 2. 相對強弱指標 (RSI 14)
+    delta = close.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
     
-    # 3. KD 指標
-    df['slowk'], df['slowd'] = talib.STOCH(
-        high, low, close,
-        fastk_period=9, slowk_period=3, slowk_matype=0,
-        slowd_period=3, slowd_matype=0
-    )
-    df['KD_diff'] = df['slowk'] - df['slowd']
+    # 3. 標記未來漲跌 (AI 的標準答案)
+    # 如果「明天收盤」比「今天收盤」高，就標記為 1 (漲)，否則 0
+    df['Target'] = (df['close_price'].shift(-1) > df['close_price']).astype(int)
     
-    # 4. 布林通道
-    df['upper'], df['middle'], df['lower'] = talib.BBANDS(close, timeperiod=20)
-    df['BB_width'] = (df['upper'] - df['lower']) / df['middle']
+    # 刪除因為計算指標產生的 NaN (前 60 天會變空值)
+    df = df.dropna()
     
-    # 5. 乖離率
-    df['Bias_20'] = (close - df['MA20']) / df['MA20']
-
-    # 6. 成交量與 ATR
-    df['vol_ma5'] = talib.SMA(volume, timeperiod=5)
-    df['vol_ratio'] = volume / df['vol_ma5'].replace(0, 1)
-
-    df['ATR'] = talib.ATR(high, low, close, timeperiod=14)
-    df['ATR_pct'] = df['ATR'] / close 
-
-    # --- ✨ V11 新增：基本面計算 ---
-    # 確保欄位存在且為數值
-    if 'pe_ratio' in df.columns and 'pb_ratio' in df.columns:
-        # 隱含 ROE = PB / PE (防止除以0)
-        df['implied_roe'] = df.apply(
-            lambda row: (row['pb_ratio'] / row['pe_ratio']) 
-            if (pd.notnull(row['pe_ratio']) and row['pe_ratio'] > 0) else 0, 
-            axis=1
-        )
-    else:
-        df['implied_roe'] = 0
-    
-    return df
-
-def calculate_chip_factors(df):
-    """計算籌碼因子"""
-    df['trust_buy_vol'] = df['trust_buy_vol'].fillna(0)
-    is_trust_buy = (df['trust_buy_vol'] > 0).astype(int)
-    grouper = (is_trust_buy != is_trust_buy.shift()).cumsum()
-    df['trust_streak'] = is_trust_buy.groupby(grouper).cumsum()
-    
-    total_buy = df['foreign_buy_vol'] + df['trust_buy_vol'] + df['dealer_buy_vol']
-    vol = df['volume'].replace(0, 1) 
-    df['institutions_ratio'] = total_buy / vol
-    
-    df['foreign_5d_sum'] = df['foreign_buy_vol'].rolling(5).sum()
-    return df
-
-def define_label(df):
-    """定義學習目標"""
-    indexer = pd.api.indexers.FixedForwardWindowIndexer(window_size=PREDICT_DAYS)
-    future_high = df['high_price'].rolling(window=indexer).max()
-    
-    df['future_max_return'] = (future_high / df['close_price']) - 1
-    df['Target'] = (df['future_max_return'] >= TARGET_RETURN).astype(int)
     return df
 
 def main():
-    print("🔌 連接資料庫...")
-    engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
+    print("🚀 Day 2: 開始特徵工程 (V11 ROE 版)...")
     
-    print("📥 讀取資料庫中 (含基本面資料)...")
-    # ✨ 這裡要選取新欄位
-    sql = """
-    SELECT trade_date, stock_id, 
-           open_price, high_price, low_price, close_price, volume,
-           foreign_buy_vol, trust_buy_vol, dealer_buy_vol,
-           pe_ratio, pb_ratio, yield_percent
-    FROM daily_market_data
-    """
-    try:
-        df_all = pd.read_sql(sql, engine)
-    except Exception as e:
-        print(f"❌ 資料庫讀取失敗: {e}")
-        return
+    # 1. 從資料庫讀取所有資料
+    print("📂 從 MySQL 讀取歷史資料 (這可能需要一點時間)...")
+    df = pd.read_sql("SELECT * FROM daily_market_data", engine)
+    print(f"   ✅ 讀取完成，共 {len(df)} 筆原始數據")
 
-    if df_all.empty:
-        print("❌ 資料庫是空的！請先執行 Day 1 爬蟲。")
-        return
-
-    # 強制轉數值
-    numeric_cols = [
-        'open_price', 'high_price', 'low_price', 'close_price', 'volume',
-        'foreign_buy_vol', 'trust_buy_vol', 'dealer_buy_vol',
-        'pe_ratio', 'pb_ratio', 'yield_percent'
-    ]
-    for col in numeric_cols:
-        if col in df_all.columns:
-            df_all[col] = pd.to_numeric(df_all[col], errors='coerce')
-    
-    df_all.fillna(0, inplace=True) 
-    df_all['trade_date'] = pd.to_datetime(df_all['trade_date'])
-    
-    print("🚀 開始特徵工程計算 (V11)...")
+    # 2. 針對每一檔股票單獨計算指標
+    # (不能混在一起算，台積電的 MA 不能跟聯電混算)
     result_list = []
     
-    groups = df_all.groupby('stock_id')
+    # 依照 stock_id 分組
+    grouped = df.groupby('stock_id')
     
-    for stock_id, group in tqdm(groups):
-        group = group.sort_values('trade_date')
-        if len(group) < 60: continue
-            
-        try:
-            group = calculate_technical_indicators(group)
-            group = calculate_chip_factors(group)
-            group = define_label(group)
-            
-            # 刪除無法計算指標的列
-            group = group.dropna(subset=['MA60', 'RSI', 'ATR_pct'])
-            result_list.append(group)
-        except Exception as e:
-            continue
+    total_stocks = len(grouped)
+    process_count = 0
+    
+    print("⚙️  正在計算技術指標與 ROE...")
+    for stock_id, group in grouped:
+        # 只有資料夠長才算 (少於 60 天算不出 MA60，跳過)
+        if len(group) > 60:
+            processed_group = calculate_technical_indicators(group.copy())
+            result_list.append(processed_group)
+        
+        process_count += 1
+        if process_count % 100 == 0:
+            print(f"   已處理 {process_count}/{total_stocks} 檔股票...")
 
+    # 3. 合併結果
     if not result_list:
-        print("❌ 計算後沒有剩餘資料。")
+        print("❌ 錯誤：沒有產生任何資料 (可能是資料庫數據太少)")
         return
 
     final_df = pd.concat(result_list)
     
-    # 存檔清單 (加入基本面與 ROE)
+    # 4. 選擇要用來訓練的欄位
     features = [
-        'trade_date', 'stock_id', 'close_price', 
-        'MA5', 'MA20', 'MA60', 'RSI', 'MACD', 'BB_width', 'Bias_20',
-        'trust_streak', 'institutions_ratio', 'foreign_5d_sum',
-        'slowk', 'KD_diff', 'vol_ratio', 'ATR_pct',
-        'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe', # ✨ 新增
-        'Target'
+        'stock_id', 'trade_date', 
+        'open_price', 'high_price', 'low_price', 'close_price', 'volume', 
+        'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',  # V11 新增
+        'MA5', 'MA20', 'MA60', 'RSI', 
+        'Target' # 答案
     ]
-    
-    available_cols = [c for c in features if c in final_df.columns]
-    final_df = final_df[available_cols]
-    
+    final_df = final_df[features]
+
     # ==========================================
-    # 📂 修改存檔路徑：Root / ML_Data / feature_engineering
+    # 📂 存檔到 ML_Data/feature_engineering
     # ==========================================
-    
-    # 1. 定義資料夾路徑
     output_dir = os.path.join('ML_Data', 'feature_engineering')
-    
-    # 2. 如果資料夾不存在，就自動建立 (包含父資料夾)
     os.makedirs(output_dir, exist_ok=True)
-    
-    # 3. 組合完整的檔案路徑
     output_file = os.path.join(output_dir, 'training_data.csv')
     
-    # 4. 存檔
     final_df.to_csv(output_file, index=False)
     
-    print(f"✅ V11 訓練檔已產出: {output_file}")
-    print(f"✨ 包含新特徵: implied_roe, pe_ratio, pb_ratio")
+    print(f"✅ 特徵工程完成！檔案已儲存至: {output_file}")
+    print(f"📊 總資料筆數: {len(final_df)}")
 
 if __name__ == "__main__":
     main()

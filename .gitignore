@@ -11,6 +11,7 @@ config.py  # 如果裡面有密碼，建議忽略，改傳 config_example.py
 # 3. 忽略虛擬環境
 venv/
 .venv/
+myenv/
 
 # 4. 忽略資料與模型 (因為它們太大，且每台電腦可以自己算)
 ML_Data/

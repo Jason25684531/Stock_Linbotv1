@@ -1,193 +1,180 @@
 import pandas as pd
-import numpy as np
 import joblib
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-import warnings
-import os # 記得 import os
+import os
+import numpy as np
+from datetime import timedelta
 
-
-warnings.filterwarnings('ignore')
-
-# ==========================================
-# 🔧 V11 策略參數 (價值動能混合版)
-# ==========================================
-PROB_THRESHOLD = 0.60      # AI 信心門檻
-STOP_LOSS = -0.07          # 初始停損
-TAKE_PROFIT = 0.15         # 停利目標 (會搭配移動鎖利)
-HOLD_DAYS = 20             
-INITIAL_CAPITAL = 1000000 
-POSITION_SIZE = 0.15       
-
-# ✨ V11 基本面濾網參數
-FILTER_PE = 20.0     # 本益比 < 20
-FILTER_PB = 2.5      # 股價淨值比 < 2.5
-FILTER_YIELD = 4.0   # 殖利率 > 4%
-FILTER_ROE = 0.08    # ROE > 8%
+def calculate_trade_return(entry_date, stock_id, entry_price, full_df, hold_days=20):
+    """
+    計算單筆交易的損益
+    策略：持有 hold_days 天後，以當天收盤價賣出
+    """
+    # 找到該股票的所有資料
+    stock_data = full_df[full_df['stock_id'] == stock_id].sort_values('trade_date')
+    
+    # 找到進場的那一天在第幾行
+    try:
+        entry_idx = stock_data[stock_data['trade_date'] == entry_date].index[0]
+        # 取得該股票的 index 列表
+        stock_indices = stock_data.index.tolist()
+        current_pos = stock_indices.index(entry_idx)
+        
+        # 往後找 20 天 (如果沒資料了，就用最後一天算)
+        exit_pos = min(current_pos + hold_days, len(stock_indices) - 1)
+        exit_idx = stock_indices[exit_pos]
+        
+        exit_row = stock_data.loc[exit_idx]
+        exit_price = exit_row['close_price']
+        exit_date = exit_row['trade_date']
+        
+        # 計算報酬率
+        ret = (exit_price - entry_price) / entry_price
+        return ret, exit_price, exit_date
+        
+    except IndexError:
+        return 0.0, entry_price, entry_date # 找無資料，當作沒賠沒賺
 
 def main():
-    print("🚀 Day 4 (V11): 啟動 基本面濾網 + AI 狙擊 回測...")
-    
+    print("🚀 Day 4: V12 策略回測 (含損益驗證 - 修正版)...")
+
+    # ==========================================
+    # 📂 1. 讀取資料與模型
+    # ==========================================
     try:
-        # ✨ 修改讀取路徑
-        file_path = os.path.join('ML_Data', 'feature_engineering', 'training_data.csv')
-        df = pd.read_csv(file_path, dtype={'stock_id': str})
+        csv_path = os.path.join('ML_Data', 'feature_engineering', 'training_data.csv')
+        df = pd.read_csv(csv_path, dtype={'stock_id': str})
         
-        model = joblib.load('stock_ai_model.pkl')
+        model_path = os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')
+        model = joblib.load(model_path)
     except Exception as e:
-        print(f"❌ 讀取失敗: {e}")
+        print(f"❌ 檔案讀取失敗: {e}")
         return
 
-    df = df[df['close_price'] > 0]
     df['trade_date'] = pd.to_datetime(df['trade_date'])
     df = df.sort_values('trade_date')
+    df = df.replace([np.inf, -np.inf], np.nan).dropna()
     
-    # 切分測試集 (取最後 20%)
-    split_idx = int(len(df) * 0.8)
-    test_df = df.iloc[split_idx:].copy().reset_index(drop=True)
-    
-    print(f"📊 回測區間: {test_df['trade_date'].min()} ~ {test_df['trade_date'].max()}")
-
-    # AI 預測特徵 (注意：基本面特徵不用放入模型訓練，只用來過濾)
-    # 我們還是用原本的技術面+籌碼面讓 AI 判斷短線爆發力
-    features = [
-        'MA5', 'MA20', 'MA60', 'RSI', 'MACD', 'BB_width', 'Bias_20', 
-        'trust_streak', 'institutions_ratio', 'foreign_5d_sum',
-        'slowk', 'KD_diff', 'vol_ratio', 'ATR_pct'
+    # ==========================================
+    # 🔮 2. AI 預測
+    # ==========================================
+    feature_cols = [
+        'open_price', 'high_price', 'low_price', 'close_price', 'volume',
+        'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
+        'MA5', 'MA20', 'MA60', 'RSI'
     ]
     
-    print("🧠 AI 正在計算信心分數...")
-    test_df['prob'] = model.predict_proba(test_df[features])[:, 1]
-
-    capital = INITIAL_CAPITAL
-    positions = [] 
-    trade_history = [] 
-    capital_curve = [INITIAL_CAPITAL] 
+    print("🔮 AI 正在計算買進訊號 (Confidence > 53%)...")
+    try:
+        # 確保資料格式正確再預測
+        df['prob'] = model.predict_proba(df[feature_cols])[:, 1]
+    except Exception as e:
+        print(f"❌ AI 預測失敗: {e}")
+        return
     
-    blocked_by_market = 0
-    blocked_by_fundamental = 0 # 統計被基本面擋掉的數量
-
-    for date, daily_data in tqdm(test_df.groupby('trade_date')):
-        
-        # --- 1. 大盤多空濾網 ---
-        valid_stocks = daily_data[daily_data['close_price'] > 0]
-        IS_BEAR_MARKET = False
-        
-        if len(valid_stocks) > 10:
-            stocks_above_ma20 = valid_stocks[valid_stocks['close_price'] > valid_stocks['MA20']]
-            market_sentiment = len(stocks_above_ma20) / len(valid_stocks)
-            if market_sentiment < 0.25:
-                IS_BEAR_MARKET = True
-
-        # --- 2. 持倉管理 (移動鎖利) ---
-        remaining_positions = []
-        for pos in positions:
-            stock_id = pos['stock_id']
-            row = daily_data[daily_data['stock_id'] == stock_id]
-            
-            if not row.empty:
-                current_price = row.iloc[0]['close_price']
-                return_rate = (current_price - pos['buy_price']) / pos['buy_price']
-                
-                if return_rate > pos['max_return']:
-                    pos['max_return'] = return_rate
-                
-                pos['days_held'] += 1
-                
-                # 動態停損邏輯
-                dynamic_stop_loss = STOP_LOSS
-                if pos['max_return'] >= 0.05: dynamic_stop_loss = 0.01
-                if pos['max_return'] >= 0.10: dynamic_stop_loss = 0.05
-
-                action = None
-                if return_rate <= dynamic_stop_loss: action = 'Stop/Trailing'
-                elif return_rate >= TAKE_PROFIT: action = 'TakeProfit'
-                elif pos['days_held'] >= HOLD_DAYS: action = 'TimeStop'
-                
-                if action:
-                    capital += pos['amount'] * current_price
-                    trade_history.append({
-                        'date': date, 'stock_id': stock_id, 'action': 'SELL',
-                        'price': current_price, 'return': return_rate, 'reason': action
-                    })
-                else:
-                    remaining_positions.append(pos)
-            else:
-                remaining_positions.append(pos)
-        positions = remaining_positions
-
-        # --- 3. 進場篩選 (V11 核心) ---
-        if IS_BEAR_MARKET:
-            blocked_by_market += 1
-        else:
-            # Step A: 基本面濾網 (Safety Filter)
-            # 必須有 PE, PB 資料 且 符合條件
-            # 注意: 如果欄位是 NaN (沒抓到資料), 就不會選
-            fundamental_pool = daily_data[
-                (daily_data['pe_ratio'] > 0) & 
-                (daily_data['pe_ratio'] < FILTER_PE) &
-                (daily_data['pb_ratio'] < FILTER_PB) &
-                (daily_data['yield_percent'] > FILTER_YIELD) &
-                (daily_data['implied_roe'] > FILTER_ROE) &
-                (daily_data['close_price'] > daily_data['MA60']) # 趨勢向上
-            ]
-            
-            # 統計有多少支是被基本面刷掉的 (為了觀察策略嚴格度)
-            raw_ai_picks = daily_data[daily_data['prob'] >= PROB_THRESHOLD]
-            qualified_picks = fundamental_pool[fundamental_pool['prob'] >= PROB_THRESHOLD]
-            blocked_by_fundamental += (len(raw_ai_picks) - len(qualified_picks))
-            
-            # Step B: AI 擇時 (AI Trigger)
-            candidates = qualified_picks.sort_values('prob', ascending=False)
-            
-            buy_quota = 3
-            for idx, row in candidates.iterrows():
-                if buy_quota <= 0: break
-                if capital >= INITIAL_CAPITAL * POSITION_SIZE:
-                    if not any(p['stock_id'] == row['stock_id'] for p in positions):
-                        cost = INITIAL_CAPITAL * POSITION_SIZE
-                        amount = cost / row['close_price']
-                        capital -= cost
-                        positions.append({
-                            'stock_id': row['stock_id'], 'buy_price': row['close_price'],
-                            'amount': amount, 'days_held': 0, 'max_return': -1.0
-                        })
-                        trade_history.append({
-                            'date': date, 'stock_id': row['stock_id'], 'action': 'BUY',
-                            'price': row['close_price'], 'prob': row['prob'], 'return': 0, 'reason': 'V11_Signal'
-                        })
-                        buy_quota -= 1
-
-        # 每日結算
-        market_value = sum(p['amount'] * (daily_data[daily_data['stock_id'] == p['stock_id']].iloc[0]['close_price'] if not daily_data[daily_data['stock_id'] == p['stock_id']].empty else p['buy_price']) for p in positions)
-        capital_curve.append(capital + market_value)
-
-    # 報告
-    print("\n" + "="*30)
-    print("📊 V11 (基本面+AI) 回測報告")
-    print("="*30)
-    final_return = (capital_curve[-1] - INITIAL_CAPITAL) / INITIAL_CAPITAL
-    print(f"總報酬率: {final_return:.2%}")
-    print(f"最終資產: {int(capital_curve[-1])}")
-    print(f"🛡️ 因基本面不佳被擋下的 AI 訊號次數: {blocked_by_fundamental} 次")
+    # ==========================================
+    # ⚔️ 3. 模擬交易
+    # ==========================================
+    history = []
     
-    if trade_history:
-        trades_df = pd.DataFrame(trade_history)
-        sells = trades_df[trades_df['action'] == 'SELL']
-        if not sells.empty:
-            win_rate = len(sells[sells['return'] > 0]) / len(sells)
-            avg_return = sells['return'].mean()
-            print(f"交易次數: {len(sells)}")
-            print(f"勝率: {win_rate:.2%}")
-            print(f"平均單筆報酬: {avg_return:.2%}")
+    # [關鍵修正] 使用 numpy.sort 來排序日期，避開 DatetimeArray 錯誤
+    dates = np.sort(df['trade_date'].unique())
+    
+    skipped_by_market = 0
+    
+    print(f"📅 回測區間: {pd.to_datetime(dates[0]).date()} ~ {pd.to_datetime(dates[-1]).date()}")
+    
+    for date in dates:
+        # 轉換 date 為 pandas Timestamp 比較安全
+        ts_date = pd.to_datetime(date)
+        daily_data = df[df['trade_date'] == ts_date]
+        
+        if daily_data.empty: continue
+
+        # --- 大盤濾網 ---
+        total_stocks = len(daily_data)
+        bullish_stocks = len(daily_data[daily_data['close_price'] > daily_data['MA60']])
+        market_sentiment = bullish_stocks / total_stocks if total_stocks > 0 else 0
+        
+        if market_sentiment < 0.25:
+            skipped_by_market += 1
+            continue
+
+        # --- 選股邏輯 ---
+        # 1. 基本面
+        fundamental_pool = daily_data[
+            (daily_data['pe_ratio'] < 25) &
+            (daily_data['pe_ratio'] > 0) &
+            (daily_data['yield_percent'] > 3) &
+            (daily_data['implied_roe'] > 0.06) &
+            (daily_data['volume'] > 500)
+        ]
+        
+        if fundamental_pool.empty: continue
+
+        # 2. AI 訊號 (門檻 53%)
+        buy_signals = fundamental_pool[fundamental_pool['prob'] >= 0.53]
+        
+        if not buy_signals.empty:
+            # 每天只買信心最高的一檔
+            top_pick = buy_signals.sort_values('prob', ascending=False).iloc[0]
             
-            plt.figure(figsize=(10, 6))
-            plt.plot(capital_curve, label='V11 Strategy')
-            plt.title('V11 (Fundamental + AI) Backtest')
-            plt.legend()
-            plt.grid(True)
-            plt.savefig('backtest_v11.png')
-            print("📈 圖表已儲存: backtest_v11.png")
+            history.append({
+                'entry_date': ts_date,
+                'stock_id': top_pick['stock_id'],
+                'entry_price': top_pick['close_price'],
+                'prob': top_pick['prob'],
+                'roe': top_pick['implied_roe']
+            })
+
+    # ==========================================
+    # 💰 4. 計算損益 (P&L)
+    # ==========================================
+    print(f"\n⚙️ 正在結算 {len(history)} 筆交易的獲利 (持有 20 天)...")
+    
+    results = []
+    total_ret = 0
+    wins = 0
+    
+    for trade in history:
+        ret, exit_price, exit_date = calculate_trade_return(
+            trade['entry_date'], 
+            trade['stock_id'], 
+            trade['entry_price'], 
+            df, 
+            hold_days=20 # 設定持有 20 天賣出
+        )
+        
+        trade['return'] = ret
+        trade['exit_price'] = exit_price
+        trade['exit_date'] = exit_date
+        results.append(trade)
+        
+        total_ret += ret
+        if ret > 0: wins += 1
+
+    # ==========================================
+    # 📊 5. 最終報告
+    # ==========================================
+    if len(results) > 0:
+        avg_ret = total_ret / len(results)
+        win_rate = wins / len(results)
+        
+        print(f"\n" + "="*30)
+        print(f"📊 V12 策略績效報告")
+        print(f"="*30)
+        print(f"🔹 總交易次數: {len(results)} 次")
+        print(f"🏆 勝率 (Win Rate): {win_rate:.2%}")
+        print(f"💰 平均單筆報酬: {avg_ret:.2%}")
+        print(f"📈 累積報酬估算: {(1+avg_ret)**len(results):.2f} 倍 (複利粗估)")
+        print(f"🛡️ 避開空頭天數: {skipped_by_market} 天")
+        print("-" * 30)
+        
+        # 儲存詳細結果
+        res_df = pd.DataFrame(results)
+        res_df.to_csv('backtest_profit_report.csv', index=False)
+        print(f"✅ 詳細損益表已儲存為 backtest_profit_report.csv")
+    else:
+        print("⚠️ 無交易產生。")
 
 if __name__ == "__main__":
     main()
