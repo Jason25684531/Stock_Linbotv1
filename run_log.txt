@@ -1,9 +1,0 @@
-[2025/12/18 ¶g¥| 18:10:06.27] ä»»å??‹å?... 
-æ­?œ¨æª¢æŸ¥è³‡æ?åº«ç???.. 
-?·è??¬èŸ²ä¸?.. 
-Traceback (most recent call last):
-  File "D:\01_Project\Stocke\Stock_Linbotv1\1_update_database.py", line 123, in <module>
-    main()
-  File "D:\01_Project\Stocke\Stock_Linbotv1\1_update_database.py", line 69, in main
-    print(f"\U0001f680 ±Ò°Ê¡u¸É¬}¼Ò¦¡¡vª¦ÂÎ...")
-UnicodeEncodeError: 'cp950' codec can't encode character '\U0001f680' in position 0: illegal multibyte sequence
