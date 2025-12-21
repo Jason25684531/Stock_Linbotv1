@@ -16,7 +16,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 # 🔧 設定區
 # ==========================================
 TEST_MODE = True       # 🟢 True: 測試模式 (只印不發 Line) | 🔴 False: 正式發送
-AI_THRESHOLD = 0.50    # 信心門檻
+AI_THRESHOLD = 0.55    # 信心門檻5_push_to_line.py
 
 # ==========================================
 # 🚀 程式主體

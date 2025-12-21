@@ -64,7 +64,7 @@ except Exception as e:
 V12_FEATURES = [
     'open_price', 'high_price', 'low_price', 'close_price', 'volume',
     'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
-    'MA5', 'MA20', 'MA60', 'RSI'
+    'MA5', 'MA20', 'MA60', 'RSI','PEG'
 ]
 
 @app.route("/callback", methods=['POST'])
@@ -78,20 +78,42 @@ def callback():
     return 'OK'
 
 # 功能 1: AI 推薦 (全市場掃描)
+# 修改 app.py 中的 get_ai_recommendation 函式
+
 def get_ai_recommendation():
     if daily_data.empty or model is None: return "⚠️ 系統資料準備中..."
     try:
         rename_map = {'Open': 'open_price', 'High': 'high_price', 'Low': 'low_price', 'Close': 'close_price', 'Volume': 'volume'}
         process_df = daily_data.rename(columns=rename_map)
         
+        # 確保有 PEG 欄位 (防止舊資料報錯)
+        if 'PEG' not in process_df.columns:
+            return "⚠️ 資料庫尚未更新 PEG 欄位，請重新執行 feature_engineering。"
+
         if 'prob' not in process_df.columns:
              process_df['prob'] = model.predict_proba(process_df[V12_FEATURES])[:, 1]
         
-        picks = process_df[process_df['prob'] >= 0.50].sort_values('prob', ascending=False).head(5)
+        # 🟢 [修改] 加入基本面濾網
+        # 條件 1: AI 信心 > 50%
+        # 條件 2: PEG < 1.5 (代表股價還算便宜，且有高成長)
+        # 條件 3: PE > 0 (排除虧損公司)
+        good_stocks = process_df[
+            (process_df['prob'] >= 0.50) & 
+            (process_df['PEG'] < 1.5) & 
+            (process_df['pe_ratio'] > 0)
+        ]
         
-        msg = f"🚀 【AI 推薦】 ({process_df['trade_date'].iloc[0].date()})\n"
-        for _, row in picks.iterrows():
-            msg += f"🔥 {row['stock_id']} 信心: {row['prob']:.1%}\n"
+        picks = good_stocks.sort_values('prob', ascending=False).head(5)
+        
+        msg = f"🚀 【AI 價值成長股】 ({process_df['trade_date'].iloc[0].date()})\n"
+        msg += f"(篩選條件: PEG < 1.5)\n" # 提示使用者我們有過濾
+        
+        if picks.empty:
+            msg += "🐢 今日無符合「高成長+低估值」之標的。"
+        else:
+            for _, row in picks.iterrows():
+                msg += f"🔥 {row['stock_id']} 信心:{row['prob']:.1%} (PEG:{row['PEG']:.2f})\n"
+                
         return msg
     except Exception as e:
         return f"❌ 運算錯誤: {e}"

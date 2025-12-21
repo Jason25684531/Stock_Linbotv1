@@ -48,6 +48,41 @@ def calculate_technical_indicators(df):
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
+        # ==========================================
+    # 🟢 [新增] 基本面因子計算 (PEG & 隱含 EPS)
+    # ==========================================
+    print("📊 正在計算基本面數據 (PEG)...")
+
+    # 1. 反推 EPS (每股盈餘)
+    # 邏輯：因為 PE = 股價 / EPS，所以 EPS = 股價 / PE
+    # 防呆：如果 PE 是 0 (虧錢) 或 NaN，EPS 就設為 0
+    df['implied_eps'] = df.apply(lambda x: x['close_price'] / x['pe_ratio'] if (pd.notnull(x['pe_ratio']) and x['pe_ratio'] > 0) else 0, axis=1)
+
+    # 2. 計算 EPS 成長率 (跟一季前/60天前相比)
+    # 我們想找的是「獲利正在加速」的公司
+    df['eps_growth_q'] = df.groupby('stock_id')['implied_eps'].pct_change(60, fill_method=None)
+
+    # 3. 計算 PEG (本益成長比)
+    # 公式：PE / (EPS成長率 * 100)
+    def calculate_peg(row):
+        pe = row['pe_ratio']
+        growth = row['eps_growth_q']
+        
+        # 過濾無效數據
+        if pd.isna(pe) or pe <= 0: return 999       # 虧錢公司給高分(爛)
+        if pd.isna(growth) or growth <= 0.01: return 999 # 沒成長或衰退給高分(爛)
+        
+        # 正常計算
+        return pe / (growth * 100)
+
+    df['PEG'] = df.apply(calculate_peg, axis=1)
+
+    # 4. 去除極端值 (讓數據乖一點，方便 AI 學習)
+    # 我們把 PEG 限制在 0 ~ 5 之間，超過 5 當作 5
+    df['PEG'] = df['PEG'].clip(0, 5)
+
+    print("✅ PEG 計算完成！")
+    
     # 3. 標記未來漲跌 (AI 的標準答案)
     # 如果「明天收盤」比「今天收盤」高，就標記為 1 (漲)，否則 0
     df['Target'] = (df['close_price'].shift(-1) > df['close_price']).astype(int)
@@ -98,10 +133,11 @@ def main():
         'stock_id', 'trade_date', 
         'open_price', 'high_price', 'low_price', 'close_price', 'volume', 
         'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',  # V11 新增
-        'MA5', 'MA20', 'MA60', 'RSI', 
+        'MA5', 'MA20', 'MA60', 'RSI', 'PEG',
         'Target' # 答案
     ]
     final_df = final_df[features]
+
 
     # ==========================================
     # 📂 存檔到 ML_Data/feature_engineering

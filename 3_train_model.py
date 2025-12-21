@@ -35,7 +35,8 @@ def main():
     features = [
         'open_price', 'high_price', 'low_price', 'close_price', 'volume',  # 價量
         'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',            # V11 基本面四大天王
-        'MA5', 'MA20', 'MA60', 'RSI'                                       # 基礎技術面
+        'MA5', 'MA20', 'MA60', 'RSI',                                       # 基礎技術面
+        'PEG'
     ]
     
     # 檢查是否有缺欄位
