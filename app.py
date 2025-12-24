@@ -9,10 +9,11 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSend
 from config import Config
 
 # --- 模組引用區 ---
-# 1. 引用新聞特工 (自動偵測是 7 號還是 6 號)
-
-from news_agent import get_market_briefing
-
+# 1. 引用新聞特工
+try:
+    from tool.news_agent import get_market_briefing
+except ImportError:
+    pass 
 
 # 2. 引用策略大腦 (由 strategy.py 負責運算)
 from tool.strategy import calculate_pivot_strategy, format_strategy_message
@@ -64,7 +65,7 @@ except Exception as e:
 V12_FEATURES = [
     'open_price', 'high_price', 'low_price', 'close_price', 'volume',
     'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
-    'MA5', 'MA20', 'MA60', 'RSI','PEG'
+    'MA5', 'MA20', 'MA60', 'RSI','PEG','foreign_ratio', 'trust_ratio'
 ]
 
 @app.route("/callback", methods=['POST'])
@@ -77,48 +78,90 @@ def callback():
         abort(400)
     return 'OK'
 
-# 功能 1: AI 推薦 (全市場掃描)
-# 修改 app.py 中的 get_ai_recommendation 函式
+# --- 🟢 [新增] 資金控管建議模組 ---
+def calculate_position_size(win_prob, peg, capital=1000000):
+    """
+    動態資金控管 (Kelly-like)
+    根據 AI 信心度 與 PEG 估值，給出建議部位大小
+    """
+    # 基礎倉位 (單筆最大風險暴露)
+    base_pos = 0.20 # 最多買 20%
+    
+    # 信心加成 (Prob)
+    if win_prob >= 0.70:
+        conf_score = 1.0 # 信心滿
+    elif win_prob >= 0.60:
+        conf_score = 0.6 # 信心強
+    elif win_prob >= 0.53:
+        conf_score = 0.3 # 信心普通
+    else:
+        conf_score = 0.0 # 信心不足
+        
+    # 估值扣分 (PEG) - 越貴買越少
+    if peg < 1.0:
+        val_score = 1.0 # 超便宜
+    elif peg < 1.5:
+        val_score = 0.8 # 合理
+    else:
+        val_score = 0.5 # 有點貴
+        
+    # 最終建議比例
+    final_ratio = base_pos * conf_score * val_score
+    suggested_money = int(capital * final_ratio)
+    
+    if final_ratio >= 0.15:
+        advice = f"🔥 重倉出擊 ({final_ratio:.0%}資金)"
+    elif final_ratio >= 0.05:
+        advice = f"⚖️ 中度佈局 ({final_ratio:.0%}資金)"
+    elif final_ratio > 0:
+        advice = f"👀 輕倉嘗試 ({final_ratio:.0%}資金)"
+    else:
+        advice = "☕ 建議觀望"
+        
+    return advice, suggested_money
 
+# 功能 1: AI 推薦 (全市場掃描)
 def get_ai_recommendation():
     if daily_data.empty or model is None: return "⚠️ 系統資料準備中..."
     try:
         rename_map = {'Open': 'open_price', 'High': 'high_price', 'Low': 'low_price', 'Close': 'close_price', 'Volume': 'volume'}
         process_df = daily_data.rename(columns=rename_map)
         
-        # 確保有 PEG 欄位 (防止舊資料報錯)
+        # 確保有 PEG 欄位
         if 'PEG' not in process_df.columns:
             return "⚠️ 資料庫尚未更新 PEG 欄位，請重新執行 feature_engineering。"
 
         if 'prob' not in process_df.columns:
              process_df['prob'] = model.predict_proba(process_df[V12_FEATURES])[:, 1]
         
-        # 🟢 [修改] 加入基本面濾網
-        # 條件 1: AI 信心 > 50%
-        # 條件 2: PEG < 1.5 (代表股價還算便宜，且有高成長)
-        # 條件 3: PE > 0 (排除虧損公司)
+        
+        # 1. AI 信心 > 50%
+        # 2. PEG < 1.2 (原本是 1.5) -> 排除高估股
+        # 3. PE > 0 (原本就有) -> 排除虧損股
         good_stocks = process_df[
             (process_df['prob'] >= 0.50) & 
-            (process_df['PEG'] < 1.5) & 
+            (process_df['PEG'] < 1.2) &  # 👈 這裡改成 1.2
             (process_df['pe_ratio'] > 0)
         ]
         
         picks = good_stocks.sort_values('prob', ascending=False).head(5)
         
-        msg = f"🚀 【AI 價值成長股】 ({process_df['trade_date'].iloc[0].date()})\n"
-        msg += f"(篩選條件: PEG < 1.5)\n" # 提示使用者我們有過濾
+        msg = f"🚀 【AI 嚴選價值股】 ({process_df['trade_date'].iloc[0].date()})\n"
+        msg += f"(條件: PEG < 1.2 且 獲利中)\n" # 更新提示文字
         
         if picks.empty:
             msg += "🐢 今日無符合「高成長+低估值」之標的。"
         else:
             for _, row in picks.iterrows():
-                msg += f"🔥 {row['stock_id']} 信心:{row['prob']:.1%} (PEG:{row['PEG']:.2f})\n"
+                # 加入簡單的資金建議提示
+                advice, _ = calculate_position_size(row['prob'], row['PEG'])
+                msg += f"🔥 {row['stock_id']} 信心:{row['prob']:.1%} (PEG:{row['PEG']:.2f})\n   👉 {advice}\n"
                 
         return msg
     except Exception as e:
         return f"❌ 運算錯誤: {e}"
 
-# 功能 2: 個股查詢 (含圖表) - 回傳 List[SendMessage]
+# 功能 2: 個股查詢 (含圖表)
 def query_stock(stock_id, base_url):
     if daily_data.empty: return [TextSendMessage(text="⚠️ 無資料。")]
     
@@ -133,12 +176,14 @@ def query_stock(stock_id, base_url):
     
     # AI 預測
     ai_prob = 0.0
+    peg_val = 999
     if model:
         try:
             ai_prob = model.predict_proba(pd.DataFrame([row])[V12_FEATURES])[:, 1][0]
+            peg_val = row.get('PEG', 999) # 取得 PEG
         except: pass
 
-    # 戰術計算 (呼叫 strategy.py)
+    # 戰術計算
     strat_result = calculate_pivot_strategy(
         high=float(row['high_price']),
         low=float(row['low_price']),
@@ -146,40 +191,34 @@ def query_stock(stock_id, base_url):
         ai_prob=ai_prob
     )
     
-    # 產生文字報告
-    txt_msg = format_strategy_message(
+    # 🟢 [新增] 計算資金控管建議
+    pos_advice, pos_money = calculate_position_size(ai_prob, peg_val)
+    
+    # 產生文字報告 (這裡插入資金建議)
+    base_msg = format_strategy_message(
         stock_id, row['trade_date'], row['close_price'], ai_prob, strat_result
     )
     
-    messages = [TextSendMessage(text=txt_msg)]
+    # 將資金建議附加在文字訊息最後
+    final_msg = base_msg + f"💰 資金控管: {pos_advice}\n(以百萬本金為例: ${pos_money:,})"
     
-    # 🟢 [修正後] 畫圖並產生圖片訊息
+    messages = [TextSendMessage(text=final_msg)]
+    
+    # 畫圖
     try:
-        # 1. 撈出歷史資料
         stock_hist = full_df[full_df['stock_id'] == stock_id].copy()
-        
         if not stock_hist.empty:
-            # ⚠️ 關鍵修正：
-            # 畫圖套件 mplfinance 指定要 'Open', 'High'... (首字大寫)
-            # 如果我們的資料是 'open_price' (小寫)，要轉回來；如果是 'Open' (大寫)，就保留
-            
-            # 定義一個「轉回大寫」的字典
             to_mpf_map = {
                 'open_price': 'Open', 'high_price': 'High', 'low_price': 'Low', 
                 'close_price': 'Close', 'volume': 'Volume'
             }
             stock_hist = stock_hist.rename(columns=to_mpf_map)
             
-            # (注意：這裡千萬不要再用原本那個 rename_map 了，那是轉小寫用的)
-
-            # 2. 呼叫畫家
             img_name = plot_stock_chart(stock_id, stock_hist, strat_result)
             
             if img_name:
-                # 3. 組合圖片網址
                 safe_base = base_url.rstrip('/')
                 img_url = f"{safe_base}/static/{img_name}"
-                
                 messages.append(ImageSendMessage(
                     original_content_url=img_url,
                     preview_image_url=img_url
@@ -192,9 +231,6 @@ def query_stock(stock_id, base_url):
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg_text = event.message.text.strip()
-    
-    # 取得目前的網址 (ngrok) 並強制轉 HTTPS
-    # 這是為了讓 Line 能讀取到我們的圖片
     base_url = request.host_url.replace("http://", "https://")
     
     if msg_text in ["推薦", "選股"]:
@@ -202,11 +238,10 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
         
     elif msg_text in ["新聞", "news", "News", "報紙"]:
-        # 呼叫新聞特工
         reply_text = get_market_briefing()
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
-    elif msg_text.isdigit(): # 輸入數字
+    elif msg_text.isdigit():
         reply_msgs = query_stock(msg_text, base_url)
         line_bot_api.reply_message(event.reply_token, reply_msgs)
         

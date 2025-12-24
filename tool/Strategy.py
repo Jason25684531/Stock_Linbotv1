@@ -1,71 +1,123 @@
-# strategy.py
-# 專門負責：樞紐點計算、買賣訊號判斷、文字格式化
+# tool/strategy.py
+
+import pandas as pd
 
 def calculate_pivot_strategy(high, low, close, ai_prob):
     """
-    輸入：昨日高、低、收，以及 AI 信心度
-    輸出：包含支撐壓力與操作建議的字典
+    計算樞紐點 (Pivot Points) 與戰術訊號
+    回傳：包含 S1, R1, P, Action 的字典
     """
-    try:
-        # 1. 數學計算 (樞紐點)
-        p = (high + low + close) / 3
-        r1 = (2 * p) - low
-        s1 = (2 * p) - high
-        
-        # 2. 策略判斷
-        strategy = ""
-        buy_price = 0
-        sell_price = 0
-        note = ""
-        
-        if ai_prob >= 0.60:
-            strategy = "🔥 強力看多"
-            buy_price = close   # 強勢股直接看收盤或開盤
-            sell_price = r1
-            note = "建議: 開盤或回檔至 S1 佈局"
-        elif ai_prob >= 0.50:
-            strategy = "📈 偏多震盪"
-            buy_price = s1      # 掛低一點買
-            sell_price = r1
-            note = "建議: 等回測 S1 支撐再進場"
+    # 1. 基礎 Pivot 計算
+    pivot = (high + low + close) / 3
+    r1 = (2 * pivot) - low
+    s1 = (2 * pivot) - high
+    
+    # 2. 決定戰術訊號 (Action)
+    # 定義：action 必須是 'BULL', 'BEAR', 'WAIT_LOW', 'WAIT_HIGH' 其中之一
+    action = "WAIT_HIGH" # 預設觀望
+    
+    if ai_prob >= 0.50:
+        # AI 看多
+        if close > pivot:
+            action = "BULL"      # 強力看多 (趨勢向上 + AI挺)
         else:
-            strategy = "😐 觀望/偏空"
-            buy_price = s1
-            sell_price = p      # 反彈到中軸就跑
-            note = "建議: 暫時觀望，勿輕易進場"
+            action = "WAIT_LOW"  # 逢低佈局 (價格弱 + AI挺)
+    else:
+        # AI 看空
+        if close < pivot:
+            action = "BEAR"      # 偏空看待 (趨勢向下 + AI看衰)
+        else:
+            action = "WAIT_HIGH" # 震盪偏多 (價格強 + AI看衰)
 
-        return {
-            'p': p, 'r1': r1, 's1': s1,
-            'strategy': strategy,
-            'buy_suggest': buy_price,
-            'sell_suggest': sell_price,
-            'note': note
-        }
-    except Exception as e:
-        return None
+    return {
+        'pivot': pivot,
+        'r1': r1,
+        's1': s1,
+        'action': action  # 🟢 [關鍵修正] 必須回傳這個，不然會報錯
+    }
 
-def format_strategy_message(stock_id, trade_date, close, ai_prob, strat_result):
+# 修改 tool/strategy.py
+def calculate_position_size(win_prob, peg, capital=100000): # 
     """
-    負責把策略結果包裝成漂亮的 Line 文字訊息
+    動態資金控管 (Kelly-like) - 採用嚴格 PEG 標準
+    PEG < 0.75: 低估 (加分)
+    PEG 0.75~1.0: 合理 (不加不減)
+    PEG > 1.2: 高估 (扣分)
     """
-    ai_msg = f"{ai_prob:.1%}" if ai_prob else "AI: 無法預測"
-    date_str = str(trade_date).split(' ')[0]
+    base_pos = 0.20 # 基礎倉位 20%
     
-    msg = f"🎫 {stock_id} 戰術分析 ({date_str})\n"
-    msg += f"💲 收盤: {close}\n"
-    msg += f"🧠 AI 信心: {ai_msg}\n"
-    msg += "-" * 20 + "\n"
-    
-    if strat_result:
-        msg += f"🎯 訊號: {strat_result['strategy']}\n"
-        msg += f"🛡️ 支撐 (S1): {strat_result['s1']:.2f}\n"
-        msg += f"⚔️ 壓力 (R1): {strat_result['r1']:.2f}\n"
-        msg += f"💡 {strat_result['note']}\n"
+    # 1. 信心加成 (Prob)
+    if win_prob >= 0.70: conf_score = 1.0
+    elif win_prob >= 0.60: conf_score = 0.7
+    elif win_prob >= 0.53: conf_score = 0.4
+    else: conf_score = 0.0 # 信心不足直接不買
         
-        # 只在看多時給出價格建議
-        if ai_prob >= 0.50:
-            msg += "-" * 20 + "\n"
-            msg += f"💰 參考買點: {strat_result['buy_suggest']:.2f} 附近\n"
-            msg += f"💵 獲利目標: {strat_result['sell_suggest']:.2f} 附近"
-            
+    # 2. 估值加成 (PEG) - 彼得林區選股法則
+    if peg < 0.75:
+        val_score = 1.2 # 🔥 超級低估，加碼買！(原本是 1.0)
+        valuation_msg = "低估"
+    elif peg <= 1.0:
+        val_score = 1.0 # 合理價格
+        valuation_msg = "合理"
+    elif peg <= 1.2:
+        val_score = 0.6 # 稍微偏貴，減碼買
+        valuation_msg = "稍貴"
+    else:
+        val_score = 0.0 # ❌ 太貴了，不買
+        valuation_msg = "高估"
+        
+    # 3. 計算最終比例
+    # 如果信心夠但太貴，val_score 會把它歸零，保護你不追高
+    final_ratio = base_pos * conf_score * val_score
+    
+    # 確保不要超過 30% (避免過度重倉)
+    final_ratio = min(final_ratio, 0.30)
+    
+    suggested_money = int(capital * final_ratio)
+    
+    if final_ratio >= 0.20:
+        advice = f"🔥 強力佈局 ({valuation_msg})"
+    elif final_ratio >= 0.10:
+        advice = f"⚖️ 一般佈局 ({valuation_msg})"
+    elif final_ratio > 0:
+        advice = f"👀 輕倉嘗試 ({valuation_msg})"
+    else:
+        advice = f"☕ 觀望 ({valuation_msg}或信心不足)"
+        
+    return advice, suggested_money
+
+def format_strategy_message(stock_id, trade_date, close, ai_prob, strat_res):
+    """
+    將戰術結果轉為文字訊息 (Line / Debugger 通用)
+    """
+    # 確保 action 存在 (防呆)
+    action = strat_res.get('action', 'WAIT_HIGH')
+    s1 = strat_res['s1']
+    r1 = strat_res['r1']
+    pivot = strat_res['pivot']
+
+    if action == 'BULL':
+        signal = "🚀 強力看多 (Buy)"
+        suggestion = f"建議於支撐 {s1:.1f} 附近佈局"
+    elif action == 'BEAR':
+        signal = "🐻 偏空/觀望 (Sell/Wait)"
+        suggestion = "趨勢向下，請勿接刀，空手者觀望"
+    elif action == 'WAIT_LOW':
+        signal = "⚠️ 逢低佈局? (Wait)"
+        suggestion = f"AI 看好但價格弱，若站回 {pivot:.1f} 再進場"
+    else: 
+        signal = "😐 震盪偏多 (Wait)"
+        suggestion = "AI 信心不足，雖然價格強，建議觀望"
+
+    msg = (
+        f"🎫 {stock_id} 戰術分析 ({pd.to_datetime(trade_date).date()})\n"
+        f"💲 收盤: {close}\n"
+        f"🧠 AI 信心: {ai_prob:.1%} (PEG過濾已啟用)\n"
+        f"--------------------\n"
+        f"🎯 訊號: {signal}\n"
+        f"🛡️ 買點參考 (S1): {s1:.2f}\n"
+        f"⚔️ 賣點參考 (R1): {s1 * 1.05:.2f} ~ {r1:.2f}\n"
+        f"--------------------\n"
+        f"💡 戰術建議: {suggestion}\n"
+    )
     return msg

@@ -40,7 +40,7 @@ def fetch_rss_news():
             # 每個來源只抓前 6 則最新的 (太多會太雜)
             count = 0
             for entry in feed.entries:
-                if count >= 6: break
+                if count >= 10: break
                 
                 title = entry.title
                 # 嘗試抓取摘要 (有些 RSS 會放在 summary 或 description)

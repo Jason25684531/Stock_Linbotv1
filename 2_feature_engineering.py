@@ -82,10 +82,28 @@ def calculate_technical_indicators(df):
     df['PEG'] = df['PEG'].clip(0, 5)
 
     print("✅ PEG 計算完成！")
+
+    # 🟢 [新增] 籌碼面因子 (Institutional Factors)
+    print("🏦 正在計算籌碼面數據...")
+
+    # 1. 外資買賣超占比 (Foreign Ratio)
+    # 公式：外資買賣超 / 成交量 (衡量外資對當天股價的影響力)
+    # 防呆：成交量為 0 時設為 0
+    df['foreign_ratio'] = df.apply(lambda x: x['foreign_buy'] / x['volume'] if x['volume'] > 0 else 0, axis=1)
+
+    # 2. 投信買賣超占比 (Trust Ratio) - 這是飆股關鍵！
+    df['trust_ratio'] = df.apply(lambda x: x['trust_buy'] / x['volume'] if x['volume'] > 0 else 0, axis=1)
+
+    # 3. 籌碼動能 (連買天數概念的簡化版)
+    # 我們算外資過去 5 天是不是都在買
+    df['foreign_ma5'] = df.groupby('stock_id')['foreign_ratio'].transform(lambda x: x.rolling(window=5).mean())
+
+    print("✅ 籌碼特徵計算完成！")
     
     # 3. 標記未來漲跌 (AI 的標準答案)
-    # 如果「明天收盤」比「今天收盤」高，就標記為 1 (漲)，否則 0
-    df['Target'] = (df['close_price'].shift(-1) > df['close_price']).astype(int)
+    
+    # 🟢 修改後：要漲超過 2% 才算 1 (去手續費還有賺)
+    df['target'] = (df['close_price'].shift(-1) > df['close_price'] * 1.02).astype(int)
     
     # 刪除因為計算指標產生的 NaN (前 60 天會變空值)
     df = df.dropna()
@@ -134,6 +152,7 @@ def main():
         'open_price', 'high_price', 'low_price', 'close_price', 'volume', 
         'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',  # V11 新增
         'MA5', 'MA20', 'MA60', 'RSI', 'PEG',
+        'foreign_ratio', 'trust_ratio',
         'Target' # 答案
     ]
     final_df = final_df[features]

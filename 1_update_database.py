@@ -1,123 +1,159 @@
+import requests
 import pandas as pd
 from sqlalchemy import create_engine, text
-from crawler.twse_fetcher import TwseFetcher
-from config import Config
-from datetime import datetime, timedelta, date
 import time
+import random
+from datetime import datetime, timedelta
 
-# 連線資料庫
-engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
+# ============================================
+# ⚙️ 設定區
+# ============================================
+DB_URL = "mysql+pymysql://root:my_secret_password@localhost:3306/stock_ai_db"
+START_DATE = "2022-01-01"  # 若資料庫全空，從這天開始抓
 
-def save_to_db(df):
-    """將資料寫入資料庫"""
-    # 對應資料庫欄位
-    rename_map = {
-        'open': 'open_price', 
-        'high': 'high_price', 
-        'low': 'low_price', 
-        'close': 'close_price'
-    }
-    df = df.rename(columns=rename_map)
-    
-    # 確保只寫入存在的欄位
-    # 注意：這裡假設你已經執行過 ALTER TABLE 新增 pe_ratio 等欄位
-    
-    try:
-        # 寫入資料庫 (append模式)
-        df.to_sql('daily_market_data', con=engine, if_exists='append', index=False, chunksize=1000)
-        print(f"   ✅ 成功寫入 {len(df)} 筆資料！")
-    except Exception as e:
-        if "Duplicate" in str(e):
-            print("   ⚠️ 資料已存在 (Duplicate)，略過。")
-        else:
-            print(f"   ❌ 資料庫錯誤: {e}")
+# ============================================
+# 🛠️ 函數區
+# ============================================
 
-def get_all_existing_dates():
-    """
-    [補洞核心] 查詢資料庫中「所有」已經存在的日期
-    回傳一個 set (集合)，方便快速比對
-    """
-    sql = text("SELECT DISTINCT trade_date FROM daily_market_data")
-    existing_dates = set()
-    
+def get_db_engine():
+    return create_engine(DB_URL)
+
+def get_latest_date(engine):
+    """查詢資料庫目前最新的日期"""
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql)
-            for row in result:
-                # 確保轉成 date 物件 (有些驅動回傳 datetime, 有些是 date)
-                db_date = row[0]
-                if isinstance(db_date, datetime):
-                    existing_dates.add(db_date.date())
-                else:
-                    existing_dates.add(db_date)
+            result = conn.execute(text("SELECT MAX(trade_date) FROM daily_market_data"))
+            latest = result.scalar()
+            return latest if latest else None
+    except:
+        return None
+
+def fetch_daily_price(date_str):
+    """抓取每日收盤行情 (MI_INDEX)"""
+    url = f"https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={date_str.replace('-','')}&type=ALL&response=json"
+    try:
+        res = requests.get(url)
+        data = res.json()
+        if data['stat'] != 'OK': return None
         
-        print(f"📊 資料庫目前已有 {len(existing_dates)} 個交易日的資料。")
-        return existing_dates
+        # 找到股價表 (通常是 tables9，但也可能是其他，依標題判斷)
+        target_table = None
+        for table in data['tables']:
+            if "每日收盤行情" in table['title']:
+                target_table = table
+                break
+        
+        if not target_table: return None
+        
+        df = pd.DataFrame(target_table['data'], columns=target_table['fields'])
+        
+        # 整理欄位
+        df = df[['證券代號', '開盤價', '最高價', '最低價', '收盤價', '成交股數', '本益比']]
+        df.columns = ['stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio']
+        
+        # 數值處理 (移除逗號，處理 --)
+        for col in ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio']:
+            df[col] = df[col].astype(str).str.replace(',', '').replace('--', '0')
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+        return df
     except Exception as e:
-        print(f"查詢現有日期失敗 (可能是空表): {e}")
-        return set()
+        print(f"❌ 抓取股價失敗 {date_str}: {e}")
+        return None
 
-def main():
-    fetcher = TwseFetcher()
-    
-    # ==========================================
-    # 🎯 設定回測起始點：這裡強制指定從 2022 年開始
-    # ==========================================
-    START_DATE = datetime(2025, 12, 1)
-    END_DATE = datetime.now() # 到今天為止
-    
-    print(f"🚀 啟動「補洞模式」爬蟲...")
-    print(f"📅 目標區間: {START_DATE.strftime('%Y-%m-%d')} ~ {END_DATE.strftime('%Y-%m-%d')}")
-    
-    # 1. 取得所有已存在的日期 (為了跳過不用爬的)
-    existing_dates = get_all_existing_dates()
-
-    # 2. 開始迴圈
-    current = START_DATE
-    
-    # 連續失敗計數器 (如果連續失敗太多天，可能被鎖 IP，休息久一點)
-    fail_count = 0 
-
-    while current <= END_DATE:
-        current_date_obj = current.date()
-        date_str = current.strftime('%Y%m%d')
+def fetch_institutional_investors(date_str):
+    """
+    🟢 [新增] 抓取三大法人買賣超 (T86)
+    抓取 外資(Foreign) 與 投信(Trust) 的買賣超股數
+    """
+    url = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={date_str.replace('-','')}&selectType=ALL&response=json"
+    try:
+        res = requests.get(url)
+        data = res.json()
+        if data['stat'] != 'OK': return None
         
-        # A. 週末判斷
-        if current.weekday() in [5, 6]:
-            # print(f"😴 {date_str} 是週末，跳過。") # 太吵可以註解掉
-            current += timedelta(days=1)
-            continue
-            
-        # B. [關鍵] 檢查資料庫是否已經有這天？
-        if current_date_obj in existing_dates:
-            print(f"⏩ {date_str} 資料庫已有，跳過 (Skip)。")
-            current += timedelta(days=1)
-            continue
-
-        # C. 真的缺資料，開始爬蟲
-        print(f"🔍 發現缺漏: {date_str}，開始爬取...")
-        df = fetcher.fetch_daily_data(date_str)
+        df = pd.DataFrame(data['data'], columns=data['fields'])
         
-        if df is not None and not df.empty:
-            save_to_db(df)
-            fail_count = 0 # 重置失敗計數
+        # 確保欄位名稱正確 (證交所欄位名稱可能會變，這裡用關鍵字找)
+        # 通常欄位：證券代號, ..., 外陸資買賣超股數(不含外資自營商), ..., 投信買賣超股數
+        
+        # 1. 找外資欄位 (包含 "外陸資" 和 "買賣超股數")
+        foreign_col = next((c for c in df.columns if "外陸資" in c and "買賣超股數" in c), None)
+        # 2. 找投信欄位
+        trust_col = next((c for c in df.columns if "投信" in c and "買賣超股數" in c), None)
+        
+        if not foreign_col or not trust_col:
+            return None
             
-            # 爬蟲禮儀：休息 5~10 秒
-            sleep_time = 5 
-            print(f"--- 休息 {sleep_time} 秒 ---")
-            time.sleep(sleep_time)
-        else:
-            # 可能是假日、颱風假、或被擋
-            # 判斷是否為「無資料」還是「被擋」通常看 fetcher 內部的 print
-            fail_count += 1
-            if fail_count >= 5:
-                print("⚠️ 連續失敗 5 次，可能被證交所暫時限制，強制休息 60 秒...")
-                time.sleep(60)
-                fail_count = 0
-            else:
-                time.sleep(3) 
+        keep_cols = ['證券代號', foreign_col, trust_col]
+        df = df[keep_cols]
+        df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
+        
+        # 數值處理
+        for col in ['foreign_buy', 'trust_buy']:
+            df[col] = df[col].astype(str).str.replace(',', '')
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
-        current += timedelta(days=1)
+        return df
+    except Exception as e:
+        print(f"❌ 抓取籌碼失敗 {date_str}: {e}")
+        return None
 
+# ============================================
+# 🚀 主程式
+# ============================================
 if __name__ == "__main__":
-    main()
+    engine = get_db_engine()
+    
+    # 決定開始日期
+    latest_db_date = get_latest_date(engine)
+    if latest_db_date:
+        start_dt = latest_db_date + timedelta(days=1)
+        print(f"📅 資料庫最新日期: {latest_db_date}，將從 {start_dt} 開始更新...")
+    else:
+        start_dt = datetime.strptime(START_DATE, "%Y-%m-%d").date()
+        print(f"⚠️ 資料庫為空，將從 {start_dt} 開始更新...")
+
+    end_dt = datetime.today().date()
+    
+    current_dt = start_dt
+    while current_dt <= end_dt:
+        date_str = current_dt.strftime("%Y-%m-%d")
+        print(f"⏳ 正在處理: {date_str} ...", end="")
+        
+        # 1. 抓股價
+        price_df = fetch_daily_price(date_str)
+        
+        if price_df is not None and not price_df.empty:
+            # 2. 抓籌碼 (🟢 新增步驟)
+            chips_df = fetch_institutional_investors(date_str)
+            
+            # 3. 合併資料 (Left Join: 以股價表為主)
+            if chips_df is not None and not chips_df.empty:
+                merged_df = pd.merge(price_df, chips_df, on='stock_id', how='left')
+                # 沒抓到籌碼的補 0
+                merged_df['foreign_buy'] = merged_df['foreign_buy'].fillna(0)
+                merged_df['trust_buy'] = merged_df['trust_buy'].fillna(0)
+            else:
+                # 當天可能只有行情沒有籌碼資料 (罕見)
+                merged_df = price_df
+                merged_df['foreign_buy'] = 0
+                merged_df['trust_buy'] = 0
+
+            # 4. 寫入資料庫
+            merged_df['trade_date'] = current_dt
+            
+            # 確保欄位順序與資料庫一致 (或使用 pandas to_sql 的彈性)
+            # 這裡簡單處理，直接存
+            try:
+                merged_df.to_sql('daily_market_data', engine, if_exists='append', index=False)
+                print(" ✅ 成功寫入 (含籌碼)！")
+            except Exception as e:
+                print(f" ❌ 寫入失敗: {e}")
+        else:
+            print(" 💤 假日或無資料")
+            
+        current_dt += timedelta(days=1)
+        time.sleep(random.randint(3, 6)) # 稍微休息避免被擋
+
+    print("🎉 資料庫更新完畢！")
