@@ -1,4 +1,3 @@
-# debug_local.py
 import pandas as pd
 import joblib
 import os
@@ -12,7 +11,8 @@ except ImportError:
     pass
 
 # 設定資料路徑
-DATA_PATH = os.path.join('ML_Data', 'feature_engineering', 'training_data.csv')
+
+DATA_PATH = os.path.join('ML_Data', 'feature_engineering', 'inference_data.csv')
 MODEL_PATH = os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')
 
 print("🧠 正在載入 AI 模型與資料...")
@@ -25,6 +25,20 @@ else:
     print(f"⚠️ 找不到模型: {MODEL_PATH}")
     exit()
 
+# 🟢 [自動同步] 取得模型需要的特徵
+try:
+    FEATURES = model.get_booster().feature_names
+except:
+    # 備案 V20
+    FEATURES = [
+        'open_price', 'high_price', 'low_price', 'close_price', 'volume',
+        'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
+        'MA5', 'MA20', 'MA60', 'RSI',
+        'MACD_hist', 'KD_K', 'BB_width',
+        'PEG', 'foreign_ratio', 'trust_ratio', 'trust_ma3'
+    ]
+print(f"📋 特徵列表已同步 (共 {len(FEATURES)} 個)")
+
 # 2. 載入資料 (只取最新一天)
 if os.path.exists(DATA_PATH):
     full_df = pd.read_csv(DATA_PATH, dtype={'stock_id': str})
@@ -36,15 +50,8 @@ else:
     print(f"⚠️ 找不到資料: {DATA_PATH}")
     exit()
 
-# 特徵列表 (含 PEG)
-V12_FEATURES = [
-    'open_price', 'high_price', 'low_price', 'close_price', 'volume',
-    'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
-    'MA5', 'MA20', 'MA60', 'RSI', 'PEG'
-]
-
 print("=========================================")
-print("🛠️  V15.5 本地戰術模擬器 (Local Debugger)")
+print("🛠️  V20 全能版 - 本地戰術模擬器")
 print("=========================================")
 print("輸入股票代碼 (例如 2330) 進行分析")
 print("輸入 '推薦' 查看 AI 選股")
@@ -67,15 +74,22 @@ while True:
             print("⚠️ 新聞模組未啟用")
             
     elif user_input == '推薦':
-        print("\n🔍 正在掃描全市場 (AI > 50% & PEG < 1.5)...")
+        print("\n🔍 正在掃描全市場 (AI > 50% & PEG < 1.2)...")
+        
+        # 檢查欄位是否齊全
+        missing = [c for c in FEATURES if c not in daily_data.columns]
+        if missing:
+            print(f"⚠️ 資料缺少特徵，無法預測: {missing}")
+            continue
+
         # 預測
         if 'prob' not in daily_data.columns:
-            daily_data['prob'] = model.predict_proba(daily_data[V12_FEATURES])[:, 1]
+            daily_data['prob'] = model.predict_proba(daily_data[FEATURES])[:, 1]
             
         # 篩選
         picks = daily_data[
             (daily_data['prob'] >= 0.50) & 
-            (daily_data['PEG'] < 0.8) & 
+            (daily_data['PEG'] < 1.75) & 
             (daily_data['pe_ratio'] > 0)
         ].sort_values('prob', ascending=False).head(5)
         
@@ -83,7 +97,7 @@ while True:
             print("🐢 今日無符合條件之標的。")
         else:
             for _, row in picks.iterrows():
-                advice, money = calculate_position_size(row['prob'], row['PEG'])
+                advice, money = calculate_position_size(row['prob'], row['PEG'], capital=100000)
                 print(f"🔥 {row['stock_id']} 信心:{row['prob']:.1%} (PEG:{row['PEG']:.2f}) -> {advice}")
 
     elif user_input.isdigit():
@@ -97,8 +111,13 @@ while True:
             
         row = row.iloc[0]
         
+        # 檢查欄位
+        if any(c not in pd.DataFrame([row]).columns for c in FEATURES):
+             print(f"⚠️ 資料欄位不足，缺: {[c for c in FEATURES if c not in row.index]}")
+             continue
+
         # AI 預測
-        ai_prob = model.predict_proba(pd.DataFrame([row])[V12_FEATURES])[:, 1][0]
+        ai_prob = model.predict_proba(pd.DataFrame([row])[FEATURES])[:, 1][0]
         peg_val = row.get('PEG', 999)
         
         # 戰術計算
@@ -111,11 +130,19 @@ while True:
             )
             
             # 產生報告
-            msg = format_strategy_message(stock_id, row['trade_date'], row['close_price'], ai_prob, strat_res)
+            # 產生報告 (傳入 row 以顯示籌碼)
+            msg = format_strategy_message(
+                stock_id, 
+                row['trade_date'], 
+                row['close_price'], 
+                ai_prob, 
+                strat_res,
+                extra_data=row # 🟢 關鍵：把整行資料傳進去
+            )
             print(msg)
             
             # 顯示資金建議
-            advice, money = calculate_position_size(ai_prob, peg_val)
+            advice, money = calculate_position_size(ai_prob, peg_val, capital=100000)
             print(f"💰 資金控管建議: {advice}")
             print(f"   (以十萬本金為例: ${money:,})")
             

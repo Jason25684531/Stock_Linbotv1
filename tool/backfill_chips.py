@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 DB_URL = "mysql+pymysql://root:my_secret_password@localhost:3306/stock_ai_db"
 
 # 設定你要回補的區間 (例如過去 3 年) #專們補齊三大法人籌碼資料
-START_DATE = "2022-01-01" 
+START_DATE = "2025-01-01" 
 END_DATE = datetime.today().strftime("%Y-%m-%d")   # 補到哪一天為止
 
 # ============================================

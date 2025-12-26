@@ -1,195 +1,186 @@
 import pandas as pd
 import joblib
 import os
-import numpy as np
-from datetime import timedelta
+import matplotlib.pyplot as plt
 
-def calculate_trade_return(entry_date, stock_id, entry_price, full_df, hold_days=5):
-    """
-    計算單筆交易的損益
-    策略：持有 hold_days 天後，以當天收盤價賣出
-    """
-    # 找到該股票的所有資料
-    stock_data = full_df[full_df['stock_id'] == stock_id].sort_values('trade_date')
-    
-    # 找到進場的那一天在第幾行
-    try:
-        # 使用 searchsorted 或直接 index 查找
-        match_rows = stock_data[stock_data['trade_date'] == entry_date]
-        if match_rows.empty:
-            return 0.0, entry_price, entry_date # 找不到進場日資料
-            
-        entry_idx = match_rows.index[0]
-        
-        # 取得該股票的 index 列表
-        stock_indices = stock_data.index.tolist()
-        
-        if entry_idx not in stock_indices:
-             return 0.0, entry_price, entry_date
+# ============================================
+# ⚙️ 設定區
+# ============================================
+DATA_PATH = os.path.join('ML_Data', 'feature_engineering', 'training_data.csv')
+MODEL_PATH = os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')
 
-        current_pos = stock_indices.index(entry_idx)
-        
-        # 往後找 hold_days 天 (如果沒資料了，就用最後一天算)
-        exit_pos = min(current_pos + hold_days, len(stock_indices) - 1)
-        exit_idx = stock_indices[exit_pos]
-        
-        exit_row = stock_data.loc[exit_idx]
-        exit_price = exit_row['close_price']
-        exit_date = exit_row['trade_date']
-        
-        # 計算報酬率
-        ret = (exit_price - entry_price) / entry_price
-        return ret, exit_price, exit_date
-        
-    except Exception as e:
-        print(f"⚠️ 計算損益錯誤 {stock_id}: {e}")
-        return 0.0, entry_price, entry_date
+# 這裡定義列表只是為了檢查「有沒有缺欄位」
+# 真正的順序我們會直接問模型 (Dynamic Ordering)
+REQUIRED_FEATURES = [
+    'open_price', 'high_price', 'low_price', 'close_price', 'volume',
+    'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
+    'MA5', 'MA20', 'MA60', 'RSI',
+    'MACD_hist', 'KD_K', 'BB_width', # V20 新特徵
+    'PEG', 
+    'foreign_ratio', 'trust_ratio', 'trust_ma3'
+]
 
+INITIAL_CAPITAL = 1_000_000 
+POSITION_SIZE = 0.2         
+HOLD_DAYS = 5               
+CONFIDENCE_THRESHOLD = 0.53 
+PEG_THRESHOLD = 1.2         
+STOP_LOSS_PCT = -0.07  
+
+# ============================================
+# 🚀 主程式
+# ============================================
 def main():
-    print("🚀 Day 4: V15.5 策略回測 (含 PEG 濾網)...")
-
-    # ==========================================
-    # 📂 1. 讀取資料與模型
-    # ==========================================
-    try:
-        csv_path = os.path.join('ML_Data', 'feature_engineering', 'training_data.csv')
-        df = pd.read_csv(csv_path, dtype={'stock_id': str})
-        
-        model_path = os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')
-        model = joblib.load(model_path)
-    except Exception as e:
-        print(f"❌ 檔案讀取失敗: {e}")
+    print("🚀 Day 4: V20 全能特徵回測 (戰壕防禦版)...")
+    
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(DATA_PATH):
+        print("❌ 找不到模型或資料")
         return
-
+        
+    model = joblib.load(MODEL_PATH)
+    df = pd.read_csv(DATA_PATH)
     df['trade_date'] = pd.to_datetime(df['trade_date'])
-    df = df.sort_values('trade_date')
-    # 去除無限值與空值
-    df = df.replace([np.inf, -np.inf], np.nan).dropna()
+    df = df.sort_values('trade_date').reset_index(drop=True)
     
-    # ==========================================
-    # 🔮 2. AI 預測
-    # ==========================================
-    # 🟢 [關鍵修正] 必須包含 'PEG'，否則模型會報錯
-    feature_cols = [
-        'open_price', 'high_price', 'low_price', 'close_price', 'volume',
-        'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
-        'MA5', 'MA20', 'MA60', 'RSI',
-        'PEG'  # ✅ 補上這個！
-    ]
-    
-    print("🔮 AI 正在計算買進訊號 (信心 > 50% & PEG < 1.5)...")
+    # 🟢 [關鍵修復] 直接問模型它當初訓練時是用什麼順序
+    # 這樣永遠不會再發生 mismatch 錯誤
     try:
-        # 確保資料中有這些欄位
-        missing_cols = [c for c in feature_cols if c not in df.columns]
-        if missing_cols:
-            print(f"❌ 資料庫缺少欄位: {missing_cols}，請重新執行 feature_engineering。")
-            return
+        model_features = model.get_booster().feature_names
+    except:
+        # 如果讀不到(舊版xgboost)，就用我們手動定義的，但要確保順序一致
+        print("⚠️ 無法自動讀取特徵順序，使用預設列表")
+        model_features = REQUIRED_FEATURES
 
-        df['prob'] = model.predict_proba(df[feature_cols])[:, 1]
-    except Exception as e:
-        print(f"❌ AI 預測失敗: {e}")
+    # 檢查資料庫有沒有缺欄位
+    missing_features = [f for f in model_features if f not in df.columns]
+    if missing_features:
+        print(f"❌ 資料庫缺少特徵: {missing_features}")
         return
-    
-    # ==========================================
-    # ⚔️ 3. 模擬交易
-    # ==========================================
-    history = []
-    dates = np.sort(df['trade_date'].unique())
-    skipped_by_market = 0
-    
-    # 設定回測持有天數
-    HOLD_DAYS = 5
-    
-    print(f"📅 回測區間: {pd.to_datetime(dates[0]).date()} ~ {pd.to_datetime(dates[-1]).date()}")
-    
-    for date in dates:
-        ts_date = pd.to_datetime(date)
-        daily_data = df[df['trade_date'] == ts_date]
-        if daily_data.empty: continue
 
-        # --- 大盤濾網 (可選) ---
-        # 簡單邏輯：如果全市場只有不到 25% 的股票站上季線，代表大空頭，不做多
-        total_stocks = len(daily_data)
-        bullish_stocks = len(daily_data[daily_data['close_price'] > daily_data['MA60']])
-        market_sentiment = bullish_stocks / total_stocks if total_stocks > 0 else 0
-        
-        if market_sentiment < 0.25:
-            skipped_by_market += 1
-            continue
+    # 預測 (使用模型指定的順序 model_features)
+    print("🔮 AI 正在重新計算買進訊號 (使用正確的特徵順序)...")
+    df['prob'] = model.predict_proba(df[model_features])[:, 1]
+    
+    capital = INITIAL_CAPITAL
+    positions = [] 
+    history = []   
+    
+    dates = sorted(df['trade_date'].unique())
+    test_dates = dates[-90:] 
+    
+    cooldown_counter = 0 # 冷靜期計數器
+    
+    print(f"⚔️ 開始回測: {test_dates[0].date()} ~ {test_dates[-1].date()}")
 
-        # --- 選股邏輯 (V15.5) ---
-        # 1. 基本面濾網：PEG < 1.5, PE > 0
-        fundamental_pool = daily_data[
-            (daily_data['PEG'] < 1.5) &
-            (daily_data['pe_ratio'] > 0) &
-            (daily_data['volume'] > 500) # 過濾殭屍股
-        ]
+    for i, date in enumerate(test_dates):
         
-        if fundamental_pool.empty: continue
-
-        # 2. AI 訊號 (門檻 50%)
-        buy_signals = fundamental_pool[fundamental_pool['prob'] >= 0.50]
+        # --- 1. 計算市場寬度 (Market Breadth) ---
+        daily_snapshot = df[df['trade_date'] == date]
+        is_bear_market = False
+        market_breadth_ratio = 1.0 
         
-        if not buy_signals.empty:
-            # 每天買信心最高的一檔
-            top_pick = buy_signals.sort_values('prob', ascending=False).iloc[0]
+        if not daily_snapshot.empty and 'MA20' in daily_snapshot.columns:
+            stocks_above_ma20 = daily_snapshot[daily_snapshot['close_price'] > daily_snapshot['MA20']]
+            market_breadth_ratio = len(stocks_above_ma20) / len(daily_snapshot)
             
-            history.append({
-                'entry_date': ts_date,
-                'stock_id': top_pick['stock_id'],
-                'entry_price': top_pick['close_price'],
-                'prob': top_pick['prob'],
-                'peg': top_pick['PEG']
-            })
+            # 門檻：市場只有不到 30% 的股票站上月線 -> 認定為空頭
+            if market_breadth_ratio < 0.3:
+                is_bear_market = True
+        
+        # --- 2. 處理庫存 (含強制清倉) ---
+        for pos in positions[:]: 
+            stock_id, buy_price, shares, days_held, buy_date = pos
+            
+            today_data = df[(df['trade_date'] == date) & (df['stock_id'] == stock_id)]
+            if today_data.empty: continue
+            current_price = today_data.iloc[0]['close_price']
+            
+            unrealized_pnl = (current_price - buy_price) / buy_price
+            
+            is_stop_loss = unrealized_pnl <= STOP_LOSS_PCT
+            is_time_up = days_held >= HOLD_DAYS
+            is_emergency_exit = is_bear_market 
+            
+            if is_stop_loss or is_time_up or is_emergency_exit:
+                revenue = shares * current_price
+                capital += revenue
+                profit = revenue - (shares * buy_price)
+                positions.remove(pos)
+                
+                # 若因市場恐慌而賣出，觸發冷靜期 3 天
+                if is_emergency_exit:
+                    cooldown_counter = 3 
+                    print(f"🚨 {date.date()} 市場恐慌! 強制清倉並冷靜 3 天")
+            else:
+                positions.remove(pos)
+                positions.append((stock_id, buy_price, shares, days_held + 1, buy_date))
 
-    # ==========================================
-    # 💰 4. 計算損益 (P&L)
-    # ==========================================
-    print(f"\n⚙️ 正在結算 {len(history)} 筆交易的獲利 (持有 {HOLD_DAYS} 天)...")
-    
-    results = []
-    total_ret = 0
-    wins = 0
-    
-    for trade in history:
-        ret, exit_price, exit_date = calculate_trade_return(
-            trade['entry_date'], 
-            trade['stock_id'], 
-            trade['entry_price'], 
-            df, 
-            hold_days=HOLD_DAYS
-        )
+        # --- 3. 買進邏輯 ---
+        if is_bear_market:
+            if cooldown_counter == 0:
+                print(f"🐻 {date.date()} 市場恐慌 ({market_breadth_ratio:.0%}) -> 觀望")
+            pass
+            
+        elif cooldown_counter > 0:
+            print(f"🧊 {date.date()} 冷靜期剩餘 {cooldown_counter} 天 -> 暫停買進")
+            cooldown_counter -= 1
+            
+        else:
+            # 正常買進
+            candidates = df[
+                (df['trade_date'] == date) & 
+                (df['prob'] > CONFIDENCE_THRESHOLD) & 
+                (df['PEG'] < PEG_THRESHOLD) &
+                (df['pe_ratio'] > 0)
+            ].sort_values('prob', ascending=False)
+            
+            # 剛復甦時每天只買 1 檔
+            buy_limit = 1 
+            buy_count = 0
+            
+            for _, row in candidates.iterrows():
+                if buy_count >= buy_limit: break
+                if capital < 10000: break
+                
+                target_amount = INITIAL_CAPITAL * POSITION_SIZE
+                if target_amount > capital: target_amount = capital
+                
+                stock_id = row['stock_id']
+                price = row['close_price']
+                if price <= 0: continue
+                
+                shares = int(target_amount / price)
+                cost = shares * price
+                
+                if shares > 0:
+                    capital -= cost
+                    positions.append((stock_id, price, shares, 0, date))
+                    buy_count += 1
         
-        trade['return'] = ret
-        trade['exit_price'] = exit_price
-        trade['exit_date'] = exit_date
-        results.append(trade)
+        # 結算
+        market_value = sum([p[2] * (df[(df['trade_date'] == date) & (df['stock_id'] == p[0])].iloc[0]['close_price'] if not df[(df['trade_date'] == date) & (df['stock_id'] == p[0])].empty else p[1]) for p in positions])
+        total_asset = capital + market_value
+        history.append({'date': date, 'total': total_asset})
         
-        total_ret += ret
-        if ret > 0: wins += 1
+        if len(positions) > 0 or is_bear_market or cooldown_counter > 0:
+             print(f"📅 {date.date()} 資產: {int(total_asset)} (庫存: {len(positions)})")
 
-    # ==========================================
-    # 📊 5. 最終報告
-    # ==========================================
-    if len(results) > 0:
-        avg_ret = total_ret / len(results)
-        win_rate = wins / len(results)
-        
-        print(f"\n" + "="*30)
-        print(f"📊 V15.5 策略績效報告 (PEG版)")
-        print(f"="*30)
-        print(f"🔹 總交易次數: {len(results)} 次")
-        print(f"🏆 勝率 (Win Rate): {win_rate:.2%}")
-        print(f"💰 平均單筆報酬: {avg_ret:.2%}")
-        print(f"📈 累積報酬估算: {(1+avg_ret)**len(results):.2f} 倍 (單利累加則為 {1+total_ret:.2f})")
-        print(f"🛡️ 避開空頭天數: {skipped_by_market} 天")
-        print("-" * 30)
-        
-        res_df = pd.DataFrame(results)
-        res_df.to_csv('backtest_profit_report.csv', index=False)
-        print(f"✅ 詳細損益表已儲存為 backtest_profit_report.csv")
-    else:
-        print("⚠️ 無交易產生 (可能是條件太嚴格或資料不足)。")
+    # 輸出
+    history_df = pd.DataFrame(history)
+    print("\n===========================")
+    print(f"💰 初始本金: {INITIAL_CAPITAL}")
+    print(f"💰 最終本金: {int(history_df.iloc[-1]['total'])}")
+    ret = (history_df.iloc[-1]['total'] - INITIAL_CAPITAL) / INITIAL_CAPITAL
+    print(f"📈 總報酬率: {ret:.2%}")
+    print("===========================")
+
+    try:
+        plt.figure(figsize=(10, 5))
+        plt.plot(history_df['date'], history_df['total'])
+        plt.title(f"V20 Full Feature Defense")
+        plt.grid(True)
+        plt.savefig("backtest_result.png")
+    except: pass
 
 if __name__ == "__main__":
     main()
