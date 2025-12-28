@@ -34,11 +34,11 @@ try:
     
     model = joblib.load(model_path)
     
-    # 🟢 [自動同步] 直接問模型它需要什麼特徵，永遠不會錯
+    # 🟢 [自動同步] 直接問模型它需要什麼特徵
     try:
         FEATURES = model.get_booster().feature_names
     except:
-        # 萬一讀不到，才用手動備案 (V20)
+        # 備案 V20
         FEATURES = [
             'open_price', 'high_price', 'low_price', 'close_price', 'volume',
             'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
@@ -54,8 +54,11 @@ except Exception as e:
 
 full_df = pd.DataFrame()
 daily_data = pd.DataFrame()
+
 try:
-    data_path = os.path.join('ML_Data', 'feature_engineering', 'training_data.csv')
+    # 🟢 [修正 1] 改讀 inference_data.csv (才有最新的一天)
+    data_path = os.path.join('ML_Data', 'feature_engineering', 'inference_data.csv')
+    
     if os.path.exists(data_path):
         full_df = pd.read_csv(data_path, dtype={'stock_id': str})
         full_df['trade_date'] = pd.to_datetime(full_df['trade_date'])
@@ -92,10 +95,13 @@ def get_ai_recommendation():
         if 'prob' not in process_df.columns:
              process_df['prob'] = model.predict_proba(process_df[FEATURES])[:, 1]
         
-        # 篩選條件：AI > 50% 且 PEG < 1.2
+        # 篩選條件：放寬 PEG 到 2.5 (V23)
         good_stocks = process_df[
             (process_df['prob'] >= 0.50) & 
-            (process_df['PEG'] < 1.75) & 
+            (
+                (process_df['PEG'] < 2.5) | 
+                (process_df['prob'] > 0.70)
+            ) & 
             (process_df['pe_ratio'] > 0)
         ]
         
@@ -146,8 +152,14 @@ def query_stock(stock_id, base_url):
     
     pos_advice, pos_money = calculate_position_size(ai_prob, peg_val, capital=100000)
     
+    # 🟢 [修正 2] 傳入 extra_data=row 以顯示籌碼
     base_msg = format_strategy_message(
-        stock_id, row['trade_date'], row['close_price'], ai_prob, strat_result
+        stock_id, 
+        row['trade_date'], 
+        row['close_price'], 
+        ai_prob, 
+        strat_result,
+        extra_data=row  # 這裡加進去
     )
     final_msg = base_msg + f"💰 資金建議: {pos_advice}\n(以十萬本金為例: ${pos_money:,})"
     
