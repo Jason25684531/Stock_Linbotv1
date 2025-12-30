@@ -1,183 +1,142 @@
-import os
-import datetime
 import pandas as pd
-import numpy as np
-import joblib
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from config import Config
-from crawler.twse_fetcher import TwseFetcher
-
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+import joblib
+import os
+import datetime
 
 # ==========================================
 # 🔧 設定區
 # ==========================================
-TEST_MODE = True       # 🟢 True: 測試模式 (只印不發 Line) | 🔴 False: 正式發送
-AI_THRESHOLD = 0.55    # 信心門檻5_push_to_line.py
+# 使用你 Config 裡的設定
+DB_URL = Config.SQLALCHEMY_DATABASE_URI
+LINE_TOKEN = Config.LINE_CHANNEL_ACCESS_TOKEN
+MODEL_PATH = os.path.join('stock_ai_model.pkl') # 假設模型在根目錄或 ML_Data
+BOND_SYMBOL = '00679B'
+MARKET_SYMBOL = '0050'
 
-# ==========================================
-# 🚀 程式主體
-# ==========================================
-
-def prepare_all_history_data(engine):
-    print("⏳ 載入歷史資料...")
-    start_date = (datetime.datetime.now() - datetime.timedelta(days=200)).strftime('%Y-%m-%d')
-    query = f"""
-    SELECT stock_id, trade_date, open_price, high_price, low_price, close_price, volume, pe_ratio, pb_ratio, yield_percent
-    FROM daily_market_data 
-    WHERE trade_date >= '{start_date}'
-    ORDER BY trade_date ASC
-    """
-    try:
-        df = pd.read_sql(query, engine)
-        df['trade_date'] = pd.to_datetime(df['trade_date'])
-        df['stock_id'] = df['stock_id'].astype(str).str.strip()
-        cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio', 'pb_ratio', 'yield_percent']
-        for col in cols: df[col] = pd.to_numeric(df[col], errors='coerce')
-        df = df.fillna(0)
-        print(f"✅ 載入 {len(df)} 筆歷史資料。")
-        return df
-    except Exception as e:
-        print(f"❌ 歷史載入失敗: {e}")
-        return pd.DataFrame()
-
-def calculate_features_in_memory(stock_id, current_row, all_history_df):
-    str_stock_id = str(stock_id).strip()
-    history_df = all_history_df[all_history_df['stock_id'] == str_stock_id].copy()
+def get_market_status(engine, date_str):
+    """判斷市場紅綠燈 (V27 雙重濾網)"""
+    query = text(f"SELECT * FROM daily_market_data WHERE stock_id='{MARKET_SYMBOL}' AND trade_date='{date_str}'")
+    with engine.connect() as conn:
+        data = conn.execute(query).mappings().fetchone()
     
-    current_df = pd.DataFrame([current_row])
-    current_df['trade_date'] = pd.to_datetime(current_df['trade_date'])
-    current_df['stock_id'] = current_df['stock_id'].astype(str).str.strip()
-
-    # 欄位翻譯機
-    rename_map = {
-        'open': 'open_price', 'high': 'high_price', 'low': 'low_price', 'close': 'close_price', 'volume': 'volume',
-        'Open': 'open_price', 'High': 'high_price', 'Low': 'low_price', 'Close': 'close_price', 'Volume': 'volume',
-        'OpeningPrice': 'open_price', 'HighestPrice': 'high_price', 'LowestPrice': 'low_price', 'ClosingPrice': 'close_price', 'TradeVolume': 'volume'
-    }
-    current_df = current_df.rename(columns=rename_map)
-
-    cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume']
-    for col in cols:
-        if col in current_df.columns: current_df[col] = pd.to_numeric(current_df[col], errors='coerce')
-
-    try:
-        full_df = pd.concat([history_df, current_df], ignore_index=True)
-        full_df = full_df.drop_duplicates(subset=['trade_date'], keep='last')
-        full_df = full_df.sort_values('trade_date')
-    except: return None
-
-    if len(full_df) < 60: return None
-
-    full_df['implied_roe'] = full_df.apply(lambda row: (row['pb_ratio'] / row['pe_ratio']) if row['pe_ratio'] > 0 else 0, axis=1)
-    close = full_df['close_price']
-    full_df['MA5'] = close.rolling(window=5).mean()
-    full_df['MA20'] = close.rolling(window=20).mean()
-    full_df['MA60'] = close.rolling(window=60).mean()
+    if not data: return "⚪ 資料不足", 0
     
-    delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    full_df['RSI'] = 100 - (100 / (1 + rs))
+    # 確保有 ma20
+    ma20 = data['ma20'] if data.get('ma20') else data['close_price']
+    bias = (data['close_price'] - data['ma60']) / data['ma60'] * 100
     
-    today_features = full_df.iloc[-1:].copy()
-    if pd.isna(today_features['MA60'].values[0]): return None
-        
-    feature_cols = [
-        'open_price', 'high_price', 'low_price', 'close_price', 'volume',
-        'pe_ratio', 'pb_ratio', 'yield_percent', 'implied_roe',
-        'MA5', 'MA20', 'MA60', 'RSI'
-    ]
-    missing = [c for c in feature_cols if c not in today_features.columns]
-    if missing: return None
+    # 雙重濾網: 股價 > 月線 > 季線
+    if data['close_price'] > ma20 and data['close_price'] > data['ma60']:
+        return "🔴 多頭 (進攻)", bias
+    elif bias < -8:
+        return "🟢 恐慌 (避險)", bias
+    else:
+        return "🟡 空頭 (觀望)", bias
 
-    return today_features[feature_cols]
+def get_ai_picks(engine, model, date_str):
+    """AI 選股 (V27 隨機森林)"""
+    # 1. 初步篩選 (流動性 + 趨勢)
+    query = text(f"""
+        SELECT * FROM daily_market_data
+        WHERE trade_date = '{date_str}' 
+        AND stock_id NOT IN ('{BOND_SYMBOL}', '{MARKET_SYMBOL}', '00632R')
+        AND volume > 2000000
+        AND close_price > ma20
+    """)
+    with engine.connect() as conn:
+        candidates = pd.read_sql(query, conn)
+    
+    if candidates.empty: return []
+
+    # 2. 準備特徵 (必須跟訓練時完全一樣)
+    features = ['rsi', 'bias', 'macd_hist', 'kd_k', 'bb_width', 'volume']
+    
+    # 確保欄位存在，缺的補 0
+    for f in features:
+        if f not in candidates.columns: candidates[f] = 0
+            
+    X = candidates[features].fillna(0)
+    
+    # 3. AI 預測
+    probs = model.predict_proba(X)[:, 1]
+    candidates['ai_score'] = probs
+    
+    # 4. 選前 5 名
+    top_picks = candidates.sort_values('ai_score', ascending=False).head(5)
+    
+    results = []
+    for _, row in top_picks.iterrows():
+        results.append({
+            'id': row['stock_id'],
+            'score': row['ai_score'],
+            'price': row['close_price']
+        })
+    return results
 
 def main():
-    print(f"🚀 V13.9 Line 推播 (潔淨美化版) 啟動...")
-    try:
-        if not TEST_MODE: line_bot_api = LineBotApi(Config.LINE_CHANNEL_ACCESS_TOKEN)
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
-        fetcher = TwseFetcher()
-        model = joblib.load(os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl'))
-        print("✅ 模型載入成功")
-    except Exception as e:
-        print(f"❌ 初始化失敗: {e}"); return
-
-    target_date = datetime.datetime.now().strftime('%Y%m%d')
-    # target_date = '20251216' 
-    print(f"📅 目標日期: {target_date}")
+    print("🚀 V27 Line 推播啟動...")
+    line_bot_api = LineBotApi(LINE_TOKEN)
+    engine = create_engine(DB_URL)
     
-    daily_df = fetcher.fetch_daily_data(target_date)
-    if daily_df is None or daily_df.empty: return
-    daily_df['stock_id'] = daily_df['stock_id'].astype(str).str.strip()
-
-    all_history_df = prepare_all_history_data(engine)
-    if all_history_df.empty: return
-
-    print(f"📊 開始 AI 運算 (共 {len(daily_df)} 檔)...")
-    candidates = []
-    
-    for index, row in daily_df.iterrows():
-        stock_id = row['stock_id']
-        try:
-            # 排除 DR 股
-            if stock_id.startswith('91'): continue
-            
-            # 基本面濾網 (PE 允許是 nan/0，讓 ETF 通過)
-            pe = float(row['pe_ratio']) if row['pe_ratio'] else 0
-            vol = float(row['volume'])
-            
-            # 濾掉沒量 (<500張) 或 PE 太高 (>30，但 0 可以)
-            if vol < 500: continue
-            if pe > 30: continue
-            
-            features = calculate_features_in_memory(stock_id, row, all_history_df)
-            if features is None: continue
-            
-            # AI 預測
-            prob = model.predict_proba(features)[:, 1][0]
-            
-            # 🔇 這裡把 print 拿掉了，還你清靜
-            
-            if prob >= AI_THRESHOLD:
-                final_price = features['close_price'].values[0]
-                candidates.append({
-                    'id': stock_id, 'name': row['stock_name'], 
-                    'prob': prob, 'price': final_price,
-                    'roe': features['implied_roe'].values[0],
-                    'pe': pe
-                })
-
-        except Exception as e:
-            continue
-
-    if candidates:
-        msg = f"🔥 【V12 價值動能選股】\n命中: {len(candidates)}檔\n" + "-"*20 + "\n"
-        candidates.sort(key=lambda x: x['prob'], reverse=True)
-        
-        # 只取前 5 名
-        for stock in candidates[:5]:
-            # 美化顯示: 如果 PE 是 0，顯示 "ETF/無"
-            pe_str = f"{stock['pe']}" if stock['pe'] > 0 else "ETF/無"
-            
-            msg += f"🎫 {stock['id']} {stock['name']}\n"
-            msg += f"💲 {stock['price']} | 🧠 {stock['prob']:.1%}\n"
-            msg += f"💎 PE: {pe_str} | ROE: {stock['roe']:.1%}\n"
-            msg += "-"*20 + "\n"
-        
-        print("\n" + "="*20); print(msg); print("="*20)
-        
-        if not TEST_MODE:
-            line_bot_api.broadcast(TextSendMessage(text=msg))
-            print("✅ Line 推播已發送！")
+    # 1. 載入模型
+    if os.path.exists(MODEL_PATH):
+        model = joblib.load(MODEL_PATH)
+    elif os.path.exists(os.path.join("ML_Data", "pkl", "stock_ai_model.pkl")):
+        model = joblib.load(os.path.join("ML_Data", "pkl", "stock_ai_model.pkl"))
     else:
-        print("💤 今日無符合標準的股票。")
+        print("❌ 找不到模型 (stock_ai_model.pkl)，請先跑訓練！")
+        return
+
+    # 2. 取得最新日期
+    with engine.connect() as conn:
+        latest_date = conn.execute(text("SELECT MAX(trade_date) FROM daily_market_data")).scalar()
+    
+    if not latest_date:
+        print("❌ 資料庫無資料")
+        return
+
+    date_str = latest_date.strftime("%Y-%m-%d")
+    print(f"📅 資料日期: {date_str}")
+
+    # 3. 判斷市場
+    status, bias = get_market_status(engine, date_str)
+    
+    # 4. 組合訊息
+    msg = f"📅 【StockAI 日報】 {date_str}\n"
+    msg += f"--------------------------\n"
+    msg += f"🚦 市場狀態: {status}\n"
+    msg += f"📊 大盤乖離: {bias:.2f}%\n"
+    msg += f"--------------------------\n"
+    
+    if "多頭" in status:
+        picks = get_ai_picks(engine, model, date_str)
+        if picks:
+            msg += "🔥 AI 嚴選飆股:\n"
+            for p in picks:
+                msg += f"🎫 {p['id']} (${p['price']})\n"
+                msg += f"   🧠 信心: {int(p['score']*100)}%\n"
+        else:
+            msg += "⚠️ 無符合高分個股\n"
+            
+    elif "恐慌" in status:
+        msg += f"🛡️ 建議避險: 買入 {BOND_SYMBOL}\n"
+        
+    else:
+        msg += "☕ 建議空手觀望，多看少做\n"
+        msg += "等待大盤站上月線再進場。"
+
+    print(msg)
+    
+    # 5. 發送廣播
+    try:
+        line_bot_api.broadcast(TextSendMessage(text=msg))
+        print("✅ Line 推播已發送！")
+    except Exception as e:
+        print(f"❌ 推播失敗: {e}")
 
 if __name__ == "__main__":
     main()
-    

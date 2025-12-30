@@ -4,11 +4,12 @@ from sqlalchemy import create_engine, text
 import time
 import random
 from datetime import datetime, timedelta, date
+from config import Config
 
 # ============================================
-# ⚙️ 設定區
+# ⚙️ 設定區 (統一使用 Config)
 # ============================================
-DB_URL = "mysql+pymysql://root:my_secret_password@localhost:3306/stock_ai_db"
+DB_URL = Config.SQLALCHEMY_DATABASE_URI
 
 # 偽裝瀏覽器，避免被擋
 HEADERS = {
