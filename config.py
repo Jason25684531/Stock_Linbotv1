@@ -30,8 +30,9 @@ class Config:
     # ==========================================
     MODEL_PATH = os.getenv('MODEL_PATH', 'ML_Data/pkl/stock_ai_model.pkl')
     
-    # AI 核心特徵 (唯一定義處，其他檔案請 import)
-    FEATURES = ['rsi', 'bias', 'macd_hist', 'kd_k', 'bb_width', 'volume']
+    # V31 混合策略特徵 (使用比例特徵)
+    FEATURES = ['rsi', 'bias', 'macd_hist', 'kd_k', 'bb_width', 
+                'volume_ratio', 'foreign_ratio', 'trust_ratio']
     
     # ==========================================
     # 📊 交易參數

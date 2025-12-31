@@ -3,19 +3,17 @@ from sqlalchemy import create_engine, text
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from config import Config
-import joblib
+from tool.strategy import get_v30_candidates, V30_PARAMS, calculate_v30_signal
 import os
 import datetime
 
 # ==========================================
 # 🔧 設定區
 # ==========================================
-# 使用你 Config 裡的設定
 DB_URL = Config.SQLALCHEMY_DATABASE_URI
 LINE_TOKEN = Config.LINE_CHANNEL_ACCESS_TOKEN
-MODEL_PATH = os.path.join('stock_ai_model.pkl') # 假設模型在根目錄或 ML_Data
-BOND_SYMBOL = '00679B'
-MARKET_SYMBOL = '0050'
+BOND_SYMBOL = Config.BOND_SYMBOL
+MARKET_SYMBOL = Config.MARKET_SYMBOL
 
 def get_market_status(engine, date_str):
     """判斷市場紅綠燈 (V27 雙重濾網)"""
@@ -37,61 +35,56 @@ def get_market_status(engine, date_str):
     else:
         return "🟡 空頭 (觀望)", bias
 
-def get_ai_picks(engine, model, date_str):
-    """AI 選股 (V27 隨機森林)"""
-    # 1. 初步篩選 (流動性 + 趨勢)
+def get_v30_picks(engine, date_str):
+    """V30 策略選股（40% 報酬實績）"""
+    # 1. 抓取當日全市場資料
     query = text(f"""
         SELECT * FROM daily_market_data
         WHERE trade_date = '{date_str}' 
         AND stock_id NOT IN ('{BOND_SYMBOL}', '{MARKET_SYMBOL}', '00632R')
-        AND volume > 2000000
-        AND close_price > ma20
+        AND close_price > 10
+        AND close_price < 500
     """)
+    
     with engine.connect() as conn:
-        candidates = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn)
     
-    if candidates.empty: return []
+    if df.empty: 
+        return []
 
-    # 2. 準備特徵 (必須跟訓練時完全一樣)
-    features = ['rsi', 'bias', 'macd_hist', 'kd_k', 'bb_width', 'volume']
+    # 2. 使用 V30 統一篩選函數
+    candidates = get_v30_candidates(df)
     
-    # 確保欄位存在，缺的補 0
-    for f in features:
-        if f not in candidates.columns: candidates[f] = 0
-            
-    X = candidates[features].fillna(0)
+    if candidates.empty:
+        return []
     
-    # 3. AI 預測
-    probs = model.predict_proba(X)[:, 1]
-    candidates['ai_score'] = probs
+    # 3. 依外資買超或成交量排序，取前 5 名
+    if 'foreign_buy' in candidates.columns:
+        top_picks = candidates.sort_values('foreign_buy', ascending=False).head(5)
+    else:
+        top_picks = candidates.sort_values('volume', ascending=False).head(5)
     
-    # 4. 選前 5 名
-    top_picks = candidates.sort_values('ai_score', ascending=False).head(5)
-    
+    # 4. 產生結果
     results = []
     for _, row in top_picks.iterrows():
+        v30_result = calculate_v30_signal(row)
         results.append({
             'id': row['stock_id'],
-            'score': row['ai_score'],
-            'price': row['close_price']
+            'price': row['close_price'],
+            'rsi': row.get('rsi', 0),
+            'stop_loss': v30_result['stop_loss'],
+            'take_profit': v30_result['take_profit'],
+            'foreign': int(row.get('foreign_buy', 0) / 1000)  # 轉張
         })
+    
     return results
 
 def main():
-    print("🚀 V27 Line 推播啟動...")
+    print("🚀 V3.0 Line 推播啟動 (V30策略)...")
     line_bot_api = LineBotApi(LINE_TOKEN)
     engine = create_engine(DB_URL)
     
-    # 1. 載入模型
-    if os.path.exists(MODEL_PATH):
-        model = joblib.load(MODEL_PATH)
-    elif os.path.exists(os.path.join("ML_Data", "pkl", "stock_ai_model.pkl")):
-        model = joblib.load(os.path.join("ML_Data", "pkl", "stock_ai_model.pkl"))
-    else:
-        print("❌ 找不到模型 (stock_ai_model.pkl)，請先跑訓練！")
-        return
-
-    # 2. 取得最新日期
+    # 1. 取得最新日期
     with engine.connect() as conn:
         latest_date = conn.execute(text("SELECT MAX(trade_date) FROM daily_market_data")).scalar()
     
@@ -102,8 +95,11 @@ def main():
     date_str = latest_date.strftime("%Y-%m-%d")
     print(f"📅 資料日期: {date_str}")
 
-    # 3. 判斷市場
+    # 2. 判斷市場狀態
     status, bias = get_market_status(engine, date_str)
+    
+    # 3. V30 策略選股
+    picks = get_v30_picks(engine, date_str)
     
     # 4. 組合訊息
     msg = f"📅 【StockAI 日報】 {date_str}\n"
@@ -112,22 +108,18 @@ def main():
     msg += f"📊 大盤乖離: {bias:.2f}%\n"
     msg += f"--------------------------\n"
     
-    if "多頭" in status:
-        picks = get_ai_picks(engine, model, date_str)
-        if picks:
-            msg += "🔥 AI 嚴選飆股:\n"
-            for p in picks:
-                msg += f"🎫 {p['id']} (${p['price']})\n"
-                msg += f"   🧠 信心: {int(p['score']*100)}%\n"
-        else:
-            msg += "⚠️ 無符合高分個股\n"
-            
-    elif "恐慌" in status:
-        msg += f"🛡️ 建議避險: 買入 {BOND_SYMBOL}\n"
-        
+    if picks:
+        msg += "🚀 V30 策略推薦 (40%實績):\n"
+        for p in picks:
+            msg += f"🎫 {p['id']} (${p['price']:.2f})\n"
+            msg += f"   RSI: {p['rsi']:.1f} | 外資: {p['foreign']:+,}張\n"
+            msg += f"   🛡️ 停損: ${p['stop_loss']:.2f} | 🎯 停利: ${p['take_profit']:.2f}\n"
+        msg += f"--------------------------\n"
+        msg += f"⏰ 持有期限: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+        msg += "💡 嚴格執行停損停利"
     else:
-        msg += "☕ 建議空手觀望，多看少做\n"
-        msg += "等待大盤站上月線再進場。"
+        msg += "🐢 今日無符合V30條件標的\n"
+        msg += "☕ 建議空手觀望"
 
     print(msg)
     

@@ -1,11 +1,12 @@
 """
-Line Bot 主程式 (V2.0 動態設定增強版)
+Line Bot 主程式 (V31 混合策略版)
 ============================================
 功能:
-1. AI 選股推薦（雙重濾網）
-2. 個股查詢（含策略報告）
-3. 動態參數調整（資料庫設定）
-4. 模式切換（穩健/積極）
+1. V31 混合策略選股（V30篩選 + ML智慧排名）
+2. V30 純技術分析選股（均線突破+量能確認）
+3. 個股查詢（含策略報告+停損停利）
+4. 動態參數調整（資料庫設定）
+5. 目標：獲利 10-20%，停損 5%
 """
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -18,7 +19,12 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from config import Config
 
 # 引入策略模組
-from tool.strategy import calculate_pivot_strategy, format_strategy_message, calculate_position_size
+from tool.strategy import (
+    calculate_pivot_strategy, format_strategy_message, calculate_position_size, 
+    calculate_v30_signal, V30_PARAMS, get_best_stocks_v31_hybrid
+)
+# 引入資料庫輔助模組
+from tool.db_helper import get_setting, update_setting, validate_setting, get_stock_data
 
 app = Flask(__name__)
 
@@ -40,90 +46,8 @@ except Exception as e:
 
 
 # ============================================
-# 🔧 設定管理函數（安全版 - 參數化查詢）
+# 🔧 設定管理函數已移至 tool.db_helper 模組
 # ============================================
-
-def get_setting(key, default_value=None):
-    """
-    從資料庫讀取設定值（防 SQL Injection）
-    
-    Args:
-        key: 設定鍵值
-        default_value: 預設值
-    
-    Returns:
-        設定值字串
-    """
-    try:
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT setting_value FROM user_settings WHERE setting_key = :key"),
-                {'key': key}
-            ).scalar()
-        return result if result is not None else default_value
-    except Exception as e:
-        print(f"⚠️ 讀取設定失敗 ({key}): {e}")
-        return default_value
-
-
-def update_setting(key, value):
-    """
-    更新資料庫設定值（防 SQL Injection）
-    
-    Args:
-        key: 設定鍵值
-        value: 新設定值
-    
-    Returns:
-        是否成功
-    """
-    try:
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
-        with engine.connect() as conn:
-            conn.execute(
-                text("""
-                    INSERT INTO user_settings (setting_key, setting_value) 
-                    VALUES (:key, :value)
-                    ON DUPLICATE KEY UPDATE 
-                        setting_value = :value,
-                        updated_at = CURRENT_TIMESTAMP
-                """),
-                {'key': key, 'value': value}
-            )
-            conn.commit()
-        return True
-    except Exception as e:
-        print(f"❌ 更新設定失敗 ({key}={value}): {e}")
-        return False
-
-
-def validate_setting(key, value):
-    """
-    驗證參數合法性
-    
-    Args:
-        key: 設定鍵值
-        value: 待驗證的值
-    
-    Returns:
-        (是否合法, 錯誤訊息)
-    """
-    validators = {
-        'ai_threshold': lambda v: (0 <= float(v) <= 1, "AI信心需在 0-100 之間"),
-        'stop_loss': lambda v: (0 < float(v) < 1, "停損需在 0-100% 之間"),
-        'take_profit': lambda v: (0 < float(v) < 1, "停利需在 0-100% 之間"),
-        'mode': lambda v: (v in ['conservative', 'aggressive'], "模式只能是 conservative 或 aggressive"),
-        'ai_top_n': lambda v: (1 <= int(v) <= 10, "推薦數量需在 1-10 之間"),
-    }
-    
-    if key in validators:
-        try:
-            is_valid, err_msg = validators[key](value)
-            return is_valid, err_msg
-        except:
-            return False, "參數格式錯誤"
-    return True, ""
 
 
 
@@ -131,136 +55,88 @@ def validate_setting(key, value):
 # 📊 核心業務邏輯
 # ============================================
 
-def get_db_data(stock_id=None, date_str=None):
-    """
-    從資料庫撈取資料（安全版 - 參數化查詢）
-    
-    Args:
-        stock_id: 股票代號（None 代表全市場）
-        date_str: 日期字串（None 代表最新）
-    
-    Returns:
-        (DataFrame, 日期字串)
-    """
-    engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
-    
-    try:
-        # 如果沒指定日期，抓最新的一天
-        if not date_str:
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT MAX(trade_date) FROM daily_market_data")).scalar()
-                if not result:
-                    return pd.DataFrame(), None
-                date_str = result.strftime('%Y-%m-%d')
 
-        # 參數化查詢（防 SQL Injection）
-        if stock_id:
-            sql = text("""
-                SELECT * FROM daily_market_data 
-                WHERE trade_date = :date AND stock_id = :sid
-            """)
-            df = pd.read_sql(sql, engine, params={'date': date_str, 'sid': stock_id})
-        else:
-            sql = text("""
-                SELECT * FROM daily_market_data 
-                WHERE trade_date = :date 
-                AND stock_id NOT IN ('0050', '00679B', '00632R')
-            """)
-            df = pd.read_sql(sql, engine, params={'date': date_str})
-            
-        return df, date_str
-        
-    except Exception as e:
-        print(f"❌ 資料庫查詢失敗: {e}")
-        return pd.DataFrame(), None
-
-
-def get_ai_recommendation():
+def get_v30_recommendation():
     """
-    AI 推薦邏輯（V2.0 動態參數版）
+    V30 策略選股（均線突破 + 量能確認）
+    已在回測中實現 40% 報酬率
     
     Returns:
         推薦訊息字串
     """
-    if model is None: 
-        return "⚠️ AI 模型維護中..."
-    
     try:
-        # 1. 讀取動態設定
-        mode = get_setting('mode', 'conservative')
-        ai_threshold = float(get_setting('ai_threshold', '0.5'))
-        ai_top_n = int(get_setting('ai_top_n', '5'))
-        
-        # 根據模式選擇成交量門檻
-        if mode == 'aggressive':
-            volume_filter = int(get_setting('volume_filter_aggressive', '1000000'))
-        else:
-            volume_filter = int(get_setting('volume_filter_conservative', '2000000'))
-        
-        use_ma20 = get_setting('use_ma20_filter', 'true') == 'true'
-        
-        # 2. 撈取最新資料
-        df, date_str = get_db_data()
+        # 撈取最新資料
+        df, date_str = get_stock_data()
         if df.empty: 
             return "💤 今日無資料"
 
-        # 3. 動態濾網
-        if 'ma20' not in df.columns and use_ma20:
-            return "⚠️ 資料庫缺 MA20，請執行 tool/calc_indicators.py"
-        
-        # 基礎過濾：成交量
-        candidates = df[df['volume'] > volume_filter].copy()
-        
-        # 進階過濾：月線（僅穩健模式）
-        if use_ma20 and mode == 'conservative':
-            candidates = candidates[candidates['close_price'] > candidates['ma20']]
-        
-        if candidates.empty: 
-            return f"🐢 今日無符合條件的股票\n模式: {mode} | 門檻: {int(ai_threshold*100)}%"
+        # 確保必要欄位存在
+        required_cols = ['close_price', 'ma20', 'ma60', 'volume', 'rsi']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            return f"⚠️ 資料庫缺少欄位: {', '.join(missing_cols)}\n請執行 tool/calc_indicators.py"
 
-        # 4. AI 預測
-        for f in Config.FEATURES:
-            if f not in candidates.columns: 
-                candidates[f] = 0
-            
-        X = candidates[Config.FEATURES].fillna(0)
-        candidates['prob'] = model.predict_proba(X)[:, 1]
+        # 套用 V30 策略篩選
+        picks = []
+        for _, row in df.iterrows():
+            v30_result = calculate_v30_signal(row)
+            if v30_result['signal_strength'] == 'strong':
+                picks.append({
+                    'stock_id': row['stock_id'],
+                    'close_price': row['close_price'],
+                    'rsi': row.get('rsi', 0),
+                    'volume': row.get('volume', 0),
+                    'stop_loss': v30_result['stop_loss'],
+                    'take_profit': v30_result['take_profit'],
+                    'foreign_buy': row.get('foreign_buy', 0),
+                })
+
+        if not picks:
+            return f"🐢 V30策略：今日無符合條件股票\n📅 {date_str}"
+
+# get_db_data 已移至 tool.db_helper.get_stock_data
+    
+    Returns:
+        推薦訊息字串
+    """
+    try:
+        # 1. 撈取最新資料
+        df, date_str = get_stock_data()
+        if df.empty: 
+            return "💤 今日無資料"
+
+        # 2. 使用 V31 混合策略選股
+        picks = get_best_stocks_v31_hybrid(df, top_n=5)
         
-        # 5. 篩選 & 排序
-        high_conf = candidates[candidates['prob'] >= ai_threshold]
-        if high_conf.empty:
-            return f"⚠️ 無股票信心 > {int(ai_threshold*100)}%\n請考慮降低門檻或切換積極模式"
-        
-        picks = high_conf.sort_values('prob', ascending=False).head(ai_top_n)
-        
-        # 6. 生成訊息
-        mode_emoji = "🛡️" if mode == "conservative" else "😈"
-        msg = f"{mode_emoji} 【AI 選股 - {mode.upper()}】\n"
-        msg += f"📅 {date_str} | 🎯 門檻 {int(ai_threshold*100)}%\n"
-        msg += "-" * 30 + "\n"
+        if picks.empty: 
+            return f"🐢 V31策略：今日無符合條件股票\n📅 {date_str}\n\n💡 V30條件：均線多頭 + 量能>300萬 + 40<RSI<70"
+
+        # 3. 生成訊息
+        msg = f"🧠 【V31 混合策略推薦】\n"
+        msg += f"📅 {date_str}\n"
+        msg += f"🎯 目標: 獲利10-20% | 停損5%\n"
+        msg += "-" * 28 + "\n"
         
         for idx, (_, row) in enumerate(picks.iterrows(), 1):
-            msg += f"{idx}. {row['stock_id']} (${row['close_price']:.2f})\n"
-            msg += f"   🧠 {row['prob']:.1%} | RSI {row['rsi']:.1f}\n"
+            ai_score = row.get('ai_score', 0)
+            stop_loss = row['close_price'] * (1 - V30_PARAMS['STOP_LOSS'])
+            take_profit = row['close_price'] * (1 + V30_PARAMS['TAKE_PROFIT'])
             
-            # 顯示籌碼（可選）
-            if get_setting('enable_chips_display', 'true') == 'true':
-                foreign = int(row.get('foreign_buy', 0) / 1000)  # 轉張
-                if abs(foreign) > 0:
-                    chip_emoji = "🔴" if foreign > 0 else "🟢"
-                    msg += f"   {chip_emoji} 外資 {foreign:+,} 張\n"
+            msg += f"{idx}. {row['stock_id']} (${row['close_price']:.2f})\n"
+            msg += f"   🧠 AI {ai_score:.0%} | RSI {row['rsi']:.1f}\n"
+            msg += f"   🛡️ 停損 ${stop_loss:.2f} | 🎯 停利 ${take_profit:.2f}\n"
         
-        msg += "-" * 30 + "\n"
-        msg += f"💡 輸入股號查看詳細策略"
+        msg += "-" * 28 + "\n"
+        msg += f"⏰ 建議持有: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+        msg += "⚠️ AI僅供參考，請嚴格執行停損"
         
         return msg
         
     except Exception as e:
         import traceback
-        print(f"❌ AI 推薦失敗: {e}")
+        print(f"❌ V31 推薦失敗: {e}")
         traceback.print_exc()
         return f"❌ 運算錯誤: {str(e)[:100]}"
-
 
 
 def query_stock(stock_id):
@@ -275,7 +151,7 @@ def query_stock(stock_id):
     """
     try:
         # 1. 撈取資料
-        df, date_str = get_db_data(stock_id=stock_id)
+        df, date_str = get_stock_data(stock_id=stock_id)
         if df.empty: 
             return f"🔍 找不到 {stock_id} 的資料"
         
@@ -362,26 +238,32 @@ def get_settings_info():
         設定資訊字串
     """
     try:
-        mode = get_setting('mode', 'conservative')
+        # AI 設定
         ai_threshold = float(get_setting('ai_threshold', '0.5'))
-        ai_top_n = int(get_setting('ai_top_n', '5'))
-        stop_loss = float(get_setting('stop_loss', '0.08'))
-        take_profit = float(get_setting('take_profit', '0.20'))
         
-        mode_name = "🛡️ 穩健" if mode == 'conservative' else "😈 積極"
+        # V30 策略參數
+        v30_stop_loss = float(get_setting('v30_stop_loss', str(V30_PARAMS['STOP_LOSS'])))
+        v30_take_profit = float(get_setting('v30_take_profit', str(V30_PARAMS['TAKE_PROFIT'])))
+        v30_max_hold = int(get_setting('v30_max_hold_days', str(V30_PARAMS['MAX_HOLD_DAYS'])))
         
         msg = "⚙️ 【當前設定】\n"
         msg += "-" * 30 + "\n"
-        msg += f"策略模式: {mode_name}\n"
-        msg += f"AI 門檻: {int(ai_threshold*100)}%\n"
-        msg += f"推薦數量: 前 {ai_top_n} 名\n"
-        msg += f"停損點: {int(stop_loss*100)}%\n"
-        msg += f"停利點: {int(take_profit*100)}%\n"
+        msg += "🚀 V30 策略參數:\n"
+        msg += f"  🛡️ 停損: {int(v30_stop_loss*100)}%\n"
+        if v30_take_profit > 0:
+            msg += f"  🎯 停利: {int(v30_take_profit*100)}%\n"
+        else:
+            msg += f"  🎯 停利: 不停利（持有至到期）\n"
+        msg += f"  ⏰ 最長持有: {v30_max_hold}天\n"
+        msg += "\n"
+        msg += "🧠 AI 參數:\n"
+        msg += f"  AI 門檻: {int(ai_threshold*100)}%\n"
         msg += "-" * 30 + "\n"
         msg += "💡 可用指令:\n"
-        msg += "• 切換積極 / 切換穩健\n"
-        msg += "• 設定信心 60 (設定為60%)\n"
-        msg += "• 設定推薦 3 (改為推薦前3名)"
+        msg += "• 設定停損 5 (設為5%)\n"
+        msg += "• 設定停利 20 (設為20%)\n"
+        msg += "• 設定停利 0 (不停利)\n"
+        msg += "• 設定信心 60 (AI門檻60%)"
         
         return msg
     except Exception as e:
@@ -440,26 +322,50 @@ def handle_message(event):
                 reply = "❌ 設定失敗"
         except ValueError:
             reply = "❌ 格式錯誤\n正確用法：設定信心 60"
-            
-    elif msg_text.startswith("設定推薦"):
+    
+    # ========== V30 參數調整指令 ==========
+    elif msg_text.startswith("設定停損"):
         try:
-            value_str = msg_text.replace("設定推薦", "").strip()
-            value = int(value_str)
-            
-            is_valid, err_msg = validate_setting('ai_top_n', str(value))
-            if not is_valid:
-                reply = f"❌ {err_msg}"
-            elif update_setting('ai_top_n', str(value)):
-                reply = f"📊 推薦數量已設為前 {value} 名"
+            value_str = msg_text.replace("設定停損", "").strip()
+            value = float(value_str) / 100
+            if 0.01 <= value <= 0.20:  # 1%-20% 範圍
+                if update_setting('v30_stop_loss', str(value)):
+                    reply = f"🛡️ V30停損已設為 {int(value*100)}%\n下次選股將使用新參數"
+                else:
+                    reply = "❌ 設定失敗"
             else:
-                reply = "❌ 設定失敗"
+                reply = "❌ 停損需在 1%-20% 之間\n範例：設定停損 5"
         except ValueError:
-            reply = "❌ 格式錯誤\n正確用法：設定推薦 3"
+            reply = "❌ 格式錯誤\n正確用法：設定停損 5（代表5%）"
+    
+    elif msg_text.startswith("設定停利"):
+        try:
+            value_str = msg_text.replace("設定停利", "").strip()
+            if value_str == "0" or value_str.lower() == "不停利":
+                if update_setting('v30_take_profit', '0'):
+                    reply = f"🎯 V30停利已取消\n將持有至停損或到期（{V30_PARAMS['MAX_HOLD_DAYS']}天）"
+                else:
+                    reply = "❌ 設定失敗"
+            else:
+                value = float(value_str) / 100
+                if 0.05 <= value <= 0.50:  # 5%-50% 範圍
+                    if update_setting('v30_take_profit', str(value)):
+                        reply = f"🎯 V30停利已設為 {int(value*100)}%\n下次選股將使用新參數"
+                    else:
+                        reply = "❌ 設定失敗"
+                else:
+                    reply = "❌ 停利需在 5%-50% 之間\n範例：設定停利 20（代表20%）\n或輸入「設定停利 0」取消停利"
+        except ValueError:
+            reply = "❌ 格式錯誤\n用法：\n• 設定停利 20（20%停利）\n• 設定停利 0（不停利）"
             
     elif msg_text == "查看設定":
         reply = get_settings_info()
         
     # ========== 核心功能指令 ==========
+    elif msg_text in ["V30", "v30", "策略"]:
+        # V30 策略選股（40% 報酬實績）
+        reply = get_v30_recommendation()
+        
     elif msg_text in ["推薦", "選股", "AI"]:
         reply = get_ai_recommendation()
         
@@ -475,23 +381,23 @@ def handle_message(event):
             
     # ========== 說明選單 ==========
     else:
-        mode = get_setting('mode', 'conservative')
-        mode_emoji = "🛡️" if mode == 'conservative' else "😈"
-        
-        reply = f"🤖 【StockAI Line Bot】\n"
-        reply += f"當前模式: {mode_emoji}\n"
+        reply = f"🤖 【StockAI Line Bot V3.0】\n"
         reply += "\n📋 指令清單:\n"
         reply += "-" * 30 + "\n"
         reply += "【選股功能】\n"
-        reply += "• 推薦 → AI 選股推薦\n"
+        reply += "• V30 → 🔥純技術分析 (40%報酬)\n"
+        reply += "• 推薦 → 🧠V30篩選+AI評分 (實驗)\n"
         reply += "• 2330 → 個股診斷\n"
-        reply += "\n【設定調整】\n"
-        reply += "• 切換積極 / 切換穩健\n"
-        reply += "• 設定信心 60\n"
-        reply += "• 設定推薦 3\n"
+        reply += "\n【V30 參數調整】✨NEW\n"
+        reply += "• 設定停損 5 (停損5%)\n"
+        reply += "• 設定停利 20 (停利20%)\n"
+        reply += "• 設定停利 0 (不停利)\n"
         reply += "• 查看設定\n"
+        reply += "\n【AI 設定】\n"
+        reply += "• 設定信心 60 (AI門檻60%)\n"
         reply += "-" * 30 + "\n"
-        reply += "💡 試試看輸入「推薦」"
+        reply += "💡 建議優先使用「V30」\n"
+        reply += "⚠️ AI功能僅供參考"
         
     line_bot_api.reply_message(
         event.reply_token, 
@@ -501,7 +407,8 @@ def handle_message(event):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 Line Bot 啟動中...")
+    print("🚀 Line Bot V3.0 啟動中 (V30策略增強版)")
     print(f"📋 模型狀態: {'✅ 已載入' if model else '❌ 未載入'}")
+    print(f"💡 主要策略: V30 純技術分析 (40%報酬實績)")
     print("=" * 60)
     app.run(host='0.0.0.0', port=5000, debug=False)
