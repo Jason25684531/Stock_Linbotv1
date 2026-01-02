@@ -155,21 +155,31 @@ def train_xgboost():
     for _, row in feature_importance.iterrows():
         print(f"  {row['feature']:<15} {'█' * int(row['importance'] * 100)} {row['importance']:.3f}")
     
-    # 8. 存檔（包含特徵列表，確保推論時特徵順序一致）
+    # 8. 存檔（包含完整元數據，確保推論時特徵順序一致）
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     
-    # 儲存模型和特徵列表（關鍵：確保推論時特徵順序一致）
+    # 🔥 關鍵：儲存完整的模型元數據
     model_data = {
         'model': model,
-        'features': available_features,
-        'version': 'V31'
+        'features': available_features,  # 特徵列表（順序關鍵）
+        'version': 'V31',
+        'training_date': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'look_ahead_days': LOOK_AHEAD_DAYS,
+        'target_return': TARGET_RETURN,
+        'train_samples': len(X_train),
+        'test_samples': len(X_test),
+        'accuracy': accuracy_score(y_test, y_pred),
+        'precision': precision_score(y_test, y_pred)
     }
     joblib.dump(model_data, MODEL_PATH)
     
     print(f"\n✅ XGBoost V31 模型已儲存至: {MODEL_PATH}")
     print(f"📋 特徵列表 (順序很重要): {available_features}")
+    print(f"📊 訓練日期: {model_data['training_date']}")
+    print(f"🎯 模型指標: 準確率 {model_data['accuracy']:.2%} | 精準率 {model_data['precision']:.2%}")
     print("🎉 V31 混合策略訓練完成！")
     print("\n💡 下一步：執行 debug_local.py 輸入「推薦」測試混合策略")
+    print("⚠️ 重要：推論時必須使用模型儲存的特徵列表，避免維度不一致錯誤")
 
 if __name__ == "__main__":
     train_xgboost()

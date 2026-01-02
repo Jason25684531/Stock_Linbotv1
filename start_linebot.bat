@@ -5,12 +5,13 @@ REM 版本: V3.0 (V30策略增強版)
 REM 用途: 啟動 Flask Line Bot 服務
 REM ============================================
 
-REM 設定專案目錄
-cd /d "d:\01_Project\Stocke\Stock_Linbotv1"
+REM 使用相對路徑，自動切換到批次檔所在目錄
+cd /d "%~dp0"
 
 echo ============================================
 echo   Stock AI Line Bot V3.0
 echo   啟動 Flask 服務中...
+echo   工作目錄: %CD%
 echo ============================================
 
 REM 啟動虛擬環境

@@ -25,7 +25,12 @@ _cached_features = None
 
 
 def _load_v31_model():
-    """載入 V31 混合策略模型（帶快取）"""
+    """
+    載入 V31 混合策略模型（帶快取與特徵驗證）
+    
+    Returns:
+        (model, features): 模型物件和特徵列表
+    """
     global _cached_model, _cached_features
     
     if _cached_model is not None:
@@ -42,16 +47,38 @@ def _load_v31_model():
                 if isinstance(data, dict) and 'model' in data:
                     _cached_model = data['model']
                     _cached_features = data.get('features', [])
-                    print(f"✅ V31 模型載入成功: {path}")
+                    
+                    # 🔥 關鍵：驗證特徵列表
+                    if _cached_features:
+                        # 檢查模型特徵與 Config 特徵是否一致
+                        config_features = set(Config.FEATURES)
+                        model_features = set(_cached_features)
+                        
+                        if config_features != model_features:
+                            print("⚠️ 警告：模型特徵與 Config 不一致！")
+                            print(f"   Config 特徵: {Config.FEATURES}")
+                            print(f"   模型特徵: {_cached_features}")
+                            print("   → 將使用模型儲存的特徵列表（確保維度一致）")
+                        
+                        # 無論如何，都使用模型儲存的特徵列表（避免維度錯誤）
+                        print(f"✅ V31 模型載入成功: {path}")
+                        print(f"📋 使用特徵列表: {_cached_features}")
+                    else:
+                        print(f"✅ 模型載入成功，但未找到特徵列表，使用 Config 預設")
+                        _cached_features = Config.FEATURES
+                    
                     return _cached_model, _cached_features
                 else:
                     # 舊格式：直接是模型，使用 Config 定義的特徵
                     _cached_model = data
                     _cached_features = Config.FEATURES
+                    print(f"⚠️ 載入舊版模型格式: {path}")
+                    print(f"📋 使用 Config 預設特徵: {_cached_features}")
                     return _cached_model, _cached_features
             except Exception as e:
                 print(f"⚠️ 載入模型失敗 ({path}): {e}")
     
+    print("❌ 未找到可用的模型文件")
     return None, None
 
 
@@ -397,3 +424,142 @@ def calculate_position_size(prob, peg, capital=100000):
     else:
         reason = "PEG太高" if peg >= 2.5 else "信心不足"
         return f"☕ 觀望 ({reason})", 0
+
+
+def format_v30_recommendation(picks, date_str):
+    """
+    格式化 V30 策略推薦訊息
+    
+    Args:
+        picks: list of dict，推薦股票列表
+        date_str: 日期字串
+    
+    Returns:
+        str: 格式化後的推薦訊息
+    """
+    if not picks:
+        return f"🐢 V30策略：今日無符合條件股票\n📅 {date_str}"
+    
+    msg = f"🔥 【V30 純技術面推薦】\n"
+    msg += f"📅 {date_str}\n"
+    msg += f"🎯 目標: 獲利10-20% | 停損5%\n"
+    msg += "-" * 28 + "\n"
+    
+    for idx, pick in enumerate(picks, 1):
+        msg += f"{idx}. {pick['stock_id']} (${pick['close_price']:.2f})\n"
+        msg += f"   📊 RSI {pick['rsi']:.1f} | 量 {int(pick['volume']/10000)}萬\n"
+        msg += f"   🛡️ 停損 ${pick['stop_loss']:.2f} | 🎯 停利 ${pick['take_profit']:.2f}\n"
+        
+        # 籌碼面
+        f_buy = pick.get('foreign_buy', 0) / 1000
+        if abs(f_buy) > 100:
+            emoji = "🔴" if f_buy > 0 else "🟢"
+            msg += f"   {emoji} 外資 {int(f_buy):,} 張\n"
+    
+    msg += "-" * 28 + "\n"
+    msg += f"⏰ 建議持有: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+    msg += "⚠️ 請嚴格執行停損停利"
+    
+    return msg
+
+
+def format_v31_recommendation(picks, date_str):
+    """
+    格式化 V31 混合策略推薦訊息
+    
+    Args:
+        picks: DataFrame，帶有 ai_score 的推薦股票
+        date_str: 日期字串
+    
+    Returns:
+        str: 格式化後的推薦訊息
+    """
+    if picks.empty:
+        return f"🐢 V31策略：今日無符合條件股票\n📅 {date_str}\n\n💡 V30條件：均線多頭 + 量能>300萬 + 40<RSI<70"
+    
+    msg = f"🧠 【V31 混合策略推薦】\n"
+    msg += f"📅 {date_str}\n"
+    msg += f"🎯 目標: 獲利10-20% | 停損5%\n"
+    msg += "-" * 28 + "\n"
+    
+    for idx, (_, row) in enumerate(picks.iterrows(), 1):
+        ai_score = row.get('ai_score', 0)
+        stop_loss = row['close_price'] * (1 - V30_PARAMS['STOP_LOSS'])
+        take_profit = row['close_price'] * (1 + V30_PARAMS['TAKE_PROFIT'])
+        
+        msg += f"{idx}. {row['stock_id']} (${row['close_price']:.2f})\n"
+        msg += f"   🧠 AI {ai_score:.0%} | RSI {row['rsi']:.1f}\n"
+        msg += f"   🛡️ 停損 ${stop_loss:.2f} | 🎯 停利 ${take_profit:.2f}\n"
+    
+    msg += "-" * 28 + "\n"
+    msg += f"⏰ 建議持有: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+    msg += "⚠️ AI僅供參考，請嚴格執行停損"
+    
+    return msg
+
+
+def format_stock_query(stock_id, date_str, row, ai_prob, enable_strategy=True):
+    """
+    格式化個股查詢報告
+    
+    Args:
+        stock_id: 股票代號
+        date_str: 日期字串
+        row: 股票資料 (Series 或 dict)
+        ai_prob: AI 預測機率
+        enable_strategy: 是否啟用完整策略報告
+    
+    Returns:
+        str: 格式化後的查詢報告
+    """
+    if enable_strategy:
+        # 完整版：含樞紐點策略
+        strat_res = calculate_pivot_strategy(
+            high=float(row['high_price']),
+            low=float(row['low_price']),
+            close=float(row['close_price']),
+            ai_prob=ai_prob
+        )
+        
+        # 生成完整報告
+        msg = format_strategy_message(
+            stock_id, 
+            date_str, 
+            row['close_price'], 
+            ai_prob, 
+            strat_res,
+            extra_data=row
+        )
+        
+        # 加入資金建議
+        advice, money = calculate_position_size(
+            ai_prob, 
+            row.get('pe_ratio', 0), 
+            capital=1000000
+        )
+        msg += f"\n💰 資金建議: {advice}"
+        if money > 0:
+            msg += f" (${money:,})"
+    else:
+        # 簡化版：基本資訊
+        price = row['close_price']
+        ma20 = row.get('ma20', 0)
+        ma60 = row.get('ma60', 0)
+        rsi = row.get('rsi', 0)
+        
+        # 趨勢判斷
+        if price > ma20 and ma20 > ma60: 
+            trend = "🔴 多頭排列"
+        elif price < ma20: 
+            trend = "🟢 空頭/回檔"
+        else: 
+            trend = "⚪ 盤整"
+        
+        msg = f"🎫 {stock_id} 個股診斷\n"
+        msg += f"📅 {date_str}\n"
+        msg += f"💲 收盤: {price:.2f}\n"
+        msg += f"📈 趨勢: {trend}\n"
+        msg += f"🧠 AI信心: {ai_prob:.1%}\n"
+        msg += f"📊 RSI: {rsi:.1f} | MA20: {ma20:.1f}"
+    
+    return msg

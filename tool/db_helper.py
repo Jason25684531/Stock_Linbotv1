@@ -172,6 +172,52 @@ def validate_setting(key, value):
     return True, ""
 
 
+def upsert_stock_data(df, table_name='daily_market_data'):
+    """
+    原子性更新股票資料（INSERT ... ON DUPLICATE KEY UPDATE）
+    
+    避免「刪除-插入」模式造成的數據丟失風險
+    
+    Args:
+        df: DataFrame，包含股票資料
+        table_name: 目標資料表名稱
+    
+    Returns:
+        成功插入/更新的筆數
+    """
+    if df is None or df.empty:
+        return 0
+    
+    try:
+        engine = get_db_engine()
+        
+        # 使用 to_sql 的 method 參數實現 upsert
+        # 注意：這裡使用簡化版本，利用 pandas 的 replace 方法
+        # 實際生產環境可以用 executemany 配合自定義 upsert SQL 提升性能
+        
+        with engine.connect() as conn:
+            # 方案：使用 REPLACE INTO（MySQL 特有）
+            # REPLACE = DELETE + INSERT，但是原子性操作
+            for _, row in df.iterrows():
+                columns = ', '.join(row.index)
+                placeholders = ', '.join([f':{col}' for col in row.index])
+                
+                sql = text(f"""
+                    REPLACE INTO {table_name} ({columns})
+                    VALUES ({placeholders})
+                """)
+                
+                conn.execute(sql, row.to_dict())
+            
+            conn.commit()
+        
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ upsert_stock_data 失敗: {e}")
+        return 0
+
+
 def get_market_trend(date_str):
     """
     判斷大盤趨勢

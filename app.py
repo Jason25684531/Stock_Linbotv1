@@ -21,7 +21,8 @@ from config import Config
 # 引入策略模組
 from tool.strategy import (
     calculate_pivot_strategy, format_strategy_message, calculate_position_size, 
-    calculate_v30_signal, V30_PARAMS, get_best_stocks_v31_hybrid
+    calculate_v30_signal, V30_PARAMS, get_best_stocks_v31_hybrid,
+    format_v30_recommendation, format_v31_recommendation, format_stock_query
 )
 # 引入資料庫輔助模組
 from tool.db_helper import get_setting, update_setting, validate_setting, get_stock_data
@@ -91,10 +92,19 @@ def get_v30_recommendation():
                     'foreign_buy': row.get('foreign_buy', 0),
                 })
 
-        if not picks:
-            return f"🐢 V30策略：今日無符合條件股票\n📅 {date_str}"
+        # 使用 Strategy 模組的格式化函數
+        return format_v30_recommendation(picks, date_str)
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ V30 推薦失敗: {e}")
+        traceback.print_exc()
+        return f"❌ 運算錯誤: {str(e)[:100]}"
 
-# get_db_data 已移至 tool.db_helper.get_stock_data
+
+def get_ai_recommendation():
+    """
+    V31 混合策略選股（V30 篩選 + ML 智慧排名）
     
     Returns:
         推薦訊息字串
@@ -108,29 +118,8 @@ def get_v30_recommendation():
         # 2. 使用 V31 混合策略選股
         picks = get_best_stocks_v31_hybrid(df, top_n=5)
         
-        if picks.empty: 
-            return f"🐢 V31策略：今日無符合條件股票\n📅 {date_str}\n\n💡 V30條件：均線多頭 + 量能>300萬 + 40<RSI<70"
-
-        # 3. 生成訊息
-        msg = f"🧠 【V31 混合策略推薦】\n"
-        msg += f"📅 {date_str}\n"
-        msg += f"🎯 目標: 獲利10-20% | 停損5%\n"
-        msg += "-" * 28 + "\n"
-        
-        for idx, (_, row) in enumerate(picks.iterrows(), 1):
-            ai_score = row.get('ai_score', 0)
-            stop_loss = row['close_price'] * (1 - V30_PARAMS['STOP_LOSS'])
-            take_profit = row['close_price'] * (1 + V30_PARAMS['TAKE_PROFIT'])
-            
-            msg += f"{idx}. {row['stock_id']} (${row['close_price']:.2f})\n"
-            msg += f"   🧠 AI {ai_score:.0%} | RSI {row['rsi']:.1f}\n"
-            msg += f"   🛡️ 停損 ${stop_loss:.2f} | 🎯 停利 ${take_profit:.2f}\n"
-        
-        msg += "-" * 28 + "\n"
-        msg += f"⏰ 建議持有: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
-        msg += "⚠️ AI僅供參考，請嚴格執行停損"
-        
-        return msg
+        # 3. 使用 Strategy 模組的格式化函數
+        return format_v31_recommendation(picks, date_str)
         
     except Exception as e:
         import traceback
@@ -170,58 +159,8 @@ def query_stock(stock_id):
         # 3. 判斷是否啟用完整策略報告
         enable_strategy = get_setting('enable_strategy_report', 'true') == 'true'
         
-        if enable_strategy:
-            # 完整版：含樞紐點策略
-            strat_res = calculate_pivot_strategy(
-                high=float(row['high_price']),
-                low=float(row['low_price']),
-                close=float(row['close_price']),
-                ai_prob=prob
-            )
-            
-            # 生成完整報告
-            msg = format_strategy_message(
-                stock_id, 
-                row['trade_date'], 
-                row['close_price'], 
-                prob, 
-                strat_res,
-                extra_data=row  # 包含籌碼資料
-            )
-            
-            # 加入資金建議
-            advice, money = calculate_position_size(
-                prob, 
-                row.get('pe_ratio', 0), 
-                capital=1000000
-            )
-            msg += f"\n💰 資金建議: {advice}"
-            if money > 0:
-                msg += f" (${money:,})"
-            
-        else:
-            # 簡化版：基本資訊
-            price = row['close_price']
-            ma20 = row.get('ma20', 0)
-            ma60 = row.get('ma60', 0)
-            rsi = row.get('rsi', 0)
-            
-            # 趨勢判斷
-            if price > ma20 and ma20 > ma60: 
-                trend = "🔴 多頭排列"
-            elif price < ma20: 
-                trend = "🟢 空頭/回檔"
-            else: 
-                trend = "⚪ 盤整"
-            
-            msg = f"🎫 {stock_id} 個股診斷\n"
-            msg += f"📅 {date_str}\n"
-            msg += f"💲 收盤: {price:.2f}\n"
-            msg += f"📈 趨勢: {trend}\n"
-            msg += f"🧠 AI信心: {prob:.1%}\n"
-            msg += f"📊 RSI: {rsi:.1f} | MA20: {ma20:.1f}"
-        
-        return msg
+        # 4. 使用 Strategy 模組的格式化函數
+        return format_stock_query(stock_id, date_str, row, prob, enable_strategy)
         
     except Exception as e:
         import traceback
