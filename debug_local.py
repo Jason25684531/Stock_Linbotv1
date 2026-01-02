@@ -56,9 +56,23 @@ def load_model():
     for p in paths:
         if os.path.exists(p):
             data = joblib.load(p)
-            （簡化版，使用 db_helper）
+            # 簡化版，使用 db_helper
+            if isinstance(data, dict) and 'model' in data:
+                return data['model'], data.get('features', [])
+            else:
+                return data, []
+    print("❌ 找不到模型檔案")
+    return None, []
+
 # ============================================
-st_data()
+# 🔥 V30 策略推薦（純技術分析，40% 報酬實績）
+# ============================================
+def show_v30_recommendations():
+    """V30 純技術分析選股（不使用 AI 模型）"""
+    print(f"\n🚀 V30 純技術分析選股 (40% 報酬實績)")
+    print(f"🎯 目標: 獲利 10-20% | 停損 5% | 持有最長 10 天")
+    
+    df, date_str = get_latest_data()
     if df.empty: 
         print("❌ 無資料")
         return
@@ -104,7 +118,7 @@ def show_recommendations(model):
     
     # 使用 V31 混合策略選股
     picks = get_best_stocks_v31_hybrid(df, top_n=5)
-    stock
+    
     if picks.empty:
         print("🐢 今日無符合 V31 混合策略條件的股票")
         print("💡 提示: V30 條件 = 均線多頭排列 + 量能 > 300萬 + 40 < RSI < 70")
@@ -113,7 +127,7 @@ def show_recommendations(model):
     print(f"✅ V30 篩選通過，ML 排名完成")
     print("-" * 75)
     print(f"{'排名':<4} {'代號':<6} {'收盤':<8} {'RSI':<6} {'AI評分':<10} {'停損':<10} {'停利':<10}")
-    print("-" * 75)stock
+    print("-" * 75)
     
     for idx, (_, row) in enumerate(picks.iterrows(), 1):
         stop_loss = row['close_price'] * (1 - V30_PARAMS['STOP_LOSS'])
