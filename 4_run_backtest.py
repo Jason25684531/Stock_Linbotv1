@@ -32,9 +32,9 @@ FEE_RATE = 0.001425
 MIN_FEE = 20
 TAX_RATE = 0.003
 
-# 持倉限制
+# 🔥 V31 Optimization: 持倉限制（降低單檔風險）
 MAX_HOLDINGS = 3
-POSITION_SIZE = 0.30
+POSITION_SIZE = 0.20  # 優化：從 30% 降至 20%（配合放寬停損）
 
 # 回測起始日
 BACKTEST_START = '2025-01-01'
@@ -306,12 +306,32 @@ class BacktestEngine:
                 # 更新最高價
                 if curr_price > self.positions[sid]['highest']:
                     self.positions[sid]['highest'] = curr_price
-                    
-                    # 漲超過 5% 後，啟動移動停損
-                    if change >= 0.05:
-                        new_stop = cost * 1.01  # 保底賺 1%
-                        if new_stop > self.positions[sid]['stop_loss']:
-                            self.positions[sid]['stop_loss'] = new_stop
+                
+                # ============================================
+                # 🔥 V31 Optimization: 階梯式移動停損
+                # ============================================
+                old_stop = self.positions[sid]['stop_loss']
+                
+                if change >= 0.30:
+                    # Level 3: 獲利 >= 30%，鎖定 25% 利潤
+                    new_stop = cost * 1.25
+                    if new_stop > old_stop:
+                        self.positions[sid]['stop_loss'] = new_stop
+                        print(f"  🔒 {sid} 進入 Level 3，停損上移至 {new_stop:.2f} (鎖定+25%)")
+                
+                elif change >= 0.20:
+                    # Level 2: 獲利 >= 20%，鎖定 15% 利潤
+                    new_stop = cost * 1.15
+                    if new_stop > old_stop:
+                        self.positions[sid]['stop_loss'] = new_stop
+                        print(f"  🔒 {sid} 進入 Level 2，停損上移至 {new_stop:.2f} (鎖定+15%)")
+                
+                elif change >= 0.10:
+                    # Level 1: 獲利 >= 10%，保本 + 手續費
+                    new_stop = cost * 1.01
+                    if new_stop > old_stop:
+                        self.positions[sid]['stop_loss'] = new_stop
+                        print(f"  🔒 {sid} 進入 Level 1，停損上移至 {new_stop:.2f} (保本+1%)")
                 
                 # 判斷賣出
                 if curr_price <= self.positions[sid]['stop_loss']:

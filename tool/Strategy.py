@@ -5,14 +5,17 @@ from config import Config
 
 # ============================================
 # V31 混合策略參數（V30 + ML 智慧排名）
-# 目標：獲利 10-20%，停損 5%
+# 🔥 V31 Optimization (2026-01):
+# - 放寬停損至 10%（提升波動容忍度）
+# - 提高停利至 20%（提升盈虧比）
+# - 加入市場趨勢過濾器（熊市暫停買進）
 # ============================================
 V30_PARAMS = {
     'VOLUME_THRESHOLD': 3000000,  # 成交量門檻
     'RSI_LOW': 40,                # RSI 下限
     'RSI_HIGH': 70,               # RSI 上限
-    'STOP_LOSS': 0.05,            # 5% 停損（固定）
-    'TAKE_PROFIT': 0.15,          # 15% 停利（目標 10-20% 中間值）
+    'STOP_LOSS': 0.10,            # 10% 停損（優化：從5%放寬至10%）
+    'TAKE_PROFIT': 0.20,          # 20% 停利（優化：從15%提高至20%）
     'MAX_HOLD_DAYS': 10,          # 最長持有天數
 }
 
@@ -86,11 +89,14 @@ def get_best_stocks_v31_hybrid(df, top_n=5):
     """
     🔥 V31 混合策略選股（V30 篩選 + ML 智慧排名）
     
+    🆕 V31 Optimization: 加入市場趨勢過濾器
+    
     流程：
-    1. V30 硬篩選（均線、量能、RSI）
-    2. 計算比例特徵（與訓練時一致）
-    3. ML 預測機率評分
-    4. 依評分排序，返回 Top N
+    1. 檢查市場趨勢（如果是熊市則暫停買進）
+    2. V30 硬篩選（均線、量能、RSI）
+    3. 計算比例特徵（與訓練時一致）
+    4. ML 預測機率評分
+    5. 依評分排序，返回 Top N
     
     Args:
         df: DataFrame，包含股票資料
@@ -101,6 +107,31 @@ def get_best_stocks_v31_hybrid(df, top_n=5):
     """
     if df.empty:
         return pd.DataFrame()
+    
+    # ============================================
+    # 🆕 Step 0: 市場趨勢過濾器（V31 Optimization）
+    # ============================================
+    try:
+        from tool.db_helper import get_market_trend
+        
+        # 取得當天日期（使用 df 中最新的日期）
+        date_str = df['trade_date'].max()
+        if hasattr(date_str, 'strftime'):
+            date_str = date_str.strftime('%Y-%m-%d')
+        else:
+            date_str = str(date_str)
+        
+        market_trend = get_market_trend(date_str)
+        
+        if market_trend == 'BEAR':
+            print(f"📉 市場趨勢偏空（{date_str}），暫停買進")
+            return pd.DataFrame()
+        elif market_trend == 'NEUTRAL':
+            print(f"⚪ 市場趨勢中性（{date_str}），謹慎操作")
+        else:
+            print(f"📈 市場趨勢偏多（{date_str}），正常選股")
+    except Exception as e:
+        print(f"⚠️ 市場趨勢檢查失敗: {e}，繼續選股")
     
     # ============================================
     # Step 1: V30 硬篩選
@@ -210,10 +241,13 @@ def get_v30_candidates(df):
     """
     V30 策略候選股票篩選器（嚴格版）
     
+    🆕 V31 Optimization: 加入市場趨勢過濾器
+    
     篩選條件：
-    1. 均線排列：收盤價 > MA20 > MA60
-    2. 成交量：> 300萬股
-    3. RSI：40 < RSI < 70
+    1. 市場趨勢檢查（熊市不選股）
+    2. 均線排列：收盤價 > MA20 > MA60
+    3. 成交量：> 300萬股
+    4. RSI：40 < RSI < 70
     
     Args:
         df: DataFrame，必須包含 close_price, ma20, ma60, volume, rsi
@@ -223,6 +257,27 @@ def get_v30_candidates(df):
     """
     if df.empty:
         return pd.DataFrame()
+    
+    # ============================================
+    # 🆕 市場趨勢過濾器（V31 Optimization）
+    # ============================================
+    try:
+        from tool.db_helper import get_market_trend
+        
+        # 取得當天日期
+        date_str = df['trade_date'].max()
+        if hasattr(date_str, 'strftime'):
+            date_str = date_str.strftime('%Y-%m-%d')
+        else:
+            date_str = str(date_str)
+        
+        market_trend = get_market_trend(date_str)
+        
+        if market_trend == 'BEAR':
+            print(f"📉 市場趨勢偏空（{date_str}），V30 暫停選股")
+            return pd.DataFrame()
+    except Exception as e:
+        print(f"⚠️ 市場趨勢檢查失敗: {e}，繼續篩選")
     
     # 確保必要欄位存在
     required_cols = ['close_price', 'ma20', 'ma60', 'volume', 'rsi']
