@@ -67,6 +67,10 @@ class BacktestEngine:
         self.win_count = 0
         self.trades = []  # 記錄所有交易
         
+        # V32: 每日資產追蹤（用於計算 MDD 和 Sharpe）
+        self.daily_assets = []
+        self.daily_dates = []
+        
         # 載入策略參數
         self._load_params()
         
@@ -211,7 +215,10 @@ class BacktestEngine:
             return
         
         shares = int(budget / price)
-        cost = shares * price
+        
+        # V32: 滑價模擬（買入時價格上滑 0.2%）
+        slippage_price = price * (1 + Config.SLIPPAGE_RATE)
+        cost = shares * slippage_price
         fee = max(int(cost * FEE_RATE), MIN_FEE)
         
         if self.capital < cost + fee:
@@ -222,15 +229,15 @@ class BacktestEngine:
         
         self.positions[stock_id] = {
             'shares': shares,
-            'cost': price,
+            'cost': slippage_price,  # V32: 記錄滑價後的實際成本
             'total_cost': cost + fee,
             'days': 0,
             'stop_loss': stop_loss,
-            'highest': price,
+            'highest': slippage_price,
             'buy_date': date_str
         }
         
-        print(f"🟢 {date_str} 買入 {stock_id} ({shares}股) @ {price:.2f} | 停損: {stop_loss:.2f}")
+        print(f"🟢 {date_str} 買入 {stock_id} ({shares}股) @ {slippage_price:.2f} (滑價+{Config.SLIPPAGE_RATE*100:.1f}%) | 停損: {stop_loss:.2f}")
     
     def sell(self, stock_id, price, date_str, reason):
         """賣出"""
@@ -238,7 +245,10 @@ class BacktestEngine:
             return
         
         info = self.positions[stock_id]
-        revenue = info['shares'] * price
+        
+        # V32: 滑價模擬（賣出時價格下滑 0.2%）
+        slippage_price = price * (1 - Config.SLIPPAGE_RATE)
+        revenue = info['shares'] * slippage_price
         fee = max(int(revenue * FEE_RATE), MIN_FEE)
         tax = int(revenue * TAX_RATE)
         net = revenue - fee - tax
@@ -254,7 +264,7 @@ class BacktestEngine:
             'buy_date': info['buy_date'],
             'sell_date': date_str,
             'buy_price': info['cost'],
-            'sell_price': price,
+            'sell_price': slippage_price,  # V32: 記錄滑價後的實際賣價
             'profit_pct': profit_pct,
             'reason': reason,
             'days': info['days']
@@ -291,6 +301,15 @@ class BacktestEngine:
         
         for date_str in date_list:
             trend = self.get_market_trend(date_str)
+            
+            # V32: 記錄每日資產（用於 MDD 和 Sharpe 計算）
+            daily_asset = self.capital
+            for sid, info in self.positions.items():
+                curr = self.get_data(sid, date_str)
+                if curr:
+                    daily_asset += info['shares'] * curr['close_price']
+            self.daily_assets.append(daily_asset)
+            self.daily_dates.append(date_str)
             
             # === 賣出邏輯 ===
             for sid in list(self.positions.keys()):
@@ -380,8 +399,42 @@ class BacktestEngine:
             avg_days = 0
             profit_ratio = 0
         
+        # ==========================================
+        # V32: 計算風險指標 (MDD & Sharpe Ratio)
+        # ==========================================
+        max_drawdown = 0
+        sharpe_ratio = 0
+        
+        if len(self.daily_assets) > 1:
+            # 計算最大回撤 (MDD)
+            peak = self.daily_assets[0]
+            for asset in self.daily_assets:
+                if asset > peak:
+                    peak = asset
+                drawdown = (peak - asset) / peak if peak > 0 else 0
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+            
+            # 計算 Sharpe Ratio
+            daily_returns = []
+            for i in range(1, len(self.daily_assets)):
+                ret = (self.daily_assets[i] - self.daily_assets[i-1]) / self.daily_assets[i-1]
+                daily_returns.append(ret)
+            
+            if daily_returns:
+                import numpy as np
+                avg_return = np.mean(daily_returns)
+                std_return = np.std(daily_returns)
+                
+                # 年化報酬與波動 (假設 252 個交易日)
+                annualized_return = avg_return * 252
+                annualized_std = std_return * np.sqrt(252)
+                
+                if annualized_std > 0:
+                    sharpe_ratio = (annualized_return - Config.RISK_FREE_RATE) / annualized_std
+        
         print("\n" + "=" * 60)
-        print(f"💰 {mode_name} 回測結果")
+        print(f"💰 {mode_name} 回測結果 (V32 擬真版)")
         print("=" * 60)
         print(f"📊 初始資金: ${INITIAL_CAPITAL:,}")
         print(f"📊 最終資產: ${int(final):,}")
@@ -391,6 +444,10 @@ class BacktestEngine:
         print(f"🎯 勝率: {win_rate:.1f}%")
         print(f"📊 盈虧比: {profit_ratio:.2f}")
         print(f"⏱️ 平均持有: {avg_days:.1f} 天")
+        print("-" * 60)
+        print(f"📉 最大回撤 (MDD): {max_drawdown*100:.2f}%")
+        print(f"📊 夏普比率 (Sharpe): {sharpe_ratio:.3f}")
+        print(f"💸 滑價成本: {Config.SLIPPAGE_RATE*100:.1f}% (買高賣低)")
         print("=" * 60)
         
         # 輸出交易明細到 CSV
@@ -399,6 +456,17 @@ class BacktestEngine:
             output_path = 'ML_Data/backtest_result.csv'
             df_trades.to_csv(output_path, index=False, encoding='utf-8-sig')
             print(f"📄 交易明細已輸出至: {output_path}")
+        
+        # V32: 輸出每日資產曲線（用於 Dashboard 視覺化）
+        if self.daily_assets:
+            df_profit = pd.DataFrame({
+                'date': self.daily_dates,
+                'asset_value': self.daily_assets,
+                'roi': [(a - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100 for a in self.daily_assets]
+            })
+            profit_path = 'ML_Data/backtest_profit_report.csv'
+            df_profit.to_csv(profit_path, index=False, encoding='utf-8-sig')
+            print(f"📈 資產曲線已輸出至: {profit_path}")
         
         return roi
 

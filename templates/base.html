@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Stock Linbot V32{% endblock %}</title>
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Google Fonts: JetBrains Mono for code/numbers -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Dark Quant Theme */
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131825;
+            --bg-card: #1a2132;
+            --text-primary: #e4e8f0;
+            --text-secondary: #9ba3b4;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --accent-amber: #f59e0b;
+            --border-color: #2d3748;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+        }
+        
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin: 0.5rem 0;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .positive {
+            color: var(--accent-green);
+        }
+        
+        .negative {
+            color: var(--accent-red);
+        }
+        
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .table-header {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .table-row {
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.2s ease;
+        }
+        
+        .table-row:hover {
+            background: var(--bg-secondary);
+        }
+        
+        /* Glowing effect for status badge */
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .status-live {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Animated gradient background */
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #0a0e1a, #1a2132, #0a0e1a);
+            background-size: 200% 200%;
+            animation: gradient-shift 10s ease infinite;
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="gradient-bg">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="border-b border-gray-700 bg-opacity-80 backdrop-blur-md" style="background-color: var(--bg-secondary);">
+            <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold">Stock Linbot <span class="text-blue-400">V32</span></h1>
+                            <p class="text-xs text-gray-400">Quantitative Trading Dashboard</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="status-badge status-live">● BACKTEST MODE</span>
+                        <span class="text-sm text-gray-400">2025-01-02 ~ 2026-01-05</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            {% block content %}{% endblock %}
+        </main>
+        
+        <!-- Footer -->
+        <footer class="border-t border-gray-700 mt-12 py-6" style="background-color: var(--bg-secondary);">
+            <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-400">
+                <p>Stock Linbot V32 © 2026 | Phase 1: Backtest Realism ✅ | Phase 2: Dashboard Infrastructure ✅</p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

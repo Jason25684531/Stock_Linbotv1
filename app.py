@@ -12,7 +12,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import joblib
 import os
-from flask import Flask, request, abort
+from flask import Flask, request, abort, render_template, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -214,6 +214,189 @@ def get_settings_info():
 # 🌐 Flask 路由
 # ============================================
 
+# ==========================================
+# V32: Web Dashboard 路由
+# ==========================================
+
+@app.route("/")
+def index():
+    """首頁重定向到 Dashboard"""
+    return render_template('dashboard.html')
+
+
+@app.route("/dashboard")
+def dashboard():
+    """V32 Dashboard 主頁面"""
+    return render_template('dashboard.html')
+
+
+@app.route("/api/performance")
+def api_performance():
+    """
+    API: 取得回測資產曲線數據
+    Returns: JSON {dates: [], equity: [], roi: []}
+    """
+    try:
+        profit_file = 'ML_Data/backtest_profit_report.csv'
+        if not os.path.exists(profit_file):
+            return jsonify({'error': '回測數據不存在，請先執行 4_run_backtest.py'}), 404
+        
+        df = pd.read_csv(profit_file)
+        
+        return jsonify({
+            'dates': df['date'].tolist(),
+            'equity': df['asset_value'].tolist(),
+            'roi': df['roi'].tolist()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/trades")
+def api_trades():
+    """
+    API: 取得交易明細（最近 50 筆）
+    Returns: JSON list of trades
+    """
+    try:
+        trades_file = 'ML_Data/backtest_result.csv'
+        if not os.path.exists(trades_file):
+            return jsonify({'error': '交易數據不存在，請先執行 4_run_backtest.py'}), 404
+        
+        df = pd.read_csv(trades_file)
+        
+        # 只回傳最近 50 筆
+        df_recent = df.tail(50)
+        
+        # 轉換為 JSON
+        trades = df_recent.to_dict('records')
+        
+        return jsonify(trades)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/summary")
+def api_summary():
+    """
+    API: 取得回測總結數據
+    Returns: JSON {total_roi, win_rate, mdd, sharpe, trade_count, avg_hold_days}
+    """
+    try:
+        # 讀取資產曲線
+        profit_file = 'ML_Data/backtest_profit_report.csv'
+        trades_file = 'ML_Data/backtest_result.csv'
+        
+        if not os.path.exists(profit_file) or not os.path.exists(trades_file):
+            return jsonify({'error': '數據不存在'}), 404
+        
+        df_profit = pd.read_csv(profit_file)
+        df_trades = pd.read_csv(trades_file)
+        
+        # 計算總 ROI
+        final_roi = df_profit['roi'].iloc[-1] if not df_profit.empty else 0
+        
+        # 計算勝率
+        wins = len(df_trades[df_trades['profit_pct'] > 0])
+        total_trades = len(df_trades)
+        win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+        
+        # 計算 MDD
+        max_drawdown = 0
+        if len(df_profit) > 1:
+            peak = df_profit['asset_value'].iloc[0]
+            for asset in df_profit['asset_value']:
+                if asset > peak:
+                    peak = asset
+                drawdown = (peak - asset) / peak if peak > 0 else 0
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+        
+        # 計算 Sharpe (簡化版)
+        import numpy as np
+        daily_returns = df_profit['roi'].diff().dropna()
+        if len(daily_returns) > 0:
+            avg_return = np.mean(daily_returns)
+            std_return = np.std(daily_returns)
+            annualized_return = avg_return * 252
+            annualized_std = std_return * np.sqrt(252)
+            sharpe_ratio = (annualized_return / 100 - Config.RISK_FREE_RATE) / (annualized_std / 100) if annualized_std > 0 else 0
+        else:
+            sharpe_ratio = 0
+        
+        # 平均持有天數
+        avg_hold_days = df_trades['days'].mean() if not df_trades.empty else 0
+        
+        return jsonify({
+            'total_roi': round(final_roi, 2),
+            'win_rate': round(win_rate, 1),
+            'mdd': round(max_drawdown * 100, 2),
+            'sharpe': round(sharpe_ratio, 3),
+            'trade_count': total_trades,
+            'avg_hold_days': round(avg_hold_days, 1)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/daily-signals")
+def api_daily_signals():
+    """
+    V32 Phase 4: 取得今日選股訊號
+    Returns: JSON list of recommended stocks for today
+    """
+    try:
+        # 取得最新資料
+        df, date_str = get_stock_data()
+        
+        if df.empty:
+            return jsonify({
+                'error': '無最新資料',
+                'date': None,
+                'signals': []
+            })
+        
+        # 使用 V31 混合策略選股
+        picks = get_best_stocks_v31_hybrid(df, top_n=5)
+        
+        if picks.empty:
+            return jsonify({
+                'date': date_str,
+                'signals': [],
+                'message': '今日無符合條件的股票'
+            })
+        
+        # 格式化輸出
+        signals = []
+        for _, row in picks.iterrows():
+            signal = {
+                'stock_id': row['stock_id'],
+                'close_price': float(row['close_price']),
+                'strategy': 'V31 混合策略',
+                'ai_score': float(row.get('ai_score', 0)) if 'ai_score' in row else None,
+                'rsi': float(row.get('rsi', 0)) if 'rsi' in row else None,
+                'volume': int(row.get('volume', 0)) if 'volume' in row else None,
+                'ma20': float(row.get('ma20', 0)) if 'ma20' in row else None,
+                'foreign_buy': int(row.get('foreign_buy', 0)) if 'foreign_buy' in row else None
+            }
+            signals.append(signal)
+        
+        return jsonify({
+            'date': date_str,
+            'signals': signals,
+            'count': len(signals)
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ==========================================
+# Line Bot Webhook 路由
+# ==========================================
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -317,6 +500,18 @@ def handle_message(event):
             reply = query_stock(stock_id)
         else:
             reply = "❌ 請輸入正確的股票代號"
+    
+    # ========== V32: Dashboard 連結 ==========
+    elif msg_text in ["dashboard", "儀表板", "Dashboard", "看板"]:
+        reply = "📊 【V32 量化交易儀表板】\n\n"
+        reply += "🔗 Dashboard URL:\n"
+        reply += "http://localhost:5000/dashboard\n\n"
+        reply += "📈 功能:\n"
+        reply += "• 資產曲線圖 (Equity Curve)\n"
+        reply += "• 回測績效指標 (ROI, MDD, Sharpe)\n"
+        reply += "• 交易明細表 (Recent Trades)\n"
+        reply += "• 即時選股訊號 (Live Signals)\n\n"
+        reply += "💡 提示: 請在電腦瀏覽器開啟以獲得最佳體驗"
             
     # ========== 說明選單 ==========
     else:
@@ -327,7 +522,9 @@ def handle_message(event):
         reply += "• V30 → 🔥純技術分析 (40%報酬)\n"
         reply += "• 推薦 → 🧠V30篩選+AI評分 (實驗)\n"
         reply += "• 2330 → 個股診斷\n"
-        reply += "\n【V30 參數調整】✨NEW\n"
+        reply += "\n【V32 新功能】✨\n"
+        reply += "• dashboard → 開啟視覺化儀表板\n"
+        reply += "\n【V30 參數調整】\n"
         reply += "• 設定停損 5 (停損5%)\n"
         reply += "• 設定停利 20 (停利20%)\n"
         reply += "• 設定停利 0 (不停利)\n"

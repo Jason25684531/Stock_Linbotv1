@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Stock Linbot V32{% endblock %}
+
+{% block content %}
+<div x-data="dashboardData()" x-init="init()">
+    <!-- Loading State -->
+    <div x-show="loading" class="flex items-center justify-center py-20">
+        <div class="text-center">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-gray-400">載入回測數據中...</p>
+        </div>
+    </div>
+    
+    <!-- Dashboard Content -->
+    <div x-show="!loading" style="display: none;">
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total ROI Card -->
+            <div class="metric-card">
+                <div class="metric-label">總報酬率 ROI</div>
+                <div class="metric-value" :class="summary.total_roi >= 0 ? 'positive' : 'negative'" x-text="formatPercent(summary.total_roi)"></div>
+                <div class="text-xs text-gray-400 mt-2">
+                    <span x-text="summary.trade_count"></span> 筆交易
+                </div>
+            </div>
+            
+            <!-- Win Rate Card -->
+            <div class="metric-card">
+                <div class="metric-label">勝率 Win Rate</div>
+                <div class="metric-value" :class="summary.win_rate >= 50 ? 'positive' : 'negative'" x-text="formatPercent(summary.win_rate)"></div>
+                <div class="text-xs text-gray-400 mt-2">
+                    平均持有 <span x-text="summary.avg_hold_days"></span> 天
+                </div>
+            </div>
+            
+            <!-- MDD Card -->
+            <div class="metric-card">
+                <div class="metric-label">最大回撤 MDD</div>
+                <div class="metric-value negative" x-text="formatPercent(summary.mdd)"></div>
+                <div class="text-xs text-gray-400 mt-2">
+                    高波動警示
+                </div>
+            </div>
+            
+            <!-- Sharpe Ratio Card -->
+            <div class="metric-card">
+                <div class="metric-label">夏普比率 Sharpe</div>
+                <div class="metric-value" :class="summary.sharpe >= 1 ? 'positive' : 'text-amber-400'" x-text="summary.sharpe.toFixed(3)"></div>
+                <div class="text-xs text-gray-400 mt-2">
+                    風險調整報酬
+                </div>
+            </div>
+        </div>
+        
+        <!-- Equity Curve Chart -->
+        <div class="chart-container">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold">資產曲線 Equity Curve</h2>
+                <div class="flex items-center space-x-2 text-sm text-gray-400">
+                    <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                    <span>資產價值</span>
+                </div>
+            </div>
+            <div class="relative" style="height: 400px;">
+                <canvas id="equityChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Live Signals Section -->
+        <div class="mt-8">
+            <div class="chart-container">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold flex items-center">
+                            <span class="text-2xl mr-2">⚡</span>
+                            即時選股訊號 Live Signals
+                        </h2>
+                        <p class="text-sm text-gray-400 mt-1" x-show="liveDate" x-text="'更新日期: ' + liveDate"></p>
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        <span x-text="liveSignals.length"></span> 檔股票
+                    </div>
+                </div>
+                
+                <div x-show="liveSignals.length === 0" class="text-center py-12 text-gray-400">
+                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                    </svg>
+                    <p>今日無符合條件的股票</p>
+                    <p class="text-xs mt-2">請執行 1_update_database.py 更新資料</p>
+                </div>
+                
+                <div x-show="liveSignals.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template x-for="signal in liveSignals" :key="signal.stock_id">
+                        <div class="metric-card border-l-4 border-blue-500">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <div class="text-2xl font-bold text-blue-400" x-text="signal.stock_id"></div>
+                                    <div class="text-sm text-gray-400 mt-1" x-text="signal.strategy"></div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xl font-bold" x-text="'$' + signal.close_price.toFixed(2)"></div>
+                                    <div class="text-xs text-gray-400">收盤價</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                <div x-show="signal.ai_score !== null">
+                                    <div class="text-gray-400">AI Score</div>
+                                    <div class="font-bold" 
+                                         :class="signal.ai_score >= 0.7 ? 'text-green-400' : signal.ai_score >= 0.5 ? 'text-amber-400' : 'text-gray-400'"
+                                         x-text="(signal.ai_score * 100).toFixed(1) + '%'"></div>
+                                </div>
+                                <div x-show="signal.rsi !== null">
+                                    <div class="text-gray-400">RSI</div>
+                                    <div class="font-bold text-gray-300" x-text="signal.rsi.toFixed(1)"></div>
+                                </div>
+                                <div x-show="signal.volume !== null">
+                                    <div class="text-gray-400">成交量</div>
+                                    <div class="font-bold text-gray-300" x-text="(signal.volume / 1000).toFixed(0) + 'K'"></div>
+                                </div>
+                                <div x-show="signal.ma20 !== null">
+                                    <div class="text-gray-400">MA20</div>
+                                    <div class="font-bold text-gray-300" x-text="signal.ma20.toFixed(2)"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Trades Table -->
+        <div class="mt-8">
+            <div class="chart-container">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold">近期交易 Recent Trades</h2>
+                    <div class="text-sm text-gray-400">
+                        顯示最近 <span x-text="trades.length"></span> 筆
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="table-header">
+                                <th class="px-4 py-3 text-left">股票代號</th>
+                                <th class="px-4 py-3 text-left">買入日期</th>
+                                <th class="px-4 py-3 text-left">賣出日期</th>
+                                <th class="px-4 py-3 text-right">買入價</th>
+                                <th class="px-4 py-3 text-right">賣出價</th>
+                                <th class="px-4 py-3 text-right">報酬率</th>
+                                <th class="px-4 py-3 text-center">原因</th>
+                                <th class="px-4 py-3 text-center">持有天數</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="trade in trades.slice(0, 20)" :key="trade.stock_id + trade.buy_date">
+                                <tr class="table-row">
+                                    <td class="px-4 py-3 font-bold" x-text="trade.stock_id"></td>
+                                    <td class="px-4 py-3 text-gray-400" x-text="trade.buy_date"></td>
+                                    <td class="px-4 py-3 text-gray-400" x-text="trade.sell_date"></td>
+                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.buy_price.toFixed(2)"></td>
+                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.sell_price.toFixed(2)"></td>
+                                    <td class="px-4 py-3 text-right font-bold" 
+                                        :class="trade.profit_pct >= 0 ? 'positive' : 'negative'"
+                                        x-text="formatPercent(trade.profit_pct)"></td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="px-2 py-1 rounded text-xs"
+                                              :class="{
+                                                  'bg-red-900 text-red-300': trade.reason === '停損',
+                                                  'bg-green-900 text-green-300': trade.reason === '停利',
+                                                  'bg-gray-700 text-gray-300': trade.reason === '時間到' || trade.reason === '趨勢轉空'
+                                              }"
+                                              x-text="trade.reason"></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center text-gray-400" x-text="trade.days + '天'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function dashboardData() {
+    return {
+        loading: true,
+        summary: {
+            total_roi: 0,
+            win_rate: 0,
+            mdd: 0,
+            sharpe: 0,
+            trade_count: 0,
+            avg_hold_days: 0
+        },
+        performance: {
+            dates: [],
+            equity: [],
+            roi: []
+        },
+        trades: [],
+        liveSignals: [],
+        liveDate: null,
+        chart: null,
+        
+        async init() {
+            try {
+                // 並行載入所有數據
+                await Promise.all([
+                    this.loadSummary(),
+                    this.loadPerformance(),
+                    this.loadTrades(),
+                    this.loadLiveSignals()
+                ]);
+                
+                // 渲染圖表
+                this.renderChart();
+                
+                this.loading = false;
+            } catch (error) {
+                console.error('載入失敗:', error);
+                alert('載入數據失敗: ' + error.message);
+                this.loading = false;
+            }
+        },
+        
+        async loadSummary() {
+            const response = await fetch('/api/summary');
+            if (!response.ok) throw new Error('無法載入總結數據');
+            this.summary = await response.json();
+        },
+        
+        async loadPerformance() {
+            const response = await fetch('/api/performance');
+            if (!response.ok) throw new Error('無法載入資產曲線數據');
+            this.performance = await response.json();
+        },
+        
+        async loadTrades() {
+            const response = await fetch('/api/trades');
+            if (!response.ok) throw new Error('無法載入交易數據');
+            this.trades = await response.json();
+            // 反轉以顯示最新的在前面
+            this.trades.reverse();
+        },
+        
+        async loadLiveSignals() {
+            try {
+                const response = await fetch('/api/daily-signals');
+                if (!response.ok) {
+                    console.warn('無法載入即時訊號');
+                    return;
+                }
+                const data = await response.json();
+                this.liveSignals = data.signals || [];
+                this.liveDate = data.date;
+            } catch (error) {
+                console.error('載入即時訊號失敗:', error);
+                this.liveSignals = [];
+            }
+        },
+        
+        renderChart() {
+            const ctx = document.getElementById('equityChart').getContext('2d');
+            
+            // 決定線條顏色（根據最終 ROI）
+            const finalROI = this.performance.roi[this.performance.roi.length - 1];
+            const lineColor = finalROI >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
+            const fillColor = finalROI >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+            
+            this.chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: this.performance.dates,
+                    datasets: [{
+                        label: '資產價值 (TWD)',
+                        data: this.performance.equity,
+                        borderColor: lineColor,
+                        backgroundColor: fillColor,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: lineColor,
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(26, 33, 50, 0.95)',
+                            titleColor: '#e4e8f0',
+                            bodyColor: '#9ba3b4',
+                            borderColor: '#2d3748',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const roi = this.performance.roi[context.dataIndex];
+                                    return [
+                                        '資產: $' + value.toLocaleString('zh-TW', {maximumFractionDigits: 0}),
+                                        'ROI: ' + roi.toFixed(2) + '%'
+                                    ];
+                                }.bind(this)
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(45, 55, 72, 0.3)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#9ba3b4',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 10
+                                },
+                                callback: function(value, index) {
+                                    // 只顯示每 20 個日期
+                                    return index % 20 === 0 ? this.getLabelForValue(value) : '';
+                                }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(45, 55, 72, 0.3)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#9ba3b4',
+                                font: {
+                                    size: 11
+                                },
+                                callback: function(value) {
+                                    return '$' + (value / 1000).toFixed(0) + 'K';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+        
+        formatPercent(value) {
+            return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,8 +1,9 @@
-# Stock AI Line Bot V31
+# Stock AI Line Bot V32
 
-> 🔥 **V31 混合策略版 - 重構升級** | V30 技術篩選 + XGBoost 智慧排名  
+> 🔥 **V32 Dashboard 版 - 專業視覺化** | 回測擬真化 + Web 儀表板  
 > 🛡️ **時間序列訓練** | 防止數據洩露，確保回測準確性  
 > 🏗️ **Clean Architecture** | 關注點分離，易維護易測試  
+> 📊 **Dark Quant Theme** | 專業量化交易介面設計  
 
 ---
 
@@ -16,11 +17,15 @@
 |------|------|------|
 | 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 ⭐推薦 | 輸入「推薦」 |
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 | 輸入「V30」 |
-| 🎫 個股診斷 | 完整策略報告 + 停損停利建議 | 輸入「2330」 |
+| 🎫 個股診斷 | 完整策略報告 + 停損停利建議 | 輸入「233
+| 📊 Web Dashboard | 視覺化回測績效與即時選股 | 輸入「dashboard」 |0」 |
 | ⚙️ 動態參數 | 即時調整停損/停利設定 | 輸入「查看設定」 |
 
 ### ✨ 最新重構（2026-01）
-
+V32 Web Dashboard**：專業量化交易儀表板（Dark Quant Theme）
+- ✅ **回測擬真化**：加入 0.2% 滑價模型 + MDD/Sharpe 風險指標
+- ✅ **即時選股訊號**：Dashboard 整合 Live Signals 卡片式顯示
+- ✅ **
 - ✅ **修復時間序列洩露**：移除 `shuffle=True`，實現嚴格時間拆分
 - ✅ **Clean Architecture**：app.py 純路由層，業務邏輯在 tool/
 - ✅ **數據原子性**：使用 `REPLACE INTO` 避免數據丟失
@@ -195,10 +200,8 @@ Stock_Linbotv1/
 │   │   └── news_agent.py        # 📰 新聞 AI 模組
 │   └── init_settings.py         # 資料庫初始化
 │
-├── 📦 批次執行檔（相對路徑）
-│   ├── run_bot.bat              # 每日排程
-│   ├── start_linebot.bat        # 啟動 Line Bot
-│   └── run_backtest.bat         # 執行回測
+├── 📦 批次執行檔（Windows）
+│   └── start_linebot.bat        # 啟動 Line Bot
 │
 ├── 📂 資料與模型
 │   ├── ML_Data/
@@ -291,14 +294,7 @@ python 3_train_model.py
 
 ### 每日更新流程
 
-可使用批次檔一鍵執行：
-
-```powershell
-# Windows 批次檔（自動執行 1→2→3 步驟）
-.\run_bot.bat
-```
-
-或手動執行：
+手動執行步驟：
 
 ```powershell
 # 1. 更新最新股價
@@ -309,6 +305,9 @@ python tool/calc_indicators.py
 
 # 3. (可選) 推送推薦到 Line
 python 5_push_to_line.py
+
+# 或使用每日整合腳本
+python 2_rundaily.py  # 自動執行上述三個步驟
 ```
 
 ### 訓練與回測
@@ -326,9 +325,6 @@ python 4_run_backtest.py --v30
 # 或使用批次檔
 .\run_backtest.bat v31
 ```
-
-### 啟動 Line Bot
-
 ```powershell
 # 方式 1：使用批次檔
 .\start_linebot.bat
@@ -337,7 +333,7 @@ python 4_run_backtest.py --v30
 python app.py
 
 # 方式 3：使用 Gunicorn (生產環境)
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
+gunicorn -w （Windows）4 -b 0.0.0.0:5000 app:app
 ```
 
 ---
@@ -406,6 +402,115 @@ Webhook URL: https://your-domain.com/callback
 | `設定停利 20` | 設定停利 | 範圍 5%-50%，輸入 0 表示不停利 |
 | `設定信心 60` | AI 信心門檻 | 範圍 0%-100% |
 | `查看設定` | 查看參數 | 顯示所有策略設定 |
+| `dashboard` / `儀表板` | 📊 V32 Dashboard | 取得 Web 儀表板連結 |
+
+---
+
+## 📊 V32 Web Dashboard（新功能）
+
+### 功能介紹
+
+V32 新增專業量化交易儀表板，提供視覺化回測績效與即時選股訊號。
+
+### 啟動 Dashboard
+
+```powershell
+# 啟動 Flask 伺服器
+python app.py
+
+# 訪問 Dashboard
+# 瀏覽器開啟 http://localhost:5000/dashboard
+```
+
+### Dashboard 功能
+
+#### 1. **回測績效總覽**
+四大核心指標卡片：
+- 📈 **總報酬率 (ROI)**: 含滑價成本的真實報酬
+- 🎯 **勝率 (Win Rate)**: 獲利交易佔比
+- 📉 **最大回撤 (MDD)**: 資產最大虧損幅度
+- ⚡ **夏普比率 (Sharpe)**: 風險調整後報酬
+
+#### 2. **資產曲線圖 (Equity Curve)**
+- 使用 Chart.js 繪製每日資產變化
+- 根據最終報酬率顯示綠色（獲利）或紅色（虧損）
+- 懸停顯示日期、資產價值與 ROI
+- Area fill 增強視覺效果
+
+#### 3. **交易明細表 (Trades Table)**
+- 顯示最近 20 筆交易
+- 包含：股票代號、買入/賣出日期、價格、獲利率、持有天數
+- 賣出原因色彩標示：
+  - 🔴 停損: 紅色背景
+  - 🟢 停利: 綠色背景
+  - ⚪ 時間到/趨勢轉空: 灰色背景
+
+#### 4. **⚡ 即時選股訊號 (Live Signals)**
+- 即時顯示 V31 混合策略選股結果
+- 卡片式設計，每檔股票獨立顯示：
+  - 股票代號（藍色大字）
+  - 收盤價
+  - **AI Score** (信心度評分)
+    - ≥ 70%: 綠色（高信心）
+    - ≥ 50%: 琥珀色（中等）
+    - < 50%: 灰色（低信心）
+  - RSI 指標
+  - 成交量（K 為單位）
+  - MA20 均線
+- 響應式布局（手機/平板/桌面自適應）
+
+### 設計美學
+
+**Dark Quant Theme（深色量化主題）**
+- 主背景: `#0a0e1a` (深藍黑)
+- 卡片背景: `#1a2132` (深灰藍)
+- 強調色: 綠色 `#10b981` (獲利) / 紅色 `#ef4444` (虧損)
+- 字體: JetBrains Mono (專業等寬字體)
+- 動畫效果: 背景漸變、卡片懸停發光
+
+### API 端點
+
+| 端點 | 方法 | 功能 | 回傳格式 |
+|------|------|------|---------|
+| `/dashboard` | GET | Dashboard 主頁 | HTML |
+| `/api/performance` | GET | 資產曲線數據 | JSON: {dates, equity, roi} |
+| `/api/trades` | GET | 交易明細（最近 50 筆） | JSON: [trade_list] |
+| `/api/summary` | GET | 總結指標 | JSON: {total_roi, win_rate, mdd, sharpe, ...} |
+| `/api/daily-signals` | GET | 即時選股訊號 | JSON: {date, signals, count} |
+
+### 技術架構
+
+```
+Frontend (前端)
+  ├─ TailwindCSS 3.x (CDN) - 樣式框架
+  ├─ Alpine.js 3.x (CDN) - 響應式資料綁定
+  ├─ Chart.js 4.4.1 (CDN) - 圖表視覺化
+  └─ JetBrains Mono - 專業字體
+
+Backend (後端)
+  ├─ Flask Routes - API 路由
+  ├─ Pandas - 數據處理
+  └─ CSV Files - 回測結果存儲
+      ├─ ML_Data/backtest_result.csv (交易明細)
+      └─ ML_Data/backtest_profit_report.csv (每日資產)
+```
+
+### Line Bot 整合
+
+在 Line Bot 中輸入 `dashboard` 或 `儀表板`：
+```
+📊 V32 Web Dashboard
+==================
+🌐 連結: http://localhost:5000/dashboard
+
+✨ 功能:
+• 資產曲線圖
+• 回測績效指標 (ROI/勝率/MDD/Sharpe)
+• 交易明細表
+• ⚡ 即時選股訊號
+
+💡 提示: 請先執行回測以產生數據
+```
 
 ---
 
@@ -440,9 +545,7 @@ Webhook URL: https://your-domain.com/callback
 ---
 
 ## 🏗️ 架構設計原則
-
-### Clean Architecture
-
+start_linebot.bat](start_linebot.bat) | 啟動 Line Bot | 使用相對路徑，啟動虛擬環境
 ```
 🌐 Presentation Layer (app.py)
     ↓ 只負責路由和請求處理
@@ -657,6 +760,18 @@ def time_series_split(df, train_ratio=0.8):
 
 ## 📝 更新日誌
 
+### V32 (2026-01) ⭐ 最新版
+- ✅ **回測擬真化** - 加入 0.2% 滑價模型
+- ✅ **風險指標** - MDD (最大回撤) + Sharpe Ratio
+- ✅ **Web Dashboard** - 專業量化交易儀表板
+  - 資產曲線圖 (Chart.js)
+  - 四大指標卡片 (ROI/勝率/MDD/Sharpe)
+  - 交易明細表
+  - ⚡ 即時選股訊號 (Live Signals)
+- ✅ **Dark Quant Theme** - 深色專業設計
+- ✅ **Line Bot 整合** - 新增 "dashboard" 指令
+- ✅ **架構清理** - 移除測試文件，確保代碼整潔
+
 ### V31 (2025-12)
 - ✅ 合併回測檔案為統一引擎 (`4_run_backtest.py`)
 - ✅ 新增 ratio 特徵 (volume/foreign/trust)
@@ -685,4 +800,6 @@ def time_series_split(df, train_ratio=0.8):
 
 ---
 
-*最後更新：2025-12-31*
+**最後更新：2026-01-06**  
+**版本：V32 - Dashboard & Risk Metrics**  
+*專業量化交易系統 | 回測擬真化 | Web 視覺化儀表板*
