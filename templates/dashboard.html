@@ -183,6 +183,96 @@
                 </div>
             </div>
         </div>
+        
+        <!-- ⚔️ V33 Phase 3: Battle Arena -->
+        <div class="mt-8">
+            <div class="chart-container">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold flex items-center">
+                            <span class="text-3xl mr-3">⚔️</span>
+                            Battle Arena - 人機對決
+                        </h2>
+                        <p class="text-sm text-gray-400 mt-1">模擬交易績效比較</p>
+                    </div>
+                </div>
+                
+                <!-- PK Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <!-- User Stats Card -->
+                    <div class="metric-card border-l-4 border-blue-500">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-lg font-bold text-blue-400">👤 使用者</div>
+                            <div class="text-3xl">🏆</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm text-gray-400">平均報酬率</div>
+                                <div class="text-2xl font-bold" 
+                                     :class="pkBattle.user_roi >= 0 ? 'text-green-400' : 'text-red-400'"
+                                     x-text="formatPercent(pkBattle.user_roi)"></div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">勝率</div>
+                                <div class="text-2xl font-bold text-gray-300" 
+                                     x-text="formatPercent(pkBattle.user_win_rate)"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- AI Stats Card -->
+                    <div class="metric-card border-l-4 border-purple-500">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-lg font-bold text-purple-400">🤖 AI 策略</div>
+                            <div class="text-3xl">🎯</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm text-gray-400">平均報酬率</div>
+                                <div class="text-2xl font-bold" 
+                                     :class="pkBattle.ai_roi >= 0 ? 'text-green-400' : 'text-red-400'"
+                                     x-text="formatPercent(pkBattle.ai_roi)"></div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">勝率</div>
+                                <div class="text-2xl font-bold text-gray-300" 
+                                     x-text="formatPercent(pkBattle.ai_win_rate)"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Battle Result -->
+                <div class="text-center py-8 border-t border-gray-700">
+                    <template x-if="pkBattle.user_roi > pkBattle.ai_roi">
+                        <div>
+                            <div class="text-5xl mb-4">🎉</div>
+                            <div class="text-2xl font-bold text-green-400">恭喜！你擊敗了 AI</div>
+                            <div class="text-sm text-gray-400 mt-2">
+                                你的報酬率領先 <span class="font-bold" x-text="(pkBattle.user_roi - pkBattle.ai_roi).toFixed(2) + '%'"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="pkBattle.user_roi <= pkBattle.ai_roi">
+                        <div>
+                            <div class="text-5xl mb-4">💪</div>
+                            <div class="text-2xl font-bold text-amber-400">繼續加油！</div>
+                            <div class="text-sm text-gray-400 mt-2">
+                                AI 目前領先 <span class="font-bold" x-text="(pkBattle.ai_roi - pkBattle.user_roi).toFixed(2) + '%'"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Mock Trade Button -->
+                <div class="mt-6 text-center">
+                    <button @click="alert('模擬交易功能開發中...')" 
+                            class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-bold transition-all transform hover:scale-105">
+                        📝 記錄新的模擬交易
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -206,6 +296,12 @@ function dashboardData() {
         trades: [],
         liveSignals: [],
         liveDate: null,
+        pkBattle: {
+            user_roi: 0,
+            ai_roi: 0,
+            user_win_rate: 0,
+            ai_win_rate: 0
+        },
         chart: null,
         
         async init() {
@@ -215,7 +311,8 @@ function dashboardData() {
                     this.loadSummary(),
                     this.loadPerformance(),
                     this.loadTrades(),
-                    this.loadLiveSignals()
+                    this.loadLiveSignals(),
+                    this.loadPKBattle()
                 ]);
                 
                 // 渲染圖表
@@ -262,6 +359,19 @@ function dashboardData() {
             } catch (error) {
                 console.error('載入即時訊號失敗:', error);
                 this.liveSignals = [];
+            }
+        },
+        
+        async loadPKBattle() {
+            try {
+                const response = await fetch('/api/pk/battle');
+                if (!response.ok) {
+                    console.warn('無法載入 PK Battle 數據');
+                    return;
+                }
+                this.pkBattle = await response.json();
+            } catch (error) {
+                console.error('載入 PK Battle 失敗:', error);
             }
         },
         

@@ -1,38 +1,55 @@
+"""策略模組 - V31 混合策略實作
+
+此模組包含：
+- V31 混合策略（V30 硬篩選 + XGBoost 智慧排名）
+- V30 純技術面策略
+- 格式化輸出函數
+- 資金管理建議
+
+🔥 V31 Optimization (2026-01):
+- 放寬停損至 10%（提升波動容忍度）
+- 提高停利至 20%（提升盈虧比）
+- 加入市場趨勢過濾器（熊市暫停買進）
+"""
+from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
 import joblib
 import os
 from config import Config
 
 # ============================================
-# V31 混合策略參數（V30 + ML 智慧排名）
-# 🔥 V31 Optimization (2026-01):
-# - 放寬停損至 10%（提升波動容忍度）
-# - 提高停利至 20%（提升盈虧比）
-# - 加入市場趨勢過濾器（熊市暫停買進）
+# 💾 快取變數 (Module-level cache)
 # ============================================
-V30_PARAMS = {
-    'VOLUME_THRESHOLD': 3000000,  # 成交量門檻
-    'RSI_LOW': 40,                # RSI 下限
-    'RSI_HIGH': 70,               # RSI 上限
-    'STOP_LOSS': 0.10,            # 10% 停損（優化：從5%放寬至10%）
-    'TAKE_PROFIT': 0.20,          # 20% 停利（優化：從15%提高至20%）
-    'MAX_HOLD_DAYS': 10,          # 最長持有天數
-}
-
-# V31 模型路徑 (統一使用 Config)
-MODEL_PATH = Config.MODEL_PATH
-
-# 快取模型（避免重複載入）
-_cached_model = None
-_cached_features = None
+_cached_model: Optional[Any] = None
+_cached_features: Optional[List[str]] = None
 
 
-def _load_v31_model():
-    """
-    載入 V31 混合策略模型（帶快取與特徵驗證）
+# ============================================
+# 🔧 Helper Functions
+# ============================================
+
+def check_market_trend(date_str: str) -> Optional[str]:
+    """檢查市場趨勢
+    
+    Args:
+        date_str: 日期字串 (YYYY-MM-DD)
     
     Returns:
-        (model, features): 模型物件和特徵列表
+        'BULL' | 'BEAR' | 'NEUTRAL' | None (失敗時)
+    """
+    try:
+        from tool.db_helper import get_market_trend
+        return get_market_trend(date_str)
+    except Exception as e:
+        print(f"⚠️ 市場趨勢檢查失敗: {e}")
+        return None
+
+
+def _load_v31_model() -> Tuple[Optional[Any], Optional[List[str]]]:
+    """載入 V31 混合策略模型（帶快取與特徵驗證）
+    
+    Returns:
+        Tuple[model, features]: 模型物件和特徵清單，失敗時返回 (None, None)
     """
     global _cached_model, _cached_features
     
@@ -40,7 +57,7 @@ def _load_v31_model():
         return _cached_model, _cached_features
     
     # 嘗試多個路徑
-    paths = [MODEL_PATH, 'stock_ai_model.pkl', os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')]
+    paths = [Config.MODEL_PATH, 'stock_ai_model.pkl', os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')]
     
     for path in paths:
         if os.path.exists(path):
@@ -85,9 +102,8 @@ def _load_v31_model():
     return None, None
 
 
-def get_best_stocks_v31_hybrid(df, top_n=5):
-    """
-    🔥 V31 混合策略選股（V30 篩選 + ML 智慧排名）
+def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame:
+    """🔥 V31 混合策略選股（V30 篩選 + ML 智慧排名）
     
     🆕 V31 Optimization: 加入市場趨勢過濾器
     
@@ -111,27 +127,21 @@ def get_best_stocks_v31_hybrid(df, top_n=5):
     # ============================================
     # 🆕 Step 0: 市場趨勢過濾器（V31 Optimization）
     # ============================================
-    try:
-        from tool.db_helper import get_market_trend
-        
-        # 取得當天日期（使用 df 中最新的日期）
-        date_str = df['trade_date'].max()
-        if hasattr(date_str, 'strftime'):
-            date_str = date_str.strftime('%Y-%m-%d')
-        else:
-            date_str = str(date_str)
-        
-        market_trend = get_market_trend(date_str)
-        
-        if market_trend == 'BEAR':
-            print(f"📉 市場趨勢偏空（{date_str}），暫停買進")
-            return pd.DataFrame()
-        elif market_trend == 'NEUTRAL':
-            print(f"⚪ 市場趨勢中性（{date_str}），謹慎操作")
-        else:
-            print(f"📈 市場趨勢偏多（{date_str}），正常選股")
-    except Exception as e:
-        print(f"⚠️ 市場趨勢檢查失敗: {e}，繼續選股")
+    date_str = df['trade_date'].max()
+    if hasattr(date_str, 'strftime'):
+        date_str = date_str.strftime('%Y-%m-%d')
+    else:
+        date_str = str(date_str)
+    
+    market_trend = check_market_trend(date_str)
+    
+    if market_trend == 'BEAR':
+        print(f"📉 市場趨勢偏空（{date_str}），暫停買進")
+        return pd.DataFrame()
+    elif market_trend == 'NEUTRAL':
+        print(f"⚪ 市場趨勢中性（{date_str}），謹慎操作")
+    elif market_trend == 'BULL':
+        print(f"📈 市場趨勢偏多（{date_str}），正常選股")
     
     # ============================================
     # Step 1: V30 硬篩選
@@ -203,19 +213,24 @@ def get_best_stocks_v31_hybrid(df, top_n=5):
     return result
 
 
-def get_v30_params_from_db():
-    """
-    從資料庫讀取 V30 動態參數（如果有設定的話）
+def get_v30_params_from_db() -> Dict[str, Any]:
+    """從資料庫讀取 V30 動態參數（如果有設定的話）
     
     Returns:
         dict: V30 參數字典
     """
     try:
         from sqlalchemy import create_engine, text
-        from config import Config
         
         engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
-        params = V30_PARAMS.copy()
+        params = {
+            'VOLUME_THRESHOLD': Config.V30_VOLUME_THRESHOLD,
+            'RSI_LOW': Config.V30_RSI_LOW,
+            'RSI_HIGH': Config.V30_RSI_HIGH,
+            'STOP_LOSS': Config.V30_STOP_LOSS,
+            'TAKE_PROFIT': Config.V30_TAKE_PROFIT,
+            'MAX_HOLD_DAYS': Config.V30_MAX_HOLD_DAYS,
+        }
         
         with engine.connect() as conn:
             # 讀取自訂參數
@@ -232,12 +247,19 @@ def get_v30_params_from_db():
                     params['MAX_HOLD_DAYS'] = int(value)
         
         return params
-    except:
+    except Exception:
         # 如果讀取失敗，使用預設值
-        return V30_PARAMS
+        return {
+            'VOLUME_THRESHOLD': Config.V30_VOLUME_THRESHOLD,
+            'RSI_LOW': Config.V30_RSI_LOW,
+            'RSI_HIGH': Config.V30_RSI_HIGH,
+            'STOP_LOSS': Config.V30_STOP_LOSS,
+            'TAKE_PROFIT': Config.V30_TAKE_PROFIT,
+            'MAX_HOLD_DAYS': Config.V30_MAX_HOLD_DAYS,
+        }
 
 
-def get_v30_candidates(df):
+def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     """
     V30 策略候選股票篩選器（嚴格版）
     
@@ -261,23 +283,17 @@ def get_v30_candidates(df):
     # ============================================
     # 🆕 市場趨勢過濾器（V31 Optimization）
     # ============================================
-    try:
-        from tool.db_helper import get_market_trend
-        
-        # 取得當天日期
-        date_str = df['trade_date'].max()
-        if hasattr(date_str, 'strftime'):
-            date_str = date_str.strftime('%Y-%m-%d')
-        else:
-            date_str = str(date_str)
-        
-        market_trend = get_market_trend(date_str)
-        
-        if market_trend == 'BEAR':
-            print(f"📉 市場趨勢偏空（{date_str}），V30 暫停選股")
-            return pd.DataFrame()
-    except Exception as e:
-        print(f"⚠️ 市場趨勢檢查失敗: {e}，繼續篩選")
+    date_str = df['trade_date'].max()
+    if hasattr(date_str, 'strftime'):
+        date_str = date_str.strftime('%Y-%m-%d')
+    else:
+        date_str = str(date_str)
+    
+    market_trend = check_market_trend(date_str)
+    
+    if market_trend == 'BEAR':
+        print(f"📉 市場趨勢偏空（{date_str}），V30 暫停選股")
+        return pd.DataFrame()
     
     # 確保必要欄位存在
     required_cols = ['close_price', 'ma20', 'ma60', 'volume', 'rsi']
@@ -290,10 +306,64 @@ def get_v30_candidates(df):
     candidates = df[
         (df['close_price'] > df['ma20']) &           # 收盤 > MA20
         (df['ma20'] > df['ma60']) &                  # MA20 > MA60
-        (df['volume'] > V30_PARAMS['VOLUME_THRESHOLD']) &  # 量能充足
-        (df['rsi'] > V30_PARAMS['RSI_LOW']) &        # RSI 不過低
-        (df['rsi'] < V30_PARAMS['RSI_HIGH'])         # RSI 不過高
+        (df['volume'] > Config.V30_VOLUME_THRESHOLD) &  # 量能充足
+        (df['rsi'] > Config.V30_RSI_LOW) &           # RSI 不過低
+        (df['rsi'] < Config.V30_RSI_HIGH)            # RSI 不過高
     ].copy()
+    
+    # ============================================
+    # 🆕 V33 Phase 2: 進階濾網 (Opt-in)
+    # ============================================
+    
+    # 1️⃣ KD 黃金交叉濾網
+    if Config.USE_KD_FILTER and not candidates.empty:
+        try:
+            from tool.calc_indicators import calculate_kd_full
+            
+            # 計算完整 KD 指標
+            if all(col in candidates.columns for col in ['high_price', 'low_price']):
+                k_values, d_values = calculate_kd_full(candidates)
+                candidates['kd_k_temp'] = k_values
+                candidates['kd_d_temp'] = d_values
+                
+                # 篩選條件：K > K_MIN, D > D_MIN, K > D (黃金交叉)
+                kd_filter = (
+                    (candidates['kd_k_temp'] > Config.KD_GOLDEN_CROSS_K_MIN) &
+                    (candidates['kd_d_temp'] > Config.KD_GOLDEN_CROSS_D_MIN)
+                )
+                
+                if Config.KD_GOLDEN_CROSS_K_OVER_D:
+                    kd_filter = kd_filter & (candidates['kd_k_temp'] > candidates['kd_d_temp'])
+                
+                candidates = candidates[kd_filter].copy()
+                candidates.drop(['kd_k_temp', 'kd_d_temp'], axis=1, inplace=True, errors='ignore')
+                
+                print(f"✨ KD 黃金交叉濾網啟用，剩餘 {len(candidates)} 檔")
+        except Exception as e:
+            print(f"⚠️ KD 濾網執行失敗: {e}")
+    
+    # 2️⃣ 布林通道壓縮突破濾網
+    if Config.USE_BB_FILTER and not candidates.empty:
+        try:
+            # 檢查 bb_width 欄位是否存在
+            if 'bb_width' in candidates.columns:
+                # 篩選條件：通道壓縮 (寬度 < 門檻)
+                bb_squeeze = candidates['bb_width'] < Config.BB_SQUEEZE_THRESHOLD
+                
+                # 突破方向判斷
+                if Config.BB_BREAKOUT_POSITION == 'upper':
+                    # 價格接近上軌 (收盤價 > MA20，趨勢向上)
+                    bb_filter = bb_squeeze & (candidates['close_price'] > candidates['ma20'])
+                elif Config.BB_BREAKOUT_POSITION == 'lower':
+                    # 價格接近下軌 (收盤價 < MA20，超跌反彈)
+                    bb_filter = bb_squeeze & (candidates['close_price'] < candidates['ma20'])
+                else:
+                    bb_filter = bb_squeeze  # 只篩選壓縮，不管方向
+                
+                candidates = candidates[bb_filter].copy()
+                print(f"✨ 布林通道壓縮突破濾網啟用，剩餘 {len(candidates)} 檔")
+        except Exception as e:
+            print(f"⚠️ BB 濾網執行失敗: {e}")
     
     return candidates
 
@@ -512,7 +582,7 @@ def format_v30_recommendation(picks, date_str):
             msg += f"   {emoji} 外資 {int(f_buy):,} 張\n"
     
     msg += "-" * 28 + "\n"
-    msg += f"⏰ 建議持有: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+    msg += f"⏰ 建議持有: 最長{Config.V30_MAX_HOLD_DAYS}天\n"
     msg += "⚠️ 請嚴格執行停損停利"
     
     return msg
@@ -539,15 +609,15 @@ def format_v31_recommendation(picks, date_str):
     
     for idx, (_, row) in enumerate(picks.iterrows(), 1):
         ai_score = row.get('ai_score', 0)
-        stop_loss = row['close_price'] * (1 - V30_PARAMS['STOP_LOSS'])
-        take_profit = row['close_price'] * (1 + V30_PARAMS['TAKE_PROFIT'])
+        stop_loss = row['close_price'] * (1 - Config.V30_STOP_LOSS)
+        take_profit = row['close_price'] * (1 + Config.V30_TAKE_PROFIT)
         
         msg += f"{idx}. {row['stock_id']} (${row['close_price']:.2f})\n"
         msg += f"   🧠 AI {ai_score:.0%} | RSI {row['rsi']:.1f}\n"
         msg += f"   🛡️ 停損 ${stop_loss:.2f} | 🎯 停利 ${take_profit:.2f}\n"
     
     msg += "-" * 28 + "\n"
-    msg += f"⏰ 建議持有: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+    msg += f"⏰ 建議持有: 最長{Config.V30_MAX_HOLD_DAYS}天\n"
     msg += "⚠️ AI僅供參考，請嚴格執行停損"
     
     return msg

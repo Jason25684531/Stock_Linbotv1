@@ -2,9 +2,15 @@
 技術指標計算模組 (合併版)
 ============================================
 包含：
-1. 技術指標計算函數 (RSI, MACD, KD, BB)
+1. 技術指標計算函數 (RSI, MACD, KD, BB, Bias)
 2. 資料庫批次更新功能
+
+🔥 V33 Refactor:
+- 所有魔術數字移至 Config
+- 加入 Type Hints
+- 改善 Docstrings
 """
+from typing import Optional, Tuple
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
@@ -25,17 +31,20 @@ DB_URL = Config.SQLALCHEMY_DATABASE_URI
 # 📊 技術指標計算函數
 # ============================================
 
-def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+def calculate_rsi(series: pd.Series, period: Optional[int] = None) -> pd.Series:
     """
     計算 RSI (Relative Strength Index)
     
     Args:
         series: 收盤價序列
-        period: 計算週期 (預設 14)
+        period: 計算週期 (預設從 Config 讀取)
     
     Returns:
         RSI 數值序列 (0~100)
     """
+    if period is None:
+        period = Config.RSI_PERIOD
+    
     delta = series.diff()
     gain = delta.where(delta > 0, 0).rolling(period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
@@ -43,19 +52,31 @@ def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
-def calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.Series:
+def calculate_macd(
+    series: pd.Series, 
+    fast: Optional[int] = None, 
+    slow: Optional[int] = None, 
+    signal: Optional[int] = None
+) -> pd.Series:
     """
     計算 MACD Histogram
     
     Args:
         series: 收盤價序列
-        fast: 快線週期 (預設 12)
-        slow: 慢線週期 (預設 26)
-        signal: 訊號線週期 (預設 9)
+        fast: 快線週期 (預設從 Config 讀取)
+        slow: 慢線週期 (預設從 Config 讀取)
+        signal: 訊號線週期 (預設從 Config 讀取)
     
     Returns:
         MACD Histogram (MACD - Signal)
     """
+    if fast is None:
+        fast = Config.MACD_FAST
+    if slow is None:
+        slow = Config.MACD_SLOW
+    if signal is None:
+        signal = Config.MACD_SIGNAL
+    
     exp_fast = series.ewm(span=fast, adjust=False).mean()
     exp_slow = series.ewm(span=slow, adjust=False).mean()
     macd_line = exp_fast - exp_slow
@@ -63,17 +84,20 @@ def calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: in
     return macd_line - signal_line
 
 
-def calculate_kd(df: pd.DataFrame, period: int = 9) -> pd.Series:
+def calculate_kd(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
     """
     計算 KD 指標的 K 值 (Stochastic Oscillator)
     
     Args:
         df: 需包含 'high_price', 'low_price', 'close_price' 欄位
-        period: 計算週期 (預設 9)
+        period: 計算週期 (預設從 Config 讀取)
     
     Returns:
         K 值序列 (0~100)
     """
+    if period is None:
+        period = Config.KD_PERIOD
+    
     low_min = df['low_price'].rolling(period).min()
     high_max = df['high_price'].rolling(period).max()
     rsv = (df['close_price'] - low_min) / (high_max - low_min) * 100
@@ -81,18 +105,59 @@ def calculate_kd(df: pd.DataFrame, period: int = 9) -> pd.Series:
     return k
 
 
-def calculate_bb_width(series: pd.Series, period: int = 20, std_mult: float = 2.0) -> pd.Series:
+def calculate_kd_full(
+    df: pd.DataFrame, 
+    period: Optional[int] = None
+) -> Tuple[pd.Series, pd.Series]:
+    """
+    計算完整 KD 指標 (K 值與 D 值)
+    
+    🆕 V33 Phase 2: 用於 KD 黃金交叉濾網
+    
+    Args:
+        df: 需包含 'high_price', 'low_price', 'close_price' 欄位
+        period: 計算週期 (預設從 Config 讀取)
+    
+    Returns:
+        Tuple[K 值序列, D 值序列] - 均為 0~100 範圍
+    """
+    if period is None:
+        period = Config.KD_PERIOD
+    
+    low_min = df['low_price'].rolling(period).min()
+    high_max = df['high_price'].rolling(period).max()
+    rsv = (df['close_price'] - low_min) / (high_max - low_min) * 100
+    
+    # K 值：RSV 的 3 期平滑
+    k = rsv.ewm(com=2, adjust=False).mean()
+    
+    # D 值：K 值的 3 期平滑
+    d = k.ewm(com=2, adjust=False).mean()
+    
+    return k, d
+
+
+def calculate_bb_width(
+    series: pd.Series, 
+    period: Optional[int] = None, 
+    std_mult: Optional[float] = None
+) -> pd.Series:
     """
     計算布林通道寬度 (Bollinger Band Width)
     
     Args:
         series: 收盤價序列
-        period: MA 週期 (預設 20)
-        std_mult: 標準差倍數 (預設 2)
+        period: MA 週期 (預設從 Config 讀取)
+        std_mult: 標準差倍數 (預設從 Config 讀取)
     
     Returns:
         帶寬百分比
     """
+    if period is None:
+        period = Config.BB_PERIOD
+    if std_mult is None:
+        std_mult = Config.BB_STD_MULT
+    
     ma = series.rolling(period).mean()
     std = series.rolling(period).std()
     upper = ma + (std_mult * std)
@@ -119,9 +184,12 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     
+    # 移動平均
     df['ma5'] = df['close_price'].rolling(5).mean()
     df['ma20'] = df['close_price'].rolling(20).mean()
     df['ma60'] = df['close_price'].rolling(60).mean()
+    
+    # 技術指標
     df['bias'] = calculate_bias(df['close_price'], df['ma20'])
     df['rsi'] = calculate_rsi(df['close_price'])
     df['macd_hist'] = calculate_macd(df['close_price'])

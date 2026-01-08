@@ -279,6 +279,118 @@ def api_trades():
 @app.route("/api/summary")
 def api_summary():
     """
+    API: 取得回測摘要統計
+    Returns: JSON {total_roi, max_drawdown, sharpe_ratio, win_rate}
+    """
+    try:
+        profit_file = 'ML_Data/backtest_profit_report.csv'
+        if not os.path.exists(profit_file):
+            return jsonify({'error': '回測數據不存在'}), 404
+        
+        df = pd.read_csv(profit_file)
+        
+        # 計算統計指標
+        final_roi = df['roi'].iloc[-1] if not df.empty else 0
+        max_dd = df['mdd'].min() if 'mdd' in df.columns else 0
+        sharpe = df['sharpe'].iloc[-1] if 'sharpe' in df.columns else 0
+        
+        # 讀取交易明細計算勝率
+        trades_file = 'ML_Data/backtest_result.csv'
+        win_rate = 0
+        if os.path.exists(trades_file):
+            df_trades = pd.read_csv(trades_file)
+            if 'roi' in df_trades.columns:
+                win_rate = (df_trades['roi'] > 0).mean() * 100
+        
+        return jsonify({
+            'total_roi': round(final_roi, 2),
+            'max_drawdown': round(max_dd, 2),
+            'sharpe_ratio': round(sharpe, 2),
+            'win_rate': round(win_rate, 2)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==========================================
+# 🎮 V33 Phase 3: PK System API
+# ==========================================
+@app.route("/api/user/trade", methods=['POST'])
+def api_user_trade():
+    """
+    API: 記錄使用者模擬交易
+    Request Body: {user_id, stock_id, buy_price, buy_date}
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        stock_id = data.get('stock_id')
+        buy_price = data.get('buy_price')
+        buy_date = data.get('buy_date')
+        
+        if not all([user_id, stock_id, buy_price, buy_date]):
+            return jsonify({'error': '缺少必要參數'}), 400
+        
+        # 插入資料庫
+        from tool.db_helper import get_db_engine
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO user_simulation_trades 
+                (user_id, stock_id, buy_price, buy_date, status)
+                VALUES (:user_id, :stock_id, :buy_price, :buy_date, 'HOLDING')
+            """), {
+                'user_id': user_id,
+                'stock_id': stock_id,
+                'buy_price': float(buy_price),
+                'buy_date': buy_date
+            })
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': '模擬交易記錄成功'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/pk/battle", methods=['GET'])
+def api_pk_battle():
+    """
+    API: 取得人機對決統計數據
+    Returns: JSON {user_roi, ai_roi, user_win_rate, ai_win_rate}
+    """
+    try:
+        # Mock 數據示範（未來可連接真實交易記錄）
+        user_roi = 15.5  # 使用者報酬率
+        ai_roi = 19.2    # AI 報酬率 (來自 backtest_result.csv)
+        
+        # 從 backtest_result.csv 讀取 AI 實際數據
+        trades_file = 'ML_Data/backtest_result.csv'
+        if os.path.exists(trades_file):
+            df_trades = pd.read_csv(trades_file)
+            if 'roi' in df_trades.columns and not df_trades.empty:
+                ai_roi = df_trades['roi'].mean()
+                ai_win_rate = (df_trades['roi'] > 0).mean() * 100
+            else:
+                ai_win_rate = 50
+        else:
+            ai_win_rate = 50
+        
+        # Mock 使用者數據（未來從 user_simulation_trades 計算）
+        user_win_rate = 45
+        
+        return jsonify({
+            'user_roi': round(user_roi, 2),
+            'ai_roi': round(ai_roi, 2),
+            'user_win_rate': round(user_win_rate, 2),
+            'ai_win_rate': round(ai_win_rate, 2)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/live_signals")
+def api_live_signals():
+    """
     API: 取得回測總結數據
     Returns: JSON {total_roi, win_rate, mdd, sharpe, trade_count, avg_hold_days}
     """

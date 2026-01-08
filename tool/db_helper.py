@@ -245,3 +245,39 @@ def get_market_trend(date_str):
         return 'NEUTRAL'
     except:
         return 'NEUTRAL'
+
+
+# ==========================================
+# 🎮 V33 Phase 3: PK System 資料庫初始化
+# ==========================================
+def init_pk_tables():
+    """
+    建立 PK System 所需資料表
+    - user_simulation_trades: 使用者模擬交易記錄
+    """
+    try:
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            # 建立使用者模擬交易表
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_simulation_trades (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id VARCHAR(100) NOT NULL COMMENT '使用者 ID (Line User ID)',
+                    stock_id VARCHAR(20) NOT NULL COMMENT '股票代碼',
+                    buy_price DECIMAL(10, 2) NOT NULL COMMENT '買入價格',
+                    buy_date DATE NOT NULL COMMENT '買入日期',
+                    sell_price DECIMAL(10, 2) DEFAULT NULL COMMENT '賣出價格',
+                    sell_date DATE DEFAULT NULL COMMENT '賣出日期',
+                    status VARCHAR(20) DEFAULT 'HOLDING' COMMENT '狀態: HOLDING, CLOSED',
+                    roi DECIMAL(10, 4) DEFAULT NULL COMMENT '報酬率 (百分比)',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_user_status (user_id, status),
+                    INDEX idx_buy_date (buy_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='使用者模擬交易記錄'
+            """))
+            conn.commit()
+        print("✅ PK System 資料表初始化完成")
+        return True
+    except Exception as e:
+        print(f"❌ init_pk_tables 失敗: {e}")
+        return False
