@@ -21,7 +21,7 @@ from config import Config
 # 引入策略模組
 from tool.strategy import (
     calculate_pivot_strategy, format_strategy_message, calculate_position_size, 
-    calculate_v30_signal, V30_PARAMS, get_best_stocks_v31_hybrid,
+    calculate_v30_signal, get_best_stocks_v31_hybrid, get_v30_params_from_db,
     format_v30_recommendation, format_v31_recommendation, format_stock_query
 )
 # 引入資料庫輔助模組
@@ -577,7 +577,8 @@ def handle_message(event):
             value_str = msg_text.replace("設定停利", "").strip()
             if value_str == "0" or value_str.lower() == "不停利":
                 if update_setting('v30_take_profit', '0'):
-                    reply = f"🎯 V30停利已取消\n將持有至停損或到期（{V30_PARAMS['MAX_HOLD_DAYS']}天）"
+                    params = get_v30_params_from_db()
+                    reply = f"🎯 V30停利已取消\n將持有至停損或到期（{params['MAX_HOLD_DAYS']}天）"
                 else:
                     reply = "❌ 設定失敗"
             else:

@@ -82,7 +82,14 @@ class Config:
     BB_BREAKOUT_POSITION = 'upper' # 突破方向: 'upper'(上軌) or 'lower'(下軌)
     
     # ==========================================
-    # 🔑 API Keys (優先環境變數)
+    # � V33 Phase 2+: 市場情緒分析與熔斷機制
+    # ==========================================
+    ENABLE_SENTIMENT_FILTER = False     # 情緒熔斷開關（預設關閉，Opt-in）
+    SENTIMENT_THRESHOLD = -0.5          # 情緒分數門檻（-1.0 ~ 1.0，低於此值觸發熔斷）
+    SENTIMENT_MOCK_MODE = True          # 開發階段使用模擬數據（避免依賴外部 API）
+    
+    # ==========================================
+    # �🔑 API Keys (優先環境變數)
     # ==========================================
     LINE_CHANNEL_ACCESS_TOKEN = os.getenv(
         'LINE_TOKEN',

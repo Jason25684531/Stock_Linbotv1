@@ -16,7 +16,7 @@ import joblib
 import os
 import sys
 from config import Config
-from tool.strategy import get_v30_candidates, get_v30_params_from_db, V30_PARAMS
+from tool.strategy import get_v30_candidates, get_v30_params_from_db
 
 # ============================================
 # ⚙️ 設定區（統一使用 Config）

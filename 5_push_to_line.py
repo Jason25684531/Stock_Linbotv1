@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, text
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from config import Config
-from tool.strategy import get_v30_candidates, V30_PARAMS, calculate_v30_signal
+from tool.strategy import get_v30_candidates, get_v30_params_from_db, calculate_v30_signal
 import os
 import datetime
 

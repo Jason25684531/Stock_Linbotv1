@@ -8,7 +8,7 @@ from config import Config
 # 📚 引用策略模組
 from tool.strategy import (
     calculate_pivot_strategy, format_strategy_message, calculate_position_size, 
-    calculate_v30_signal, V30_PARAMS, get_best_stocks_v31_hybrid
+    calculate_v30_signal, get_v30_params_from_db, get_best_stocks_v31_hybrid
 )
 # 引用資料庫輔助模組
 from tool.db_helper import get_db_engine, get_setting, update_setting, get_stock_data, get_latest_trade_date

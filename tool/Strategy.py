@@ -10,6 +10,10 @@
 - 放寬停損至 10%（提升波動容忍度）
 - 提高停利至 20%（提升盈虧比）
 - 加入市場趨勢過濾器（熊市暫停買進）
+
+🔥 V33 Phase 2+ (2026-01):
+- 整合市場情緒分析（Circuit Breaker 熔斷機制）
+- 情緒分數低於門檻時自動暫停交易
 """
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
@@ -22,11 +26,51 @@ from config import Config
 # ============================================
 _cached_model: Optional[Any] = None
 _cached_features: Optional[List[str]] = None
+_sentiment_agent: Optional[Any] = None  # 情緒分析代理快取
 
 
 # ============================================
 # 🔧 Helper Functions
 # ============================================
+
+def check_sentiment_filter(date_str: str) -> Optional[Dict[str, any]]:
+    """檢查市場情緒熔斷機制
+    
+    Args:
+        date_str: 日期字串 (YYYY-MM-DD)
+    
+    Returns:
+        dict | None: 如果觸發熔斷返回情緒資訊，否則返回 None
+    """
+    # 如果未啟用情緒過濾，直接返回
+    if not Config.ENABLE_SENTIMENT_FILTER:
+        return None
+    
+    try:
+        global _sentiment_agent
+        
+        # 延遲載入情緒分析代理（避免循環導入）
+        if _sentiment_agent is None:
+            from tool.news_agent import NewsSentimentAgent
+            _sentiment_agent = NewsSentimentAgent(mock_mode=Config.SENTIMENT_MOCK_MODE)
+        
+        # 取得當日情緒分數
+        sentiment = _sentiment_agent.get_daily_sentiment(date_str)
+        score = sentiment['score']
+        
+        # 檢查是否觸發熔斷
+        if score < Config.SENTIMENT_THRESHOLD:
+            print(f"📉 市場情緒過低 (Score: {score:.2f}, 門檻: {Config.SENTIMENT_THRESHOLD})")
+            print(f"🔥 觸發熔斷機制，暫停買進！")
+            return sentiment
+        else:
+            print(f"✅ 市場情緒正常 (Score: {score:.2f}, 情緒: {sentiment['mood']})")
+            return None
+            
+    except Exception as e:
+        print(f"⚠️ 情緒分析檢查失敗: {e}")
+        return None  # 失敗時不阻擋交易
+
 
 def check_market_trend(date_str: str) -> Optional[str]:
     """檢查市場趨勢
@@ -68,25 +112,9 @@ def _load_v31_model() -> Tuple[Optional[Any], Optional[List[str]]]:
                     _cached_model = data['model']
                     _cached_features = data.get('features', [])
                     
-                    # 🔥 關鍵：驗證特徵列表
-                    if _cached_features:
-                        # 檢查模型特徵與 Config 特徵是否一致
-                        config_features = set(Config.FEATURES)
-                        model_features = set(_cached_features)
-                        
-                        if config_features != model_features:
-                            print("⚠️ 警告：模型特徵與 Config 不一致！")
-                            print(f"   Config 特徵: {Config.FEATURES}")
-                            print(f"   模型特徵: {_cached_features}")
-                            print("   → 將使用模型儲存的特徵列表（確保維度一致）")
-                        
-                        # 無論如何，都使用模型儲存的特徵列表（避免維度錯誤）
-                        print(f"✅ V31 模型載入成功: {path}")
-                        print(f"📋 使用特徵列表: {_cached_features}")
-                    else:
-                        print(f"✅ 模型載入成功，但未找到特徵列表，使用 Config 預設")
-                        _cached_features = Config.FEATURES
-                    
+                    # 無論如何，都使用模型儲存的特徵列表（避免維度錯誤）
+                    print(f"✅ V31 模型載入成功: {path}")
+                    print(f"📋 使用特徵列表: {_cached_features}")
                     return _cached_model, _cached_features
                 else:
                     # 舊格式：直接是模型，使用 Config 定義的特徵
@@ -106,13 +134,15 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
     """🔥 V31 混合策略選股（V30 篩選 + ML 智慧排名）
     
     🆕 V31 Optimization: 加入市場趨勢過濾器
+    🆕 V33 Phase 2+: 加入市場情緒熔斷機制
     
     流程：
-    1. 檢查市場趨勢（如果是熊市則暫停買進）
-    2. V30 硬篩選（均線、量能、RSI）
-    3. 計算比例特徵（與訓練時一致）
-    4. ML 預測機率評分
-    5. 依評分排序，返回 Top N
+    1. 檢查市場情緒（如果過低則觸發熔斷）
+    2. 檢查市場趨勢（如果是熊市則暫停買進）
+    3. V30 硬篩選（均線、量能、RSI）
+    4. 計算比例特徵（與訓練時一致）
+    5. ML 預測機率評分
+    6. 依評分排序，返回 Top N
     
     Args:
         df: DataFrame，包含股票資料
@@ -125,13 +155,23 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
         return pd.DataFrame()
     
     # ============================================
-    # 🆕 Step 0: 市場趨勢過濾器（V31 Optimization）
+    # 🆕 Step 0a: 市場情緒熔斷檢查（V33 Phase 2+）
     # ============================================
     date_str = df['trade_date'].max()
     if hasattr(date_str, 'strftime'):
         date_str = date_str.strftime('%Y-%m-%d')
     else:
         date_str = str(date_str)
+    
+    sentiment_alert = check_sentiment_filter(date_str)
+    if sentiment_alert is not None:
+        # 觸發熔斷：返回空結果
+        print(f"⛔ Circuit Breaker 已觸發：市場情緒 {sentiment_alert['mood']} (分數: {sentiment_alert['score']:.2f})")
+        return pd.DataFrame()
+    
+    # ============================================
+    # 🆕 Step 0b: 市場趨勢過濾器（V31 Optimization）
+    # ============================================
     
     market_trend = check_market_trend(date_str)
     
@@ -214,15 +254,15 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
 
 
 def get_v30_params_from_db() -> Dict[str, Any]:
-    """從資料庫讀取 V30 動態參數（如果有設定的話）
+    """從資料庫讀取 V30 策略參數
     
     Returns:
-        dict: V30 參數字典
+        Dict[str, Any]: 參數字典
     """
     try:
-        from sqlalchemy import create_engine, text
+        from tool.db_helper import get_strategy_params
+        result = get_strategy_params()
         
-        engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
         params = {
             'VOLUME_THRESHOLD': Config.V30_VOLUME_THRESHOLD,
             'RSI_LOW': Config.V30_RSI_LOW,
@@ -232,13 +272,7 @@ def get_v30_params_from_db() -> Dict[str, Any]:
             'MAX_HOLD_DAYS': Config.V30_MAX_HOLD_DAYS,
         }
         
-        with engine.connect() as conn:
-            # 讀取自訂參數
-            result = conn.execute(text(
-                "SELECT setting_key, setting_value FROM user_settings WHERE setting_key LIKE 'v30_%'"
-            )).fetchall()
-            
-            for key, value in result:
+        if result:
                 if key == 'v30_stop_loss':
                     params['STOP_LOSS'] = float(value)
                 elif key == 'v30_take_profit':
@@ -419,7 +453,7 @@ def calculate_v30_signal(row, custom_params=None):
         "signal_strength": signal_strength,
         "stop_loss": stop_loss,
         "take_profit": take_profit,
-        "max_hold_days": V30_PARAMS['MAX_HOLD_DAYS'],
+        "max_hold_days": params['MAX_HOLD_DAYS'],
         "conditions": {
             "均線排列": "✅" if is_above_ma else "❌",
             "量能充足": "✅" if volume_ok else "❌",

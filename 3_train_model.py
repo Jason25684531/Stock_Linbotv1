@@ -6,13 +6,13 @@ from sklearn.metrics import classification_report, accuracy_score, precision_sco
 import joblib
 import os
 from config import Config
+from tool.news_agent import NewsSentimentAgent
 
 # ============================================
 # ⚙️ V31 混合策略版 - 設定區（統一使用 Config）
 # ============================================
 DB_URL = Config.SQLALCHEMY_DATABASE_URI
 MODEL_PATH = Config.MODEL_PATH
-FEATURES = Config.FEATURES
 
 # V31: 預測參數（配合獲利目標 10-20%）
 LOOK_AHEAD_DAYS = 7      # 看未來 7 天（配合 10 天持有期）
@@ -20,6 +20,9 @@ TARGET_RETURN = 0.08     # 目標漲幅 8%（中間值，提高精準度）
 
 # 時間序列拆分參數
 TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
+
+# V33 Phase 2+: 擴展特徵清單（加入情緒分數）
+FEATURES = Config.FEATURES + ['sentiment_score']
 
 
 def calculate_ratio_features(df):
@@ -93,6 +96,62 @@ def calculate_future_target(df, look_ahead_days, target_return):
     return df
 
 
+def merge_sentiment_features(df):
+    """
+    整合市場情緒特徵到訓練數據
+    
+    🔥 V33 Phase 2+: 新增特徵
+    
+    策略：
+    - 使用 NewsSentimentAgent 產生每日情緒分數
+    - 使用 Mock Mode 確保訓練穩定（不依賴外部 API）
+    - 缺失值填充為 0（中性情緒）
+    
+    Args:
+        df: DataFrame，必須包含 'trade_date' 欄位
+    
+    Returns:
+        DataFrame: 添加 'sentiment_score' 欄位
+    """
+    print("📰 整合市場情緒特徵...")
+    
+    try:
+        # 初始化情緒分析代理（使用 Mock Mode）
+        sentiment_agent = NewsSentimentAgent(mock_mode=True)
+        
+        # 取得所有唯一日期
+        unique_dates = df['trade_date'].unique()
+        sentiment_map = {}
+        
+        print(f"   正在計算 {len(unique_dates)} 個交易日的情緒分數...")
+        
+        # 批次計算所有日期的情緒分數
+        for date in unique_dates:
+            date_str = pd.to_datetime(date).strftime('%Y-%m-%d')
+            sentiment_result = sentiment_agent.get_daily_sentiment(date_str)
+            sentiment_map[date] = sentiment_result['score']
+        
+        # 映射到原始數據
+        df['sentiment_score'] = df['trade_date'].map(sentiment_map)
+        
+        # 填充缺失值為 0（中性）
+        missing_count = df['sentiment_score'].isna().sum()
+        if missing_count > 0:
+            print(f"   ⚠️ {missing_count} 筆資料缺少情緒分數，填充為 0（中性）")
+            df['sentiment_score'] = df['sentiment_score'].fillna(0)
+        
+        print(f"   ✅ 情緒特徵整合完成")
+        print(f"   📊 情緒分數範圍: {df['sentiment_score'].min():.3f} ~ {df['sentiment_score'].max():.3f}")
+        print(f"   📊 平均情緒: {df['sentiment_score'].mean():.3f}")
+        
+    except Exception as e:
+        print(f"   ⚠️ 情緒特徵整合失敗: {e}")
+        print(f"   → 填充為 0（中性），繼續訓練")
+        df['sentiment_score'] = 0
+    
+    return df
+
+
 def time_series_split(df, train_ratio=0.8):
     """
     時間序列拆分（無數據洩露）
@@ -133,8 +192,67 @@ def time_series_split(df, train_ratio=0.8):
     print("=" * 60 + "\n")
     
     return train_df, test_df
-
 def train_xgboost():
+    """
+    XGBoost V31 混合策略訓練主函數
+    
+    改進：
+    1. 移除 train_test_split 的 shuffle=True
+    2. 實現時間序列拆分（前 80% 訓練，後 20% 測試）
+    3. 封裝特徵工程和目標計算邏輯
+    4. 保存完整的模型元數據
+    
+    🔥 V33 Phase 2+: 整合市場情緒特徵
+    """
+    print("🚀 正在啟動 XGBoost V31 混合策略訓練引擎...")
+    print("🎯 目標：V30 篩選 + ML 智慧排名，獲利 10-20%")
+    print("🔒 防止數據洩露：使用時間序列拆分")
+    print("📰 V33 Phase 2+: 整合市場情緒特徵\n")
+    
+    engine = create_engine(DB_URL)
+    
+    # ============================================
+    # 1. 讀取數據
+    # ============================================
+    print("📥 從資料庫讀取訓練資料...")
+    try:
+        df = pd.read_sql("SELECT * FROM daily_market_data", engine)
+    except Exception as e:
+        print(f"❌ 資料庫讀取失敗: {e}")
+        return
+
+    if df.empty:
+        print("❌ 資料庫是空的！請先跑 1_update_database.py")
+        return
+
+    # ============================================
+    # 2. 數據前處理
+    # ============================================
+    print(f"📦 原始數據: {len(df):,} 筆")
+    
+    # 確保日期格式正確
+    df['trade_date'] = pd.to_datetime(df['trade_date'])
+    
+    # 按股票和日期排序（關鍵）
+    df = df.sort_values(['stock_id', 'trade_date']).reset_index(drop=True)
+    
+    # 補齊缺失的籌碼欄位
+    if 'foreign_buy' not in df.columns:
+        df['foreign_buy'] = 0
+    if 'trust_buy' not in df.columns:
+        df['trust_buy'] = 0
+    
+    # ============================================
+    # 3. 特徵工程
+    # ============================================
+    df = calculate_ratio_features(df)
+    
+    # 🔥 V33 Phase 2+: 整合情緒特徵
+    df = merge_sentiment_features(df)
+    
+    # ============================================
+    # 4. 計算未來收益目標
+    # ============================================
     """
     XGBoost V31 混合策略訓練主函數
     

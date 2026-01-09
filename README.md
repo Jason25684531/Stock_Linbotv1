@@ -1,10 +1,10 @@
 # Stock AI Line Bot V33
 
-> 🔥 **V33 Phase 3 完成** | PK System 人機對決系統上線  
+> 🔥 **V33 Phase 2+ 完成** | 市場情緒分析與熔斷機制上線  
+> ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
 > 🛡️ **Type Safety** | 完整 Type Hints，提升代碼可維護性  
 > 🧪 **Test Coverage 60%+** | 核心邏輯測試覆蓋，確保穩定性  
 > 🏗️ **Clean Architecture** | 消除魔術數字，統一配置管理  
-> ⚔️ **Battle Arena** | 模擬交易與 AI 績效比較視覺化  
 
 ---
 
@@ -16,13 +16,20 @@
 
 | 功能 | 說明 | 命令 |
 |------|------|------|
-| 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 ⭐推薦 | 輸入「推薦」 |
-| 🚀 V30 純技術策略 | 均線突破 + 量能確認 | 輸入「V30」 |
+| 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 + 情緒過濾 ⭐推薦 | 輸入「推薦」 |
+| 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 情緒熔斷 | 輸入「V30」 |
 | 🎫 個股診斷 | 完整策略報告 + 停損停利建議 | 輸入「2330」 |
 | 📊 Web Dashboard | 視覺化回測績效與即時選股 | 輸入「dashboard」 |
 | ⚙️ 動態參數 | 即時調整停損/停利設定 | 輸入「查看設定」 |
 
-### ✨ 最新重構（2026-01-08）
+### ✨ 最新重構（2026-01-09）
+
+**🧠 V33 Phase 2+: Sentiment Analysis & Circuit Breaker (完成)**
+- ✅ **情緒分析引擎**：`NewsSentimentAgent` 類別（Mock Mode + Real Mode 介面）
+- ✅ **熔斷機制**：情緒分數低於門檻時自動暫停交易
+- ✅ **XGBoost 特徵擴展**：整合 `sentiment_score` 為第 9 個特徵
+- ✅ **Opt-in 設計**：預設關閉，不影響現有策略
+- ✅ **確定性模擬**：基於日期哈希生成可重現的情緒數據
 
 **⚔️ V33 Phase 3: PK System & Visualization (完成)**
 - ✅ **資料庫架構**：`user_simulation_trades` 表記錄模擬交易
@@ -34,7 +41,6 @@
 - ✅ **動能濾網**：KD 黃金交叉 + 布林通道壓縮突破（Opt-in 設計）
 - ✅ **參數最佳化**：Optuna 框架，支援 ROI/Sharpe 雙目標搜尋
 - ✅ **進階指標**：`calculate_kd_full()` 同時輸出 K/D 值
-- 📋 **待實作**：情緒分析整合（建議後續迭代）
 
 **🛡️ V33 Phase 1: Foundation & Quality Assurance (完成)**
 - ✅ **Code Refactor**：Type Hints + 消除魔術數字 + 統一配置管理
@@ -61,24 +67,29 @@
 
 ```mermaid
 graph LR
-    A[全市場股票] --> B[V30 硬篩選]
-    B --> C{均線多頭?<br/>量能足夠?<br/>RSI 適中?}
-    C -->|✅| D[候選池]
-    C -->|❌| E[排除]
-    D --> F[計算比例特徵]
-    F --> G[XGBoost 評分]
-    G --> H[Top 5 推薦]
+    A[全市場股票] --> B[情緒熔斷檢查]
+    B --> C{情緒過低?}
+    C -->|是| D[暫停交易]
+    C -->|否| E[V30 硬篩選]
+    E --> F{均線多頭?<br/>量能足夠?<br/>RSI 適中?}
+    F -->|✅| G[候選池]
+    F -->|❌| H[排除]
+    G --> I[計算比例特徵 + 情緒特徵]
+    I --> J[XGBoost 評分]
+    J --> K[Top 5 推薦]
 ```
 
 ### V30 篩選條件
 
 | 項目 | 條件 | 說明 |
 |------|------|------|
+| 市場情緒 | score > -0.5（可選） | 避免在極度悲觀時買入 |
+| 市場趨勢 | 非熊市 | 大盤空頭時暫停 |
 | 均線排列 | 收盤 > MA20 > MA60 | 多頭趨勢 |
 | 成交量 | > 300 萬股 | 流動性充足 |
 | RSI | 40 < RSI < 70 | 非超買超賣 |
 
-### XGBoost 特徵 (8 個)
+### XGBoost 特徵 (9 個)
 
 | 類型 | 特徵 | 說明 |
 |------|------|------|
@@ -90,8 +101,42 @@ graph LR
 | 量能面 | volume_ratio | 成交量 / 20日均量 |
 | 籌碼面 | foreign_ratio | 外資買賣 / 成交量 |
 | 籌碼面 | trust_ratio | 投信買賣 / 成交量 |
+| 🆕 情緒面 | sentiment_score | 市場情緒分數 (-1.0 ~ 1.0) |
 
-### 🔒 防止數據洩露機制-
+### 🧠 情緒分析系統（V33 Phase 2+）
+
+#### 熔斷機制原理
+
+```python
+# 每日選股前檢查情緒
+sentiment_agent = NewsSentimentAgent(mock_mode=True)
+result = sentiment_agent.get_daily_sentiment('2026-01-09')
+
+if result['score'] < Config.SENTIMENT_THRESHOLD:  # 預設 -0.5
+    print("🔥 觸發熔斷機制，暫停買進！")
+    return pd.DataFrame()  # 返回空選股結果
+```
+
+#### 情緒分數定義
+
+| 分數範圍 | 情緒標籤 | 熔斷狀態 | 說明 |
+|---------|---------|---------|------|
+| > 0.3 | 樂觀 ✅ | 正常交易 | 市場氣氛正向 |
+| -0.3 ~ 0.3 | 中性 ⚪ | 正常交易 | 市場平穩 |
+| -0.5 ~ -0.3 | 輕度悲觀 ⚠️ | 正常交易 | 謹慎觀察 |
+| < -0.5 | 極度悲觀 ❌ | 觸發熔斷 | 暫停買入 |
+
+#### Mock Mode（開發階段）
+- 使用日期哈希 + 正弦函數生成確定性分數
+- 確保同一日期總是返回相同結果（可重現性）
+- 不依賴外部 API，訓練與回測穩定
+
+#### Real Mode（未來擴展）
+- 整合 Gemini AI 分析新聞情緒
+- 預留介面：`_analyze_with_gemini(date_str)`
+- 需實作：RSS 新聞抓取 + Prompt 工程
+
+### 🔒 防止數據洩露機制
 
 #### 問題：舊版使用 `train_test_split(shuffle=True)`
 ```python
@@ -195,49 +240,138 @@ if get_market_trend() == 'BEAR':
 
 ## 📁 專案架構
 
+### 🏗️ 整體架構圖
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                   🌐 使用者介面層                          │
+│  Line Bot (app.py) │ Web Dashboard │ 本地測試 (debug_local.py) │
+└────────────┬─────────────────────────────────────────────┘
+             │
+┌────────────▼─────────────────────────────────────────────┐
+│                   📊 業務邏輯層                            │
+│  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐  │
+│  │ strategy.py  │  │ news_agent.py │  │ db_helper.py │  │
+│  │ (選股策略)    │  │ (情緒分析)     │  │ (資料查詢)    │  │
+│  └──────────────┘  └───────────────┘  └──────────────┘  │
+│         │                   │                  │          │
+│  ┌──────▼───────────────────▼──────────────────▼──┐      │
+│  │          calc_indicators.py (技術指標)         │      │
+│  └──────────────────────────────────────────────┘      │
+└────────────┬─────────────────────────────────────────────┘
+             │
+┌────────────▼─────────────────────────────────────────────┐
+│                   🗄️ 資料存取層                            │
+│      MySQL Database  │  XGBoost Model (.pkl)              │
+└──────────────────────────────────────────────────────────┘
+
+                         ▲
+                         │
+           ┌─────────────┴──────────────┐
+           │     📥 資料更新層           │
+           │  1_update_database.py      │
+           │  (爬蟲 + 資料清洗)           │
+           └────────────────────────────┘
+```
+
+### 📂 檔案結構與職責
+
 ```
 Stock_Linbotv1/
 │
-├── 📊 每日流程腳本
-│   ├── 1_update_database.py     # 更新股價資料庫（含重試機制）
-│   ├── 2_rundaily.py            # 計算技術指標 + 觸發推播
-│   └── 5_push_to_line.py        # Line 推送通知
+├── 📊 每日流程腳本 (自動化工作流)
+│   ├── 1_update_database.py     # 爬取上市櫃股價 + 籌碼數據 (含重試機制)
+│   ├── 2_rundaily.py            # 整合腳本：執行 1→計算指標→推播
+│   └── 5_push_to_line.py        # Line 每日選股推播通知
 │
-├── 🤖 AI 模型
-│   ├── 3_train_model.py         # 🔥 XGBoost 訓練（時間序列拆分）
-│   └── 4_run_backtest.py        # 統一回測引擎
+├── 🤖 AI 模型與回測
+│   ├── 3_train_model.py         # XGBoost 訓練（時間序列拆分 + 情緒特徵）
+│   ├── 4_run_backtest.py        # 統一回測引擎（支援 V30/V31）
+│   └── 5_optimize_params.py     # Optuna 參數最佳化（選用）
 │
-├── 🌐 Line Bot（路由層）
-│   ├── app.py                   # Flask 主程式（純路由）
-│   └── debug_local.py           # 本地測試工具
+├── 🌐 使用者介面層
+│   ├── app.py                   # Flask Line Bot 主程式（純路由）
+│   ├── debug_local.py           # 本地互動測試工具
+│   ├── templates/               # Web Dashboard 頁面
+│   │   ├── base.html
+│   │   └── dashboard.html
+│   └── static/                  # 靜態資源（若有）
 │
-├── ⚙️ 核心模組（業務層）
-│   ├── config.py                # 📌 統一設定中心
+├── ⚙️ 核心業務模組 (tool/)
+│   ├── config.py                # 📌 統一設定中心（所有參數）
 │   ├── tool/
-│   │   ├── strategy.py          # 🎯 策略邏輯 + 格式化
-│   │   ├── db_helper.py         # 🗄️ 資料庫操作（含 upsert）
-│   │   ├── calc_indicators.py   # 📊 技術指標計算
-│   │   └── news_agent.py        # 📰 新聞 AI 模組
-│   └── init_settings.py         # 資料庫初始化
+│   │   ├── strategy.py          # 🎯 V30/V31 選股邏輯 + 格式化輸出
+│   │   ├── db_helper.py         # 🗄️ 資料庫查詢 + 設定管理
+│   │   ├── calc_indicators.py   # 📊 技術指標計算（RSI/MACD/KD/BB）
+│   │   └── news_agent.py        # 🧠 市場情緒分析（Mock + Gemini）
+│   └── init_settings.py         # 資料庫表初始化腳本
 │
-├── 📦 批次執行檔（Windows）
-│   └── start_linebot.bat        # 啟動 Line Bot
+├── 📦 部署與測試
+│   ├── start_linebot.bat        # Windows 快速啟動 Line Bot
+│   ├── docker-compose.yaml      # Docker 容器部署設定
+│   ├── tests/                   # 單元測試（pytest）
+│   │   ├── conftest.py
+│   │   ├── test_indicators.py
+│   │   └── test_strategy.py
+│   └── pytest.ini               # 測試設定檔
 │
-├── 📂 資料與模型
+├── 📂 數據與模型
 │   ├── ML_Data/
-│   │   ├── pkl/                 # 模型存放
+│   │   ├── pkl/                 # XGBoost 模型檔案
 │   │   │   └── stock_ai_model.pkl
-│   │   ├── feature_engineering/ # 特徵資料
-│   │   ├── backtest_result.csv  # 回測結果
-│   │   └── backtest_profit_report.csv
+│   │   ├── feature_engineering/ # 訓練/推論特徵數據
+│   │   │   ├── training_data.csv
+│   │   │   └── inference_data.csv
+│   │   ├── backtest_result.csv  # 交易明細
+│   │   └── backtest_profit_report.csv  # 每日資產
 │   └── logs/                    # 執行日誌
 │
-└── 📄 文檔
-    ├── README.md                # 本文件
-    ├── V31策略參數調整指南.md
-    ├── 架構優化總結.md
-    └── 系統架構分析報告.md
+├── 📄 文檔與規格
+│   ├── README.md                # 本文件（完整指南）
+│   ├── UpdateList.md            # 版本更新記錄
+│   └── openspec/                # 專案規格與任務管理
+│       ├── AGENTS.md
+│       ├── project.md
+│       └── changes/             # 各版本變更記錄
+│
+└── 🔧 設定檔
+    ├── config.py                # 主設定檔
+    ├── requirements.txt         # Python 依賴套件
+    ├── .env.example             # 環境變數範例
+    └── .gitignore               # Git 忽略規則
 ```
+
+### 🔄 資料流程圖
+
+```mermaid
+graph TD
+    A[證交所/櫃買中心 API] -->|1_update_database.py| B[(MySQL Database)]
+    B -->|calc_indicators.py| C[技術指標計算]
+    C --> B
+    B -->|3_train_model.py| D[XGBoost 模型訓練]
+    D --> E[stock_ai_model.pkl]
+    
+    B -->|2_rundaily.py 整合| F{選股引擎}
+    E --> F
+    
+    F -->|V30 純技術| G[均線突破選股]
+    F -->|V31 混合| H[V30 + AI 評分]
+    F -->|情緒過濾| I[NewsSentimentAgent]
+    
+    G --> J[5_push_to_line.py]
+    H --> J
+    I --> F
+    
+    J -->|Line Messaging API| K[Line Bot 推播]
+    
+    B -->|app.py 路由| L[Web Dashboard]
+    B -->|app.py 路由| K
+    
+    M[使用者指令] -->|Line Bot| K
+    K -->|app.py| F
+    F -->|格式化| K
+```
+
 ---
 
 ## 🚀 快速開始
@@ -299,66 +433,240 @@ python init_settings.py
 
 ## 📊 完整執行流程
 
-### 首次設置
+### 🎬 首次設置（完整部署）
 
+#### Step 1: 環境準備
 ```powershell
-# 1. 更新股價資料（會自動抓取從 2024-01-01 至今的資料）
-python 1_update_database.py
+# 1. Clone 專案
+cd D:\01_Project\Stocke
+git clone <your-repo-url> Stock_Linbotv1
+cd Stock_Linbotv1
 
-# 2. 計算技術指標（需等步驟 1 完成）
-python tool/calc_indicators.py
+# 2. 建立虛擬環境
+python -m venv myenv
+.\myenv\Scripts\activate
 
-# 3. 訓練 AI 模型（時間序列拆分，無數據洩露）
-python 3_train_model.py
+# 3. 安裝依賴
+pip install -r requirements.txt
 ```
 
-### 每日更新流程
-
-手動執行步驟：
-
+#### Step 2: 資料庫設定
 ```powershell
-# 1. 更新最新股價
+# 1. 建立資料庫（MySQL Workbench 或命令列）
+CREATE DATABASE stock_ai_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+# 2. 修改 config.py 設定資料庫連線
+# 或建立 .env 檔案：
+DB_URL=mysql+pymysql://root:your_password@localhost:3306/stock_ai_db
+LINE_TOKEN=your_line_channel_access_token
+LINE_SECRET=your_line_channel_secret
+GEMINI_KEY=your_gemini_api_key
+
+# 3. 初始化資料表
+python init_settings.py
+```
+
+#### Step 3: 資料初始化
+```powershell
+# 1. 爬取歷史股價（首次執行會抓取 2024-01-01 至今的資料）
 python 1_update_database.py
+# ⏱️ 預計耗時：15-30 分鐘（視資料量而定）
 
-# 2. 計算今日技術指標
-python tool/calc_indicators.py
+# 2. 計算技術指標
+python -c "from tool.calc_indicators import main; main()"
+# ⏱️ 預計耗時：5-10 分鐘
 
-# 3. (可選) 推送推薦到 Line
+# 3. 訓練 XGBoost 模型（含時間序列拆分 + 情緒特徵）
+python 3_train_model.py
+# ⏱️ 預計耗時：3-5 分鐘
+# ✅ 成功後會產生 ML_Data/pkl/stock_ai_model.pkl
+```
+
+### 📅 每日更新流程
+
+#### 方法一：一鍵整合腳本（推薦）⭐
+```powershell
+python 2_rundaily.py
+
+# 自動執行順序：
+# Step 1: 1_update_database.py    → 爬取最新股價
+# Step 2: tool/calc_indicators.py → 計算今日技術指標
+# Step 3: 5_push_to_line.py       → Line 日報推播（選用）
+
+# ⏱️ 總耗時：約 5-10 分鐘
+```
+
+#### 方法二：手動分步執行
+```powershell
+# Step 1: 更新股價資料（含三大法人籌碼）
+python 1_update_database.py
+# 建議執行時間：每日 14:30 收盤後
+# ⚠️ 注意：必須等資料更新完成才能進行下一步
+
+# Step 2: 計算技術指標（依賴 Step 1 的最新資料）
+python -c "from tool.calc_indicators import main; main()"
+# 計算內容：MA20/MA60, RSI, MACD, KD, BB, Bias
+
+# Step 3: Line 推播（可選，需要 Line Bot Token）
 python 5_push_to_line.py
-
-# 或使用每日整合腳本
-python 2_rundaily.py  # 自動執行上述三個步驟
+# 推播內容：V30 策略選股 Top 5
 ```
 
-### 訓練與回測
+### 🧪 模型訓練與回測
 
+#### 重新訓練模型（建議每月執行）
 ```powershell
-# 重新訓練模型（建議每月執行一次）
+# 使用所有最新資料重新訓練
 python 3_train_model.py
 
-# 執行 V31 策略回測
+# 特徵說明：
+# - 8 個技術指標特徵（rsi, bias, macd_hist, kd_k, bb_width, volume_ratio, foreign_ratio, trust_ratio）
+# - 1 個情緒分析特徵（sentiment_score, V33 Phase 2+）
+# - 時間序列拆分：前 80% 訓練，後 20% 測試
+# - 無未來數據洩露（Look-ahead Bias Free）
+
+# 輸出：
+# ✅ ML_Data/pkl/stock_ai_model.pkl
+# ✅ ML_Data/feature_engineering/training_data.csv
+# ✅ 訓練報告（準確率、Precision、分類報告）
+```
+
+#### 執行策略回測
+```powershell
+# V31 混合策略回測（預設，含情緒過濾）
+python 4_run_backtest.py
+# 或明確指定
 python 4_run_backtest.py --v31
 
-# 執行 V30 策略回測
+# V30 純技術策略回測
 python 4_run_backtest.py --v30
 
-# 或使用批次檔
-.\run_backtest.bat v31
+# 回測輸出：
+# ✅ ML_Data/backtest_result.csv        → 交易明細（每筆進出場記錄）
+# ✅ ML_Data/backtest_profit_report.csv → 每日資產變化（用於繪製曲線）
+
+# 關鍵指標：
+# - 總報酬率 (ROI)
+# - 勝率 (Win Rate)
+# - 最大回撤 (MDD)
+# - 夏普比率 (Sharpe Ratio)
+# - 交易次數、平均持有天數
 ```
+
+#### 參數最佳化（進階功能）
 ```powershell
-# 方式 1：使用批次檔
+# 使用 Optuna 搜尋最佳參數組合
+python 5_optimize_params.py
+
+# 最佳化目標：
+# - ROI (報酬率)
+# - Sharpe Ratio (風險調整後報酬)
+
+# 搜尋範圍：
+# - 停損：5%-15%
+# - 停利：10%-30%
+# - RSI 門檻：35-45 / 65-75
+# - 持有天數：5-15 天
+
+# ⏱️ 預計耗時：1-3 小時（視搜尋次數而定）
+```
+
+### 🌐 Line Bot 啟動
+
+#### 方式 1：使用批次檔（Windows，推薦）
+```powershell
+# 雙擊執行或命令列啟動
 .\start_linebot.bat
 
-# 方式 2：直接執行
+# 自動執行：
+# 1. 啟動虛擬環境
+# 2. 執行 python app.py
+# 3. 監聽 Port 5000
+```
+
+#### 方式 2：直接執行 Python
+```powershell
+# 確保已在虛擬環境中
 python app.py
 
-# 方式 3：使用 Gunicorn (生產環境)
-gunicorn -w （Windows）4 -b 0.0.0.0:5000 app:app
+# 啟動資訊：
+# 🚀 Line Bot V3.0 啟動中 (V30策略增強版)
+# 📋 模型狀態: ✅ 已載入
+# 💡 主要策略: V30 純技術分析 (40%報酬實績)
+# * Running on http://0.0.0.0:5000
+```
+
+#### 方式 3：生產環境部署（Gunicorn，Linux/Mac）
+```bash
+# 安裝 Gunicorn
+pip install gunicorn
+
+# 多 Worker 模式啟動
+gunicorn -w 4 -b 0.0.0.0:5000 app:app
+
+# 參數說明：
+# -w 4: 4 個 Worker 處理並發請求
+# -b 0.0.0.0:5000: 綁定所有網卡，Port 5000
+# app:app: 模組名稱:應用程式實例
+```
+
+#### 方式 4：Docker 容器部署
+```powershell
+# 使用 docker-compose
+docker-compose up -d
+
+# 查看日誌
+docker-compose logs -f
+
+# 停止服務
+docker-compose down
+```
+
+### 🖥️ Web Dashboard 存取
+
+```powershell
+# 確保 app.py 已啟動
+python app.py
+
+# 瀏覽器開啟
+http://localhost:5000/dashboard
+
+# 或透過 Line Bot 取得連結
+# 在 Line 中輸入：dashboard 或 儀表板
 ```
 
 ---
 
 ## 🧪 測試與驗證
+
+### 快速檢查清單
+
+執行前的系統驗證：
+
+| 步驟 | 指令 | 用途 | 預期結果 |
+|------|------|------|---------|
+| 1️⃣ 更新資料 | `python 1_update_database.py` | 抓取最新股價 | 資料庫新增當日記錄 |
+| 2️⃣ 計算指標 | `python -c "from tool.calc_indicators import main; main()"` | 計算 MA/RSI/MACD | 指標欄位更新 |
+| 3️⃣ 訓練模型 | `python 3_train_model.py` | 重新訓練 XGBoost | 產生新的 .pkl 檔案 |
+| 4️⃣ 執行回測 | `python 4_run_backtest.py` | 驗證策略績效 | 產生回測報表 CSV |
+| 5️⃣ 本地測試 | `python debug_local.py` | 互動式選股 | 顯示推薦股票 |
+
+### 語法檢查（開發用）
+
+```powershell
+# 檢查核心檔案語法
+python -m py_compile config.py
+python -m py_compile tool/strategy.py
+python -m py_compile tool/news_agent.py
+python -m py_compile 3_train_model.py
+python -m py_compile 4_run_backtest.py
+python -m py_compile 5_push_to_line.py
+
+# 執行單元測試
+pytest                                    # 所有測試
+pytest tests/test_strategy.py -v         # 策略測試
+pytest --cov=tool --cov-report=html      # 含覆蓋率報告
+```
 
 ### 本地互動測試（推薦）
 
@@ -565,32 +873,102 @@ Backend (後端)
 ---
 
 ## 🏗️ 架構設計原則
-start_linebot.bat](start_linebot.bat) | 啟動 Line Bot | 使用相對路徑，啟動虛擬環境
+
+### 分層架構 (Layered Architecture)
+
 ```
-🌐 Presentation Layer (app.py)
-    ↓ 只負責路由和請求處理
-📊 Business Logic Layer (tool/*.py)
-    ↓ 策略邏輯、計算、格式化
-🗄️ Data Access Layer (db_helper.py)
-    ↓ 資料庫操作、查詢
-💾 Database (MySQL)
+┌─────────────────────────────────────────┐
+│   🌐 Presentation Layer (表現層)         │
+│   - app.py (Flask 路由 + Line Bot)      │
+│   - debug_local.py (本地測試介面)       │
+│   - templates/ (Web Dashboard 前端)     │
+└──────────────┬──────────────────────────┘
+               │ 只負責：路由分發、請求處理、格式化輸出
+┌──────────────▼──────────────────────────┐
+│   📊 Business Logic Layer (業務層)       │
+│   - tool/strategy.py (選股邏輯)         │
+│   - tool/news_agent.py (情緒分析)       │
+│   - tool/calc_indicators.py (指標計算)  │
+└──────────────┬──────────────────────────┘
+               │ 只負責：核心演算法、策略判斷、特徵工程
+┌──────────────▼──────────────────────────┐
+│   🗄️ Data Access Layer (資料存取層)      │
+│   - tool/db_helper.py (資料庫查詢)       │
+│   - config.py (設定管理)                │
+└──────────────┬──────────────────────────┘
+               │ 只負責：資料 CRUD、參數讀寫
+┌──────────────▼──────────────────────────┐
+│   💾 Data Storage Layer (資料儲存層)     │
+│   - MySQL Database (股價 + 技術指標)    │
+│   - XGBoost Model (.pkl 檔案)           │
+└─────────────────────────────────────────┘
 ```
 
-### 關注點分離
+### 🎯 關注點分離 (Separation of Concerns)
 
-| 層級 | 職責 | 文件 |
+| 層級 | 職責 | 檔案 | 禁止事項 |
+|------|------|------|---------|
+| 🌐 表現層 | HTTP 路由、訊息格式化 | app.py, debug_local.py | ❌ 不寫業務邏輯、不直接查資料庫 |
+| 📊 業務層 | 選股演算法、技術分析 | tool/strategy.py, tool/calc_indicators.py | ❌ 不處理 HTTP、不直接操作 SQL |
+| 🗄️ 資料層 | 資料庫 CRUD、設定管理 | tool/db_helper.py | ❌ 不包含業務邏輯、不做數據分析 |
+| ⚙️ 設定層 | 參數集中管理 | config.py | ❌ 不執行邏輯、只存常數和配置 |
+
+### 🔒 數據安全與正確性
+
+| 項目 | 實作方式 | 目的 |
+|------|---------|------|
+| **SQL Injection 防護** | 使用 SQLAlchemy 參數化查詢 | 防止惡意 SQL 注入攻擊 |
+| **原子性操作** | `REPLACE INTO` 替代 `DELETE + INSERT` | 避免資料更新中斷導致遺失 |
+| **時間序列拆分** | 按日期嚴格劃分訓練/測試集 | 防止未來數據洩露（Look-ahead Bias） |
+| **特徵一致性驗證** | 模型載入時檢查特徵名稱 | 確保訓練與推論使用相同特徵 |
+| **資料快取** | Module-level 快取模型 | 避免重複載入，提升效能 |
+| **錯誤隔離** | Try-except + 預設值降級 | 單一模組失敗不影響整體系統 |
+
+### 🔄 設計模式應用
+
+#### 1. **Opt-in Design（選擇性啟用）**
+```python
+# 新功能預設關閉，避免影響現有系統
+Config.ENABLE_SENTIMENT_FILTER = False  # 情緒分析
+Config.USE_KD_FILTER = False            # KD 濾網
+Config.USE_BB_FILTER = False            # 布林通道濾網
+```
+
+#### 2. **Lazy Loading（延遲載入）**
+```python
+# 全域快取，避免重複載入模型
+_cached_model = None
+def _load_v31_model():
+    global _cached_model
+    if _cached_model is not None:
+        return _cached_model
+    # 第一次呼叫才載入...
+```
+
+#### 3. **Strategy Pattern（策略模式）**
+```python
+# 統一介面，不同策略實作
+def get_v30_candidates(df) -> pd.DataFrame:  # 純技術策略
+def get_best_stocks_v31_hybrid(df) -> pd.DataFrame:  # 混合策略
+```
+
+#### 4. **Circuit Breaker（熔斷器模式）**
+```python
+# 市場情緒過低時自動暫停交易
+sentiment = check_sentiment_filter(date_str)
+if sentiment:  # 觸發熔斷
+    return pd.DataFrame()  # 返回空選股
+```
+
+### 📋 程式碼品質標準
+
+| 標準 | 要求 | 目的 |
 |------|------|------|
-| 路由層 | HTTP 請求處理 | app.py |
-| 業務層 | 策略邏輯、計算 | tool/strategy.py |
-| 數據層 | 資料庫 CRUD | tool/db_helper.py |
-| 配置層 | 統一設定 | config.py |
-
-### 數據安全
-
-- ✅ **參數化查詢**：防止 SQL Injection
-- ✅ **原子性操作**：使用 `REPLACE INTO` 避免數據丟失
-- ✅ **時間序列拆分**：防止 Look-ahead Bias
-- ✅ **特徵驗證**：自動檢查模型特徵一致性
+| **Type Hints** | 所有函數必須標註型別 | 提升可讀性、IDE 自動補全 |
+| **Docstrings** | 使用 Google Style 格式 | 自動生成 API 文檔 |
+| **無魔術數字** | 所有常數移至 Config | 集中管理、避免重複定義 |
+| **單一職責** | 每個函數只做一件事 | 易於測試、維護 |
+| **測試覆蓋** | 核心模組需 60%+ 覆蓋率 | 確保邏輯正確性 |
 
 ---
 
