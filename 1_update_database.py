@@ -14,7 +14,9 @@ DB_URL = Config.SQLALCHEMY_DATABASE_URI
 # 偽裝瀏覽器，避免被擋
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://www.tpex.org.tw/',
+    'Referer': 'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
     'X-Requested-With': 'XMLHttpRequest'
 }
 

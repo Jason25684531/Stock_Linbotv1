@@ -239,7 +239,7 @@ def fix_database_indicators():
     
     # 進階指標 (使用共用模組的函數)
     df['macd_hist'] = df.groupby('stock_id')['close_price'].transform(calculate_macd)
-    df['kd_k'] = df.groupby('stock_id').apply(calculate_kd).reset_index(level=0, drop=True)
+    df['kd_k'] = df.groupby('stock_id').apply(calculate_kd, include_groups=False).reset_index(level=0, drop=True)
     df['bb_width'] = df.groupby('stock_id')['close_price'].transform(calculate_bb_width)
     
     # RSI (使用共用模組)

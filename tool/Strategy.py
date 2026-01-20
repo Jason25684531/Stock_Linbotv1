@@ -298,12 +298,14 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     V30 策略候選股票篩選器（嚴格版）
     
     🆕 V31 Optimization: 加入市場趨勢過濾器
+    🆕 V33 Phase 2: 強制 MA60 趨勢濾網，降低 MDD
     
     篩選條件：
     1. 市場趨勢檢查（熊市不選股）
     2. 均線排列：收盤價 > MA20 > MA60
-    3. 成交量：> 300萬股
-    4. RSI：40 < RSI < 70
+    3. 🔥 強制趨勢濾網：收盤價 > MA60（降低 MDD）
+    4. 成交量：> 300萬股
+    5. RSI：40 < RSI < 70
     
     Args:
         df: DataFrame，必須包含 close_price, ma20, ma60, volume, rsi
@@ -315,7 +317,7 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     
     # ============================================
-    # 🆕 市場趨勢過濾器（V31 Optimization）
+    # 🔥 V33 Phase 2: 市場熔斷機制（Circuit Breaker）
     # ============================================
     date_str = df['trade_date'].max()
     if hasattr(date_str, 'strftime'):
@@ -323,11 +325,15 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     else:
         date_str = str(date_str)
     
-    market_trend = check_market_trend(date_str)
-    
-    if market_trend == 'BEAR':
-        print(f"📉 市場趨勢偏空（{date_str}），V30 暫停選股")
-        return pd.DataFrame()
+    # 🔥 嚴格市場濾網：只在大盤多頭時選股
+    if Config.USE_MARKET_FILTER:
+        market_trend = check_market_trend(date_str)
+        
+        if market_trend != 'BULL':
+            print(f"⛔ 市場熔斷觸發（{date_str}）：大盤未處於明確多頭（收盤 < MA60），V30 策略全面暫停")
+            return pd.DataFrame()
+        else:
+            print(f"✅ 市場狀態良好（{date_str}）：大盤處於多頭（收盤 > MA60），允許選股")
     
     # 確保必要欄位存在
     required_cols = ['close_price', 'ma20', 'ma60', 'volume', 'rsi']
@@ -335,6 +341,15 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
         if col not in df.columns:
             print(f"⚠️ 缺少必要欄位: {col}")
             return pd.DataFrame()
+    
+    # 🔥 V33 Phase 2: 個股趨勢濾網（收盤 > MA60）
+    if Config.USE_TREND_FILTER:
+        before_count = len(df)
+        df = df[df['close_price'] > df['ma60']].copy()
+        if df.empty:
+            print(f"⚠️ 個股趨勢濾網生效：所有標的收盤價皆低於 MA60，暫停選股")
+            return pd.DataFrame()
+        print(f"✨ 個股趨勢濾網：{before_count} → {len(df)} 檔（篩除收盤 < MA60）")
     
     # 嚴格篩選
     candidates = df[
@@ -349,30 +364,22 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     # 🆕 V33 Phase 2: 進階濾網 (Opt-in)
     # ============================================
     
-    # 1️⃣ KD 黃金交叉濾網
+    # 1️⃣ KD 黃金交叉濾網（超賣反彈策略）
     if Config.USE_KD_FILTER and not candidates.empty:
         try:
-            from tool.calc_indicators import calculate_kd_full
-            
-            # 計算完整 KD 指標
-            if all(col in candidates.columns for col in ['high_price', 'low_price']):
-                k_values, d_values = calculate_kd_full(candidates)
-                candidates['kd_k_temp'] = k_values
-                candidates['kd_d_temp'] = d_values
+            # 檢查是否有 kd_k 欄位（資料庫通常只有 K 值）
+            if 'kd_k' in candidates.columns:
+                # 🔥 V33 Phase 2 簡化邏輯：K < 30 (超賣區間)
+                # 因資料庫可能無 D 值，僅用 K 值判斷超賣
+                kd_filter = (candidates['kd_k'] < 30)
                 
-                # 篩選條件：K > K_MIN, D > D_MIN, K > D (黃金交叉)
-                kd_filter = (
-                    (candidates['kd_k_temp'] > Config.KD_GOLDEN_CROSS_K_MIN) &
-                    (candidates['kd_d_temp'] > Config.KD_GOLDEN_CROSS_D_MIN)
-                )
-                
-                if Config.KD_GOLDEN_CROSS_K_OVER_D:
-                    kd_filter = kd_filter & (candidates['kd_k_temp'] > candidates['kd_d_temp'])
-                
+                before_count = len(candidates)
                 candidates = candidates[kd_filter].copy()
-                candidates.drop(['kd_k_temp', 'kd_d_temp'], axis=1, inplace=True, errors='ignore')
+                after_count = len(candidates)
                 
-                print(f"✨ KD 黃金交叉濾網啟用，剩餘 {len(candidates)} 檔")
+                print(f"✨ KD 超賣濾網啟用：篩選前 {before_count} 檔 → 篩選後 {after_count} 檔 (K < 30)")
+            else:
+                print(f"⚠️ 資料庫無 KD 指標，跳過 KD 濾網")
         except Exception as e:
             print(f"⚠️ KD 濾網執行失敗: {e}")
     

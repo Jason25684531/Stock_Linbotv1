@@ -220,31 +220,34 @@ def upsert_stock_data(df, table_name='daily_market_data'):
 
 def get_market_trend(date_str):
     """
-    判斷大盤趨勢
+    判斷大盤趨勢（V33 Phase 2: 簡化為二元狀態）
+    
+    🔥 嚴格邏輯：只在收盤 > MA60 時返回 BULL，否則一律 BEAR
+    目的：避免在下跌趨勢中買入，降低 MDD
     
     Args:
         date_str: 日期字串
     
     Returns:
-        'BULL' | 'BEAR' | 'NEUTRAL'
+        'BULL' | 'BEAR' (簡化為二元狀態，提高安全性)
     """
     try:
         df, _ = get_stock_data(Config.MARKET_SYMBOL, date_str)
-        if df.empty or 'ma20' not in df.columns or 'ma60' not in df.columns:
-            return 'NEUTRAL'
+        if df.empty or 'ma60' not in df.columns:
+            return 'BEAR'  # 🔥 預設為 BEAR（保守策略）
         
         data = df.iloc[0]
         close = data['close_price']
-        ma20 = data.get('ma20', close)
         ma60 = data.get('ma60', close)
         
-        if close > ma20 and ma20 > ma60:
+        # 🔥 嚴格條件：只有收盤 > MA60 才視為多頭
+        if close > ma60:
             return 'BULL'
-        elif close < ma20 and ma20 < ma60:
-            return 'BEAR'
-        return 'NEUTRAL'
-    except:
-        return 'NEUTRAL'
+        else:
+            return 'BEAR'  # 其他情況一律視為空頭，禁止買入
+    except Exception as e:
+        print(f"⚠️ 市場趨勢判斷失敗: {e}")
+        return 'BEAR'  # 🔥 錯誤時預設為 BEAR（保守策略）
 
 
 # ==========================================

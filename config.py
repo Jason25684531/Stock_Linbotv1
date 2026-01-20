@@ -53,9 +53,19 @@ class Config:
     V30_VOLUME_THRESHOLD = 3_000_000  # 成交量門檻 (300萬股)
     V30_RSI_LOW = 40                  # RSI 下限
     V30_RSI_HIGH = 70                 # RSI 上限
-    V30_STOP_LOSS = 0.10              # 停損比例 (10%)
-    V30_TAKE_PROFIT = 0.20            # 停利比例 (20%)
+    V30_STOP_LOSS = 0.07              # 停損比例 (7%) 🔥 收緊以降低 MDD
+    V30_TAKE_PROFIT = 0.15            # 停利比例 (15%) 🔥 收緊以提早獲利
     V30_MAX_HOLD_DAYS = 10            # 最長持有天數
+    
+    # V30 參數字典（用於向後兼容和便捷存取）
+    V30_PARAMS = {
+        'VOLUME_THRESHOLD': 3_000_000,
+        'RSI_LOW': 40,
+        'RSI_HIGH': 70,
+        'STOP_LOSS': 0.07,              # 🔥 收緊停損至 7%
+        'TAKE_PROFIT': 0.15,            # 🔥 收緊停利至 15%
+        'MAX_HOLD_DAYS': 10
+    }
     
     # 技術指標計算參數
     RSI_PERIOD = 14
@@ -67,10 +77,12 @@ class Config:
     BB_STD_MULT = 2.0
     
     # ==========================================
-    # 🧠 V33 Phase 2: 進階策略濾網 (預設關閉，Opt-in)
+    # 🧠 V33 Phase 2: 進階策略濾網（全面啟用以降低 MDD）
     # ==========================================
-    USE_KD_FILTER = False          # KD 黃金交叉濾網
-    USE_BB_FILTER = False          # 布林通道壓縮突破濾網
+    USE_MARKET_FILTER = True       # 🔥 市場熔斷機制：大盤 < MA60 禁止買入
+    USE_TREND_FILTER = True        # 🔥 個股趨勢濾網：收盤 > MA60
+    USE_KD_FILTER = True           # 🔥 KD 超賣反彈濾網：K<30 且 K>D
+    USE_BB_FILTER = False          # 布林通道壓縮突破濾網（保持關閉）
     
     # KD 黃金交叉參數
     KD_GOLDEN_CROSS_K_MIN = 20     # K 值最低門檻

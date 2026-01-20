@@ -115,7 +115,7 @@ def main():
             msg += f"   RSI: {p['rsi']:.1f} | 外資: {p['foreign']:+,}張\n"
             msg += f"   🛡️ 停損: ${p['stop_loss']:.2f} | 🎯 停利: ${p['take_profit']:.2f}\n"
         msg += f"--------------------------\n"
-        msg += f"⏰ 持有期限: 最長{V30_PARAMS['MAX_HOLD_DAYS']}天\n"
+        msg += f"⏰ 持有期限: 最長{Config.V30_PARAMS['MAX_HOLD_DAYS']}天\n"
         msg += "💡 嚴格執行停損停利"
     else:
         msg += "🐢 今日無符合V30條件標的\n"
