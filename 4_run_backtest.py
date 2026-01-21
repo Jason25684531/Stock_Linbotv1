@@ -88,9 +88,9 @@ class BacktestEngine:
             self.take_profit_pct = params['TAKE_PROFIT']
             self.max_hold_days = params['MAX_HOLD_DAYS']
         else:
-            self.stop_loss_pct = V30_PARAMS['STOP_LOSS']
-            self.take_profit_pct = V30_PARAMS['TAKE_PROFIT']
-            self.max_hold_days = V30_PARAMS['MAX_HOLD_DAYS']
+            self.stop_loss_pct = Config.V30_PARAMS['STOP_LOSS']
+            self.take_profit_pct = Config.V30_PARAMS['TAKE_PROFIT']
+            self.max_hold_days = Config.V30_PARAMS['MAX_HOLD_DAYS']
         
         # 格式化停利顯示
         tp_display = f"{self.take_profit_pct*100:.0f}%" if self.take_profit_pct > 0 else "不停利"

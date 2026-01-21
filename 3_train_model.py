@@ -253,61 +253,6 @@ def train_xgboost():
     # ============================================
     # 4. 計算未來收益目標
     # ============================================
-    """
-    XGBoost V31 混合策略訓練主函數
-    
-    改進：
-    1. 移除 train_test_split 的 shuffle=True
-    2. 實現時間序列拆分（前 80% 訓練，後 20% 測試）
-    3. 封裝特徵工程和目標計算邏輯
-    4. 保存完整的模型元數據
-    """
-    print("🚀 正在啟動 XGBoost V31 混合策略訓練引擎...")
-    print("🎯 目標：V30 篩選 + ML 智慧排名，獲利 10-20%")
-    print("🔒 防止數據洩露：使用時間序列拆分\n")
-    
-    engine = create_engine(DB_URL)
-    
-    # ============================================
-    # 1. 讀取數據
-    # ============================================
-    print("📥 從資料庫讀取訓練資料...")
-    try:
-        df = pd.read_sql("SELECT * FROM daily_market_data", engine)
-    except Exception as e:
-        print(f"❌ 資料庫讀取失敗: {e}")
-        return
-
-    if df.empty:
-        print("❌ 資料庫是空的！請先跑 1_update_database.py")
-        return
-
-    # ============================================
-    # 2. 數據前處理
-    # ============================================
-    print(f"📦 原始數據: {len(df):,} 筆")
-    
-    # 確保日期格式正確
-    df['trade_date'] = pd.to_datetime(df['trade_date'])
-    
-    # 按股票和日期排序（關鍵）
-    df = df.sort_values(['stock_id', 'trade_date']).reset_index(drop=True)
-    
-    # 補齊缺失的籌碼欄位
-    if 'foreign_buy' not in df.columns:
-        df['foreign_buy'] = 0
-    if 'trust_buy' not in df.columns:
-        df['trust_buy'] = 0
-    
-    # ============================================
-    # 3. 特徵工程
-    # ============================================
-    df = calculate_ratio_features(df)
-    df = df.fillna(0)
-    
-    # ============================================
-    # 4. 計算目標變量
-    # ============================================
     df = calculate_future_target(df, LOOK_AHEAD_DAYS, TARGET_RETURN)
     
     # 清洗：移除無法計算目標的樣本

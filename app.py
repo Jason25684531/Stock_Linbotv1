@@ -181,9 +181,9 @@ def get_settings_info():
         ai_threshold = float(get_setting('ai_threshold', '0.5'))
         
         # V30 策略參數
-        v30_stop_loss = float(get_setting('v30_stop_loss', str(V30_PARAMS['STOP_LOSS'])))
-        v30_take_profit = float(get_setting('v30_take_profit', str(V30_PARAMS['TAKE_PROFIT'])))
-        v30_max_hold = int(get_setting('v30_max_hold_days', str(V30_PARAMS['MAX_HOLD_DAYS'])))
+        v30_stop_loss = float(get_setting('v30_stop_loss', str(Config.V30_PARAMS['STOP_LOSS'])))
+        v30_take_profit = float(get_setting('v30_take_profit', str(Config.V30_PARAMS['TAKE_PROFIT'])))
+        v30_max_hold = int(get_setting('v30_max_hold_days', str(Config.V30_PARAMS['MAX_HOLD_DAYS'])))
         
         msg = "⚙️ 【當前設定】\n"
         msg += "-" * 30 + "\n"

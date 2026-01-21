@@ -1,12 +1,11 @@
 # Stock AI Line Bot V33
 
-> 🔥 **V33 Phase 2+ 完成** | 市場情緒分析與熔斷機制上線  
+> 🔥 **V33 Phase 3+ 完成** | 深度重構，移除 55 行重複代碼，修復 11 處未定義變數  
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
 > 🛡️ **Type Safety** | 完整 Type Hints，提升代碼可維護性  
 > 🧪 **Test Coverage 60%+** | 核心邏輯測試覆蓋，確保穩定性  
 > 🏗️ **Clean Architecture** | 消除魔術數字，統一配置管理  
-
----
+> 📅 **最後更新**: 2026-01-21
 
 ## 📊 專案簡介
 
@@ -298,30 +297,25 @@ Stock_Linbotv1/
 │   └── static/                  # 靜態資源（若有）
 │
 ├── ⚙️ 核心業務模組 (tool/)
-│   ├── config.py                # 📌 統一設定中心（所有參數）
-│   ├── tool/
-│   │   ├── strategy.py          # 🎯 V30/V31 選股邏輯 + 格式化輸出
-│   │   ├── db_helper.py         # 🗄️ 資料庫查詢 + 設定管理
-│   │   ├── calc_indicators.py   # 📊 技術指標計算（RSI/MACD/KD/BB）
-│   │   └── news_agent.py        # 🧠 市場情緒分析（Mock + Gemini）
-│   └── init_settings.py         # 資料庫表初始化腳本
+│   ├── __init__.py              # 模組初始化
+│   ├── strategy.py              # 🎯 V30/V31 選股邏輯 + 格式化輸出
+│   ├── db_helper.py             # 🗄️ 資料庫查詢 + 設定管理
+│   ├── calc_indicators.py       # 📊 技術指標計算（RSI/MACD/KD/BB）
+│   └── news_agent.py            # 🧠 市場情緒分析（Mock + Gemini）
 │
 ├── 📦 部署與測試
 │   ├── start_linebot.bat        # Windows 快速啟動 Line Bot
 │   ├── docker-compose.yaml      # Docker 容器部署設定
 │   ├── tests/                   # 單元測試（pytest）
-│   │   ├── conftest.py
-│   │   ├── test_indicators.py
-│   │   └── test_strategy.py
+│   │   ├── conftest.py          # 測試 fixtures
+│   │   ├── test_indicators.py   # 技術指標測試
+│   │   └── test_strategy.py     # 策略邏輯測試
 │   └── pytest.ini               # 測試設定檔
 │
 ├── 📂 數據與模型
 │   ├── ML_Data/
 │   │   ├── pkl/                 # XGBoost 模型檔案
 │   │   │   └── stock_ai_model.pkl
-│   │   ├── feature_engineering/ # 訓練/推論特徵數據
-│   │   │   ├── training_data.csv
-│   │   │   └── inference_data.csv
 │   │   ├── backtest_result.csv  # 交易明細
 │   │   └── backtest_profit_report.csv  # 每日資產
 │   └── logs/                    # 執行日誌
@@ -330,12 +324,10 @@ Stock_Linbotv1/
 │   ├── README.md                # 本文件（完整指南）
 │   ├── UpdateList.md            # 版本更新記錄
 │   └── openspec/                # 專案規格與任務管理
-│       ├── AGENTS.md
-│       ├── project.md
-│       └── changes/             # 各版本變更記錄
 │
 └── 🔧 設定檔
-    ├── config.py                # 主設定檔
+    ├── config.py                # 📌 統一設定中心（所有參數）
+    ├── init_settings.py         # 資料庫表初始化腳本
     ├── requirements.txt         # Python 依賴套件
     ├── .env.example             # 環境變數範例
     └── .gitignore               # Git 忽略規則

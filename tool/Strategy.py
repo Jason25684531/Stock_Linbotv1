@@ -273,6 +273,7 @@ def get_v30_params_from_db() -> Dict[str, Any]:
         }
         
         if result:
+            for key, value in result.items():
                 if key == 'v30_stop_loss':
                     params['STOP_LOSS'] = float(value)
                 elif key == 'v30_take_profit':

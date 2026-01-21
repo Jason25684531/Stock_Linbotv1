@@ -100,7 +100,7 @@ def show_v30_recommendations():
         print(f"{row['stock_id']:<6} {row['close_price']:<8.2f} {row['rsi']:<6.1f} {v30_result['stop_loss']:<10.2f} {v30_result['take_profit']:<10.2f} {foreign:,}")
     
     print("-" * 60)
-    print(f"⏰ 建議持有: 最長 {V30_PARAMS['MAX_HOLD_DAYS']} 天")
+    print(f"⏰ 建議持有: 最長 {Config.V30_PARAMS['MAX_HOLD_DAYS']} 天")
     print(f"💡 提示: 這是純技術分析策略，不使用 AI 模型")
 
 
@@ -130,8 +130,8 @@ def show_recommendations(model):
     print("-" * 75)
     
     for idx, (_, row) in enumerate(picks.iterrows(), 1):
-        stop_loss = row['close_price'] * (1 - V30_PARAMS['STOP_LOSS'])
-        take_profit = row['close_price'] * (1 + V30_PARAMS['TAKE_PROFIT'])
+        stop_loss = row['close_price'] * (1 - Config.V30_PARAMS['STOP_LOSS'])
+        take_profit = row['close_price'] * (1 + Config.V30_PARAMS['TAKE_PROFIT'])
         ai_score = row.get('ai_score', 0)
         
         # AI 評分視覺化
@@ -141,8 +141,8 @@ def show_recommendations(model):
               f"{ai_score:.1%} {score_bar:<5} {stop_loss:<10.2f} {take_profit:<10.2f}")
     
     print("-" * 75)
-    print(f"⏰ 建議持有: 最長 {V30_PARAMS['MAX_HOLD_DAYS']} 天")
-    print(f"🛡️ 停損: -{int(V30_PARAMS['STOP_LOSS']*100)}% | 🎯 停利: +{int(V30_PARAMS['TAKE_PROFIT']*100)}%")
+    print(f"⏰ 建議持有: 最長 {Config.V30_PARAMS['MAX_HOLD_DAYS']} 天")
+    print(f"🛡️ 停損: -{int(Config.V30_PARAMS['STOP_LOSS']*100)}% | 🎯 停利: +{int(Config.V30_PARAMS['TAKE_PROFIT']*100)}%")
     print("💡 說明: AI評分 = XGBoost 預測未來 7 天漲 8% 以上的機率")
     print("⚠️ 風險提示: AI 僅供參考，請嚴格執行停損停利規則")
 
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     print("3. 代碼     → 個股診斷 (如: 2330)")
     print("")
     print("✨ 策略參數:")
-    print(f"  • 停損: {int(V30_PARAMS['STOP_LOSS']*100)}% | 停利: {int(V30_PARAMS['TAKE_PROFIT']*100)}% | 持有: {V30_PARAMS['MAX_HOLD_DAYS']}天")
+    print(f"  • 停損: {int(Config.V30_PARAMS['STOP_LOSS']*100)}% | 停利: {int(Config.V30_PARAMS['TAKE_PROFIT']*100)}% | 持有: {Config.V30_PARAMS['MAX_HOLD_DAYS']}天")
     print("  • 設定停損 5   → 修改停損為5%")
     print("  • 設定停利 20  → 修改停利為20%")
     print("  • 查看設定     → 顯示當前參數")
