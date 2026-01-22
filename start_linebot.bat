@@ -1,4 +1,7 @@
 @echo off
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 REM ============================================
 REM Stock AI Line Bot - 服務啟動批次檔
 REM 版本: V3.0 (V30策略增強版)

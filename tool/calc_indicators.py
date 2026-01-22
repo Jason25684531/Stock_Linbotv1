@@ -204,6 +204,50 @@ def calculate_bias(close: pd.Series, ma: pd.Series) -> pd.Series:
     return (close - ma) / ma * 100
 
 
+def calculate_ratio_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    計算比例特徵（籌碼面標準化）
+    
+    🔄 V33 Refactor: 從 3_train_model.py 移至此模組供共用
+    
+    Args:
+        df: DataFrame，包含股票資料
+    
+    Returns:
+        DataFrame: 添加了比例特徵的數據
+    """
+    print("📊 計算比例特徵（籌碼面標準化）...")
+    
+    df = df.copy()
+    
+    # 避免除以零
+    df['volume'] = df['volume'].replace(0, 1)
+    
+    # 計算成交量相對於 20 日均量的比例（量能強度）
+    df['volume_ma20'] = df.groupby('stock_id')['volume'].transform(
+        lambda x: x.rolling(20, min_periods=1).mean()
+    )
+    df['volume_ratio'] = df['volume'] / df['volume_ma20'].replace(0, 1)
+    
+    # 籌碼面比例（外資/投信 參與度）
+    if 'foreign_buy' in df.columns:
+        df['foreign_ratio'] = df['foreign_buy'] / df['volume']
+        df['foreign_ratio'] = df['foreign_ratio'].clip(-0.5, 0.5)
+    else:
+        df['foreign_ratio'] = 0
+        
+    if 'trust_buy' in df.columns:
+        df['trust_ratio'] = df['trust_buy'] / df['volume']
+        df['trust_ratio'] = df['trust_ratio'].clip(-0.5, 0.5)
+    else:
+        df['trust_ratio'] = 0
+    
+    # 限制極端值（避免異常數據影響模型）
+    df['volume_ratio'] = df['volume_ratio'].clip(0, 5)
+    
+    return df
+
+
 def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     一次性計算所有技術指標 (便捷函數，用於單一股票)

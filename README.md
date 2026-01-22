@@ -107,7 +107,7 @@ python 2_rundaily.py
 
 # 或手動分步執行
 python 1_update_database.py                           # 爬取股價
-python -c "from tool.calc_indicators import main; main()"  # 計算指標
+python -c "from tool.calc_indicators import fix_database_indicators; fix_database_indicators()"  # 計算指標
 python 5_push_to_line.py                              # Line 推播
 ```
 
@@ -119,6 +119,9 @@ python 4_run_backtest.py
 
 # 重新訓練模型
 python 3_train_model.py
+
+# 參數最佳化 (可選)
+python 6_optimize_params.py --objective roi --n-trials 100
 ```
 
 ---
@@ -127,32 +130,32 @@ python 3_train_model.py
 
 ```
 Stock_Linbotv1/
-├── 📊 每日流程腳本
+├── 📊 每日流程腳本 (依執行順序編號)
 │   ├── 1_update_database.py     # 爬取股價 + 籌碼
-│   ├── 2_rundaily.py            # 整合腳本
-│   └── 5_push_to_line.py        # Line 推播
-│
-├── 🤖 AI 模型與回測
+│   ├── 2_rundaily.py            # 整合腳本 (一鍵執行)
 │   ├── 3_train_model.py         # XGBoost 訓練
 │   ├── 4_run_backtest.py        # 統一回測引擎
-│   └── 5_optimize_params.py     # Optuna 參數優化
+│   ├── 5_push_to_line.py        # Line 推播
+│   └── 6_optimize_params.py     # Optuna 參數優化
 │
 ├── 🌐 使用者介面
 │   ├── app.py                   # Flask + Line Bot
 │   ├── debug_local.py           # 本地互動測試
 │   └── templates/               # Web Dashboard
 │
-├── ⚙️ 核心模組 (tool/)
+├── ⚙️ 核心模組 (tool/) - 統一共用函數
 │   ├── strategy.py              # V30/V31 選股邏輯
-│   ├── calc_indicators.py       # 技術指標 (含 ATR)
-│   ├── db_helper.py             # 資料庫操作
+│   ├── calc_indicators.py       # 技術指標 + 特徵計算
+│   ├── db_helper.py             # 資料庫操作 (唯一入口)
 │   └── news_agent.py            # 情緒分析
 │
 ├── 📦 數據與模型
 │   └── ML_Data/                 # 模型 + 回測結果
+│       ├── pkl/                 # XGBoost 模型
+│       └── *.csv                # 回測報告
 │
 ├── 📄 設定檔
-│   ├── config.py                # 統一設定中心
+│   ├── config.py                # 統一設定中心 (唯一真理)
 │   ├── requirements.txt         # Python 依賴
 │   └── docker-compose.yaml      # Docker 部署
 │
@@ -161,6 +164,23 @@ Stock_Linbotv1/
     ├── UpdateList.md            # 版本更新記錄
     └── openspec/                # 開發規範
 ```
+
+### 模組依賴關係
+
+```
+應用層 (app.py, 腳本)
+    ↓
+策略層 (tool/strategy.py)
+    ↓
+工具層 (tool/db_helper.py, tool/calc_indicators.py)
+    ↓
+設定層 (config.py)
+```
+
+**設計原則**:
+- 所有資料庫操作必須通過 `tool/db_helper.py`
+- 所有技術指標計算必須通過 `tool/calc_indicators.py`
+- 所有常數定義必須在 `config.py`
 
 ---
 
@@ -197,5 +217,5 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V33 Phase 1+ (2026-01-22)  
+**版本**: V33 Phase 1+ Refactor (2026-01-22)  
 **授權**: MIT License

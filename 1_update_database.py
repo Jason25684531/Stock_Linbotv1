@@ -5,11 +5,11 @@ import time
 import random
 from datetime import datetime, timedelta, date
 from config import Config
+from tool.db_helper import get_db_engine
 
 # ============================================
-# ⚙️ 設定區 (統一使用 Config)
+# ⚙️ 設定區 (統一使用 Config + db_helper)
 # ============================================
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
 
 # 偽裝瀏覽器，避免被擋
 HEADERS = {
@@ -269,8 +269,8 @@ def process_and_save(df, date_str, engine):
 # 🚀 主程式
 # ============================================
 if __name__ == "__main__":
-    print(f"🔗 連線資料庫: {DB_URL}")
-    engine = create_engine(DB_URL)
+    print(f"🔗 連線資料庫: {Config.SQLALCHEMY_DATABASE_URI}")
+    engine = get_db_engine()
     
     latest_date = get_latest_date_from_db(engine)
     if latest_date:

@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
 > **最後更新**: 2026-01-22  
-> **當前版本**: V33 Phase 1+ (ATR Dynamic Stop Loss)  
+> **當前版本**: V33 Phase 1+ Refactor (Code Cleanup)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V33 Phase 1+ Refactor](#v33-phase-1-refactor-代碼清理與合併-2026-01-22) | 2026-01-22 | 重複代碼清理 + 架構優化 | ✅ 完成 |
 | [V33 Phase 1+](#v33-phase-1-atr-動態停損-2026-01-22) | 2026-01-22 | ATR 動態停損 + README 重寫 | ✅ 完成 |
 | [README.md 清理](#readmemd-清理-2026-01-21) | 2026-01-21 | 移除重複/過時內容，更新版本資訊 | ✅ 完成 |
 | [V33 Phase 3+ Deep Refactor](#v33-phase-3-deep-refactor-2026-01-21) | 2026-01-21 | 深度重構 + 修復重複代碼與語法錯誤 | ✅ 完成 |
@@ -19,6 +20,123 @@
 | [V33 Phase 3](#v33-phase-3-pk-system-visualization) | 2026-01 | PK 系統 + 儀表板 | ✅ 完成 |
 | [V33 Phase 2](#v33-phase-2-strategy-deep-dive) | 2026-01 | 進階濾網 + 參數優化 | ✅ 完成 |
 | [V33 Phase 1](#v33-phase-1-quality-assurance) | 2026-01 | 程式碼重構 + 測試 | ✅ 完成 |
+
+---
+
+## 🔄 V33 Phase 1+ Refactor - 代碼清理與合併 (2026-01-22)
+
+### 🎯 目標
+
+全面清理專案中的 **重複代碼**、**髒代碼**，提升 **可讀性**、**邏輯性** 與 **可擴展性**。
+
+### ✅ 重構內容
+
+#### **1. 移除重複的 DB_URL 變數定義**
+
+多個檔案都有重複定義 `DB_URL = Config.SQLALCHEMY_DATABASE_URI`，現統一使用 `get_db_engine()` 共用函數。
+
+**修改檔案**:
+- `1_update_database.py` - 改用 `get_db_engine()`
+- `3_train_model.py` - 移除 `DB_URL` 和 `MODEL_PATH` 變數
+- `4_run_backtest.py` - 移除 `DB_URL`、`MODEL_PATH`、`BOND_SYMBOL`、`MARKET_SYMBOL` 變數
+- `5_push_to_line.py` - 移除 `DB_URL`、`LINE_TOKEN`、`BOND_SYMBOL`、`MARKET_SYMBOL` 變數
+
+#### **2. 合併重複的 `calculate_ratio_features()` 函數**
+
+**問題**: `3_train_model.py` 和 `tool/strategy.py` 都有類似的籌碼面比例計算邏輯。
+
+**解決方案**: 將函數移至 `tool/calc_indicators.py`，統一供各模組使用。
+
+```python
+# tool/calc_indicators.py 新增
+def calculate_ratio_features(df: pd.DataFrame) -> pd.DataFrame:
+    """計算比例特徵（籌碼面標準化）"""
+```
+
+**修改檔案**:
+- `tool/calc_indicators.py` - 新增共用函數
+- `3_train_model.py` - 改為導入共用函數
+- `tool/strategy.py` - 改為導入共用函數
+
+#### **3. 整合市場趨勢判斷函數**
+
+**問題**: 市場狀態判斷邏輯分散在多處：
+- `5_push_to_line.py` 的 `get_market_status()`
+- `4_run_backtest.py` 的 `get_market_trend()`
+- `tool/db_helper.py` 的 `get_market_trend()`
+
+**解決方案**: 統一使用 `tool/db_helper.py` 的 `get_market_trend()` 函數。
+
+**修改檔案**:
+- `5_push_to_line.py` - 改為調用 `db_helper.get_market_trend()`
+
+#### **4. 修正檔案編號衝突**
+
+**問題**: 有兩個 `5_` 開頭的檔案：
+- `5_optimize_params.py`
+- `5_push_to_line.py`
+
+**解決方案**: 重新命名為正確的執行順序：
+- `5_push_to_line.py` (保留)
+- `6_optimize_params.py` (原 5_optimize_params.py)
+
+#### **5. 使用共用的 `get_stock_data()` 函數**
+
+**問題**: `5_push_to_line.py` 有自己的 SQL 查詢邏輯，沒有使用共用函數。
+
+**解決方案**: 改為使用 `tool/db_helper.py` 的 `get_stock_data()` 函數。
+
+### 📂 修改檔案清單
+
+| 檔案 | 變更類型 | 說明 |
+|------|---------|------|
+| `1_update_database.py` | 修改 | 移除 DB_URL，使用 get_db_engine() |
+| `3_train_model.py` | 修改 | 移除重複函數，改用共用模組 |
+| `4_run_backtest.py` | 修改 | 移除重複變數定義 |
+| `5_push_to_line.py` | 修改 | 整合共用函數，清理重複邏輯 |
+| `6_optimize_params.py` | 重命名 | 原 5_optimize_params.py |
+| `tool/calc_indicators.py` | 修改 | 新增 calculate_ratio_features() |
+| `tool/strategy.py` | 修改 | 使用共用函數，更新文檔 |
+| `UpdateList.md` | 更新 | 新增本次變更記錄 |
+| `README.md` | 更新 | 更新檔案結構說明 |
+
+### 📊 重構成效
+
+| 指標 | Before | After | 改善 |
+|------|--------|-------|------|
+| 重複函數 | 3 處 | 1 處 (共用) | -67% |
+| 重複變數定義 | 12 處 | 0 處 | -100% |
+| 代碼行數 (估計) | ~3500 行 | ~3200 行 | -8% |
+| 模組耦合度 | 高 | 低 | ✅ |
+
+### 🏗️ 更新後的模組依賴關係
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   📱 應用層                              │
+│   app.py │ 5_push_to_line.py │ 2_rundaily.py            │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                   📊 策略層                              │
+│   tool/strategy.py                                       │
+│   ├── 依賴 tool/db_helper.py (資料庫操作)               │
+│   ├── 依賴 tool/calc_indicators.py (特徵計算)           │
+│   └── 依賴 tool/news_agent.py (情緒分析)                │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                   🛠️ 工具層 (Core Modules)               │
+│   tool/db_helper.py      - 資料庫連線與查詢             │
+│   tool/calc_indicators.py - 技術指標與特徵計算          │
+│   tool/news_agent.py     - 新聞情緒分析                 │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                   ⚙️ 設定層                              │
+│   config.py - 所有常數與環境變數                        │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 

@@ -1,18 +1,17 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
 from xgboost import XGBClassifier
 from sklearn.metrics import classification_report, accuracy_score, precision_score
 import joblib
 import os
 from config import Config
 from tool.news_agent import NewsSentimentAgent
+from tool.db_helper import get_db_engine
+from tool.calc_indicators import calculate_ratio_features
 
 # ============================================
-# ⚙️ V31 混合策略版 - 設定區（統一使用 Config）
+# ⚙️ V31 混合策略版 - 設定區（統一使用 Config + db_helper）
 # ============================================
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
-MODEL_PATH = Config.MODEL_PATH
 
 # V31: 預測參數（配合獲利目標 10-20%）
 LOOK_AHEAD_DAYS = 7      # 看未來 7 天（配合 10 天持有期）
@@ -23,39 +22,6 @@ TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
 
 # V33 Phase 2+: 擴展特徵清單（加入情緒分數）
 FEATURES = Config.FEATURES + ['sentiment_score']
-
-
-def calculate_ratio_features(df):
-    """
-    計算比例特徵（籌碼面標準化）
-    
-    Args:
-        df: DataFrame，包含股票資料
-    
-    Returns:
-        DataFrame: 添加了比例特徵的數據
-    """
-    print("📊 計算比例特徵（籌碼面標準化）...")
-    
-    # 避免除以零
-    df['volume'] = df['volume'].replace(0, 1)
-    
-    # 計算成交量相對於 20 日均量的比例（量能強度）
-    df['volume_ma20'] = df.groupby('stock_id')['volume'].transform(
-        lambda x: x.rolling(20, min_periods=1).mean()
-    )
-    df['volume_ratio'] = df['volume'] / df['volume_ma20'].replace(0, 1)
-    
-    # 籌碼面比例（外資/投信 參與度）
-    df['foreign_ratio'] = df['foreign_buy'] / df['volume']
-    df['trust_ratio'] = df['trust_buy'] / df['volume']
-    
-    # 限制極端值（避免異常數據影響模型）
-    df['foreign_ratio'] = df['foreign_ratio'].clip(-0.5, 0.5)
-    df['trust_ratio'] = df['trust_ratio'].clip(-0.5, 0.5)
-    df['volume_ratio'] = df['volume_ratio'].clip(0, 5)
-    
-    return df
 
 
 def calculate_future_target(df, look_ahead_days, target_return):
@@ -209,7 +175,7 @@ def train_xgboost():
     print("🔒 防止數據洩露：使用時間序列拆分")
     print("📰 V33 Phase 2+: 整合市場情緒特徵\n")
     
-    engine = create_engine(DB_URL)
+    engine = get_db_engine()
     
     # ============================================
     # 1. 讀取數據
@@ -328,7 +294,7 @@ def train_xgboost():
     # ============================================
     # 9. 保存模型與元數據
     # ============================================
-    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+    os.makedirs(os.path.dirname(Config.MODEL_PATH), exist_ok=True)
     
     model_data = {
         'model': model,
@@ -345,9 +311,9 @@ def train_xgboost():
         'precision': precision_score(y_test, y_pred, zero_division=0),
         'time_series_split': True  # 標記使用時間序列拆分
     }
-    joblib.dump(model_data, MODEL_PATH)
+    joblib.dump(model_data, Config.MODEL_PATH)
     
-    print(f"\n✅ XGBoost V31 模型已儲存至: {MODEL_PATH}")
+    print(f"\n✅ XGBoost V31 模型已儲存至: {Config.MODEL_PATH}")
     print(f"📋 特徵列表: {available_features}")
     print(f"📊 訓練日期: {model_data['training_date']}")
     print(f"🎯 模型指標: 準確率 {model_data['accuracy']:.2%} | 精準率 {model_data['precision']:.2%}")

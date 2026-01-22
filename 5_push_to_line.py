@@ -1,70 +1,73 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 from config import Config
 from tool.strategy import get_v30_candidates, get_v30_params_from_db, calculate_v30_signal
-import os
-import datetime
+from tool.db_helper import get_db_engine, get_market_trend, get_stock_data
 
 # ==========================================
-# 🔧 設定區
+# 🔧 設定區 (統一使用 db_helper)
 # ==========================================
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
-LINE_TOKEN = Config.LINE_CHANNEL_ACCESS_TOKEN
-BOND_SYMBOL = Config.BOND_SYMBOL
-MARKET_SYMBOL = Config.MARKET_SYMBOL
+
 
 def get_market_status(engine, date_str):
-    """判斷市場紅綠燈 (V27 雙重濾網)"""
-    query = text(f"SELECT * FROM daily_market_data WHERE stock_id='{MARKET_SYMBOL}' AND trade_date='{date_str}'")
-    with engine.connect() as conn:
-        data = conn.execute(query).mappings().fetchone()
+    """
+    判斷市場紅綠燈 (整合 db_helper.get_market_trend)
     
-    if not data: return "⚪ 資料不足", 0
+    🔄 V33 Refactor: 使用共用的市場趨勢判斷函數
+    """
+    # 使用共用函數取得趨勢
+    trend = get_market_trend(date_str)
     
-    # 確保有 ma20
-    ma20 = data['ma20'] if data.get('ma20') else data['close_price']
-    bias = (data['close_price'] - data['ma60']) / data['ma60'] * 100
+    # 取得詳細資料計算乖離率
+    df, _ = get_stock_data(Config.MARKET_SYMBOL, date_str)
+    if df.empty:
+        return "⚪ 資料不足", 0
     
-    # 雙重濾網: 股價 > 月線 > 季線
-    if data['close_price'] > ma20 and data['close_price'] > data['ma60']:
+    data = df.iloc[0]
+    ma60 = data.get('ma60', data['close_price'])
+    bias = (data['close_price'] - ma60) / ma60 * 100 if ma60 > 0 else 0
+    
+    # 根據趨勢返回狀態
+    if trend == 'BULL':
         return "🔴 多頭 (進攻)", bias
     elif bias < -8:
         return "🟢 恐慌 (避險)", bias
     else:
         return "🟡 空頭 (觀望)", bias
 
-def get_v30_picks(engine, date_str):
-    """V30 策略選股（40% 報酬實績）"""
-    # 1. 抓取當日全市場資料
-    query = text(f"""
-        SELECT * FROM daily_market_data
-        WHERE trade_date = '{date_str}' 
-        AND stock_id NOT IN ('{BOND_SYMBOL}', '{MARKET_SYMBOL}', '00632R')
-        AND close_price > 10
-        AND close_price < 500
-    """)
+def get_v30_picks(date_str):
+    """
+    V30 策略選股（40% 報酬實績）
     
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
+    🔄 V33 Refactor: 使用 get_stock_data() 共用函數
+    """
+    # 1. 使用共用函數抓取資料
+    df, _ = get_stock_data(date_str=date_str)
     
     if df.empty: 
         return []
 
-    # 2. 使用 V30 統一篩選函數
+    # 2. 過濾價格區間
+    df = df[(df['close_price'] > 10) & (df['close_price'] < 500)]
+    
+    if df.empty:
+        return []
+
+    # 3. 使用 V30 統一篩選函數
     candidates = get_v30_candidates(df)
     
     if candidates.empty:
         return []
     
-    # 3. 依外資買超或成交量排序，取前 5 名
+    # 4. 依外資買超或成交量排序，取前 5 名
     if 'foreign_buy' in candidates.columns:
         top_picks = candidates.sort_values('foreign_buy', ascending=False).head(5)
     else:
         top_picks = candidates.sort_values('volume', ascending=False).head(5)
     
-    # 4. 產生結果
+    # 5. 產生結果
     results = []
     for _, row in top_picks.iterrows():
         v30_result = calculate_v30_signal(row)
@@ -79,10 +82,11 @@ def get_v30_picks(engine, date_str):
     
     return results
 
+
 def main():
     print("🚀 V3.0 Line 推播啟動 (V30策略)...")
-    line_bot_api = LineBotApi(LINE_TOKEN)
-    engine = create_engine(DB_URL)
+    line_bot_api = LineBotApi(Config.LINE_CHANNEL_ACCESS_TOKEN)
+    engine = get_db_engine()
     
     # 1. 取得最新日期
     with engine.connect() as conn:
@@ -98,8 +102,8 @@ def main():
     # 2. 判斷市場狀態
     status, bias = get_market_status(engine, date_str)
     
-    # 3. V30 策略選股
-    picks = get_v30_picks(engine, date_str)
+    # 3. V30 策略選股（使用共用函數）
+    picks = get_v30_picks(date_str)
     
     # 4. 組合訊息
     msg = f"📅 【StockAI 日報】 {date_str}\n"

@@ -17,14 +17,11 @@ import os
 import sys
 from config import Config
 from tool.strategy import get_v30_candidates, get_v30_params_from_db
+from tool.db_helper import get_db_engine
 
 # ============================================
-# ⚙️ 設定區（統一使用 Config）
+# ⚙️ 設定區（統一使用 Config + db_helper）
 # ============================================
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
-MODEL_PATH = Config.MODEL_PATH
-BOND_SYMBOL = Config.BOND_SYMBOL
-MARKET_SYMBOL = Config.MARKET_SYMBOL
 
 # 交易參數
 INITIAL_CAPITAL = 1000000
@@ -60,7 +57,7 @@ class BacktestEngine:
             mode: 'v30' = 純技術面, 'v31' = 技術 + AI
         """
         self.mode = mode.lower()
-        self.engine = create_engine(DB_URL)
+        self.engine = get_db_engine()
         self.capital = INITIAL_CAPITAL
         self.positions = {}
         self.trade_count = 0

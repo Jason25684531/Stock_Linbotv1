@@ -8,14 +8,33 @@ Line Bot 主程式 (V31 混合策略版)
 4. 動態參數調整（資料庫設定）
 5. 目標：獲利 10-20%，停損 5%
 """
+# -*- coding: utf-8 -*-
+import sys
+import io
+
+# 修復 Windows 終端機 UTF-8 編碼問題
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 import pandas as pd
 from sqlalchemy import create_engine, text
 import joblib
 import os
 from flask import Flask, request, abort, render_template, jsonify
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+
+# Line Bot SDK v3 (2024更新)
+from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import (
+    Configuration,
+    ApiClient,
+    MessagingApi,
+    ReplyMessageRequest,
+    TextMessage as V3TextMessage
+)
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
+
 from config import Config
 
 # 引入策略模組
@@ -29,21 +48,21 @@ from tool.db_helper import get_setting, update_setting, validate_setting, get_st
 
 app = Flask(__name__)
 
-# Line 設定
-line_bot_api = LineBotApi(Config.LINE_CHANNEL_ACCESS_TOKEN)
+# Line Bot SDK v3 設定
+configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(Config.LINE_CHANNEL_SECRET)
 
 # 載入模型
-print("🧠 正在載入 AI 模型...")
+print("[AI] 正在載入 AI 模型...")
 model = None
 try:
     if os.path.exists(Config.MODEL_PATH):
         model = joblib.load(Config.MODEL_PATH)
     elif os.path.exists('stock_ai_model.pkl'):
         model = joblib.load('stock_ai_model.pkl')
-    print("✅ 模型載入成功")
+    print("[OK] 模型載入成功")
 except Exception as e:
-    print(f"⚠️ 模型載入失敗: {e}")
+    print(f"[WARNING] 模型載入失敗: {e}")
 
 
 # ============================================
@@ -229,6 +248,10 @@ def dashboard():
     """V32 Dashboard 主頁面"""
     return render_template('dashboard.html')
 
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 @app.route("/api/performance")
 def api_performance():
@@ -520,7 +543,7 @@ def callback():
     return 'OK'
 
 
-@handler.add(MessageEvent, message=TextMessage)
+@handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     """
     Line 訊息處理中心（V2.0 完整指令版）
@@ -647,17 +670,22 @@ def handle_message(event):
         reply += "-" * 30 + "\n"
         reply += "💡 建議優先使用「V30」\n"
         reply += "⚠️ AI功能僅供參考"
-        
-    line_bot_api.reply_message(
-        event.reply_token, 
-        TextSendMessage(text=reply)
-    )
+    
+    # 使用 Line Bot SDK v3 回覆訊息
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[V3TextMessage(text=reply)]
+            )
+        )
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 Line Bot V3.0 啟動中 (V30策略增強版)")
-    print(f"📋 模型狀態: {'✅ 已載入' if model else '❌ 未載入'}")
-    print(f"💡 主要策略: V30 純技術分析 (40%報酬實績)")
+    print("[START] Line Bot V3.0 啟動中 (V30策略增強版)")
+    print(f"[MODEL] 模型狀態: {'已載入' if model else '未載入'}")
+    print(f"[INFO] 主要策略: V30 純技術分析 (40%報酬實績)")
     print("=" * 60)
     app.run(host='0.0.0.0', port=5000, debug=False)

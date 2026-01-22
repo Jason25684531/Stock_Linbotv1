@@ -14,6 +14,9 @@
 🔥 V33 Phase 2+ (2026-01):
 - 整合市場情緒分析（Circuit Breaker 熔斷機制）
 - 情緒分數低於門檻時自動暫停交易
+
+🔄 V33 Refactor (2026-01-22):
+- 移除重複函數，使用 calc_indicators 共用模組
 """
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
@@ -202,30 +205,11 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
         return candidates.head(top_n)
     
     # ============================================
-    # Step 3: 計算比例特徵（關鍵：必須與訓練時一致）
+    # Step 3: 計算比例特徵（使用共用函數）
+    # 🔄 V33 Refactor: 使用 calc_indicators.calculate_ratio_features()
     # ============================================
-    candidates = candidates.copy()
-    
-    # 避免除以零
-    candidates['volume'] = candidates['volume'].replace(0, 1)
-    
-    # 計算成交量比例（相對於資料中的平均值，簡化版）
-    avg_volume = candidates['volume'].mean()
-    candidates['volume_ratio'] = candidates['volume'] / avg_volume if avg_volume > 0 else 1
-    candidates['volume_ratio'] = candidates['volume_ratio'].clip(0, 5)
-    
-    # 籌碼面比例
-    if 'foreign_buy' in candidates.columns:
-        candidates['foreign_ratio'] = candidates['foreign_buy'] / candidates['volume']
-        candidates['foreign_ratio'] = candidates['foreign_ratio'].clip(-0.5, 0.5)
-    else:
-        candidates['foreign_ratio'] = 0
-        
-    if 'trust_buy' in candidates.columns:
-        candidates['trust_ratio'] = candidates['trust_buy'] / candidates['volume']
-        candidates['trust_ratio'] = candidates['trust_ratio'].clip(-0.5, 0.5)
-    else:
-        candidates['trust_ratio'] = 0
+    from tool.calc_indicators import calculate_ratio_features
+    candidates = calculate_ratio_features(candidates)
     
     # ============================================
     # Step 4: ML 預測評分

@@ -5,16 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Stock Linbot V32{% endblock %}</title>
     
-    <!-- TailwindCSS CDN -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Alpine.js CDN -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
-    <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     
-    <!-- Google Fonts: JetBrains Mono for code/numbers -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -154,7 +152,6 @@
 </head>
 <body class="gradient-bg">
     <div class="min-h-screen">
-        <!-- Header -->
         <header class="border-b border-gray-700 bg-opacity-80 backdrop-blur-md" style="background-color: var(--bg-secondary);">
             <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between">
@@ -177,12 +174,10 @@
             </div>
         </header>
         
-        <!-- Main Content -->
         <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
             {% block content %}{% endblock %}
         </main>
         
-        <!-- Footer -->
         <footer class="border-t border-gray-700 mt-12 py-6" style="background-color: var(--bg-secondary);">
             <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-400">
                 <p>Stock Linbot V32 © 2026 | Phase 1: Backtest Realism ✅ | Phase 2: Dashboard Infrastructure ✅</p>
