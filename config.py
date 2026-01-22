@@ -94,6 +94,13 @@ class Config:
     BB_BREAKOUT_POSITION = 'upper' # 突破方向: 'upper'(上軌) or 'lower'(下軌)
     
     # ==========================================
+    # 🛡️ V33 Phase 1+: ATR 動態停損
+    # ==========================================
+    USE_ATR_STOP = True             # 🔥 啟用 ATR 動態停損（波動大則寬，波動小則窄）
+    ATR_MULTIPLIER = 2.0            # 停損 = 收盤價 - ATR * 2.0
+    ATR_PERIOD = 14                 # ATR 計算週期
+    
+    # ==========================================
     # � V33 Phase 2+: 市場情緒分析與熔斷機制
     # ==========================================
     ENABLE_SENTIMENT_FILTER = False     # 情緒熔斷開關（預設關閉，Opt-in）

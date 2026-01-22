@@ -436,8 +436,23 @@ def calculate_v30_signal(row, custom_params=None):
     volume_ok = volume > params['VOLUME_THRESHOLD']
     rsi_ok = params['RSI_LOW'] < rsi < params['RSI_HIGH']
     
-    # 計算停損停利
-    stop_loss = close * (1 - params['STOP_LOSS'])
+    # ============================================
+    # 🛡️ V33 Phase 1+: ATR 動態停損
+    # ============================================
+    if Config.USE_ATR_STOP:
+        atr = float(row.get('atr', 0))
+        if atr > 0:
+            # 🔥 ATR 動態停損：收盤價 - ATR * 乘數
+            # 波動大則停損寬，波動小則停損窄
+            stop_loss = close - (atr * Config.ATR_MULTIPLIER)
+        else:
+            # ATR 不可用時，回退到固定百分比停損
+            stop_loss = close * (1 - params['STOP_LOSS'])
+    else:
+        # 傳統固定百分比停損
+        stop_loss = close * (1 - params['STOP_LOSS'])
+    
+    # 計算停利
     take_profit = close * (1 + params['TAKE_PROFIT']) if params['TAKE_PROFIT'] > 0 else None  # None 表示不停利
     
     # 訊號判斷

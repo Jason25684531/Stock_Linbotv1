@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-01-21  
-> **當前版本**: V33 Phase 3+ (Deep Refactor)  
+> **最後更新**: 2026-01-22  
+> **當前版本**: V33 Phase 1+ (ATR Dynamic Stop Loss)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V33 Phase 1+](#v33-phase-1-atr-動態停損-2026-01-22) | 2026-01-22 | ATR 動態停損 + README 重寫 | ✅ 完成 |
 | [README.md 清理](#readmemd-清理-2026-01-21) | 2026-01-21 | 移除重複/過時內容，更新版本資訊 | ✅ 完成 |
 | [V33 Phase 3+ Deep Refactor](#v33-phase-3-deep-refactor-2026-01-21) | 2026-01-21 | 深度重構 + 修復重複代碼與語法錯誤 | ✅ 完成 |
 | [V33 Phase 2+ Refactor](#v33-phase-2-code-refactor-2026-01-09) | 2026-01-09 | 架構清理 + Import 修復 | ✅ 完成 |
@@ -18,6 +19,80 @@
 | [V33 Phase 3](#v33-phase-3-pk-system-visualization) | 2026-01 | PK 系統 + 儀表板 | ✅ 完成 |
 | [V33 Phase 2](#v33-phase-2-strategy-deep-dive) | 2026-01 | 進階濾網 + 參數優化 | ✅ 完成 |
 | [V33 Phase 1](#v33-phase-1-quality-assurance) | 2026-01 | 程式碼重構 + 測試 | ✅ 完成 |
+
+---
+
+## 🛡️ V33 Phase 1+ - ATR 動態停損 (2026-01-22)
+
+### 🎯 目標
+
+實作 **ATR 動態停損**，根據個股波動率自動調整停損幅度，降低 MDD。
+
+### ✅ 實作內容
+
+#### **1. Config 新增參數**
+
+**檔案**: `config.py`
+
+```python
+# V33 Phase 1+: ATR 動態停損
+USE_ATR_STOP = True             # 啟用 ATR 動態停損
+ATR_MULTIPLIER = 2.0            # 停損 = 收盤價 - ATR * 2.0
+ATR_PERIOD = 14                 # ATR 計算週期
+```
+
+#### **2. 技術指標擴展**
+
+**檔案**: `tool/calc_indicators.py`
+
+新增函數：
+```python
+def calculate_atr(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
+    """計算 ATR (Average True Range) - 平均真實波幅"""
+    # True Range = max(H-L, |H-Prev_C|, |L-Prev_C|)
+    # ATR = EMA of True Range
+```
+
+#### **3. 策略邏輯更新**
+
+**檔案**: `tool/strategy.py` → `calculate_v30_signal()`
+
+```python
+# 🛡️ V33 Phase 1+: ATR 動態停損
+if Config.USE_ATR_STOP and row.get('atr', 0) > 0:
+    stop_loss = close - (atr * Config.ATR_MULTIPLIER)
+else:
+    stop_loss = close * (1 - params['STOP_LOSS'])
+```
+
+#### **4. README.md 全面重寫**
+
+| 指標 | Before | After | 改善 |
+|------|--------|-------|------|
+| 總行數 | 1216 行 | 約 200 行 | -83% |
+| 內容 | 包含大量歷史日誌 | 精簡 V33 架構說明 | 更清晰 |
+
+### 📊 回測績效驗證
+
+```
+=== V33 Phase 1+ 回測績效 ===
+交易次數: 41
+總報酬率: 27.4%    ✅ 符合 10-20% 目標
+勝率: 46.3%
+停利次數: 7
+停損次數: 12
+時間到次數: 22
+```
+
+### 📂 修改檔案清單
+
+| 檔案 | 變更類型 | 說明 |
+|------|---------|------|
+| `config.py` | 修改 | 新增 USE_ATR_STOP, ATR_MULTIPLIER, ATR_PERIOD |
+| `tool/calc_indicators.py` | 修改 | 新增 calculate_atr() 函數 |
+| `tool/strategy.py` | 修改 | calculate_v30_signal() 加入 ATR 停損邏輯 |
+| `README.md` | 重寫 | 從 1216 行簡化至約 200 行 |
+| `UpdateList.md` | 更新 | 新增本次變更記錄 |
 
 ---
 

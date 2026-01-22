@@ -84,6 +84,38 @@ def calculate_macd(
     return macd_line - signal_line
 
 
+def calculate_atr(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
+    """
+    計算 ATR (Average True Range) - 平均真實波幅
+    
+    🆕 V33 Phase 1+: 用於動態停損計算
+    
+    Args:
+        df: 需包含 'high_price', 'low_price', 'close_price' 欄位
+        period: 計算週期 (預設從 Config 讀取)
+    
+    Returns:
+        ATR 數值序列
+    """
+    if period is None:
+        period = Config.ATR_PERIOD
+    
+    high = df['high_price']
+    low = df['low_price']
+    close = df['close_price']
+    
+    # True Range = max(H-L, |H-Prev_C|, |L-Prev_C|)
+    prev_close = close.shift(1)
+    tr1 = high - low
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # ATR = EMA of True Range
+    atr = true_range.ewm(span=period, adjust=False).mean()
+    return atr
+
+
 def calculate_kd(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
     """
     計算 KD 指標的 K 值 (Stochastic Oscillator)
@@ -195,6 +227,7 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['macd_hist'] = calculate_macd(df['close_price'])
     df['kd_k'] = calculate_kd(df)
     df['bb_width'] = calculate_bb_width(df['close_price'])
+    df['atr'] = calculate_atr(df)  # 🆕 V33 Phase 1+: ATR 動態停損
     
     return df
 
