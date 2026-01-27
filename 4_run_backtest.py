@@ -17,7 +17,7 @@ import os
 import sys
 from config import Config
 from tool.strategy import get_v30_candidates, get_v30_params_from_db
-from tool.db_helper import get_db_engine
+from tool.db_helper import get_db_engine, get_market_trend as db_get_market_trend
 
 # ============================================
 # ⚙️ 設定區（統一使用 Config + db_helper）
@@ -41,6 +41,11 @@ AI_CONFIDENCE_THRESHOLD = 0.60  # AI 信心門檻
 
 # 從資料庫讀取參數
 USE_DB_PARAMS = True
+
+
+MODEL_PATH = Config.MODEL_PATH
+MARKET_SYMBOL = Config.MARKET_SYMBOL
+BOND_SYMBOL = Config.BOND_SYMBOL
 
 
 class BacktestEngine:
@@ -125,20 +130,12 @@ class BacktestEngine:
             return conn.execute(query).mappings().fetchone()
     
     def get_market_trend(self, date_str):
-        """判斷大盤趨勢"""
-        data = self.get_data(MARKET_SYMBOL, date_str)
-        if not data or not data.get('ma20') or not data.get('ma60'):
+        """判斷大盤趨勢（使用共用函數）"""
+        try:
+            return db_get_market_trend(date_str)
+        except Exception as e:
+            print(f"⚠️ 市場趨勢判斷失敗: {e}")
             return 'NEUTRAL'
-        
-        close = data['close_price']
-        ma20 = data['ma20']
-        ma60 = data['ma60']
-        
-        if close > ma20 > ma60:
-            return 'BULL'
-        elif close < ma20 < ma60:
-            return 'BEAR'
-        return 'NEUTRAL'
     
     def find_candidates(self, date_str):
         """

@@ -8,13 +8,12 @@ from config import Config
 from tool.db_helper import get_db_engine
 
 # ============================================
-# ⚙️ 設定區 (統一使用 Config + db_helper)
+# ⚙️ 設定區 (統一使用 Config)
 # ============================================
 
-# 偽裝瀏覽器，避免被擋
+# 偽裝瀏覽器 (全域 Header，會被函式內部的 update 覆蓋)
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php',
     'Accept': 'application/json, text/javascript, */*; q=0.01',
     'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
     'X-Requested-With': 'XMLHttpRequest'
@@ -48,13 +47,6 @@ def clean_number(x):
 def fetch_twse_data(date_str, max_retries=3):
     """
     抓取證交所 (上市) 全市場（含重試機制）
-    
-    Args:
-        date_str: 日期字串 (YYYY-MM-DD)
-        max_retries: 最大重試次數
-    
-    Returns:
-        DataFrame 或 None
     """
     print("  🔹 正在抓取上市 (TWSE) 資料...", end="")
     clean_date = date_str.replace('-', '')
@@ -68,11 +60,9 @@ def fetch_twse_data(date_str, max_retries=3):
             data = res.json()
             
             if data.get('stat') == 'OK':
-                # 找「每日收盤行情」表
                 target_table = next((t for t in data['tables'] if "每日收盤行情" in t['title']), None)
                 if target_table:
                     price_df = pd.DataFrame(target_table['data'], columns=target_table['fields'])
-                    # 欄位映射
                     price_df = price_df.rename(columns={
                         '證券代號': 'stock_id', '開盤價': 'open_price', 
                         '最高價': 'high_price', '最低價': 'low_price', 
@@ -83,7 +73,7 @@ def fetch_twse_data(date_str, max_retries=3):
             if price_df.empty: 
                 if attempt < max_retries - 1:
                     print(f" (第{attempt+1}次重試)", end="")
-                    time.sleep(2 ** attempt)  # 指數退避: 1s, 2s, 4s
+                    time.sleep(2 ** attempt)
                     continue
                 else:
                     print(" (無資料)")
@@ -96,7 +86,6 @@ def fetch_twse_data(date_str, max_retries=3):
             data = res.json()
             if data.get('stat') == 'OK':
                 df = pd.DataFrame(data['data'], columns=data['fields'])
-                # 模糊搜尋欄位
                 f_col = next((c for c in df.columns if "外" in c and "買賣超股數" in c), None)
                 t_col = next((c for c in df.columns if "投信" in c and "買賣超股數" in c), None)
                 
@@ -104,7 +93,6 @@ def fetch_twse_data(date_str, max_retries=3):
                     chips_df = df[['證券代號', f_col, t_col]]
                     chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
 
-            # 3. 合併
             if not chips_df.empty:
                 merged = pd.merge(price_df, chips_df, on='stock_id', how='left')
             else:
@@ -115,65 +103,79 @@ def fetch_twse_data(date_str, max_retries=3):
             print(" ✅")
             return merged
             
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             if attempt < max_retries - 1:
-                print(f" (網路錯誤，第{attempt+1}次重試)", end="")
+                print(f" (重試...)", end="")
                 time.sleep(2 ** attempt)
             else:
-                print(f" ❌ 重試失敗: {e}")
+                print(f" ❌ 上市抓取失敗: {e}")
                 return None
-        except Exception as e:
-            print(f" ❌ 錯誤: {e}")
-            return None
-    
     return None
 
 def fetch_tpex_data(date_str, max_retries=3):
     """
-    抓取櫃買中心 (上櫃) 全市場 - 含債券ETF（含重試機制）
-    
-    Args:
-        date_str: 日期字串 (YYYY-MM-DD)
-        max_retries: 最大重試次數
-    
-    Returns:
-        DataFrame 或 None
+    抓取櫃買中心 (上櫃) 全市場 - 強健修復版
     """
     print("  🔹 正在抓取上櫃 (TPEx) 資料...", end="")
     dt = datetime.strptime(date_str, "%Y-%m-%d")
     minguo_date = f"{dt.year - 1911}/{dt.month:02d}/{dt.day:02d}"
     
+    # ✅ 強化的 Headers，偽裝成真實瀏覽器
+    current_headers = HEADERS.copy()
+    current_headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': f'https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d={minguo_date}',
+        'Origin': 'https://www.tpex.org.tw'
+    })
+
     for attempt in range(max_retries):
         try:
+            # ✅ 隨機延遲，降低被封鎖機率
+            time.sleep(random.uniform(1.5, 3.0))
+            
             price_df_stock = pd.DataFrame()
             price_df_etf = pd.DataFrame()
             
             # 1-A. 上櫃股票
             url = f"https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php?l=zh-tw&d={minguo_date}&o=json"
-            res = requests.get(url, headers=HEADERS, timeout=15)
-            data = res.json()
+            res = requests.get(url, headers=current_headers, timeout=20)
+            
+            if res.status_code != 200:
+                raise Exception(f"HTTP {res.status_code}")
+
+            try:
+                data = res.json()
+            except ValueError:
+                # ✅ 捕獲 JSON 解析錯誤，避免程式崩潰
+                print(f" (回應非 JSON: {res.text[:30]}...)", end="")
+                if attempt < max_retries - 1: continue
+                return None
+
             if data.get('aaData'):
                 df = pd.DataFrame(data['aaData'])
-                # Index: 0代號, 2收盤, 4開盤, 5最高, 6最低, 8成交量
                 price_df_stock = df.iloc[:, [0, 4, 5, 6, 2, 8]].copy()
                 price_df_stock.columns = ['stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']
             
-            # 1-B. 上櫃 ETF (關鍵！為了 00679B)
+            # 1-B. 上櫃 ETF
+            time.sleep(random.uniform(1, 2))
             url_etf = f"https://www.tpex.org.tw/web/etf/etf_daily_close_quotes/etf_quote_result.php?l=zh-tw&d={minguo_date}&o=json"
-            res = requests.get(url_etf, headers=HEADERS, timeout=15)
-            data = res.json()
+            res = requests.get(url_etf, headers=current_headers, timeout=20)
+            
+            try:
+                data = res.json()
+            except ValueError:
+                data = {} # ETF 失敗不影響整體
+
             if data.get('aaData'):
                 df = pd.DataFrame(data['aaData'])
-                # Index: 0代號, 2收盤, 4開盤, 5最高, 6最低, 7成交量 (ETF少一欄)
                 price_df_etf = df.iloc[:, [0, 4, 5, 6, 2, 7]].copy()
                 price_df_etf.columns = ['stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']
 
-            # 合併價格
+            # 合併
             price_df = pd.concat([price_df_stock, price_df_etf], ignore_index=True)
             if price_df.empty:
                 if attempt < max_retries - 1:
-                    print(f" (第{attempt+1}次重試)", end="")
-                    time.sleep(2 ** attempt)
+                    print(f" (空資料，第{attempt+1}次重試)", end="")
                     continue
                 else:
                     print(" (無資料)")
@@ -181,19 +183,22 @@ def fetch_tpex_data(date_str, max_retries=3):
             
             price_df['pe_ratio'] = 0.0
 
-            # 2. 籌碼 (se=AL 包含全部)
+            # 2. 籌碼
+            time.sleep(random.uniform(1, 2))
             chips_df = pd.DataFrame()
             url = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&se=AL&t=D&d={minguo_date}&o=json"
-            res = requests.get(url, headers=HEADERS, timeout=15)
-            data = res.json()
-            if data.get('aaData'):
-                df = pd.DataFrame(data['aaData'])
-                chips_df = df.iloc[:, [0, 10, 13]].copy()
-                chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
+            res = requests.get(url, headers=current_headers, timeout=20)
+            
+            try:
+                data = res.json()
+                if data.get('aaData'):
+                    df = pd.DataFrame(data['aaData'])
+                    chips_df = df.iloc[:, [0, 10, 13]].copy()
+                    chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
+            except:
+                pass
 
-            # 3. 合併
             if not chips_df.empty:
-                # 轉字串對齊
                 price_df['stock_id'] = price_df['stock_id'].astype(str)
                 chips_df['stock_id'] = chips_df['stock_id'].astype(str)
                 merged = pd.merge(price_df, chips_df, on='stock_id', how='left')
@@ -205,60 +210,37 @@ def fetch_tpex_data(date_str, max_retries=3):
             print(" ✅")
             return merged
             
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries - 1:
-                print(f" (網路錯誤，第{attempt+1}次重試)", end="")
-                time.sleep(2 ** attempt)
-            else:
-                print(f" ❌ 重試失敗: {e}")
-                return None
         except Exception as e:
-            print(f" ❌ 錯誤: {e}")
-            return None
+            if attempt < max_retries - 1:
+                print(f" (錯誤: {str(e)[:20]}... 重試)", end="")
+                time.sleep(5 * (attempt + 1))
+            else:
+                print(f" ❌ 上櫃抓取失敗: {e}")
+                return None
     
     return None
 
 def process_and_save(df, date_str, engine):
-    """
-    清洗並寫入資料庫（使用 upsert 模式）
+    """清洗並寫入資料庫"""
+    if df is None or df.empty: return 0
     
-    Args:
-        df: DataFrame，包含股票資料
-        date_str: 日期字串
-        engine: 資料庫引擎
-    
-    Returns:
-        成功寫入的筆數
-    """
-    if df is None or df.empty: 
-        return 0
-    
-    # 清洗數字
     cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio', 'foreign_buy', 'trust_buy']
     for col in cols:
         df[col] = df[col].apply(clean_number)
     
     df['trade_date'] = date_str
-    
-    # 過濾掉沒有收盤價的
     df = df[df['close_price'] > 0]
     
-    # 使用 upsert 模式寫入（原子性操作）
     try:
-        # 引入 db_helper 的 upsert 函數
         from tool.db_helper import upsert_stock_data
-        
         count = upsert_stock_data(df, 'daily_market_data')
         return count
     except ImportError:
-        # 如果無法引入，則使用傳統 REPLACE INTO 方式（回退方案）
         print("⚠️ 使用回退方案：REPLACE INTO")
         try:
-            # 為了效能，先刪除當天所有資料 (避免重複)
             with engine.connect() as conn:
                 conn.execute(text(f"DELETE FROM daily_market_data WHERE trade_date='{date_str}'"))
                 conn.commit()
-                
             df.to_sql('daily_market_data', engine, if_exists='append', index=False, chunksize=2000)
             return len(df)
         except Exception as e:
@@ -269,7 +251,7 @@ def process_and_save(df, date_str, engine):
 # 🚀 主程式
 # ============================================
 if __name__ == "__main__":
-    print(f"🔗 連線資料庫: {Config.SQLALCHEMY_DATABASE_URI}")
+    print(f"🔗 連線資料庫...")
     engine = get_db_engine()
     
     latest_date = get_latest_date_from_db(engine)

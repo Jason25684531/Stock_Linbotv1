@@ -1,8 +1,4 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
-import joblib
-import os
-import sys
 from config import Config
 
 # 📚 引用策略模組
@@ -22,47 +18,26 @@ except ImportError:
 # ============================================
 # ⚙️ 設定區（統一使用 Config 和 db_helper）
 # ============================================
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
-MODEL_PATH = Config.MODEL_PATH
-BOND_SYMBOL = Config.BOND_SYMBOL
-MARKET_SYMBOL = Config.MARKET_SYMBOL
+# 所有設定直接從 Config 讀取，不需要重複定義
 
 # ============================================
 # 🔍 資料存取與模型
 # ============================================
 def get_latest_data(stock_id=None):
-    engine = get_db_engine()
+    """從資料庫取得最新資料（使用共用函數）"""
     if stock_id:
-        # 個股：抓最近一次交易日
-        sql = f"SELECT * FROM daily_market_data WHERE stock_id = '{stock_id}' ORDER BY trade_date DESC LIMIT 1"
-        df = pd.read_sql(sql, engine)
-        if df.empty: return pd.DataFrame(), None
-        date_str = df['trade_date'].iloc[0].strftime('%Y-%m-%d')
+        # 個股查詢
+        df, date_str = get_stock_data(stock_id=stock_id, date_str=None)
         return df, date_str
     else:
-        # 全市場：抓最新一天
-        with engine.connect() as conn:
-            date_str = conn.execute(text("SELECT MAX(trade_date) FROM daily_market_data")).scalar()
-        if not date_str: return pd.DataFrame(), None
-        date_str = date_str.strftime('%Y-%m-%d')
-        sql = f"SELECT * FROM daily_market_data WHERE trade_date = '{date_str}'"
-        sql += f" AND stock_id NOT IN ('{BOND_SYMBOL}', '{MARKET_SYMBOL}', '00632R')"
-        df = pd.read_sql(sql, engine)
+        # 全市場查詢
+        df, date_str = get_stock_data(stock_id=None, date_str=None)
         return df, date_str
 
 def load_model():
-    """載入 V31 模型（包含模型和特徵列表）"""
-    paths = [MODEL_PATH, os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')]
-    for p in paths:
-        if os.path.exists(p):
-            data = joblib.load(p)
-            # 簡化版，使用 db_helper
-            if isinstance(data, dict) and 'model' in data:
-                return data['model'], data.get('features', [])
-            else:
-                return data, []
-    print("❌ 找不到模型檔案")
-    return None, []
+    """載入 V31 模型（使用 strategy 模組的私有函數）"""
+    from tool.strategy import _load_v31_model
+    return _load_v31_model()
 
 # ============================================
 # 🔥 V30 策略推薦（純技術分析，40% 報酬實績）

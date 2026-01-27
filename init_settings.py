@@ -6,10 +6,8 @@
 """
 from sqlalchemy import create_engine, text
 from config import Config
+from tool.db_helper import get_db_engine
 import sys
-
-# 使用統一設定（避免硬編碼）
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
 
 
 def init_settings_table():
@@ -19,8 +17,11 @@ def init_settings_table():
     print("=" * 60)
     
     try:
-        engine = create_engine(DB_URL)
-        print(f"✅ 資料庫連線成功: {DB_URL.split('@')[1]}")
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            # 測試連接
+            conn.execute(text("SELECT 1"))
+        print(f"✅ 資料庫連線成功")
     except Exception as e:
         print(f"❌ 資料庫連線失敗: {e}")
         sys.exit(1)

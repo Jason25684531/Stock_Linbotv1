@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sqlalchemy import create_engine
 from xgboost import XGBClassifier
 from sklearn.metrics import classification_report, accuracy_score, precision_score
 import joblib
@@ -7,10 +8,9 @@ import os
 from config import Config
 from tool.news_agent import NewsSentimentAgent
 from tool.db_helper import get_db_engine
-from tool.calc_indicators import calculate_ratio_features
 
 # ============================================
-# ⚙️ V31 混合策略版 - 設定區（統一使用 Config + db_helper）
+# ⚙️ V31 混合策略版 - 設定區（統一使用 Config）
 # ============================================
 
 # V31: 預測參數（配合獲利目標 10-20%）
@@ -24,9 +24,36 @@ TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
 FEATURES = Config.FEATURES + ['sentiment_score']
 
 
+def calculate_ratio_features(df):
+    """
+    計算比例特徵（籌碼面標準化）
+    """
+    print("📊 計算比例特徵（籌碼面標準化）...")
+    
+    # 避免除以零
+    df['volume'] = df['volume'].replace(0, 1)
+    
+    # 計算成交量相對於 20 日均量的比例（量能強度）
+    df['volume_ma20'] = df.groupby('stock_id')['volume'].transform(
+        lambda x: x.rolling(20, min_periods=1).mean()
+    )
+    df['volume_ratio'] = df['volume'] / df['volume_ma20'].replace(0, 1)
+    
+    # 籌碼面比例（外資/投信 參與度）
+    df['foreign_ratio'] = df['foreign_buy'] / df['volume']
+    df['trust_ratio'] = df['trust_buy'] / df['volume']
+    
+    # 限制極端值（避免異常數據影響模型）
+    df['foreign_ratio'] = df['foreign_ratio'].clip(-0.5, 0.5)
+    df['trust_ratio'] = df['trust_ratio'].clip(-0.5, 0.5)
+    df['volume_ratio'] = df['volume_ratio'].clip(0, 5)
+    
+    return df
+
+
 def calculate_future_target(df, look_ahead_days, target_return):
     """
-    計算未來收益目標（按股票分組計算）
+    計算未來收益目標（向量化極速版 - 修復 KeyError 與除以零錯誤）
     
     Args:
         df: DataFrame，包含股票資料
@@ -36,48 +63,41 @@ def calculate_future_target(df, look_ahead_days, target_return):
     Returns:
         DataFrame: 添加了 future_max_return 和 target 欄位
     """
-    print(f"📊 計算未來 {look_ahead_days} 天最高漲幅...")
+    print(f"📊 計算未來 {look_ahead_days} 天最高漲幅 (Vectorized)...")
     
-    def calc_future_max_return(group):
-        """計算單個股票的未來收益"""
-        close = group['close_price'].values
-        high = group['high_price'].values
-        max_returns = []
-        
-        for i in range(len(close)):
-            if i + look_ahead_days >= len(close):
-                max_returns.append(np.nan)
-            else:
-                # 取未來 N 天內的最高價
-                future_max = max(high[i+1:i+look_ahead_days+1])
-                ret = (future_max - close[i]) / close[i]
-                max_returns.append(ret)
-        
-        group['future_max_return'] = max_returns
-        return group
-    
-    df = df.groupby('stock_id', group_keys=False).apply(calc_future_max_return)
+    # 1. 確保價格大於 0 (修復 RuntimeWarning: divide by zero)
+    df = df[df['close_price'] > 0].copy()
+
+    # 2. 排序：股票分組，日期【降序】 (為了做反向 rolling)
+    df = df.sort_values(['stock_id', 'trade_date'], ascending=[True, False])
+
+    # 3. 計算未來 N 天最高價 (Vectorized)
+    # 原理：反向排列後，用 rolling(N) 取最大值，相當於取「未來 N 天」的最大值
+    # shift(1) 是為了讓視窗從「明天」開始算，不包含「今天」
+    df['future_max_price'] = df.groupby('stock_id')['high_price'].transform(
+        lambda x: x.rolling(look_ahead_days, min_periods=1).max().shift(1)
+    )
+
+    # 4. 轉回正常順序 (日期升序)
+    df = df.sort_values(['stock_id', 'trade_date'], ascending=[True, True])
+
+    # 5. 計算報酬率
+    # ret = (future_max - close) / close
+    df['future_max_return'] = (df['future_max_price'] - df['close_price']) / df['close_price']
+
+    # 6. 標記 Target (填補 NaN 為 0)
+    df['future_max_return'] = df['future_max_return'].fillna(0)
     df['target'] = (df['future_max_return'] > target_return).astype(int)
+
+    # 清理暫存欄位
+    df = df.drop(columns=['future_max_price'])
     
     return df
 
 
 def merge_sentiment_features(df):
     """
-    整合市場情緒特徵到訓練數據
-    
-    🔥 V33 Phase 2+: 新增特徵
-    
-    策略：
-    - 使用 NewsSentimentAgent 產生每日情緒分數
-    - 使用 Mock Mode 確保訓練穩定（不依賴外部 API）
-    - 缺失值填充為 0（中性情緒）
-    
-    Args:
-        df: DataFrame，必須包含 'trade_date' 欄位
-    
-    Returns:
-        DataFrame: 添加 'sentiment_score' 欄位
+    整合市場情緒特徵到訓練數據 (V33 Phase 2+)
     """
     print("📰 整合市場情緒特徵...")
     
@@ -101,18 +121,12 @@ def merge_sentiment_features(df):
         df['sentiment_score'] = df['trade_date'].map(sentiment_map)
         
         # 填充缺失值為 0（中性）
-        missing_count = df['sentiment_score'].isna().sum()
-        if missing_count > 0:
-            print(f"   ⚠️ {missing_count} 筆資料缺少情緒分數，填充為 0（中性）")
-            df['sentiment_score'] = df['sentiment_score'].fillna(0)
+        df['sentiment_score'] = df['sentiment_score'].fillna(0)
         
         print(f"   ✅ 情緒特徵整合完成")
-        print(f"   📊 情緒分數範圍: {df['sentiment_score'].min():.3f} ~ {df['sentiment_score'].max():.3f}")
-        print(f"   📊 平均情緒: {df['sentiment_score'].mean():.3f}")
         
     except Exception as e:
         print(f"   ⚠️ 情緒特徵整合失敗: {e}")
-        print(f"   → 填充為 0（中性），繼續訓練")
         df['sentiment_score'] = 0
     
     return df
@@ -121,16 +135,6 @@ def merge_sentiment_features(df):
 def time_series_split(df, train_ratio=0.8):
     """
     時間序列拆分（無數據洩露）
-    
-    🔥 關鍵：按日期順序拆分，前 80% 訓練，後 20% 測試
-    不打亂順序，避免未來數據混入訓練集
-    
-    Args:
-        df: DataFrame，必須包含 'trade_date' 欄位
-        train_ratio: 訓練集比例（預設 0.8）
-    
-    Returns:
-        (train_df, test_df): 訓練集和測試集
     """
     # 1. 確保按日期嚴格排序
     df = df.sort_values('trade_date').reset_index(drop=True)
@@ -139,7 +143,7 @@ def time_series_split(df, train_ratio=0.8):
     unique_dates = sorted(df['trade_date'].unique())
     n_dates = len(unique_dates)
     
-    # 3. 計算拆分點（按日期數量）
+    # 3. 計算拆分點
     split_idx = int(n_dates * train_ratio)
     train_end_date = unique_dates[split_idx - 1]
     
@@ -152,34 +156,22 @@ def time_series_split(df, train_ratio=0.8):
     print("=" * 60)
     print(f"📅 訓練期間: {train_df['trade_date'].min()} ~ {train_df['trade_date'].max()}")
     print(f"📅 測試期間: {test_df['trade_date'].min()} ~ {test_df['trade_date'].max()}")
-    print(f"📊 訓練樣本: {len(train_df):,} 筆 ({len(train_df)/len(df)*100:.1f}%)")
-    print(f"📊 測試樣本: {len(test_df):,} 筆 ({len(test_df)/len(df)*100:.1f}%)")
-    print(f"✅ 數據無洩露：測試集所有日期都晚於訓練集")
+    print(f"📊 訓練樣本: {len(train_df):,} 筆")
+    print(f"📊 測試樣本: {len(test_df):,} 筆")
     print("=" * 60 + "\n")
     
     return train_df, test_df
+
+
 def train_xgboost():
     """
     XGBoost V31 混合策略訓練主函數
-    
-    改進：
-    1. 移除 train_test_split 的 shuffle=True
-    2. 實現時間序列拆分（前 80% 訓練，後 20% 測試）
-    3. 封裝特徵工程和目標計算邏輯
-    4. 保存完整的模型元數據
-    
-    🔥 V33 Phase 2+: 整合市場情緒特徵
     """
     print("🚀 正在啟動 XGBoost V31 混合策略訓練引擎...")
-    print("🎯 目標：V30 篩選 + ML 智慧排名，獲利 10-20%")
-    print("🔒 防止數據洩露：使用時間序列拆分")
-    print("📰 V33 Phase 2+: 整合市場情緒特徵\n")
     
     engine = get_db_engine()
     
-    # ============================================
     # 1. 讀取數據
-    # ============================================
     print("📥 從資料庫讀取訓練資料...")
     try:
         df = pd.read_sql("SELECT * FROM daily_market_data", engine)
@@ -191,34 +183,19 @@ def train_xgboost():
         print("❌ 資料庫是空的！請先跑 1_update_database.py")
         return
 
-    # ============================================
-    # 2. 數據前處理
-    # ============================================
     print(f"📦 原始數據: {len(df):,} 筆")
-    
-    # 確保日期格式正確
     df['trade_date'] = pd.to_datetime(df['trade_date'])
-    
-    # 按股票和日期排序（關鍵）
     df = df.sort_values(['stock_id', 'trade_date']).reset_index(drop=True)
     
     # 補齊缺失的籌碼欄位
-    if 'foreign_buy' not in df.columns:
-        df['foreign_buy'] = 0
-    if 'trust_buy' not in df.columns:
-        df['trust_buy'] = 0
+    if 'foreign_buy' not in df.columns: df['foreign_buy'] = 0
+    if 'trust_buy' not in df.columns: df['trust_buy'] = 0
     
-    # ============================================
-    # 3. 特徵工程
-    # ============================================
+    # 2. 特徵工程
     df = calculate_ratio_features(df)
-    
-    # 🔥 V33 Phase 2+: 整合情緒特徵
     df = merge_sentiment_features(df)
     
-    # ============================================
-    # 4. 計算未來收益目標
-    # ============================================
+    # 3. 計算未來收益目標 (✅ 這裡使用了修復後的函數)
     df = calculate_future_target(df, LOOK_AHEAD_DAYS, TARGET_RETURN)
     
     # 清洗：移除無法計算目標的樣本
@@ -226,11 +203,8 @@ def train_xgboost():
     
     print(f"📊 有效樣本數: {len(data):,} 筆")
     print(f"📈 正樣本比例: {data['target'].mean():.2%}")
-    print(f"🎯 目標：未來 {LOOK_AHEAD_DAYS} 天內漲幅 > {TARGET_RETURN*100}%")
     
-    # ============================================
-    # 5. 時間序列拆分（關鍵改進）
-    # ============================================
+    # 4. 時間序列拆分
     train_df, test_df = time_series_split(data, train_ratio=TRAIN_RATIO)
     
     # 準備特徵
@@ -242,13 +216,9 @@ def train_xgboost():
     X_test = test_df[available_features]
     y_test = test_df['target']
     
-    # ============================================
-    # 6. 訓練 XGBoost
-    # ============================================
+    # 5. 訓練 XGBoost
     print("🏋️ XGBoost 正在極限訓練中...")
-    
     pos_weight = (len(y_train) - sum(y_train)) / max(sum(y_train), 1)
-    print(f"⚖️ 正樣本權重: {pos_weight:.2f}")
     
     model = XGBClassifier(
         n_estimators=300,
@@ -265,11 +235,8 @@ def train_xgboost():
     
     model.fit(X_train, y_train)
     
-    # ============================================
-    # 7. 評估模型
-    # ============================================
+    # 6. 評估模型
     y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
     
     print("\n" + "=" * 60)
     print("📊 模型成績單 (XGBoost V31 - 時間序列驗證)")
@@ -279,22 +246,8 @@ def train_xgboost():
     print(f"🎯 精準率 (Precision): {precision_score(y_test, y_pred, zero_division=0):.2%}")
     print("=" * 60)
     
-    # ============================================
-    # 8. 特徵重要性
-    # ============================================
-    print("\n🎯 特徵重要性排行:")
-    feature_importance = pd.DataFrame({
-        'feature': available_features,
-        'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    
-    for _, row in feature_importance.iterrows():
-        print(f"  {row['feature']:<15} {'█' * int(row['importance'] * 100)} {row['importance']:.3f}")
-    
-    # ============================================
-    # 9. 保存模型與元數據
-    # ============================================
-    os.makedirs(os.path.dirname(Config.MODEL_PATH), exist_ok=True)
+    # 7. 保存模型
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     
     model_data = {
         'model': model,
@@ -303,26 +256,12 @@ def train_xgboost():
         'training_date': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
         'look_ahead_days': LOOK_AHEAD_DAYS,
         'target_return': TARGET_RETURN,
-        'train_samples': len(X_train),
-        'test_samples': len(X_test),
-        'train_period': f"{train_df['trade_date'].min()} ~ {train_df['trade_date'].max()}",
-        'test_period': f"{test_df['trade_date'].min()} ~ {test_df['trade_date'].max()}",
         'accuracy': accuracy_score(y_test, y_pred),
-        'precision': precision_score(y_test, y_pred, zero_division=0),
-        'time_series_split': True  # 標記使用時間序列拆分
     }
-    joblib.dump(model_data, Config.MODEL_PATH)
+    joblib.dump(model_data, MODEL_PATH)
     
-    print(f"\n✅ XGBoost V31 模型已儲存至: {Config.MODEL_PATH}")
-    print(f"📋 特徵列表: {available_features}")
-    print(f"📊 訓練日期: {model_data['training_date']}")
-    print(f"🎯 模型指標: 準確率 {model_data['accuracy']:.2%} | 精準率 {model_data['precision']:.2%}")
-    print(f"🔒 時間序列拆分: ✅ (無數據洩露)")
+    print(f"\n✅ 模型已儲存至: {MODEL_PATH}")
     print("\n🎉 V31 混合策略訓練完成！")
-    print("\n💡 下一步：")
-    print("   1. 執行 debug_local.py 輸入「推薦」測試混合策略")
-    print("   2. 執行 4_run_backtest.py 進行回測驗證")
-    print("\n⚠️ 重要：推論時必須使用模型儲存的特徵列表，避免維度不一致錯誤")
 
 if __name__ == "__main__":
     train_xgboost()
