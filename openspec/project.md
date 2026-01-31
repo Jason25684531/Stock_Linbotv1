@@ -1,26 +1,34 @@
-# Project Context: Stock Linbot V1
+# Project Specification: Stock_Linbotv1 Strategy Upgrade (V33/V34)
 
-## Project Overview
-Stock Linbot V1 是一個針對台股市場的自動化量化交易與分析系統。它結合了傳統技術指標 (V30) 與機器學習模型 (V31 XGBoost) 來產生交易訊號，並透過 Line Bot 提供即時互動，目前正朝向 V32 (Web Dashboard & 擬真回測) 邁進。
+## 1. 專案目標 (Project Goal)
+將現有的 Python 量化交易腳本 (`Stock_Linbotv1`) 重構為模組化的 **「策略工廠模式 (Strategy Factory Pattern)」**。目標是建立一個能夠支援多策略切換（穩健/動能）的系統，並解決營收資料抓取困難的問題，以實現高報酬的 V34 策略。
 
-## Tech Stack
+## 2. 核心技術棧 (Core Technologies)
 - **Language**: Python 3.10+
-- **Web Framework**: Flask (Line Bot Webhook & Dashboard Backend)
-- **Database**: MySQL 8.0 (Dockerized), SQLAlchemy ORM
-- **Data Analysis**: Pandas, NumPy, TA-Lib (Technical Indicators)
-- **Machine Learning**: XGBoost, Scikit-learn, Joblib
-- **Frontend (V32+)**: HTML5, TailwindCSS (CDN), Alpine.js (CDN), Chart.js (CDN)
-- **Scheduling**: Windows Task Scheduler
+- **Database**: SQLite (`daily_market_data.db`)
+- **Data Source**: 
+  - Price: TWSE/TPEX Daily Report.
+  - Revenue: **`mopsov.twse.com.tw`** (Backup site for stability).
+- **Web Dashboard**: Flask (MVC Architecture).
+- **Notification**: Line Bot API (Dynamic message content).
 
-## Architecture
-1.  **ETL Layer**: `1_update_database.py` (Daily crawl), `calc_indicators.py`.
-2.  **Strategy Layer**: `tool/Strategy.py` (Logic core), `3_train_model.py` (AI training).
-3.  **Backtest Engine**: `4_run_backtest.py` (Simulation).
-4.  **Application Layer**: `app.py` (Line Bot interface & Web Dashboard).
+## 3. 架構設計 (Architecture)
+系統採用 **MVC 架構**：
+- **Model (Strategy Logic)**: `BaseStrategy` 抽象類別，衍生出 V31, V33, V34。
+- **Controller (Manager)**: `StrategyManager` 負責讀取 `settings.json` 並實例化當前策略。
+- **View (Web)**: Flask Dashboard 提供下拉選單切換策略。
 
-## Directory Structure
-- `tool/`: 核心邏輯 (db_helper, strategy, indicators).
-- `ML_Model/`: 存放訓練好的 XGBoost 模型 (.json/.pkl).
-- `ML_Data/`: 存放回測結果與訓練資料 (.csv).
-- `templates/`: Flask HTML 模板 (V32 Dashboard).
-- `openspec/`: 開發規範與變更管理.
+## 4. 策略定義 (Strategies)
+1.  **V31 Hybrid (現行版)**:
+    - 邏輯：MA + RSI + 籌碼面。
+    - 目標：平衡型波段。
+2.  **V33 Low Volatility (低波動穩健型)**:
+    - 邏輯：`NATR < 4%`, `STD_20` 低。
+    - 目標：降低 MDD，追求月獲利 3~5%。
+3.  **V34 Twin-Turbo (雙渦輪飆股型)**:
+    - 邏輯：**營收 YoY > 30%** (關鍵) + 股價創 60 日新高。
+    - 目標：追求月獲利 10% 以上 (高風險高報酬)。
+
+## 5. 關鍵數據需求 (Data Requirements)
+- 必須修復月營收爬蟲，取得 `revenue_yoy` 欄位，否則 V34 無法運作。
+- 必須計算 `natr` 與 `std_20` 指標，否則 V33 無法運作。

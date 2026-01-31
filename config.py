@@ -30,9 +30,59 @@ class Config:
     # ==========================================
     MODEL_PATH = os.getenv('MODEL_PATH', 'ML_Data/pkl/stock_ai_model.pkl')
     
-    # V31 混合策略特徵 (使用比例特徵)
+    # 🔥 V33 Phase 2: 動態策略載入
+    # FEATURES, TARGET_RETURN, LOOK_AHEAD_DAYS 現在從 StrategyManager 動態取得
+    # 保留 V31 預設值以供向後兼容
     FEATURES = ['rsi', 'bias', 'macd_hist', 'kd_k', 'bb_width', 
                 'volume_ratio', 'foreign_ratio', 'trust_ratio']
+    
+    @classmethod
+    def get_active_features(cls):
+        """動態取得當前策略的特徵列表
+        
+        ⚠️ 使用 Lazy Loading 避免循環依賴
+        
+        Returns:
+            List[str]: 特徵名稱列表
+        """
+        try:
+            from tool.strategy_manager import get_active_strategy
+            strategy = get_active_strategy()
+            return strategy.features
+        except Exception as e:
+            # 回退到預設值
+            print(f"⚠️ 無法載入策略特徵，使用預設值: {e}")
+            return cls.FEATURES
+    
+    @classmethod
+    def get_target_return(cls):
+        """動態取得當前策略的目標報酬率
+        
+        Returns:
+            float: 目標報酬率
+        """
+        try:
+            from tool.strategy_manager import get_active_strategy
+            strategy = get_active_strategy()
+            return strategy.target_return
+        except Exception as e:
+            # 回退到預設值
+            return 0.08
+    
+    @classmethod
+    def get_look_ahead_days(cls):
+        """動態取得當前策略的預測天數
+        
+        Returns:
+            int: 預測天數
+        """
+        try:
+            from tool.strategy_manager import get_active_strategy
+            strategy = get_active_strategy()
+            return strategy.look_ahead_days
+        except Exception as e:
+            # 回退到預設值
+            return 7
     
     # ==========================================
     # 📊 交易參數

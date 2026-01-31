@@ -6,6 +6,7 @@ import random
 from datetime import datetime, timedelta, date
 from config import Config
 from tool.db_helper import get_db_engine
+from io import StringIO
 
 # ============================================
 # ⚙️ 設定區 (統一使用 Config)
@@ -246,6 +247,171 @@ def process_and_save(df, date_str, engine):
         except Exception as e:
             print(f"❌ 寫入失敗: {e}")
             return 0
+
+# ============================================
+# 🌐 營收爬蟲 (V4 Smart - 使用舊版網站)
+# ============================================
+
+def fetch_revenue_v4_smart(year, month, max_retries=3):
+    """
+    從 mopsov.twse.com.tw (舊版網站) 抓取月營收資料並計算 YoY
+    
+    Args:
+        year: 西元年
+        month: 月份
+        max_retries: 最大重試次數
+    
+    Returns:
+        DataFrame with columns: ['stock_id', 'revenue', 'revenue_yoy']
+        若失敗則回傳 None
+    """
+    print(f"  🔹 正在抓取 {year}年{month}月 營收資料...", end="")
+    
+    roc_year = year - 1911
+    session = requests.Session()
+    
+    # 強化的 Headers (模擬真實瀏覽器)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Referer': 'https://mopsov.twse.com.tw/',
+    }
+    session.headers.update(headers)
+    
+    for attempt in range(max_retries):
+        try:
+            # 隨機延遲
+            if attempt > 0:
+                time.sleep(random.uniform(2, 4))
+            
+            # 嘗試多種可能的 URL 格式
+            urls = [
+                f'https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{roc_year}_{month}_0.html',
+                f'https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{roc_year}_{month:02d}_0.html',
+            ]
+            
+            for url in urls:
+                try:
+                    resp = session.get(url, timeout=15)
+                    
+                    # 嘗試多種編碼
+                    for encoding in ['big5', 'cp950', 'utf-8']:
+                        try:
+                            resp.encoding = encoding
+                            html = resp.text
+                            
+                            # 檢查是否有表格資料
+                            if resp.status_code == 200 and '<table' in html and '公司代號' in html:
+                                # 解析表格
+                                dfs = pd.read_html(StringIO(html))
+                                
+                                for df in dfs:
+                                    # 處理多層欄位
+                                    if isinstance(df.columns, pd.MultiIndex):
+                                        df.columns = df.columns.get_level_values(-1)
+                                    
+                                    # 清理欄位名稱
+                                    df.columns = [str(c).strip() for c in df.columns]
+                                    col_str = ' '.join(df.columns)
+                                    
+                                    # 確認是營收表格
+                                    if '公司代號' in col_str or '公司 代號' in col_str:
+                                        # 尋找關鍵欄位
+                                        code_col = next((c for c in df.columns if '代號' in c), None)
+                                        revenue_col = next((c for c in df.columns if '當月營收' in c or '營業收入' in c), None)
+                                        yoy_col = next((c for c in df.columns if '去年同月增減' in c or '增減(%)' in c), None)
+                                        
+                                        if code_col and revenue_col:
+                                            # 建立結果 DataFrame
+                                            result = pd.DataFrame()
+                                            result['stock_id'] = df[code_col].astype(str).str.strip()
+                                            result['revenue'] = df[revenue_col].apply(clean_number)
+                                            
+                                            # 處理 YoY (若存在)
+                                            if yoy_col:
+                                                result['revenue_yoy'] = df[yoy_col].apply(clean_number)
+                                            else:
+                                                result['revenue_yoy'] = 0.0
+                                            
+                                            # 過濾有效資料
+                                            result = result[result['stock_id'].str.match(r'^\d{4}$', na=False)]
+                                            result = result[result['revenue'] > 0]
+                                            
+                                            if len(result) > 0:
+                                                print(f" ✅ ({len(result)}筆)")
+                                                return result
+                        except:
+                            continue
+                except:
+                    continue
+            
+            if attempt < max_retries - 1:
+                print(f" (重試{attempt+1})", end="")
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f" (錯誤，重試)", end="")
+            else:
+                print(f" ❌ 營收抓取失敗: {e}")
+    
+    print(" (無資料)")
+    return None
+
+
+def update_revenue_data(engine, year, month):
+    """
+    更新指定月份的營收資料到資料庫
+    
+    Args:
+        engine: 資料庫引擎
+        year: 西元年
+        month: 月份
+    
+    Returns:
+        成功更新的筆數
+    """
+    revenue_df = fetch_revenue_v4_smart(year, month)
+    
+    if revenue_df is None or revenue_df.empty:
+        return 0
+    
+    # 準備更新 SQL
+    update_count = 0
+    try:
+        with engine.connect() as conn:
+            for _, row in revenue_df.iterrows():
+                stock_id = row['stock_id']
+                revenue_yoy = row['revenue_yoy']
+                
+                # 找出該月份的所有交易日
+                year_month_str = f"{year}-{month:02d}"
+                
+                # 更新該股票該月份的所有記錄
+                sql = text("""
+                    UPDATE daily_market_data 
+                    SET revenue_yoy = :yoy 
+                    WHERE stock_id = :stock_id 
+                    AND strftime('%Y-%m', trade_date) = :year_month
+                """)
+                
+                result = conn.execute(sql, {
+                    'yoy': revenue_yoy,
+                    'stock_id': stock_id,
+                    'year_month': year_month_str
+                })
+                update_count += result.rowcount
+            
+            conn.commit()
+        
+        print(f"💾 營收資料已更新 {update_count} 筆記錄")
+        return update_count
+    
+    except Exception as e:
+        print(f"❌ 營收更新失敗: {e}")
+        return 0
 
 # ============================================
 # 🚀 主程式

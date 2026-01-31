@@ -45,6 +45,8 @@ from tool.strategy import (
 )
 # 引入資料庫輔助模組
 from tool.db_helper import get_setting, update_setting, validate_setting, get_stock_data
+# 引入策略工廠
+from tool.strategy_manager import StrategyManager
 
 app = Flask(__name__)
 
@@ -63,6 +65,11 @@ try:
     print("[OK] 模型載入成功")
 except Exception as e:
     print(f"[WARNING] 模型載入失敗: {e}")
+
+# 初始化策略管理器
+print("[AI] 正在初始化策略管理器...")
+strategy_manager = StrategyManager()
+print(f"[OK] 當前策略: {strategy_manager.get_active_strategy_name()}")
 
 
 # ============================================
@@ -246,7 +253,38 @@ def index():
 @app.route("/dashboard")
 def dashboard():
     """V32 Dashboard 主頁面"""
-    return render_template('dashboard.html')
+    # 傳遞策略資訊給前端
+    current_strategy = strategy_manager.get_active_strategy_name()
+    strategy_options = strategy_manager.list_strategies()
+    
+    return render_template('dashboard.html', 
+                         current_strategy=current_strategy,
+                         strategy_options=strategy_options)
+
+
+@app.route('/update_strategy', methods=['POST'])
+def update_strategy():
+    """切換策略"""
+    from flask import flash, redirect, url_for
+    
+    try:
+        new_strategy = request.form.get('strategy')
+        if not new_strategy:
+            flash('請選擇策略', 'error')
+            return redirect(url_for('dashboard'))
+        
+        # 切換策略
+        strategy_manager.set_active_strategy(new_strategy)
+        strategy_obj = strategy_manager.get_active_strategy()
+        
+        flash(f'✅ 已切換至 {strategy_obj.display_name}', 'success')
+        print(f"[Strategy] 切換至: {new_strategy}")
+        
+    except Exception as e:
+        flash(f'❌ 切換失敗: {str(e)}', 'error')
+        print(f"[ERROR] 策略切換失敗: {e}")
+    
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/favicon.ico')

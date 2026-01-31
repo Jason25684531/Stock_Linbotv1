@@ -15,14 +15,28 @@
 - 整合市場情緒分析（Circuit Breaker 熔斷機制）
 - 情緒分數低於門檻時自動暫停交易
 
-🔄 V33 Refactor (2026-01-22):
-- 移除重複函數，使用 calc_indicators 共用模組
+🔄 V33 Phase 2 Refactor (2026-01-31):
+- 引入策略工廠模式（Strategy Factory Pattern）
+- get_v30_candidates 現在使用 StrategyManager 動態取得策略
+- 保持向後兼容性
 """
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
 import joblib
 import os
 from config import Config
+
+# ============================================
+# 🏭 V33 Phase 2: 策略工廠（Lazy Loading）
+# ============================================
+def _get_strategy():
+    """動態取得當前策略（避免循環依賴）"""
+    try:
+        from tool.strategy_manager import get_active_strategy
+        return get_active_strategy()
+    except Exception as e:
+        print(f"⚠️ 無法載入策略管理器: {e}")
+        return None
 
 # ============================================
 # 💾 快取變數 (Module-level cache)
@@ -280,12 +294,11 @@ def get_v30_params_from_db() -> Dict[str, Any]:
 
 def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     """
-    V30 策略候選股票篩選器（嚴格版）
+    V30/V31 策略候選股票篩選器
     
-    🆕 V31 Optimization: 加入市場趨勢過濾器
-    🆕 V33 Phase 2: 強制 MA60 趨勢濾網，降低 MDD
+    🔥 V33 Phase 2 Refactor: 使用策略工廠動態取得篩選邏輯
     
-    篩選條件：
+    篩選條件由當前啟用的策略決定，預設為 V31:
     1. 市場趨勢檢查（熊市不選股）
     2. 均線排列：收盤價 > MA20 > MA60
     3. 🔥 強制趨勢濾網：收盤價 > MA60（降低 MDD）
@@ -296,21 +309,38 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
         df: DataFrame，必須包含 close_price, ma20, ma60, volume, rsi
         
     Returns:
-        DataFrame: 符合 V30 條件的股票清單
+        DataFrame: 符合條件的股票清單
     """
     if df.empty:
         return pd.DataFrame()
     
+    # 🔥 V33 Phase 2: 使用策略工廠
+    strategy = _get_strategy()
+    
+    if strategy is not None:
+        # 使用策略物件的 filter_candidates 方法
+        try:
+            candidates = strategy.filter_candidates(df)
+            return candidates
+        except Exception as e:
+            print(f"⚠️ 策略篩選執行失敗: {e}")
+            # 繼續使用下方的回退邏輯
+    
     # ============================================
-    # 🔥 V33 Phase 2: 市場熔斷機制（Circuit Breaker）
+    # 回退邏輯（向後兼容）
     # ============================================
+    print(f"⚠️ 使用回退篩選邏輯（V31 硬編碼）")
+    
+    # 取得日期
     date_str = df['trade_date'].max()
     if hasattr(date_str, 'strftime'):
         date_str = date_str.strftime('%Y-%m-%d')
     else:
         date_str = str(date_str)
     
-    # 🔥 嚴格市場濾網：只在大盤多頭時選股
+    # ============================================
+    # 🔥 V33 Phase 2: 市場熔斷機制（Circuit Breaker）
+    # ============================================
     if Config.USE_MARKET_FILTER:
         market_trend = check_market_trend(date_str)
         

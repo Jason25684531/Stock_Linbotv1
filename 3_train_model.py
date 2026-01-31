@@ -10,18 +10,30 @@ from tool.news_agent import NewsSentimentAgent
 from tool.db_helper import get_db_engine
 
 # ============================================
-# ⚙️ V31 混合策略版 - 設定區（統一使用 Config）
+# ⚙️ V33 Phase 2: 動態策略參數
 # ============================================
 
-# V31: 預測參數（配合獲利目標 10-20%）
-LOOK_AHEAD_DAYS = 7      # 看未來 7 天（配合 10 天持有期）
-TARGET_RETURN = 0.08     # 目標漲幅 8%（中間值，提高精準度）
+# 🔥 從 StrategyManager 動態取得當前策略參數
+try:
+    from tool.strategy_manager import get_active_strategy
+    _strategy = get_active_strategy()
+    LOOK_AHEAD_DAYS = _strategy.look_ahead_days
+    TARGET_RETURN = _strategy.target_return
+    FEATURES = _strategy.features + ['sentiment_score']  # 加入情緒分數
+    
+    print(f"✅ 使用策略: {_strategy.display_name}")
+    print(f"   預測天數: {LOOK_AHEAD_DAYS} 天")
+    print(f"   目標報酬: {TARGET_RETURN*100:.1f}%")
+    print(f"   特徵數量: {len(FEATURES)} 個")
+except Exception as e:
+    # 回退到預設值（V31）
+    print(f"⚠️ 無法載入策略設定，使用 V31 預設值: {e}")
+    LOOK_AHEAD_DAYS = 7
+    TARGET_RETURN = 0.08
+    FEATURES = Config.FEATURES + ['sentiment_score']
 
 # 時間序列拆分參數
 TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
-
-# V33 Phase 2+: 擴展特徵清單（加入情緒分數）
-FEATURES = Config.FEATURES + ['sentiment_score']
 
 
 def calculate_ratio_features(df):

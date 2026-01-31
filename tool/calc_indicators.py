@@ -116,6 +116,46 @@ def calculate_atr(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
     return atr
 
 
+def calculate_natr(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
+    """
+    計算 NATR (Normalized ATR) - 標準化真實波幅
+    
+    🆕 V33 Phase 1: NATR = (ATR / Close) * 100
+    用於 V33 Low Volatility 策略的波動度篩選
+    
+    Args:
+        df: 需包含 'high_price', 'low_price', 'close_price' 欄位
+        period: 計算週期 (預設從 Config 讀取)
+    
+    Returns:
+        NATR 百分比序列 (通常 0~10%)
+    """
+    atr = calculate_atr(df, period)
+    close = df['close_price']
+    
+    # NATR = (ATR / Close) * 100
+    natr = (atr / close) * 100
+    
+    # 避免極端值
+    return natr.fillna(0).clip(0, 50)
+
+
+def calculate_std_20(series: pd.Series) -> pd.Series:
+    """
+    計算 20 日標準差 (Standard Deviation)
+    
+    🆕 V33 Phase 1: 用於低波動策略
+    衡量價格波動的離散程度
+    
+    Args:
+        series: 收盤價序列
+    
+    Returns:
+        20 日標準差序列
+    """
+    return series.rolling(window=20, min_periods=10).std().fillna(0)
+
+
 def calculate_kd(df: pd.DataFrame, period: Optional[int] = None) -> pd.Series:
     """
     計算 KD 指標的 K 值 (Stochastic Oscillator)
@@ -272,6 +312,8 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['kd_k'] = calculate_kd(df)
     df['bb_width'] = calculate_bb_width(df['close_price'])
     df['atr'] = calculate_atr(df)  # 🆕 V33 Phase 1+: ATR 動態停損
+    df['natr'] = calculate_natr(df)  # 🆕 V33 Phase 1: 標準化波動度
+    df['std_20'] = calculate_std_20(df['close_price'])  # 🆕 V33 Phase 1: 20日標準差
     
     return df
 
@@ -282,7 +324,7 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def fix_database_indicators():
     """計算全市場技術指標並寫回資料庫"""
-    print("🚑 [AI工程] 正在計算全套技術指標 (MA, RSI, MACD, KD, BB)...")
+    print("🚑 [AI工程] 正在計算全套技術指標 (MA, RSI, MACD, KD, BB, NATR, STD_20)...")
     engine = create_engine(DB_URL)
     
     try:
@@ -321,13 +363,21 @@ def fix_database_indicators():
     
     # RSI (使用共用模組)
     df['rsi'] = df.groupby('stock_id')['close_price'].transform(calculate_rsi)
+    
+    # 🆕 V33 Phase 1: NATR 與 STD_20
+    print("📊 計算 V33 新指標 (NATR, STD_20)...")
+    df['natr'] = df.groupby('stock_id').apply(
+        lambda x: calculate_natr(x), include_groups=False
+    ).reset_index(level=0, drop=True)
+    
+    df['std_20'] = df.groupby('stock_id')['close_price'].transform(calculate_std_20)
 
     df = df.fillna(0)
     
     # 3. 存回資料庫
     print("💾 正在升級資料庫 (寫入新特徵)...")
     df.to_sql('daily_market_data', engine, if_exists='replace', index=False, chunksize=5000)
-    print("✅ 資料庫升級完成！現在裡面有 MACD 和 KD 了。")
+    print("✅ 資料庫升級完成！現在包含 MACD, KD, NATR, STD_20。")
 
 if __name__ == "__main__":
     fix_database_indicators()
