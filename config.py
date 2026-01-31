@@ -158,17 +158,12 @@ class Config:
     SENTIMENT_MOCK_MODE = True          # 開發階段使用模擬數據（避免依賴外部 API）
     
     # ==========================================
-    # �🔑 API Keys (優先環境變數)
+    # 🔑 API Keys (從環境變數讀取 - 無預設值)
     # ==========================================
-    LINE_CHANNEL_ACCESS_TOKEN = os.getenv(
-        'LINE_TOKEN',
-        'KBl386t0eh2puuuZsgcrGVU2OHJ/Rbyw/h7hEnb6XcWMDGdzUTVEWooMZjoBQtoyqCOIMnd3KHVeA1HAJ1FPJGU2MfDfakPiVZKwvowT6tT4/ZrnqGe+cC61QqZd5S+upAlpMxpftxi6tubsvFYMZwdB04t89/1O/w1cDnyilFU='
-    )
-    LINE_CHANNEL_SECRET = os.getenv(
-        'LINE_SECRET',
-        'd5357cddabb11529890938731af41f95'
-    )
-    GEMINI_API_KEY = os.getenv(
-        'GEMINI_KEY',
-        'AIzaSyBg-8fEJcjc6LoTVEJQjvrtvGKziKvfgZQ'
-    )
+    LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_TOKEN', '')
+    LINE_CHANNEL_SECRET = os.getenv('LINE_SECRET', '')
+    GEMINI_API_KEY = os.getenv('GEMINI_KEY', '')
+    
+    # 🔐 Web Dashboard 驗證 (Phase 1 Security)
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
+    FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')

@@ -16,8 +16,13 @@ from tool.db_helper import get_db_engine, get_market_trend, get_stock_data
 from tool.strategy_manager import StrategyManager
 
 # ==========================================
-# 🔧 設定區 (統一使用 db_helper)
+# 策略顯示名稱對照表
 # ==========================================
+STRATEGY_DISPLAY_NAMES = {
+    'v31_hybrid': '🔹 均衡型 (V31)',
+    'v33_low_vol': '🛡️ 穩健型 (V33)',
+    'v34_turbo': '🚀 飆股型 (V34)',
+}
 
 
 def get_market_status(engine, date_str):
@@ -46,61 +51,19 @@ def get_market_status(engine, date_str):
     else:
         return "🟡 空頭 (觀望)", bias
 
-def get_v30_picks(date_str):
-    """
-    V30 策略選股（40% 報酬實績）
-    
-    🔄 V33 Refactor: 使用 get_stock_data() 共用函數
-    """
-    # 1. 使用共用函數抓取資料
-    df, _ = get_stock_data(date_str=date_str)
-    
-    if df.empty: 
-        return []
-
-    # 2. 過濾價格區間
-    df = df[(df['close_price'] > 10) & (df['close_price'] < 500)]
-    
-    if df.empty:
-        return []
-
-    # 3. 使用 V30 統一篩選函數
-    candidates = get_v30_candidates(df)
-    
-    if candidates.empty:
-        return []
-    
-    # 4. 依外資買超或成交量排序，取前 5 名
-    if 'foreign_buy' in candidates.columns:
-        top_picks = candidates.sort_values('foreign_buy', ascending=False).head(5)
-    else:
-        top_picks = candidates.sort_values('volume', ascending=False).head(5)
-    
-    # 5. 產生結果
-    results = []
-    for _, row in top_picks.iterrows():
-        v30_result = calculate_v30_signal(row)
-        results.append({
-            'id': row['stock_id'],
-            'price': row['close_price'],
-            'rsi': row.get('rsi', 0),
-            'stop_loss': v30_result['stop_loss'],
-            'take_profit': v30_result['take_profit'],
-            'foreign': int(row.get('foreign_buy', 0) / 1000)  # 轉張
-        })
-    
-    return results
-
 
 def main():
-    print("🚀 V33 Line 推播啟動 (Strategy Factory)...")
+    print("🚀 V33 Line 推播啟動 (Multi-Strategy Support)...")
     line_bot_api = LineBotApi(Config.LINE_CHANNEL_ACCESS_TOKEN)
     engine = get_db_engine()
     
     # 1. 初始化策略管理器
     manager = StrategyManager()
-    strategy = manager.get_active_strategy()
-    print(f"📊 當前策略: {strategy.display_name}")
+    strategies = manager.get_active_strategies()
+    strategy_names = manager.get_active_strategy_names()
+    
+    print(f"📊 啟用策略數量: {len(strategies)}")
+    print(f"📋 策略列表: {', '.join(strategy_names)}")
     
     # 2. 取得最新日期
     with engine.connect() as conn:
@@ -116,72 +79,59 @@ def main():
     # 3. 判斷市場狀態
     status, bias = get_market_status(engine, date_str)
     
-    # 4. 從資料庫讀取今日推薦
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT stock_id, close_price, ai_score, rsi, volume
-            FROM daily_recommendations
-            WHERE trade_date = :date AND strategy = :strategy
-            ORDER BY ai_score DESC
-            LIMIT 5
-        """), {"date": date_str, "strategy": strategy.name})
-        picks = result.fetchall()
-    
-    # 5. 組合訊息
+    # 4. 組合訊息標頭
     msg = f"📅 【StockAI 日報】 {date_str}\n"
     msg += f"--------------------------\n"
-    msg += f"🛡️ 當前策略: {strategy.display_name}\n"
     msg += f"🚦 市場狀態: {status}\n"
     msg += f"📊 大盤乖離: {bias:.2f}%\n"
     msg += f"--------------------------\n"
     
-    if picks:
-        msg += f"🚀 {strategy.display_name}推薦:\n"
-        for p in picks:
-            stock_id, price, ai_score, rsi, volume = p
-            msg += f"🎫 {stock_id} (${price:.2f})\n"
-            
-            # 動態顯示指標
-            if strategy.name == 'v33_low_vol':
-                # V33 顯示 NATR
-                df_stock = pd.read_sql(
-                    f"SELECT natr FROM daily_market_data WHERE stock_id='{stock_id}' AND trade_date='{date_str}'",
-                    engine
-                )
-                if not df_stock.empty:
-                    natr = df_stock.iloc[0]['natr']
-                    msg += f"   🌊 NATR: {natr:.2f}%"
-            elif strategy.name == 'v34_turbo':
-                # V34 顯示營收年增
-                df_stock = pd.read_sql(
-                    f"SELECT revenue_yoy FROM daily_market_data WHERE stock_id='{stock_id}' AND trade_date='{date_str}'",
-                    engine
-                )
-                if not df_stock.empty:
-                    rev_yoy = df_stock.iloc[0]['revenue_yoy']
-                    msg += f"   💰 營收年增: {rev_yoy:.1f}%"
-            else:
-                # V31 顯示 RSI
-                if rsi:
-                    msg += f"   📈 RSI: {rsi:.1f}"
-            
-            # AI分數
-            if ai_score:
-                msg += f" | 🤖 AI: {ai_score:.1%}\n"
-            else:
-                msg += "\n"
-        
-        msg += f"--------------------------\n"
-        msg += f"🎯 目標報酬: {strategy.target_return}%\n"
-        msg += f"⏰ 持有期限: {strategy.look_ahead_days}天\n"
-        msg += "💡 嚴格執行停損停利"
-    else:
-        msg += f"🐢 今日無符合{strategy.name}條件標的\n"
-        msg += "☕ 建議空手觀望"
-
-    print(msg)
+    # 5. 遍歷所有策略，撈取推薦結果
+    has_picks = False
     
-    # 6. 發送廣播
+    for strategy in strategies:
+        strategy_label = STRATEGY_DISPLAY_NAMES.get(strategy.name, strategy.display_name)
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT stock_id, close_price, ai_score, rsi, volume
+                FROM daily_recommendations
+                WHERE trade_date = :date AND strategy = :strategy
+                ORDER BY ai_score DESC
+                LIMIT 5
+            """), {"date": date_str, "strategy": strategy.name})
+            picks = result.fetchall()
+        
+        if picks:
+            has_picks = True
+            msg += f"\n== {strategy_label} ==\n"
+            
+            for p in picks:
+                stock_id, price, ai_score, rsi, volume = p
+                msg += f"🎫 {stock_id} (${price:.2f})"
+                
+                # AI分數
+                if ai_score:
+                    msg += f" | 🤖 {ai_score:.0%}"
+                msg += "\n"
+            
+            msg += f"🎯 目標: {strategy.target_return}% / ⏰ {strategy.look_ahead_days}天\n"
+    
+    # 6. 無推薦時的訊息
+    if not has_picks:
+        msg += f"\n🐢 今日無符合條件標的\n"
+        msg += "☕ 建議空手觀望"
+    else:
+        msg += f"\n--------------------------\n"
+        msg += "💡 嚴格執行停損停利"
+
+    print("\n" + "="*40)
+    print("📨 推播訊息預覽:")
+    print("="*40)
+    print(msg)
+    print("="*40)
+    
+    # 7. 發送廣播
     try:
         line_bot_api.broadcast(TextSendMessage(text=msg))
         print("✅ Line 推播已發送！")

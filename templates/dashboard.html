@@ -22,27 +22,42 @@
                         <span class="text-2xl mr-2">🎯</span>
                         策略指揮中心 Strategy Control
                     </h2>
-                    <p class="text-sm text-gray-400 mt-1">切換交易策略以適應不同市場環境</p>
+                    <p class="text-sm text-gray-400 mt-1">可同時選擇多個策略，分散風險</p>
                 </div>
             </div>
             
-            <form method="POST" action="/update_strategy" class="flex items-end gap-4">
-                <div class="flex-1">
-                    <label class="block text-sm font-medium text-gray-400 mb-2">當前策略</label>
-                    <select name="strategy" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <form method="POST" action="/update_strategy" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-3">選擇啟用的策略 (可複選)</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {% for strategy in strategy_options %}
-                        <option value="{{ strategy }}" {% if strategy == current_strategy %}selected{% endif %}>
-                            {% if strategy == 'v31_hybrid' %}V31 混合策略 (均衡型)
-                            {% elif strategy == 'v33_low_vol' %}V33 低波動策略 (穩健型)
-                            {% elif strategy == 'v34_turbo' %}V34 雙渦輪策略 (進攻型)
-                            {% else %}{{ strategy }}{% endif %}
-                        </option>
+                        <label class="flex items-center p-4 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors {% if strategy in active_strategies %}border-blue-500 bg-blue-900/20{% endif %}">
+                            <input type="checkbox" name="strategies" value="{{ strategy }}" 
+                                   class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                                   {% if strategy in active_strategies %}checked{% endif %}>
+                            <div class="ml-3">
+                                <div class="text-white font-medium">
+                                    {% if strategy == 'v31_hybrid' %}V31 混合策略
+                                    {% elif strategy == 'v33_low_vol' %}V33 低波動
+                                    {% elif strategy == 'v34_turbo' %}V34 雙渦輪
+                                    {% else %}{{ strategy }}{% endif %}
+                                </div>
+                                <div class="text-xs text-gray-400">
+                                    {% if strategy == 'v31_hybrid' %}均衡型 - 技術+AI
+                                    {% elif strategy == 'v33_low_vol' %}穩健型 - 低波動
+                                    {% elif strategy == 'v34_turbo' %}進攻型 - 高動能
+                                    {% else %}自訂策略{% endif %}
+                                </div>
+                            </div>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                 </div>
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
-                    🔄 切換策略
-                </button>
+                <div class="flex justify-end">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
+                        ✅ 儲存策略設定
+                    </button>
+                </div>
             </form>
             
             {% with messages = get_flashed_messages(with_categories=true) %}

@@ -21,7 +21,8 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 import joblib
 import os
-from flask import Flask, request, abort, render_template, jsonify
+from flask import Flask, request, abort, render_template, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
 # Line Bot SDK v3 (2024更新)
 from linebot.v3 import WebhookHandler
@@ -49,6 +50,43 @@ from tool.db_helper import get_setting, update_setting, validate_setting, get_st
 from tool.strategy_manager import StrategyManager
 
 app = Flask(__name__)
+app.secret_key = Config.FLASK_SECRET_KEY
+
+# ==========================================
+# 🔐 Flask-Login 設定 (Phase 1 Security)
+# ==========================================
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = '請先登入以存取此頁面'
+login_manager.login_message_category = 'error'
+
+
+class User(UserMixin):
+    """簡易使用者類別 (基於環境變數驗證)
+    
+    只有一個管理員帳號，密碼從環境變數讀取
+    """
+    def __init__(self, user_id):
+        self.id = user_id
+    
+    @staticmethod
+    def validate_password(password):
+        """驗證密碼是否正確"""
+        return password == Config.ADMIN_PASSWORD
+    
+    @staticmethod
+    def get(user_id):
+        """取得使用者物件"""
+        if user_id == 'admin':
+            return User('admin')
+        return None
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Flask-Login 回呼：載入使用者"""
+    return User.get(user_id)
 
 # Line Bot SDK v3 設定
 configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
@@ -241,44 +279,91 @@ def get_settings_info():
 # ============================================
 
 # ==========================================
+# 🔐 登入/登出路由 (Phase 1 Security)
+# ==========================================
+
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    """登入頁面"""
+    # 如果已登入，重定向到 Dashboard
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        
+        if User.validate_password(password):
+            user = User('admin')
+            login_user(user)
+            flash('✅ 登入成功！', 'success')
+            
+            # 重定向到原本要訪問的頁面，或 Dashboard
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('dashboard'))
+        else:
+            flash('❌ 密碼錯誤，請重試', 'error')
+    
+    return render_template('login.html')
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    """登出"""
+    logout_user()
+    flash('👋 已登出', 'success')
+    return redirect(url_for('login'))
+
+
+# ==========================================
 # V32: Web Dashboard 路由
 # ==========================================
 
 @app.route("/")
+@login_required
 def index():
     """首頁重定向到 Dashboard"""
-    return render_template('dashboard.html')
+    return redirect(url_for('dashboard'))
 
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
     """V32 Dashboard 主頁面"""
     # 傳遞策略資訊給前端
-    current_strategy = strategy_manager.get_active_strategy_name()
+    active_strategies = strategy_manager.get_active_strategy_names()
     strategy_options = strategy_manager.list_strategies()
     
     return render_template('dashboard.html', 
-                         current_strategy=current_strategy,
-                         strategy_options=strategy_options)
+                         active_strategies=active_strategies,
+                         strategy_options=strategy_options,
+                         current_strategy=active_strategies[0] if active_strategies else 'v31_hybrid')
 
 
 @app.route('/update_strategy', methods=['POST'])
+@login_required
 def update_strategy():
-    """切換策略"""
-    from flask import flash, redirect, url_for
-    
+    """切換策略 (V2: 支援多策略)"""
     try:
-        new_strategy = request.form.get('strategy')
-        if not new_strategy:
-            flash('請選擇策略', 'error')
+        # 使用 getlist 取得多個 checkbox 的值
+        selected_strategies = request.form.getlist('strategies')
+        
+        if not selected_strategies:
+            flash('請至少選擇一個策略', 'error')
             return redirect(url_for('dashboard'))
         
-        # 切換策略
-        strategy_manager.set_active_strategy(new_strategy)
-        strategy_obj = strategy_manager.get_active_strategy()
+        # 設定多策略
+        success = strategy_manager.set_active_strategies(selected_strategies)
         
-        flash(f'✅ 已切換至 {strategy_obj.display_name}', 'success')
-        print(f"[Strategy] 切換至: {new_strategy}")
+        if success:
+            if len(selected_strategies) == 1:
+                strategy_obj = strategy_manager.get_active_strategy()
+                flash(f'✅ 已切換至 {strategy_obj.display_name}', 'success')
+            else:
+                flash(f'✅ 已啟用 {len(selected_strategies)} 個策略', 'success')
+            print(f"[Strategy] 切換至: {selected_strategies}")
+        else:
+            flash('❌ 策略切換失敗', 'error')
         
     except Exception as e:
         flash(f'❌ 切換失敗: {str(e)}', 'error')

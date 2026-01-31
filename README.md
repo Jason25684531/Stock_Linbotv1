@@ -1,9 +1,10 @@
-# Stock AI Line Bot V33
+# Stock AI Line Bot V33+
 
-> 🔥 **V33 Phase 2 Refactor** | 深度代碼清理 + 架構優化  
+> 🔥 **V33 Phase 2+ Multi-Strategy** | 多策略並行 + 安全強化  
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
+> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證  
 > 🛡️ **回測績效** | 總報酬率 27.4% | 勝率 46.3%  
-> 📅 **最後更新**: 2026-01-27
+> 📅 **最後更新**: 2026-01-31
 
 ---
 
@@ -13,30 +14,33 @@
 
 ### 🎯 核心功能
 
-| 功能 | 說明 | 命令 |
-|------|------|------|
+| 功能 | 說明 | 命令/路徑 |
+|------|------|---------|
+| 🎯 多策略並行 | 同時啟用多個策略 (V31/V33/V34)，分散風險 | Web Dashboard 核取方塊 |
+| 🔐 登入驗證 | Web Dashboard 需密碼登入 | `/login` |
 | 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 | 輸入「推薦」 |
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 大盤熔斷 | 輸入「V30」 |
 | 🎫 個股診斷 | 完整策略報告 + ATR 動態停損 | 輸入股票代號 |
-| 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:5000/dashboard` |
+| 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:5000` |
 
 ---
 
-## 🏗️ 系統架構 (V33 Phase 2 Refactor)
+## 🏗️ 系統架構 (V33 Phase 2+ Multi-Strategy)
 
-**設計原則**：DRY (Don't Repeat Yourself) + 單一職責 + 統一介面
+**設計原則**：DRY (Don't Repeat Yourself) + 單一職責 + 統一介面 + 安全優先
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   🌐 應用層 (Application)                │
-│   Line Bot (app.py) │ Web Dashboard │ 本地測試           │
+│                  🌐 應用層 (Application)                │
+│   🔐 Flask Login │ Line Bot │ Web Dashboard             │
 │   1-6_*.py (自動化腳本)                                   │
 └────────────┬────────────────────────────────────────────┘
              │ 統一使用共用函數，無重複代碼
 ┌────────────▼────────────────────────────────────────────┐
-│                   📊 策略層 (Strategy)                   │
-│   tool/strategy.py (V30/V31 選股邏輯)                    │
-│   tool/news_agent.py (情緒分析與熔斷機制)                │
+│                 📊 策略層 (Multi-Strategy)              │
+│   tool/strategy_manager.py (策略工廠，支援多策略並行)     │
+│   tool/strategies/ (V31, V33, V34)                      │
+│   tool/strategy.py (V30/V31 共用邏輯)                    │
 └────────────┬────────────────────────────────────────────┘
              │ 策略依賴技術指標與資料查詢
 ┌────────────▼────────────────────────────────────────────┐
@@ -56,18 +60,20 @@
              │
 ┌────────────▼────────────────────────────────────────────┐
 │                   ⚙️ 配置層 (Config)                     │
-│   config.py (唯一設定來源)                                │
+│   config.py + .env (環境變數隔離)                         │
 │   MySQL (Docker) + XGBoost Model (.pkl)                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 🔑 關鍵設計決策 (V33 Phase 2)
+### 🔑 關鍵設計決策 (V33 Phase 2+)
 
 | 原則 | 實施方式 | 效益 |
 |------|---------|------|
+| **多策略並行** | `StrategyManager` 支援列表形式 | 同時運行 V33+V34，分散風險 |
+| **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入 | 防止資料外洩 |
 | **統一入口** | 所有 DB 操作經 `tool.db_helper` | 防 SQL Injection、易測試 |
 | **無重複代碼** | 共用函數取代本地實作 | 減少 150+ 行代碼 |
-| **參數集中** | 所有設定來自 `config.py` | 無散彈式修改 |
+| **參數集中** | 所有設定來自 `config.py` + `.env` | 無散彈式修改 |
 | **職責分離** | 每層只做一件事 | 可讀性、可擴展性 |
 
 ---
@@ -113,8 +119,15 @@ python -m venv myenv
 # 3. 安裝套件
 pip install -r requirements.txt
 
-# 4. 設定環境變數 (複製 .env.example 為 .env)
-# 必要設定：DB_URL, LINE_TOKEN, LINE_SECRET
+# 4. 設定環境變數 (Phase 1: Security Hardening)
+# 複製 .env.example 為 .env，填入實際值
+copy .env.example .env
+
+# 必要設定：
+# - DB_URL=mysql+pymysql://user:password@localhost:3306/stock_ai_db
+# - LINE_TOKEN=你的_Line_Channel_Access_Token
+# - LINE_SECRET=你的_Line_Channel_Secret
+# - ADMIN_PASSWORD=Web_Dashboard_密碼
 
 # 5. 初始化資料庫
 python init_settings.py
@@ -238,5 +251,8 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V33 Phase 1+ Refactor (2026-01-22)  
-**授權**: MIT License
+**版本**: V33 Phase 2+ Multi-Strategy (2026-01-31)  
+**授權**: MIT License  
+**新增功能**:
+- ✅ Phase 1: 環境變數隔離 + Web 登入驗證
+- ✅ Phase 2: 多策略並行架構 (同時運行多個策略)

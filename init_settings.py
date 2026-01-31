@@ -139,7 +139,7 @@ def verify_settings():
     """驗證設定表是否正常"""
     print("\n🔍 驗證設定表...")
     try:
-        engine = create_engine(DB_URL)
+        engine = get_db_engine()
         with engine.connect() as conn:
             result = conn.execute(text("SELECT COUNT(*) FROM user_settings")).scalar()
             print(f"✅ 設定表驗證成功！共 {result} 筆參數")

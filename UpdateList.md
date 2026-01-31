@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-01-27  
-> **當前版本**: V33 Phase 2 Refactor (深度代碼清理)  
+> **最後更新**: 2026-01-31  
+> **當前版本**: V33 Phase 2+ Multi-Strategy (多策略並行 + 安全強化)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,11 +10,239 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V33 Phase 2+ Multi-Strategy](#v33-phase-2-multi-strategy-多策略並行--安全強化-2026-01-31) | 2026-01-31 | 多策略並行 + 環境變數隔離 + Web 登入 | ✅ 完成 |
 | [V33 Phase 2 Refactor](#v33-phase-2-refactor-深度代碼清理-2026-01-27) | 2026-01-27 | 全面清理重複代碼 + 架構優化 | ✅ 完成 |
 | [V33 Phase 1+ Refactor](#v33-phase-1-refactor-代碼清理與合併-2026-01-22) | 2026-01-22 | 重複代碼清理 + 架構優化 | ✅ 完成 |
 | [V33 Phase 1+](#v33-phase-1-atr-動態停損-2026-01-22) | 2026-01-22 | ATR 動態停損 + README 重寫 | ✅ 完成 |
 | [README.md 清理](#readmemd-清理-2026-01-21) | 2026-01-21 | 移除重複/過時內容，更新版本資訊 | ✅ 完成 |
-| [V33 Phase 3+ Deep Refactor](#v33-phase-3-deep-refactor-2026-01-21) | 2026-01-21 | 深度重構 + 修復重複代碼與語法錯誤 | ✅ 完成 |
+
+---
+
+## 🚀 V33 Phase 2+ Multi-Strategy - 多策略並行 + 安全強化 (2026-01-31)
+
+### 🎯 目標
+
+基於 OpenSpec 規範，完成兩大關鍵升級：
+1. **Phase 1: Security Hardening (資安強化)** - 敏感資訊隔離 + Web 登入驗證
+2. **Phase 2: Multi-Strategy Parallelism (多策略並行)** - 打破單策略限制，支援同時運行多個策略
+
+### ✅ Phase 1: Security Hardening (資安強化)
+
+#### **1. 環境變數遷移 (Environment Variables Migration)**
+
+**問題**：所有敏感資訊（LINE Token、密碼）直接寫在 `config.py` 中，存在安全風險。
+
+**解決方案**：
+- ✅ 建立 `.env` 檔案存放敏感資訊
+- ✅ 更新 `.env.example` 提供範本
+- ✅ 重構 `config.py`，移除所有硬編碼 Token
+- ✅ 更新 `.gitignore` 確保 `.env` 不被上傳
+
+**修改檔案**：
+- `.env` - 新增，包含所有敏感資訊
+- `.env.example` - 新增 `ADMIN_PASSWORD` 和 `FLASK_SECRET_KEY`
+- `config.py` - 移除硬編碼，改用 `os.getenv()`
+- `.gitignore` - 確保 `.env` 被忽略
+
+**Before**:
+```python
+# ❌ 硬編碼在 config.py 中
+LINE_CHANNEL_ACCESS_TOKEN = 'KBl386t0eh2puuuZsgcrGVU...'
+```
+
+**After**:
+```python
+# ✅ 從環境變數讀取
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_TOKEN', '')
+```
+
+#### **2. Web Dashboard 登入驗證 (Web Authentication)**
+
+**問題**：Web Dashboard 無任何保護，任何人都能存取。
+
+**解決方案**：
+- ✅ 安裝 `Flask-Login` 套件
+- ✅ 實作簡易 `User` 類別（基於 `ADMIN_PASSWORD` 驗證）
+- ✅ 建立 `templates/login.html` 登入頁面
+- ✅ 為 `/`, `/dashboard`, `/update_strategy` 加上 `@login_required`
+- ✅ 實作 `/login` 和 `/logout` 路由
+
+**修改檔案**：
+- `app.py` - 加入 Flask-Login 初始化、User 類別、登入路由
+- `templates/login.html` - 新增登入頁面
+- `requirements.txt` - 加入 `Flask-Login==0.6.3`
+
+**Before**:
+```python
+@app.route("/dashboard")
+def dashboard():
+    # ❌ 無任何保護
+    return render_template('dashboard.html')
+```
+
+**After**:
+```python
+@app.route("/dashboard")
+@login_required  # ✅ 需要登入
+def dashboard():
+    return render_template('dashboard.html')
+```
+
+### ✅ Phase 2: Multi-Strategy Parallelism (多策略並行)
+
+#### **1. 升級策略管理器 (Strategy Manager Upgrade)**
+
+**問題**：`StrategyManager` 只支援單一策略（`active_strategy: str`），無法同時運行多個策略。
+
+**解決方案**：
+- ✅ 將 `active_strategy` (字串) 改為 `active_strategies` (列表)
+- ✅ 新增 `get_active_strategies()` 回傳策略列表
+- ✅ 新增 `set_active_strategies()` 設定多策略
+- ✅ 向後相容：自動將舊格式 JSON 轉換為列表
+
+**修改檔案**：
+- `tool/strategy_manager.py` - 核心升級，支援多策略
+
+**Before**:
+```python
+# ❌ 單一策略
+DEFAULT_SETTINGS = {
+    'active_strategy': 'v31_hybrid',
+    'version': '1.0',
+}
+
+def get_active_strategy_name(self) -> str:
+    return settings.get('active_strategy', 'v31_hybrid')
+```
+
+**After**:
+```python
+# ✅ 多策略列表
+DEFAULT_SETTINGS = {
+    'active_strategies': ['v31_hybrid'],  # 列表形式
+    'version': '2.0',
+}
+
+def get_active_strategy_names(self) -> List[str]:
+    return settings.get('active_strategies', ['v31_hybrid'])
+
+def get_active_strategies(self) -> List[BaseStrategy]:
+    # 回傳多個策略物件
+    ...
+```
+
+#### **2. 升級 Web UI (Dashboard Upgrade)**
+
+**問題**：Dashboard 使用 `<select>` 下拉選單，只能選擇一個策略。
+
+**解決方案**：
+- ✅ 改為 `<input type="checkbox">` 核取方塊，支援複選
+- ✅ 更新 `/update_strategy` 路由，使用 `request.form.getlist()` 接收列表
+- ✅ 更新前端顯示邏輯，顯示所有啟用的策略
+
+**修改檔案**：
+- `templates/dashboard.html` - 改用 checkbox 複選框
+- `app.py` - 更新策略切換邏輯
+
+**Before**:
+```html
+<!-- ❌ 單選下拉 -->
+<select name="strategy">
+    <option value="v31_hybrid">V31 混合策略</option>
+    <option value="v33_low_vol">V33 低波動</option>
+</select>
+```
+
+**After**:
+```html
+<!-- ✅ 複選核取方塊 -->
+<input type="checkbox" name="strategies" value="v31_hybrid" checked>
+<input type="checkbox" name="strategies" value="v33_low_vol" checked>
+```
+
+#### **3. 升級執行邏輯 (Execution Logic)**
+
+**問題**：`2_rundaily.py` 只執行單一策略。
+
+**解決方案**：
+- ✅ 改用迴圈遍歷 `manager.get_active_strategies()`
+- ✅ 為每個策略獨立執行篩選與 AI 預測
+- ✅ 寫入資料庫時正確標記 `strategy` 欄位
+
+**修改檔案**：
+- `2_rundaily.py` - 重構為多策略執行
+
+**Before**:
+```python
+# ❌ 單一策略
+strategy = manager.get_active_strategy()
+candidates = strategy.filter_candidates(df)
+```
+
+**After**:
+```python
+# ✅ 多策略遍歷
+strategies = manager.get_active_strategies()
+for strategy in strategies:
+    candidates = strategy.filter_candidates(df.copy())
+    # 為每個策略獨立處理
+```
+
+#### **4. 升級推播 (Line Notification)**
+
+**問題**：`5_push_to_line.py` 只推播單一策略結果。
+
+**解決方案**：
+- ✅ 遍歷所有策略，撈取各自的推薦結果
+- ✅ 分組顯示：`== 穩健型 (V33) ==` ... `== 飆股型 (V34) ==`
+
+**修改檔案**：
+- `5_push_to_line.py` - 支援多策略分組顯示
+
+**Before**:
+```python
+# ❌ 單一策略
+strategy = manager.get_active_strategy()
+picks = conn.execute(f"... WHERE strategy = '{strategy.name}'")
+```
+
+**After**:
+```python
+# ✅ 多策略遍歷
+strategies = manager.get_active_strategies()
+for strategy in strategies:
+    picks = conn.execute(f"... WHERE strategy = '{strategy.name}'")
+    msg += f"\n== {strategy.display_name} ==\n"
+```
+
+### 📊 重構統計
+
+| 項目 | Phase 1 | Phase 2 | 總計 |
+|------|---------|---------|------|
+| 新增檔案 | 2 | 0 | 2 |
+| 修改檔案 | 4 | 4 | 8 |
+| 移除硬編碼 | 3 處 | 0 | 3 處 |
+| 新增功能 | 登入驗證 | 多策略並行 | 2 大功能 |
+
+### 🧪 測試結果
+
+```bash
+✅ 環境變數載入正常 (LINE_TOKEN, ADMIN_PASSWORD)
+✅ Flask-Login 驗證正常 (未登入會重定向至 /login)
+✅ StrategyManager 支援多策略 (可同時啟用 V33 + V34)
+✅ Dashboard checkbox 功能正常
+✅ 2_rundaily.py 多策略執行正常
+✅ 5_push_to_line.py 分組顯示正常
+```
+
+### 📦 額外改進
+
+在實作過程中，同時清理了其他重複代碼：
+- ✅ `init_settings.py` - 改用 `get_db_engine()`
+- ✅ `fix_db_schema.py` - 改用 `get_db_engine()`
+- ✅ `tool/calc_indicators.py` - 改用 `get_db_engine()`
+
+這些檔案原本都有重複的 `create_engine(DB_URL)` 呼叫，現已統一使用 `tool.db_helper.get_db_engine()` 共用函數。
 
 ---
 

@@ -325,7 +325,8 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def fix_database_indicators():
     """計算全市場技術指標並寫回資料庫"""
     print("🚑 [AI工程] 正在計算全套技術指標 (MA, RSI, MACD, KD, BB, NATR, STD_20)...")
-    engine = create_engine(DB_URL)
+    from tool.db_helper import get_db_engine
+    engine = get_db_engine()
     
     try:
         df = pd.read_sql("SELECT * FROM daily_market_data", engine)

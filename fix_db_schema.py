@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from config import Config
 import time
 from datetime import datetime
+from tool.db_helper import get_db_engine
 
 # 引入您剛寫好的爬蟲與指標計算
 try:
@@ -23,7 +24,7 @@ def fix_schema():
     print("                        資料庫結構修復工具 - V33 Phase 1 (MySQL修正版)")
     print("======================================================================")
     
-    engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
+    engine = get_db_engine()
     conn = engine.connect()
     
     # 1. 檢查並新增欄位
