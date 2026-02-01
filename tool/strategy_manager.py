@@ -54,6 +54,7 @@ class StrategyManager:
         'v31_hybrid': 'tool.strategies.v31_hybrid.V31HybridStrategy',
         'v33_low_vol': 'tool.strategies.v33_low_vol.V33LowVolStrategy',
         'v34_turbo': 'tool.strategies.v34_turbo.V34TurboStrategy',
+        'v35_innovation': 'tool.strategies.v35_innovation.V35InnovationStrategy',  # 🧪 V35 研發動能策略
     }
     
     def __new__(cls):

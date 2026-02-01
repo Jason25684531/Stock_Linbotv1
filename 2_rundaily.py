@@ -19,6 +19,81 @@ from config import Config
 import joblib
 
 
+def merge_financial_data(df: pd.DataFrame, engine) -> pd.DataFrame:
+    """
+    合併財報數據到日線數據
+    
+    財報是季度數據（稀疏），日線是每日數據（密集）
+    使用 forward fill 方法：每檔股票使用最新的季報數據
+    
+    Args:
+        df: 日線資料 DataFrame
+        engine: 資料庫引擎
+    
+    Returns:
+        合併後的 DataFrame (新增 rd_ratio, eps 欄位)
+    """
+    try:
+        # 從資料庫讀取最新的財報數據（每檔股票取最新一季）
+        query = text("""
+            SELECT 
+                fs1.stock_id,
+                fs1.year,
+                fs1.quarter,
+                fs1.revenue,
+                fs1.rd_expense,
+                fs1.eps,
+                CASE 
+                    WHEN fs1.revenue > 0 THEN fs1.rd_expense / fs1.revenue 
+                    ELSE 0 
+                END as rd_ratio
+            FROM financial_statements fs1
+            INNER JOIN (
+                SELECT stock_id, MAX(year * 10 + quarter) as max_period
+                FROM financial_statements
+                GROUP BY stock_id
+            ) fs2 ON fs1.stock_id = fs2.stock_id 
+                 AND (fs1.year * 10 + fs1.quarter) = fs2.max_period
+        """)
+        
+        with engine.connect() as conn:
+            financial_df = pd.read_sql(query, conn)
+        
+        if financial_df.empty:
+            print("  ⚠️ 資料庫中無財報數據，使用預設值 (rd_ratio=0, eps=0)")
+            df['rd_ratio'] = 0.0
+            df['eps'] = 0.0
+            return df
+        
+        print(f"  ✓ 從資料庫載入 {len(financial_df)} 檔股票的財報數據")
+        
+        # 合併數據（left join，保留所有日線數據）
+        df = df.merge(
+            financial_df[['stock_id', 'rd_ratio', 'eps', 'year', 'quarter']],
+            on='stock_id',
+            how='left'
+        )
+        
+        # 填補缺失值（無財報數據的股票）
+        df['rd_ratio'] = df['rd_ratio'].fillna(0.0)
+        df['eps'] = df['eps'].fillna(0.0)
+        
+        # 統計
+        has_rd = (df['rd_ratio'] > 0).sum()
+        has_eps = (df['eps'] != 0).sum()
+        print(f"  ✓ 有研發費用：{has_rd} 檔 ({has_rd/len(df)*100:.1f}%)")
+        print(f"  ✓ 有 EPS 數據：{has_eps} 檔 ({has_eps/len(df)*100:.1f}%)")
+        
+        return df
+        
+    except Exception as e:
+        print(f"  ❌ 合併財報數據失敗: {e}")
+        # 失敗時填補預設值
+        df['rd_ratio'] = 0.0
+        df['eps'] = 0.0
+        return df
+
+
 def run_strategy(strategy, df, date_str, model, engine):
     """執行單一策略的選股流程
     
@@ -124,6 +199,11 @@ def main():
     print("🔧 計算比率特徵...")
     df = calculate_ratio_features(df)
     print("✅ 特徵計算完成\n")
+    
+    # 🧪 V35: 合併財報數據（季報：EPS、研發費用）
+    print("🧪 合併財報數據（V35 需要）...")
+    df = merge_financial_data(df, engine)
+    print("✅ 財報數據合併完成\n")
     
     # 4. 載入 AI 模型
     model = None
