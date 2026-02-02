@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}回測設定 - Stock AI Bot{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">
+        <i class="fas fa-chart-line"></i> 多策略組合回測
+    </h2>
+    
+    <!-- 說明卡片 -->
+    <div class="alert alert-info" role="alert">
+        <h5><i class="fas fa-info-circle"></i> 回測說明</h5>
+        <p>選擇一個或多個策略進行組合回測。系統會將初始資金平均分配給各策略，並計算組合的總體績效。</p>
+        <ul class="mb-0">
+            <li><strong>V31 Hybrid:</strong> V30 技術篩選 + AI 智慧排名</li>
+            <li><strong>V33 Low Vol:</strong> 低波動穩健策略（波動 <4%）</li>
+            <li><strong>V34 Turbo:</strong> 高動能突破策略（快進快出）</li>
+            <li><strong>V35 Innovation:</strong> 研發動能策略（ROE + 研發費用）</li>
+        </ul>
+    </div>
+    
+    <!-- 回測設定表單 -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('backtest') }}">
+                <!-- 策略選擇 -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold">
+                        <i class="fas fa-tasks"></i> 選擇策略（可多選）
+                    </label>
+                    <div class="row">
+                        {% for strategy in strategies %}
+                        <div class="col-md-6 mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       name="strategies" value="{{ strategy }}" 
+                                       id="strategy_{{ strategy }}"
+                                       {% if strategy == 'v31_hybrid' %}checked{% endif %}>
+                                <label class="form-check-label" for="strategy_{{ strategy }}">
+                                    {{ strategy }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- 日期範圍 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="start_date" class="form-label fw-bold">
+                            <i class="fas fa-calendar-alt"></i> 開始日期
+                        </label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" 
+                               value="{{ (now() - timedelta(days=365)).strftime('%Y-%m-%d') }}">
+                        <small class="text-muted">預設為 1 年前</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="end_date" class="form-label fw-bold">
+                            <i class="fas fa-calendar-check"></i> 結束日期
+                        </label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" 
+                               value="{{ now().strftime('%Y-%m-%d') }}">
+                        <small class="text-muted">預設為今日</small>
+                    </div>
+                </div>
+                
+                <!-- 提交按鈕 -->
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-play-circle"></i> 執行回測
+                    </button>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> 返回 Dashboard
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 快速預設組合 -->
+    <div class="mt-4">
+        <h5><i class="fas fa-star"></i> 快速預設組合</h5>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">🛡️ 穩健組合</h6>
+                        <p class="card-text small">V31 + V33（低風險）</p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="selectPreset(['v31_hybrid', 'v33_low_vol'])">
+                            選擇
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">⚡ 積極組合</h6>
+                        <p class="card-text small">V34 + V35（高報酬）</p>
+                        <button class="btn btn-sm btn-outline-warning" onclick="selectPreset(['v34_turbo', 'v35_innovation'])">
+                            選擇
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">🎯 平衡組合</h6>
+                        <p class="card-text small">全部策略（分散風險）</p>
+                        <button class="btn btn-sm btn-outline-success" onclick="selectAll()">
+                            選擇
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function selectPreset(strategies) {
+    // 先取消所有勾選
+    document.querySelectorAll('input[name="strategies"]').forEach(cb => cb.checked = false);
+    // 勾選指定策略
+    strategies.forEach(s => {
+        const cb = document.getElementById('strategy_' + s);
+        if (cb) cb.checked = true;
+    });
+}
+
+function selectAll() {
+    document.querySelectorAll('input[name="strategies"]').forEach(cb => cb.checked = true);
+}
+
+// 日期範圍驗證
+document.querySelector('form').addEventListener('submit', function(e) {
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    
+    if (startDate && endDate && startDate > endDate) {
+        e.preventDefault();
+        alert('開始日期不能晚於結束日期');
+    }
+    
+    const checkedStrategies = document.querySelectorAll('input[name="strategies"]:checked').length;
+    if (checkedStrategies === 0) {
+        e.preventDefault();
+        alert('請至少選擇一個策略');
+    }
+});
+</script>
+{% endblock %}

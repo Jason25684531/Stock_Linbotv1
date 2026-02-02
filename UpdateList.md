@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-01-31  
-> **當前版本**: V33 Phase 2+ Multi-Strategy (多策略並行 + 安全強化)  
+> **最後更新**: 2026-02-02  
+> **當前版本**: V35 Phase 5 - Backtesting & Visualization (多策略回測與視覺化)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,11 +10,312 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [Phase 5: Backtesting & Visualization](#phase-5-backtesting--visualization-2026-02-02) | 2026-02-02 | 多策略組合回測 + Plotly 視覺化 + Web 整合 | ✅ 完成 |
 | [V33 Phase 2+ Multi-Strategy](#v33-phase-2-multi-strategy-多策略並行--安全強化-2026-01-31) | 2026-01-31 | 多策略並行 + 環境變數隔離 + Web 登入 | ✅ 完成 |
 | [V33 Phase 2 Refactor](#v33-phase-2-refactor-深度代碼清理-2026-01-27) | 2026-01-27 | 全面清理重複代碼 + 架構優化 | ✅ 完成 |
 | [V33 Phase 1+ Refactor](#v33-phase-1-refactor-代碼清理與合併-2026-01-22) | 2026-01-22 | 重複代碼清理 + 架構優化 | ✅ 完成 |
-| [V33 Phase 1+](#v33-phase-1-atr-動態停損-2026-01-22) | 2026-01-22 | ATR 動態停損 + README 重寫 | ✅ 完成 |
-| [README.md 清理](#readmemd-清理-2026-01-21) | 2026-01-21 | 移除重複/過時內容，更新版本資訊 | ✅ 完成 |
+
+---
+
+## 🚀 Phase 5: Backtesting & Visualization (2026-02-02)
+
+### 🎯 目標
+
+將現有的單一策略回測系統升級為「多策略投資組合回測引擎」，並整合 Plotly 互動式視覺化至 Web Dashboard，讓使用者能直觀評估策略績效。
+
+### ✅ 完成項目
+
+#### **1. 安裝視覺化依賴**
+
+**新增套件**：
+- `plotly==6.5.2` - 互動式圖表庫
+- `kaleido==1.2.0` - Plotly 靜態圖片匯出支援
+- `narwhals`, `choreographer`, `logistro`, `orjson` - Plotly 相關依賴
+
+**執行命令**：
+```powershell
+pip install plotly kaleido
+```
+
+**更新檔案**：
+- `requirements.txt` - 新增 plotly 及相關依賴
+
+---
+
+#### **2. 建立視覺化模組 `tool/viz_helper.py`**
+
+**功能**：
+- ✅ `PerformanceVisualizer` 類別：完整的績效視覺化器
+- ✅ `plot_equity_curve()` - 權益曲線圖（支援基準比較）
+- ✅ `plot_drawdown()` - 回撤分析圖（Underwater Plot）
+- ✅ `plot_monthly_returns()` - 月度報酬熱力圖
+- ✅ `get_metrics_summary()` - 績效指標計算（CAGR, Sharpe, MDD, 勝率等）
+- ✅ `generate_report_from_csv()` - 便捷函數，直接從 CSV 生成完整報告
+
+**關鍵指標計算**：
+```python
+# CAGR (年化複合成長率)
+cagr = ((1 + final_roi / 100) ** (1 / years) - 1) * 100
+
+# Sharpe Ratio (夏普比率)
+sharpe = (annualized_return - risk_free_rate) / annualized_std
+
+# Max Drawdown (最大回撤)
+max_dd = max((peak - value) / peak for all values)
+
+# Win Rate (勝率)
+win_rate = win_trades / total_trades * 100
+```
+
+**輸出格式**：
+- 所有圖表轉換為 Plotly JSON 格式
+- 可直接嵌入 HTML 模板使用 `Plotly.newPlot()`
+
+---
+
+#### **3. 重構回測引擎支援多策略組合**
+
+**新增類別**：`PortfolioBacktestEngine` (在 `4_run_backtest.py`)
+
+**功能特點**：
+- ✅ 支援同時回測多個策略（如 `['v33_low_vol', 'v35_innovation']`）
+- ✅ 資金平均分配：每個策略獲得 `初始資金 / 策略數量`
+- ✅ 獨立交易邏輯：每個策略維護獨立的持倉與交易記錄
+- ✅ 組合彙總：每日計算總資產價值（現金 + 所有策略持倉市值）
+- ✅ 各策略績效追蹤：記錄每個策略的報酬率、勝率、交易次數
+
+**使用方式**：
+```python
+# 多策略組合回測
+engine = PortfolioBacktestEngine(
+    strategies=['v33_low_vol', 'v35_innovation'],
+    start_date='2025-06-01',
+    end_date='2026-01-31'
+)
+result = engine.run_portfolio_backtest()
+```
+
+**命令列支援**：
+```powershell
+# 單一策略（原功能保留）
+python 4_run_backtest.py --v31
+
+# 多策略組合回測（新功能）
+python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
+```
+
+**輸出結果**：
+```python
+{
+    'equity_curve': DataFrame,      # 每日資產曲線（含 date, asset_value, roi）
+    'trades': List[Dict],            # 所有交易記錄（含策略標籤）
+    'metrics': {                     # 組合績效指標
+        'total_return': 27.4,        # 總報酬率
+        'max_drawdown': 12.5,        # 最大回撤
+        'sharpe_ratio': 1.85,        # 夏普比率
+        'win_rate': 52.3,            # 組合勝率
+        'trade_count': 45            # 總交易次數
+    },
+    'strategy_performance': {        # 各策略詳細績效
+        'v33_low_vol': {'roi': 15.2, 'win_rate': 68.5, ...},
+        'v35_innovation': {'roi': 39.6, 'win_rate': 48.1, ...}
+    }
+}
+```
+
+---
+
+#### **4. Web 整合 - 回測功能路由**
+
+**新增路由**（`app.py`）：
+
+**A. `/backtest` (GET/POST) - 回測主頁面**
+- GET: 顯示策略選擇表單與日期設定
+- POST: 執行回測並顯示結果頁面
+- 🔐 需登入驗證 (`@login_required`)
+
+**B. `/api/backtest/run` (POST) - API 端點**
+- 接收 JSON 參數：`{'strategies': [...], 'start_date': '...', 'end_date': '...'}`
+- 執行回測並回傳 JSON 結果
+- 🔐 需登入驗證
+
+**功能流程**：
+1. 使用者在 Dashboard 點擊「執行回測分析」
+2. 選擇策略組合（可多選）與回測期間
+3. 系統執行 `PortfolioBacktestEngine.run_portfolio_backtest()`
+4. 呼叫 `viz_helper.generate_report_from_csv()` 生成圖表
+5. 渲染 `backtest_result.html` 顯示完整報告
+
+---
+
+#### **5. HTML 模板建立**
+
+**A. `templates/backtest.html` - 回測設定頁面**
+
+**功能**：
+- ✅ 策略選擇（支援多選 checkbox）
+- ✅ 日期範圍選擇（預設最近 1 年）
+- ✅ 快速預設組合：
+  - 🛡️ 穩健組合：V31 + V33（低風險）
+  - ⚡ 積極組合：V34 + V35（高報酬）
+  - 🎯 平衡組合：全部策略（分散風險）
+- ✅ 前端驗證：日期邏輯檢查、至少選一個策略
+
+**B. `templates/backtest_result.html` - 回測結果頁面**
+
+**內容板塊**：
+1. **績效指標卡片**（4 個）：
+   - 總報酬率（綠/紅色動態顯示）
+   - 最大回撤（風險指標）
+   - 夏普比率（風險調整後報酬）
+   - 勝率（成功率）
+
+2. **各策略績效表格**：
+   - 每個策略的報酬率、勝率、交易次數
+   - 方便比較各策略表現
+
+3. **互動式圖表**（Plotly）：
+   - 📈 權益曲線圖
+   - 📉 回撤分析圖
+   - 📅 月度報酬熱力圖
+
+4. **績效總結**：
+   - ✅ 優點：自動列出表現優異的指標
+   - ⚠️ 風險提示：標示需改進的項目
+
+**技術實作**：
+```html
+<!-- 嵌入 Plotly 圖表 -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+const equityData = {{ equity_chart|safe }};
+Plotly.newPlot('equity-chart', equityData.data, equityData.layout, {responsive: true});
+</script>
+```
+
+**C. 更新 `templates/dashboard.html`**
+- ✅ 新增「執行回測分析」按鈕（紫藍漸層設計）
+- 位置：策略指揮中心標題右側
+
+---
+
+#### **6. 架構優化與代碼清理**
+
+**確認無重複代碼**：
+- ✅ `get_market_trend()` - 統一使用 `tool.db_helper.get_market_trend()`
+- ✅ `get_stock_data()` - 統一使用 `tool.db_helper.get_stock_data()`
+- ✅ 所有資料庫操作統一經過 `tool.db_helper.get_db_engine()`
+
+**保持架構清晰**：
+```
+app.py (Web 層)
+  ↓ 呼叫
+4_run_backtest.py (回測引擎)
+  ↓ 使用
+tool/viz_helper.py (視覺化)
+  ↓ 依賴
+tool/db_helper.py (資料層)
+```
+
+---
+
+### 📊 效能與易用性提升
+
+**1. 預設參數優化**：
+- 回測期間預設為「最近 1 年」（365 天）
+- 避免全資料回測造成效能問題
+
+**2. 錯誤處理**：
+- ✅ 策略未選擇時顯示友善提示
+- ✅ 回測執行失敗時顯示詳細錯誤訊息
+- ✅ 資料不足時顯示「無法生成圖表」提示
+
+**3. 使用者體驗**：
+- ✅ Loading 動畫（執行回測時）
+- ✅ Flash 訊息提示（成功/失敗）
+- ✅ Hover 效果（指標卡片）
+- ✅ 響應式設計（支援手機瀏覽）
+
+---
+
+### 🗂️ 新增/修改檔案清單
+
+**新增檔案**：
+- `tool/viz_helper.py` - 視覺化模組（430 行）
+- `templates/backtest.html` - 回測設定頁面
+- `templates/backtest_result.html` - 回測結果頁面
+
+**修改檔案**：
+- `4_run_backtest.py` - 新增 `PortfolioBacktestEngine` 類別
+- `app.py` - 新增 `/backtest` 路由與 API 端點
+- `templates/dashboard.html` - 新增回測入口按鈕
+- `requirements.txt` - 新增 plotly 相關套件
+- `UpdateList.md` - 本次更新記錄
+
+---
+
+### 🧪 測試建議
+
+**功能測試**：
+```powershell
+# 1. 測試單一策略回測（原功能）
+python 4_run_backtest.py --v31
+
+# 2. 測試多策略組合回測（新功能）
+python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
+
+# 3. 啟動 Web 服務
+python app.py
+
+# 4. 瀏覽器測試
+# - 登入 Dashboard
+# - 點擊「執行回測分析」
+# - 選擇策略 + 日期範圍
+# - 驗證圖表是否正確渲染
+```
+
+**視覺化測試**：
+```python
+# 測試 viz_helper 獨立功能
+from tool.viz_helper import generate_report_from_csv
+
+report = generate_report_from_csv()
+print(report['metrics'])  # 檢查指標計算
+# 圖表 JSON 可貼到 https://plotly.com/chart-studio/ 預覽
+```
+
+---
+
+### 📝 文檔更新
+
+**README.md 需更新章節**：
+- ✅ 核心功能表格：新增「多策略回測」與「Plotly 視覺化」
+- ✅ 系統架構圖：新增 `tool/viz_helper.py` 層
+- ✅ 快速開始：說明回測功能使用方式
+
+---
+
+### 🎯 Phase 5 總結
+
+**完成度**：✅ 100%
+
+**達成目標**：
+1. ✅ 多策略組合回測引擎（支援 2+ 策略並行）
+2. ✅ Plotly 互動式視覺化（權益曲線、回撤、月度熱力圖）
+3. ✅ Web Dashboard 完整整合（表單 → 執行 → 結果展示）
+4. ✅ 績效指標完整計算（CAGR, Sharpe, MDD, Win Rate）
+5. ✅ 保持架構清晰（無重複代碼，職責分離）
+
+**技術亮點**：
+- 🎨 使用 Plotly 生成高品質互動圖表
+- 🏗️ 物件導向設計（`PerformanceVisualizer` 類別）
+- 🔒 安全性（`@login_required` 保護回測功能）
+- 📱 響應式設計（手機也能查看回測結果）
+
+**下一步建議**：
+- Phase 6: 即時交易模擬（紙上交易 Paper Trading）
+- Phase 7: 策略參數自動優化（Grid Search / Genetic Algorithm）
+- Phase 8: 通知系統增強（Line 推播回測報告）
 
 ---
 

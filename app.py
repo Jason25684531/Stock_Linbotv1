@@ -652,6 +652,131 @@ def api_daily_signals():
 
 
 # ==========================================
+# Phase 5: Backtesting & Visualization
+# ==========================================
+
+@app.route("/backtest", methods=['GET', 'POST'])
+@login_required
+def backtest():
+    """
+    回測頁面
+    - GET: 顯示回測設定表單
+    - POST: 執行回測並顯示結果
+    """
+    if request.method == 'GET':
+        # 顯示回測設定頁面
+        available_strategies = list(strategy_manager.STRATEGY_REGISTRY.keys())
+        return render_template('backtest.html', strategies=available_strategies)
+    
+    # POST: 執行回測
+    try:
+        from tool.viz_helper import generate_report_from_csv
+        from datetime import datetime, timedelta
+        import sys
+        import os
+        
+        # 取得表單資料
+        selected_strategies = request.form.getlist('strategies')  # 多選策略
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        
+        if not selected_strategies:
+            flash('請至少選擇一個策略', 'error')
+            return redirect(url_for('backtest'))
+        
+        # 設定預設日期（最近 1 年）
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # 執行組合回測
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from importlib import import_module
+        backtest_module = import_module('4_run_backtest')
+        
+        engine = backtest_module.PortfolioBacktestEngine(
+            strategies=selected_strategies,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        result = engine.run_portfolio_backtest()
+        
+        # 生成視覺化報告
+        report = generate_report_from_csv()
+        
+        # 傳遞給模板
+        return render_template(
+            'backtest_result.html',
+            metrics=result['metrics'],
+            strategy_performance=result['strategy_performance'],
+            equity_chart=report['equity_curve'],
+            drawdown_chart=report['drawdown'],
+            monthly_chart=report['monthly_returns'],
+            selected_strategies=selected_strategies,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        flash(f'回測執行失敗: {str(e)}', 'error')
+        return redirect(url_for('backtest'))
+
+
+@app.route("/api/backtest/run", methods=['POST'])
+@login_required
+def api_run_backtest():
+    """
+    API: 執行回測
+    Returns: JSON {success, data}
+    """
+    try:
+        from datetime import datetime, timedelta
+        import sys
+        import os
+        
+        data = request.get_json()
+        selected_strategies = data.get('strategies', ['v31_hybrid'])
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        # 設定預設日期
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # 執行回測
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from importlib import import_module
+        backtest_module = import_module('4_run_backtest')
+        
+        engine = backtest_module.PortfolioBacktestEngine(
+            strategies=selected_strategies,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        result = engine.run_portfolio_backtest()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'metrics': result['metrics'],
+                'strategy_performance': result['strategy_performance']
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==========================================
 # Line Bot Webhook 路由
 # ==========================================
 

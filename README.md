@@ -1,22 +1,23 @@
-# Stock AI Line Bot V33+
+# Stock AI Line Bot V35
 
-> 🔥 **V33 Phase 2+ Multi-Strategy** | 多策略並行 + 安全強化  
+> 🔥 **V35 Phase 5** | 多策略回測 + Plotly 視覺化  
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證  
-> 🛡️ **回測績效** | 總報酬率 27.4% | 勝率 46.3%  
-> 📅 **最後更新**: 2026-01-31
+> 📊 **Backtesting Engine** | 組合回測 + 互動式圖表  
+> 📅 **最後更新**: 2026-02-02
 
 ---
 
 ## 📊 專案簡介
 
-整合 AI 機器學習與技術分析的台股選股系統，透過 Line Bot 提供即時選股推薦與個股診斷。
+整合 AI 機器學習與技術分析的台股選股系統，透過 Line Bot 提供即時選股推薦與個股診斷，並支援多策略組合回測與視覺化分析。
 
 ### 🎯 核心功能
 
 | 功能 | 說明 | 命令/路徑 |
 |------|------|---------|
-| 🎯 多策略並行 | 同時啟用多個策略 (V31/V33/V34)，分散風險 | Web Dashboard 核取方塊 |
+| 🎯 多策略並行 | 同時啟用多個策略 (V31/V33/V34/V35)，分散風險 | Web Dashboard 核取方塊 |
+| 📊 組合回測 | 多策略投資組合回測 + Plotly 視覺化 | `/backtest` |
 | 🔐 登入驗證 | Web Dashboard 需密碼登入 | `/login` |
 | 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 | 輸入「推薦」 |
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 大盤熔斷 | 輸入「V30」 |
@@ -25,21 +26,27 @@
 
 ---
 
-## 🏗️ 系統架構 (V33 Phase 2+ Multi-Strategy)
+## 🏗️ 系統架構 (V35 Phase 5)
 
-**設計原則**：DRY (Don't Repeat Yourself) + 單一職責 + 統一介面 + 安全優先
+**設計原則**：DRY + 單一職責 + 統一介面 + 安全優先
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  🌐 應用層 (Application)                │
 │   🔐 Flask Login │ Line Bot │ Web Dashboard             │
-│   1-6_*.py (自動化腳本)                                   │
+│   1-7_*.py (自動化腳本)                                   │
 └────────────┬────────────────────────────────────────────┘
              │ 統一使用共用函數，無重複代碼
 ┌────────────▼────────────────────────────────────────────┐
+│         📊 回測層 (Backtesting & Visualization)         │
+│   4_run_backtest.py (單一/組合回測引擎)                   │
+│   tool/viz_helper.py (Plotly 視覺化)                     │
+└────────────┬────────────────────────────────────────────┘
+             │ 回測依賴策略邏輯
+┌────────────▼────────────────────────────────────────────┐
 │                 📊 策略層 (Multi-Strategy)              │
 │   tool/strategy_manager.py (策略工廠，支援多策略並行)     │
-│   tool/strategies/ (V31, V33, V34)                      │
+│   tool/strategies/ (V31, V33, V34, V35)                 │
 │   tool/strategy.py (V30/V31 共用邏輯)                    │
 └────────────┬────────────────────────────────────────────┘
              │ 策略依賴技術指標與資料查詢
@@ -65,20 +72,20 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 🔑 關鍵設計決策 (V33 Phase 2+)
+### 🔑 關鍵設計決策 (V35 Phase 5)
 
 | 原則 | 實施方式 | 效益 |
 |------|---------|------|
+| **組合回測** | `PortfolioBacktestEngine` 支援多策略 | 驗證策略組合績效 |
+| **視覺化** | Plotly 互動式圖表 | 直觀展示權益曲線與回撤 |
 | **多策略並行** | `StrategyManager` 支援列表形式 | 同時運行 V33+V34，分散風險 |
 | **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入 | 防止資料外洩 |
 | **統一入口** | 所有 DB 操作經 `tool.db_helper` | 防 SQL Injection、易測試 |
 | **無重複代碼** | 共用函數取代本地實作 | 減少 150+ 行代碼 |
-| **參數集中** | 所有設定來自 `config.py` + `.env` | 無散彈式修改 |
-| **職責分離** | 每層只做一件事 | 可讀性、可擴展性 |
 
 ---
 
-## 🛡️ V33 策略強化特性
+## 🛡️ V33+ 策略強化特性
 
 ### 風險控制機制
 
@@ -119,7 +126,7 @@ python -m venv myenv
 # 3. 安裝套件
 pip install -r requirements.txt
 
-# 4. 設定環境變數 (Phase 1: Security Hardening)
+# 4. 設定環境變數
 # 複製 .env.example 為 .env，填入實際值
 copy .env.example .env
 
@@ -145,9 +152,47 @@ python -c "from tool.calc_indicators import fix_database_indicators; fix_databas
 python 5_push_to_line.py                              # Line 推播
 ```
 
-### 回測與訓練
+### 回測與視覺化 (Phase 5 新功能)
 
 ```powershell
+# 單一策略回測
+python 4_run_backtest.py --v31
+
+# 多策略組合回測
+python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
+
+# Web 回測（推薦）
+python app.py
+# 瀏覽器開啟 http://localhost:5000/backtest
+# 1. 選擇策略組合（可多選）
+# 2. 設定回測期間（預設 1 年）
+# 3. 查看互動式圖表與績效指標
+```
+
+---
+
+## 📊 Phase 5: Backtesting & Visualization
+
+### 功能特色
+
+**1. 多策略組合回測**
+- ✅ 支援同時回測 2+ 策略
+- ✅ 資金平均分配
+- ✅ 每日資產曲線追蹤
+- ✅ 各策略績效比較
+
+**2. Plotly 互動式圖表**
+- 📈 權益曲線圖（Portfolio vs Benchmark）
+- 📉 回撤分析圖（Underwater Plot）
+- 📅 月度報酬熱力圖
+- 🎯 績效指標卡片
+
+**3. 績效指標計算**
+- **CAGR** (年化複合成長率)
+- **Sharpe Ratio** (夏普比率)
+- **Max Drawdown** (最大回撤)
+- **Win Rate** (勝率)
+- **Profit Factor** (盈虧比)
 # 執行回測
 python 4_run_backtest.py
 

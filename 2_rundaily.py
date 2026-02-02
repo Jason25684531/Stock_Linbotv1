@@ -195,7 +195,10 @@ def main():
     print(f"✅ 資料日期: {date_str}")
     print(f"✅ 總計 {len(df)} 檔股票\n")
     
-    # 3. 計算比率特徵 (V34需要volume_ratio)
+    # 3. 取得資料庫引擎（需要在使用前初始化）
+    engine = get_db_engine()
+    
+    # 4. 計算比率特徵 (V34需要volume_ratio)
     print("🔧 計算比率特徵...")
     df = calculate_ratio_features(df)
     print("✅ 特徵計算完成\n")
@@ -205,7 +208,7 @@ def main():
     df = merge_financial_data(df, engine)
     print("✅ 財報數據合併完成\n")
     
-    # 4. 載入 AI 模型
+    # 5. 載入 AI 模型
     model = None
     try:
         if os.path.exists(Config.MODEL_PATH):
@@ -217,9 +220,6 @@ def main():
                 model = None
     except Exception as e:
         print(f"⚠️ AI模型載入失敗: {e}\n")
-    
-    # 5. 取得資料庫引擎
-    engine = get_db_engine()
     
     # 6. 遍歷所有策略執行選股
     all_results = {}

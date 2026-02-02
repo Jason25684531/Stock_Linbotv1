@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}回測結果 - Stock AI Bot{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+.metric-card {
+    border-left: 4px solid;
+    transition: transform 0.2s;
+}
+.metric-card:hover {
+    transform: translateY(-5px);
+}
+.metric-positive { border-left-color: #28a745; }
+.metric-negative { border-left-color: #dc3545; }
+.metric-neutral { border-left-color: #17a2b8; }
+.strategy-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    display: inline-block;
+    margin: 0.25rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- 頁面標題 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-chart-bar"></i> 回測結果報告</h2>
+        <div>
+            <a href="{{ url_for('backtest') }}" class="btn btn-outline-primary">
+                <i class="fas fa-redo"></i> 重新回測
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-home"></i> 返回 Dashboard
+            </a>
+        </div>
+    </div>
+    
+    <!-- 回測資訊 -->
+    <div class="alert alert-light border" role="alert">
+        <div class="row">
+            <div class="col-md-6">
+                <strong><i class="fas fa-calendar-alt"></i> 回測期間:</strong> 
+                {{ start_date }} 至 {{ end_date }}
+            </div>
+            <div class="col-md-6">
+                <strong><i class="fas fa-layer-group"></i> 策略組合:</strong>
+                {% for strategy in selected_strategies %}
+                <span class="badge bg-primary">{{ strategy }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 績效指標卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card metric-card {% if metrics.total_return > 0 %}metric-positive{% else %}metric-negative{% endif %} shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">
+                        <i class="fas fa-percentage"></i> 總報酬率
+                    </h6>
+                    <h3 class="mb-0 {% if metrics.total_return > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ metrics.total_return }}%
+                    </h3>
+                    <small class="text-muted">
+                        ${{ "{:,}".format(metrics.initial_capital|int) }} → 
+                        ${{ "{:,}".format(metrics.final_value|int) }}
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card metric-card metric-negative shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">
+                        <i class="fas fa-arrow-down"></i> 最大回撤 (MDD)
+                    </h6>
+                    <h3 class="mb-0 text-danger">
+                        -{{ metrics.max_drawdown }}%
+                    </h3>
+                    <small class="text-muted">風險控制指標</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card metric-card metric-neutral shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">
+                        <i class="fas fa-chart-line"></i> 夏普比率
+                    </h6>
+                    <h3 class="mb-0 text-info">
+                        {{ metrics.sharpe_ratio }}
+                    </h3>
+                    <small class="text-muted">風險調整後報酬</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card metric-card {% if metrics.win_rate >= 50 %}metric-positive{% else %}metric-negative{% endif %} shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">
+                        <i class="fas fa-bullseye"></i> 勝率
+                    </h6>
+                    <h3 class="mb-0 {% if metrics.win_rate >= 50 %}text-success{% else %}text-warning{% endif %}">
+                        {{ metrics.win_rate }}%
+                    </h3>
+                    <small class="text-muted">共 {{ metrics.trade_count }} 筆交易</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 各策略績效 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-tasks"></i> 各策略績效分析</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>策略名稱</th>
+                            <th>報酬率</th>
+                            <th>勝率</th>
+                            <th>交易次數</th>
+                            <th>獲利次數</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for strategy_name, perf in strategy_performance.items() %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ strategy_name }}</span></td>
+                            <td class="{% if perf.roi > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                {{ perf.roi|round(2) }}%
+                            </td>
+                            <td>{{ perf.win_rate|round(1) }}%</td>
+                            <td>{{ perf.trade_count }}</td>
+                            <td>{{ perf.win_count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 權益曲線圖 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-chart-area"></i> 權益曲線</h5>
+        </div>
+        <div class="card-body">
+            <div id="equity-chart"></div>
+        </div>
+    </div>
+    
+    <!-- 回撤圖 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-water"></i> 回撤分析</h5>
+        </div>
+        <div class="card-body">
+            <div id="drawdown-chart"></div>
+        </div>
+    </div>
+    
+    <!-- 月度報酬熱力圖 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-calendar"></i> 月度報酬熱力圖</h5>
+        </div>
+        <div class="card-body">
+            <div id="monthly-chart"></div>
+        </div>
+    </div>
+    
+    <!-- 績效總結 -->
+    <div class="card shadow-sm mb-4 border-success">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-clipboard-check"></i> 績效總結</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>✅ 優點</h6>
+                    <ul>
+                        {% if metrics.total_return > 10 %}
+                        <li>總報酬率達 {{ metrics.total_return }}%，表現優異</li>
+                        {% endif %}
+                        {% if metrics.win_rate >= 50 %}
+                        <li>勝率達 {{ metrics.win_rate }}%，策略穩定</li>
+                        {% endif %}
+                        {% if metrics.sharpe_ratio > 1 %}
+                        <li>夏普比率 {{ metrics.sharpe_ratio }}，風險調整後表現良好</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>⚠️ 風險提示</h6>
+                    <ul>
+                        {% if metrics.max_drawdown > 15 %}
+                        <li class="text-danger">最大回撤達 {{ metrics.max_drawdown }}%，需加強風控</li>
+                        {% endif %}
+                        {% if metrics.win_rate < 45 %}
+                        <li class="text-warning">勝率偏低（{{ metrics.win_rate }}%），建議優化策略</li>
+                        {% endif %}
+                        <li>回測結果僅供參考，實際交易請謹慎評估</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 渲染權益曲線
+const equityData = {{ equity_chart|safe }};
+Plotly.newPlot('equity-chart', equityData.data, equityData.layout, {responsive: true});
+
+// 渲染回撤圖
+const drawdownData = {{ drawdown_chart|safe }};
+Plotly.newPlot('drawdown-chart', drawdownData.data, drawdownData.layout, {responsive: true});
+
+// 渲染月度熱力圖
+const monthlyData = {{ monthly_chart|safe }};
+Plotly.newPlot('monthly-chart', monthlyData.data, monthlyData.layout, {responsive: true});
+</script>
+{% endblock %}

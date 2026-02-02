@@ -107,201 +107,140 @@ class V35InnovationStrategy(BaseStrategy):
     # ============================================
     
     def filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        V35 篩選邏輯 - 基本面 + 技術面雙重驗證
-        
-        Args:
-            df: 包含所有指標的 DataFrame
-                必要欄位：
-                - rd_ratio: 研發費用佔比（來自 financial_statements）
-                - revenue_yoy: 營收年增率
-                - eps: 每股盈餘
-                - close: 收盤價
-                - ma60: 60日均線
-                - volume_ratio: 成交量比例
-        
-        Returns:
-            篩選後的 DataFrame
-        """
-        if df.empty:
-            return df
-        
-        print(f"\n🔍 [V35] 原始候選股票數：{len(df)}")
-        
-        # ============================================
-        # 階段 1：基本面篩選（嚴格）
-        # ============================================
-        
-        # 檢查必要欄位
-        required_cols = ['rd_ratio', 'revenue_yoy', 'eps', 'close', 'ma60', 'volume_ratio']
-        missing_cols = [col for col in required_cols if col not in df.columns]
-        
-        if missing_cols:
-            print(f"⚠️ [V35] 缺少必要欄位：{missing_cols}")
-            # 嘗試填補預設值
-            if 'rd_ratio' in missing_cols:
-                df['rd_ratio'] = 0.0  # 假設無研發
-            if 'eps' in missing_cols:
-                df['eps'] = 0.0
-        
-        # 過濾條件 1：研發投入比例 > 3%
-        mask_rd = df['rd_ratio'] > 0.03
-        df_rd = df[mask_rd].copy()
-        print(f"  ✓ 研發投入 > 3%：{len(df_rd)} 檔 (剩餘 {len(df_rd)/len(df)*100:.1f}%)")
-        
-        if df_rd.empty:
-            print("  ⚠️ 無股票符合研發條件")
-            return pd.DataFrame()
-        
-        # 過濾條件 2：營收正成長（YoY > 0）
-        mask_revenue = df_rd['revenue_yoy'] > 0
-        df_revenue = df_rd[mask_revenue].copy()
-        print(f"  ✓ 營收正成長：{len(df_revenue)} 檔 (剩餘 {len(df_revenue)/len(df)*100:.1f}%)")
-        
-        if df_revenue.empty:
-            print("  ⚠️ 無股票符合營收成長條件")
-            return pd.DataFrame()
-        
-        # 過濾條件 3：獲利能力（EPS > 0）
-        mask_eps = df_revenue['eps'] > 0
-        df_eps = df_revenue[mask_eps].copy()
-        print(f"  ✓ 有獲利 (EPS>0)：{len(df_eps)} 檔 (剩餘 {len(df_eps)/len(df)*100:.1f}%)")
-        
-        if df_eps.empty:
-            print("  ⚠️ 無獲利股票")
-            return pd.DataFrame()
-        
-        # ============================================
-        # 階段 2：技術面篩選（趨勢確認）
-        # ============================================
-        
-        # 過濾條件 4：多頭排列（收盤 > 60 日均線）
-        mask_ma = df_eps['close'] > df_eps['ma60']
-        df_ma = df_eps[mask_ma].copy()
-        print(f"  ✓ 多頭排列 (>MA60)：{len(df_ma)} 檔 (剩餘 {len(df_ma)/len(df)*100:.1f}%)")
-        
-        if df_ma.empty:
-            print("  ⚠️ 無股票在多頭趨勢")
-            return pd.DataFrame()
-        
-        # 過濾條件 5：成交量足夠（流動性）
-        mask_vol = df_ma['volume_ratio'] > 0.8
-        df_final = df_ma[mask_vol].copy()
-        print(f"  ✓ 成交量充足：{len(df_final)} 檔 (剩餘 {len(df_final)/len(df)*100:.1f}%)")
-        
-        # ============================================
-        # 階段 3：計算品質評分（排序用）
-        # ============================================
-        
-        if not df_final.empty:
-            # 品質評分 = 研發佔比*40% + 營收成長*30% + EPS*30%
-            df_final = df_final.copy()
+            """
+            V35 篩選邏輯 - 自動適應 API 數據模式
+            """
+            if df.empty:
+                return df
             
-            # 正規化各指標 (0-1)
-            rd_norm = (df_final['rd_ratio'] - df_final['rd_ratio'].min()) / \
-                      (df_final['rd_ratio'].max() - df_final['rd_ratio'].min() + 1e-9)
+            print(f"\n🔍 [V35] 原始候選股票數：{len(df)}")
             
-            revenue_norm = (df_final['revenue_yoy'] - df_final['revenue_yoy'].min()) / \
-                           (df_final['revenue_yoy'].max() - df_final['revenue_yoy'].min() + 1e-9)
-            
-            eps_norm = (df_final['eps'] - df_final['eps'].min()) / \
-                       (df_final['eps'].max() - df_final['eps'].min() + 1e-9)
-            
-            # 計算綜合評分
-            df_final['v35_quality_score'] = (
-                rd_norm * 0.4 +         # 研發投入權重 40%
-                revenue_norm * 0.3 +    # 營收成長權重 30%
-                eps_norm * 0.3          # 獲利能力權重 30%
-            )
-            
-            # 依品質評分排序
-            df_final = df_final.sort_values('v35_quality_score', ascending=False)
-            
-            print(f"\n✅ [V35] 最終篩選：{len(df_final)} 檔")
-            print(f"  • 平均研發佔比：{df_final['rd_ratio'].mean()*100:.2f}%")
-            print(f"  • 平均營收成長：{df_final['revenue_yoy'].mean():.1f}%")
-            print(f"  • 平均 EPS：{df_final['eps'].mean():.2f} 元")
-        else:
-            print(f"\n⚠️ [V35] 無股票通過所有條件")
-        
-        return df_final
-    
-    # ============================================
-    # 輔助方法
-    # ============================================
-    
-    def get_recommendation_message(self, stock_id: str, stock_data: pd.Series) -> str:
-        """
-        生成推薦訊息（用於 LINE 通知）
-        
-        Args:
-            stock_id: 股票代號
-            stock_data: 股票資料 (Series)
-        
-        Returns:
-            格式化的推薦訊息
-        """
-        rd_ratio = stock_data.get('rd_ratio', 0) * 100
-        revenue_yoy = stock_data.get('revenue_yoy', 0)
-        eps = stock_data.get('eps', 0)
-        quality_score = stock_data.get('v35_quality_score', 0) * 100
-        
-        msg = f"""
-🧪 研發動能股 ({stock_id})
-━━━━━━━━━━━━━━━
-📊 基本面：
-  • 研發佔比：{rd_ratio:.2f}%
-  • 營收成長：{revenue_yoy:+.1f}%
-  • 每股盈餘：{eps:.2f} 元
+            # 檢查必要欄位 (rd_ratio 允許為 0)
+            required_cols = ['rd_ratio', 'revenue_yoy', 'eps', 'close', 'ma60', 'volume_ratio']
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = 0.0 # 補 0 避免報錯
 
-⭐ 品質評分：{quality_score:.1f}/100
+            # ============================================
+            # 修正點：智慧型研發篩選
+            # ============================================
+            # 如果全市場的研發佔比最大值都是 0，代表是用 API 更新的，沒有研發數據
+            # 這時我們自動 "關閉" 研發篩選條件
+            if df['rd_ratio'].max() == 0:
+                print("  ⚠️ 偵測到無研發數據 (API 模式)，自動略過 [研發 > 3%] 條件")
+                print("  👉 策略降級為：[營收成長] + [獲利能力] + [技術面]")
+                df_rd = df.copy() # 不過濾
+            else:
+                # 正常模式：過濾條件 1：研發投入比例 > 3%
+                mask_rd = df['rd_ratio'] > 0.03
+                df_rd = df[mask_rd].copy()
+                print(f"  ✓ 研發投入 > 3%：{len(df_rd)} 檔")
+            
+            if df_rd.empty:
+                return pd.DataFrame()
+            
+            # ... (以下邏輯保持不變) ...
+            
+            # 過濾條件 2：營收正成長（YoY > 0）
+            mask_revenue = df_rd['revenue_yoy'] > 0
+            df_revenue = df_rd[mask_revenue].copy()
+            print(f"  ✓ 營收正成長：{len(df_revenue)} 檔")
+            
+            if df_revenue.empty: return pd.DataFrame()
+            
+            # 過濾條件 3：獲利能力（EPS > 0）
+            mask_eps = df_revenue['eps'] > 0
+            df_eps = df_revenue[mask_eps].copy()
+            print(f"  ✓ 有獲利 (EPS>0)：{len(df_eps)} 檔")
+            
+            if df_eps.empty: return pd.DataFrame()
+            
+            # 過濾條件 4：多頭排列
+            mask_ma = df_eps['close'] > df_eps['ma60']
+            df_ma = df_eps[mask_ma].copy()
+            
+            # 過濾條件 5：流動性
+            mask_vol = df_ma['volume_ratio'] > 0.8
+            df_final = df_ma[mask_vol].copy()
+            
+            return df_final
+        
+        # ============================================
+        # 輔助方法
+        # ============================================
+        
+        def get_recommendation_message(self, stock_id: str, stock_data: pd.Series) -> str:
+            """
+            生成推薦訊息（用於 LINE 通知）
+            
+            Args:
+                stock_id: 股票代號
+                stock_data: 股票資料 (Series)
+            
+            Returns:
+                格式化的推薦訊息
+            """
+            rd_ratio = stock_data.get('rd_ratio', 0) * 100
+            revenue_yoy = stock_data.get('revenue_yoy', 0)
+            eps = stock_data.get('eps', 0)
+            quality_score = stock_data.get('v35_quality_score', 0) * 100
+            
+            msg = f"""
+    🧪 研發動能股 ({stock_id})
+    ━━━━━━━━━━━━━━━
+    📊 基本面：
+    • 研發佔比：{rd_ratio:.2f}%
+    • 營收成長：{revenue_yoy:+.1f}%
+    • 每股盈餘：{eps:.2f} 元
 
-💡 策略：V35 中長線（持有 30-60 天）
-  停損 10% | 目標 20%
-"""
-        return msg.strip()
-    
-    def validate_data_quality(self, df: pd.DataFrame) -> dict:
-        """
-        驗證資料品質
+    ⭐ 品質評分：{quality_score:.1f}/100
+
+    💡 策略：V35 中長線（持有 30-60 天）
+    停損 10% | 目標 20%
+    """
+            return msg.strip()
         
-        Args:
-            df: 輸入資料框
-        
-        Returns:
-            驗證報告 (dict)
-        """
-        report = {
-            'total_rows': len(df),
-            'has_rd_data': 0,
-            'has_revenue_data': 0,
-            'has_eps_data': 0,
-            'complete_data': 0
-        }
-        
-        if df.empty:
+        def validate_data_quality(self, df: pd.DataFrame) -> dict:
+            """
+            驗證資料品質
+            
+            Args:
+                df: 輸入資料框
+            
+            Returns:
+                驗證報告 (dict)
+            """
+            report = {
+                'total_rows': len(df),
+                'has_rd_data': 0,
+                'has_revenue_data': 0,
+                'has_eps_data': 0,
+                'complete_data': 0
+            }
+            
+            if df.empty:
+                return report
+            
+            # 統計資料完整性
+            if 'rd_ratio' in df.columns:
+                report['has_rd_data'] = (df['rd_ratio'] > 0).sum()
+            
+            if 'revenue_yoy' in df.columns:
+                report['has_revenue_data'] = df['revenue_yoy'].notna().sum()
+            
+            if 'eps' in df.columns:
+                report['has_eps_data'] = df['eps'].notna().sum()
+            
+            # 完整資料（三者皆有）
+            if all(col in df.columns for col in ['rd_ratio', 'revenue_yoy', 'eps']):
+                complete_mask = (
+                    (df['rd_ratio'] > 0) & 
+                    df['revenue_yoy'].notna() & 
+                    df['eps'].notna()
+                )
+                report['complete_data'] = complete_mask.sum()
+            
             return report
-        
-        # 統計資料完整性
-        if 'rd_ratio' in df.columns:
-            report['has_rd_data'] = (df['rd_ratio'] > 0).sum()
-        
-        if 'revenue_yoy' in df.columns:
-            report['has_revenue_data'] = df['revenue_yoy'].notna().sum()
-        
-        if 'eps' in df.columns:
-            report['has_eps_data'] = df['eps'].notna().sum()
-        
-        # 完整資料（三者皆有）
-        if all(col in df.columns for col in ['rd_ratio', 'revenue_yoy', 'eps']):
-            complete_mask = (
-                (df['rd_ratio'] > 0) & 
-                df['revenue_yoy'].notna() & 
-                df['eps'].notna()
-            )
-            report['complete_data'] = complete_mask.sum()
-        
-        return report
 
 
 # ===========================================
