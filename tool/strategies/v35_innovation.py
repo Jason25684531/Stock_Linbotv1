@@ -107,63 +107,55 @@ class V35InnovationStrategy(BaseStrategy):
     # ============================================
     
     def filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
-            """
-            V35 篩選邏輯 - 自動適應 API 數據模式
-            """
-            if df.empty:
-                return df
-            
-            print(f"\n🔍 [V35] 原始候選股票數：{len(df)}")
-            
-            # 檢查必要欄位 (rd_ratio 允許為 0)
-            required_cols = ['rd_ratio', 'revenue_yoy', 'eps', 'close', 'ma60', 'volume_ratio']
-            for col in required_cols:
-                if col not in df.columns:
-                    df[col] = 0.0 # 補 0 避免報錯
+        """
+        V35 篩選邏輯 - 自動適應無研發費用的資料
+        """
+        if df.empty:
+            return df
+        
+        print(f"\n🔍 [V35] 原始候選股票數：{len(df)}")
+        
+        # 補齊欄位
+        required_cols = ['rd_ratio', 'revenue_yoy', 'eps', 'close', 'ma60', 'volume_ratio']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = 0.0
 
-            # ============================================
-            # 修正點：智慧型研發篩選
-            # ============================================
-            # 如果全市場的研發佔比最大值都是 0，代表是用 API 更新的，沒有研發數據
-            # 這時我們自動 "關閉" 研發篩選條件
-            if df['rd_ratio'].max() == 0:
-                print("  ⚠️ 偵測到無研發數據 (API 模式)，自動略過 [研發 > 3%] 條件")
-                print("  👉 策略降級為：[營收成長] + [獲利能力] + [技術面]")
-                df_rd = df.copy() # 不過濾
-            else:
-                # 正常模式：過濾條件 1：研發投入比例 > 3%
-                mask_rd = df['rd_ratio'] > 0.03
-                df_rd = df[mask_rd].copy()
-                print(f"  ✓ 研發投入 > 3%：{len(df_rd)} 檔")
-            
-            if df_rd.empty:
-                return pd.DataFrame()
-            
-            # ... (以下邏輯保持不變) ...
-            
-            # 過濾條件 2：營收正成長（YoY > 0）
-            mask_revenue = df_rd['revenue_yoy'] > 0
-            df_revenue = df_rd[mask_revenue].copy()
-            print(f"  ✓ 營收正成長：{len(df_revenue)} 檔")
-            
-            if df_revenue.empty: return pd.DataFrame()
-            
-            # 過濾條件 3：獲利能力（EPS > 0）
-            mask_eps = df_revenue['eps'] > 0
-            df_eps = df_revenue[mask_eps].copy()
-            print(f"  ✓ 有獲利 (EPS>0)：{len(df_eps)} 檔")
-            
-            if df_eps.empty: return pd.DataFrame()
-            
-            # 過濾條件 4：多頭排列
-            mask_ma = df_eps['close'] > df_eps['ma60']
-            df_ma = df_eps[mask_ma].copy()
-            
-            # 過濾條件 5：流動性
-            mask_vol = df_ma['volume_ratio'] > 0.8
-            df_final = df_ma[mask_vol].copy()
-            
-            return df_final
+        # === 自動切換模式 ===
+        # 如果全市場研發費用都是 0 (代表 CSV 沒這欄)，則跳過研發篩選
+        if df['rd_ratio'].max() == 0:
+            print("  ⚠️ 偵測到無研發數據 (CSV 簡表模式)")
+            print("  👉 自動降級策略：跳過研發條件，專注 [營收成長] + [EPS]")
+            df_rd = df.copy() # 不過濾
+        else:
+            # 正常模式：研發 > 3%
+            mask_rd = df['rd_ratio'] > 0.03
+            df_rd = df[mask_rd].copy()
+            print(f"  ✓ 研發投入 > 3%：{len(df_rd)} 檔")
+        
+        if df_rd.empty: return pd.DataFrame()
+        
+        # 篩選 2：營收成長
+        mask_rev = df_rd['revenue_yoy'] > 0
+        df_rev = df_rd[mask_rev].copy()
+        print(f"  ✓ 營收正成長：{len(df_rev)} 檔")
+        
+        if df_rev.empty: return pd.DataFrame()
+
+        # 篩選 3：有獲利 (EPS > 0)
+        mask_eps = df_rev['eps'] > 0
+        df_eps = df_rev[mask_eps].copy()
+        print(f"  ✓ 有獲利 (EPS>0)：{len(df_eps)} 檔")
+        
+        # 篩選 4：多頭排列
+        mask_ma = df_eps['close'] > df_eps['ma60']
+        df_ma = df_eps[mask_ma].copy()
+        
+        # 篩選 5：成交量
+        mask_vol = df_ma['volume_ratio'] > 0.8
+        df_final = df_ma[mask_vol].copy()
+        
+        return df_final
         
         # ============================================
         # 輔助方法
