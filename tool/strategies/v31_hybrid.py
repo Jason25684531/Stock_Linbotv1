@@ -108,28 +108,13 @@ class V31HybridStrategy(BaseStrategy):
         if df.empty:
             return pd.DataFrame()
         
-        # 取得日期
-        date_str = df['trade_date'].max()
-        if hasattr(date_str, 'strftime'):
-            date_str = date_str.strftime('%Y-%m-%d')
-        else:
-            date_str = str(date_str)
+        date_str = self._extract_date_str(df)
         
         # ============================================
         # 🔥 市場熔斷機制（Circuit Breaker）
         # ============================================
-        if Config.USE_MARKET_FILTER:
-            try:
-                from tool.db_helper import get_market_trend
-                market_trend = get_market_trend(date_str)
-                
-                if market_trend != 'BULL':
-                    print(f"⛔ 市場熔斷觸發（{date_str}）：大盤未處於多頭，V31 暫停選股")
-                    return pd.DataFrame()
-                else:
-                    print(f"✅ 市場狀態良好（{date_str}）：大盤處於多頭，允許選股")
-            except Exception as e:
-                print(f"⚠️ 市場趨勢檢查失敗: {e}")
+        if not self._check_market_filter(date_str, 'V31'):
+            return pd.DataFrame()
         
         # ============================================
         # 基本欄位檢查

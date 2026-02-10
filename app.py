@@ -429,31 +429,11 @@ def api_summary():
     Returns: JSON {total_roi, max_drawdown, sharpe_ratio, win_rate}
     """
     try:
-        profit_file = 'ML_Data/backtest_profit_report.csv'
-        if not os.path.exists(profit_file):
+        from tool.viz_helper import get_backtest_summary
+        summary = get_backtest_summary()
+        if summary is None:
             return jsonify({'error': '回測數據不存在'}), 404
-        
-        df = pd.read_csv(profit_file)
-        
-        # 計算統計指標
-        final_roi = df['roi'].iloc[-1] if not df.empty else 0
-        max_dd = df['mdd'].min() if 'mdd' in df.columns else 0
-        sharpe = df['sharpe'].iloc[-1] if 'sharpe' in df.columns else 0
-        
-        # 讀取交易明細計算勝率
-        trades_file = 'ML_Data/backtest_result.csv'
-        win_rate = 0
-        if os.path.exists(trades_file):
-            df_trades = pd.read_csv(trades_file)
-            if 'roi' in df_trades.columns:
-                win_rate = (df_trades['roi'] > 0).mean() * 100
-        
-        return jsonify({
-            'total_roi': round(final_roi, 2),
-            'max_drawdown': round(max_dd, 2),
-            'sharpe_ratio': round(sharpe, 2),
-            'win_rate': round(win_rate, 2)
-        })
+        return jsonify(summary)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -541,57 +521,19 @@ def api_live_signals():
     Returns: JSON {total_roi, win_rate, mdd, sharpe, trade_count, avg_hold_days}
     """
     try:
-        # 讀取資產曲線
-        profit_file = 'ML_Data/backtest_profit_report.csv'
-        trades_file = 'ML_Data/backtest_result.csv'
-        
-        if not os.path.exists(profit_file) or not os.path.exists(trades_file):
+        from tool.viz_helper import get_backtest_summary
+        summary = get_backtest_summary()
+        if summary is None:
             return jsonify({'error': '數據不存在'}), 404
         
-        df_profit = pd.read_csv(profit_file)
-        df_trades = pd.read_csv(trades_file)
-        
-        # 計算總 ROI
-        final_roi = df_profit['roi'].iloc[-1] if not df_profit.empty else 0
-        
-        # 計算勝率
-        wins = len(df_trades[df_trades['profit_pct'] > 0])
-        total_trades = len(df_trades)
-        win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-        
-        # 計算 MDD
-        max_drawdown = 0
-        if len(df_profit) > 1:
-            peak = df_profit['asset_value'].iloc[0]
-            for asset in df_profit['asset_value']:
-                if asset > peak:
-                    peak = asset
-                drawdown = (peak - asset) / peak if peak > 0 else 0
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
-        
-        # 計算 Sharpe (簡化版)
-        import numpy as np
-        daily_returns = df_profit['roi'].diff().dropna()
-        if len(daily_returns) > 0:
-            avg_return = np.mean(daily_returns)
-            std_return = np.std(daily_returns)
-            annualized_return = avg_return * 252
-            annualized_std = std_return * np.sqrt(252)
-            sharpe_ratio = (annualized_return / 100 - Config.RISK_FREE_RATE) / (annualized_std / 100) if annualized_std > 0 else 0
-        else:
-            sharpe_ratio = 0
-        
-        # 平均持有天數
-        avg_hold_days = df_trades['days'].mean() if not df_trades.empty else 0
-        
+        # 重新映射鍵名以符合前端期望
         return jsonify({
-            'total_roi': round(final_roi, 2),
-            'win_rate': round(win_rate, 1),
-            'mdd': round(max_drawdown * 100, 2),
-            'sharpe': round(sharpe_ratio, 3),
-            'trade_count': total_trades,
-            'avg_hold_days': round(avg_hold_days, 1)
+            'total_roi': summary['total_roi'],
+            'win_rate': summary['win_rate'],
+            'mdd': summary['max_drawdown'],
+            'sharpe': summary['sharpe_ratio'],
+            'trade_count': summary['trade_count'],
+            'avg_hold_days': summary['avg_hold_days']
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

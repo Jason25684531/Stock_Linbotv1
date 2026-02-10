@@ -24,7 +24,6 @@ V33 低波動穩健策略 (Low Volatility Strategy)
 from typing import List
 import pandas as pd
 from .base import BaseStrategy
-from config import Config
 
 
 class V33LowVolStrategy(BaseStrategy):
@@ -135,11 +134,7 @@ class V33LowVolStrategy(BaseStrategy):
         # ============================================
         # 取得日期
         # ============================================
-        date_str = df['trade_date'].max()
-        if hasattr(date_str, 'strftime'):
-            date_str = date_str.strftime('%Y-%m-%d')
-        else:
-            date_str = str(date_str)
+        date_str = self._extract_date_str(df)
         
         print(f"\n🔍 V33 低波動策略篩選 ({date_str})")
         print(f"   目標：低波動 + 穩定成長")
@@ -147,18 +142,8 @@ class V33LowVolStrategy(BaseStrategy):
         # ============================================
         # 市場熔斷檢查（可選）
         # ============================================
-        if Config.USE_MARKET_FILTER:
-            try:
-                from tool.db_helper import get_market_trend
-                market_trend = get_market_trend(date_str)
-                
-                if market_trend == 'BEAR':
-                    print(f"⛔ 市場熊市：V33 暫停選股（大盤 < MA60）")
-                    return pd.DataFrame()
-                else:
-                    print(f"✅ 市場狀態：{market_trend}")
-            except Exception as e:
-                print(f"⚠️ 市場趨勢檢查失敗: {e}")
+        if not self._check_market_filter(date_str, 'V33'):
+            return pd.DataFrame()
         
         # ============================================
         # V33 核心篩選

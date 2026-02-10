@@ -156,96 +156,78 @@ class V35InnovationStrategy(BaseStrategy):
         df_final = df_ma[mask_vol].copy()
         
         return df_final
+    
+    # ============================================
+    # 輔助方法
+    # ============================================
+    
+    def get_recommendation_message(self, stock_id: str, stock_data: pd.Series) -> str:
+        """
+        生成推薦訊息（用於 LINE 通知）
         
-        # ============================================
-        # 輔助方法
-        # ============================================
+        Args:
+            stock_id: 股票代號
+            stock_data: 股票資料 (Series)
         
-        def get_recommendation_message(self, stock_id: str, stock_data: pd.Series) -> str:
-            """
-            生成推薦訊息（用於 LINE 通知）
-            
-            Args:
-                stock_id: 股票代號
-                stock_data: 股票資料 (Series)
-            
-            Returns:
-                格式化的推薦訊息
-            """
-            rd_ratio = stock_data.get('rd_ratio', 0) * 100
-            revenue_yoy = stock_data.get('revenue_yoy', 0)
-            eps = stock_data.get('eps', 0)
-            quality_score = stock_data.get('v35_quality_score', 0) * 100
-            
-            msg = f"""
-    🧪 研發動能股 ({stock_id})
-    ━━━━━━━━━━━━━━━
-    📊 基本面：
-    • 研發佔比：{rd_ratio:.2f}%
-    • 營收成長：{revenue_yoy:+.1f}%
-    • 每股盈餘：{eps:.2f} 元
-
-    ⭐ 品質評分：{quality_score:.1f}/100
-
-    💡 策略：V35 中長線（持有 30-60 天）
-    停損 10% | 目標 20%
-    """
-            return msg.strip()
+        Returns:
+            格式化的推薦訊息
+        """
+        rd_ratio = stock_data.get('rd_ratio', 0) * 100
+        revenue_yoy = stock_data.get('revenue_yoy', 0)
+        eps = stock_data.get('eps', 0)
+        quality_score = stock_data.get('v35_quality_score', 0) * 100
         
-        def validate_data_quality(self, df: pd.DataFrame) -> dict:
-            """
-            驗證資料品質
-            
-            Args:
-                df: 輸入資料框
-            
-            Returns:
-                驗證報告 (dict)
-            """
-            report = {
-                'total_rows': len(df),
-                'has_rd_data': 0,
-                'has_revenue_data': 0,
-                'has_eps_data': 0,
-                'complete_data': 0
-            }
-            
-            if df.empty:
-                return report
-            
-            # 統計資料完整性
-            if 'rd_ratio' in df.columns:
-                report['has_rd_data'] = (df['rd_ratio'] > 0).sum()
-            
-            if 'revenue_yoy' in df.columns:
-                report['has_revenue_data'] = df['revenue_yoy'].notna().sum()
-            
-            if 'eps' in df.columns:
-                report['has_eps_data'] = df['eps'].notna().sum()
-            
-            # 完整資料（三者皆有）
-            if all(col in df.columns for col in ['rd_ratio', 'revenue_yoy', 'eps']):
-                complete_mask = (
-                    (df['rd_ratio'] > 0) & 
-                    df['revenue_yoy'].notna() & 
-                    df['eps'].notna()
-                )
-                report['complete_data'] = complete_mask.sum()
-            
+        msg = (
+            f"🧪 研發動能股 ({stock_id})\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"📊 基本面：\n"
+            f"• 研發佔比：{rd_ratio:.2f}%\n"
+            f"• 營收成長：{revenue_yoy:+.1f}%\n"
+            f"• 每股盈餘：{eps:.2f} 元\n\n"
+            f"⭐ 品質評分：{quality_score:.1f}/100\n\n"
+            f"💡 策略：V35 中長線（持有 30-60 天）\n"
+            f"停損 10% | 目標 20%"
+        )
+        return msg
+    
+    def validate_data_quality(self, df: pd.DataFrame) -> dict:
+        """
+        驗證資料品質
+        
+        Args:
+            df: 輸入資料框
+        
+        Returns:
+            驗證報告 (dict)
+        """
+        report = {
+            'total_rows': len(df),
+            'has_rd_data': 0,
+            'has_revenue_data': 0,
+            'has_eps_data': 0,
+            'complete_data': 0
+        }
+        
+        if df.empty:
             return report
-
-
-# ===========================================
-# 策略工廠註冊（自動註冊）
-# ===========================================
-def register_strategy():
-    """註冊策略到策略管理器"""
-    from tool.strategy_manager import register_strategy as register
-    register(V35InnovationStrategy())
-
-
-# 模組載入時自動註冊
-try:
-    register_strategy()
-except ImportError:
-    pass  # 避免循環依賴
+        
+        # 統計資料完整性
+        if 'rd_ratio' in df.columns:
+            report['has_rd_data'] = int((df['rd_ratio'] > 0).sum())
+        
+        if 'revenue_yoy' in df.columns:
+            report['has_revenue_data'] = int(df['revenue_yoy'].notna().sum())
+        
+        if 'eps' in df.columns:
+            report['has_eps_data'] = int(df['eps'].notna().sum())
+        
+        # 完整資料（三者皆有）
+        if all(col in df.columns for col in ['rd_ratio', 'revenue_yoy', 'eps']):
+            complete_mask = (
+                (df['rd_ratio'] > 0) & 
+                df['revenue_yoy'].notna() & 
+                df['eps'].notna()
+            )
+            report['complete_data'] = int(complete_mask.sum())
+        
+        return report

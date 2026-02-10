@@ -1,3 +1,10 @@
+"""
+每日資料庫統一更新入口 (V35 Pipeline)
+============================================
+功能：一鍵執行所有資料更新流程
+更新順序：股價行情 → 月營收 → 季度財報
+使用方式：python 1_update_database.py
+"""
 import requests
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -6,7 +13,6 @@ import random
 from datetime import datetime, timedelta, date
 from config import Config
 from tool.db_helper import get_db_engine
-from io import StringIO
 
 # ============================================
 # ⚙️ 設定區 (統一使用 Config)
@@ -222,7 +228,20 @@ def fetch_tpex_data(date_str, max_retries=3):
     return None
 
 def process_and_save(df, date_str, engine):
-    """清洗並寫入資料庫"""
+    """
+    清洗股票行情資料並寫入資料庫
+    
+    將抓回的原始 DataFrame 進行數值清洗（去除逗號、處理無效值），
+    然後透過 db_helper.upsert_stock_data 寫入 daily_market_data 表。
+    
+    Args:
+        df: 原始行情 DataFrame（含 stock_id, open_price 等欄位）
+        date_str: 交易日期字串 (YYYY-MM-DD)
+        engine: SQLAlchemy 資料庫引擎
+    
+    Returns:
+        int: 成功寫入的筆數
+    """
     if df is None or df.empty: return 0
     
     cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio', 'foreign_buy', 'trust_buy']
@@ -249,176 +268,25 @@ def process_and_save(df, date_str, engine):
             return 0
 
 # ============================================
-# 🌐 營收爬蟲 (V4 Smart - 使用舊版網站)
+# 🚀 主程式 - V35 統一更新入口
 # ============================================
 
-def fetch_revenue_v4_smart(year, month, max_retries=3):
+def run_price_update(engine):
     """
-    從 mopsov.twse.com.tw (舊版網站) 抓取月營收資料並計算 YoY
+    步驟一：更新每日股價行情
+    
+    從 TWSE/TPEx 抓取最新的日線行情（含籌碼），
+    自動偵測資料庫最新日期並補齊至今日。
     
     Args:
-        year: 西元年
-        month: 月份
-        max_retries: 最大重試次數
+        engine: SQLAlchemy 資料庫引擎
     
     Returns:
-        DataFrame with columns: ['stock_id', 'revenue', 'revenue_yoy']
-        若失敗則回傳 None
+        int: 本次更新的總筆數
     """
-    print(f"  🔹 正在抓取 {year}年{month}月 營收資料...", end="")
-    
-    roc_year = year - 1911
-    session = requests.Session()
-    
-    # 強化的 Headers (模擬真實瀏覽器)
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
-        'Referer': 'https://mopsov.twse.com.tw/',
-    }
-    session.headers.update(headers)
-    
-    for attempt in range(max_retries):
-        try:
-            # 隨機延遲
-            if attempt > 0:
-                time.sleep(random.uniform(2, 4))
-            
-            # 嘗試多種可能的 URL 格式
-            urls = [
-                f'https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{roc_year}_{month}_0.html',
-                f'https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_{roc_year}_{month:02d}_0.html',
-            ]
-            
-            for url in urls:
-                try:
-                    resp = session.get(url, timeout=15)
-                    
-                    # 嘗試多種編碼
-                    for encoding in ['big5', 'cp950', 'utf-8']:
-                        try:
-                            resp.encoding = encoding
-                            html = resp.text
-                            
-                            # 檢查是否有表格資料
-                            if resp.status_code == 200 and '<table' in html and '公司代號' in html:
-                                # 解析表格
-                                dfs = pd.read_html(StringIO(html))
-                                
-                                for df in dfs:
-                                    # 處理多層欄位
-                                    if isinstance(df.columns, pd.MultiIndex):
-                                        df.columns = df.columns.get_level_values(-1)
-                                    
-                                    # 清理欄位名稱
-                                    df.columns = [str(c).strip() for c in df.columns]
-                                    col_str = ' '.join(df.columns)
-                                    
-                                    # 確認是營收表格
-                                    if '公司代號' in col_str or '公司 代號' in col_str:
-                                        # 尋找關鍵欄位
-                                        code_col = next((c for c in df.columns if '代號' in c), None)
-                                        revenue_col = next((c for c in df.columns if '當月營收' in c or '營業收入' in c), None)
-                                        yoy_col = next((c for c in df.columns if '去年同月增減' in c or '增減(%)' in c), None)
-                                        
-                                        if code_col and revenue_col:
-                                            # 建立結果 DataFrame
-                                            result = pd.DataFrame()
-                                            result['stock_id'] = df[code_col].astype(str).str.strip()
-                                            result['revenue'] = df[revenue_col].apply(clean_number)
-                                            
-                                            # 處理 YoY (若存在)
-                                            if yoy_col:
-                                                result['revenue_yoy'] = df[yoy_col].apply(clean_number)
-                                            else:
-                                                result['revenue_yoy'] = 0.0
-                                            
-                                            # 過濾有效資料
-                                            result = result[result['stock_id'].str.match(r'^\d{4}$', na=False)]
-                                            result = result[result['revenue'] > 0]
-                                            
-                                            if len(result) > 0:
-                                                print(f" ✅ ({len(result)}筆)")
-                                                return result
-                        except:
-                            continue
-                except:
-                    continue
-            
-            if attempt < max_retries - 1:
-                print(f" (重試{attempt+1})", end="")
-            
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f" (錯誤，重試)", end="")
-            else:
-                print(f" ❌ 營收抓取失敗: {e}")
-    
-    print(" (無資料)")
-    return None
-
-
-def update_revenue_data(engine, year, month):
-    """
-    更新指定月份的營收資料到資料庫
-    
-    Args:
-        engine: 資料庫引擎
-        year: 西元年
-        month: 月份
-    
-    Returns:
-        成功更新的筆數
-    """
-    revenue_df = fetch_revenue_v4_smart(year, month)
-    
-    if revenue_df is None or revenue_df.empty:
-        return 0
-    
-    # 準備更新 SQL
-    update_count = 0
-    try:
-        with engine.connect() as conn:
-            for _, row in revenue_df.iterrows():
-                stock_id = row['stock_id']
-                revenue_yoy = row['revenue_yoy']
-                
-                # 找出該月份的所有交易日
-                year_month_str = f"{year}-{month:02d}"
-                
-                # 更新該股票該月份的所有記錄
-                sql = text("""
-                    UPDATE daily_market_data 
-                    SET revenue_yoy = :yoy 
-                    WHERE stock_id = :stock_id 
-                    AND strftime('%Y-%m', trade_date) = :year_month
-                """)
-                
-                result = conn.execute(sql, {
-                    'yoy': revenue_yoy,
-                    'stock_id': stock_id,
-                    'year_month': year_month_str
-                })
-                update_count += result.rowcount
-            
-            conn.commit()
-        
-        print(f"💾 營收資料已更新 {update_count} 筆記錄")
-        return update_count
-    
-    except Exception as e:
-        print(f"❌ 營收更新失敗: {e}")
-        return 0
-
-# ============================================
-# 🚀 主程式
-# ============================================
-if __name__ == "__main__":
-    print(f"🔗 連線資料庫...")
-    engine = get_db_engine()
+    print(f"\n{'='*60}")
+    print("📈 步驟 1/3：更新每日股價行情")
+    print(f"{'='*60}")
     
     latest_date = get_latest_date_from_db(engine)
     if latest_date:
@@ -431,9 +299,10 @@ if __name__ == "__main__":
     end_dt = datetime.now().date()
     
     if start_dt > end_dt:
-        print("✅ 資料庫已是最新，無需更新。")
-        exit(0)
+        print("✅ 股價資料已是最新，無需更新。")
+        return 0
 
+    total_count = 0
     current_dt = start_dt
     while current_dt <= end_dt:
         date_str = current_dt.strftime("%Y-%m-%d")
@@ -449,10 +318,176 @@ if __name__ == "__main__":
         count = process_and_save(final_df, date_str, engine)
         if count > 0:
             print(f"💾 成功寫入 {count} 筆資料！")
+            total_count += count
         else:
             print("💤 假日或無資料")
 
         current_dt += timedelta(days=1)
         time.sleep(random.randint(3, 5))
 
-    print("\n🎉 每日更新完成！")
+    return total_count
+
+
+def run_monthly_revenue_update():
+    """
+    步驟二：更新月營收資料
+    
+    呼叫 tool/update_monthly_revenue.py 中的爬蟲邏輯，
+    爬取 MOPS 靜態 HTML 以取得最新月營收與 YoY 資料，
+    寫入 monthly_revenue 資料表。
+    
+    Returns:
+        bool: 是否成功
+    """
+    print(f"\n{'='*60}")
+    print("💰 步驟 2/3：更新月營收資料")
+    print(f"{'='*60}")
+    
+    try:
+        from tool.update_monthly_revenue import fetch_mops_static_revenue, process_and_save as save_revenue
+        
+        now = datetime.now()
+        # 營收通常在次月 10 日後公布，抓取上個月的
+        if now.day < 12:
+            target_year = now.year if now.month > 1 else now.year - 1
+            target_month = now.month - 1 if now.month > 1 else 12
+        else:
+            target_year = now.year
+            target_month = now.month
+        
+        # 嘗試最新月份 + 上個月（確保補齊）
+        months_to_try = []
+        for offset in range(2):
+            m = target_month - offset
+            y = target_year
+            if m <= 0:
+                m += 12
+                y -= 1
+            months_to_try.append((y, m))
+        
+        success = False
+        for y, m in months_to_try:
+            print(f"\n📅 嘗試更新 {y}年{m}月 月營收...")
+            res_df = fetch_mops_static_revenue(y, m)
+            if res_df is not None and not res_df.empty:
+                save_revenue(res_df)
+                success = True
+            time.sleep(random.uniform(2, 4))
+        
+        return success
+        
+    except Exception as e:
+        print(f"⚠️ 月營收更新失敗（不中斷流程）: {e}")
+        return False
+
+
+def run_financial_update():
+    """
+    步驟三：更新最新一季財報
+    
+    呼叫 tool/update_financials_mops.py 中的季報爬蟲邏輯，
+    從 mopsov 備援站抓取最新一季的綜合損益表，
+    寫入 financial_statements 資料表（含營業利益率計算）。
+    
+    Returns:
+        bool: 是否成功
+    """
+    print(f"\n{'='*60}")
+    print("📊 步驟 3/3：更新季度財報")
+    print(f"{'='*60}")
+    
+    try:
+        from tool.update_financials_mops import update_quarter
+        
+        now = datetime.now()
+        roc_year = now.year - 1911
+        
+        # 推算最新可取得的季度
+        # Q1 (5月後可取得), Q2 (8月後), Q3 (11月後), Q4 (次年3月後)
+        if now.month >= 11:
+            target_year, target_quarter = roc_year, 3
+        elif now.month >= 8:
+            target_year, target_quarter = roc_year, 2
+        elif now.month >= 5:
+            target_year, target_quarter = roc_year, 1
+        elif now.month >= 3:
+            target_year, target_quarter = roc_year - 1, 4
+        else:
+            target_year, target_quarter = roc_year - 1, 3
+        
+        print(f"📅 目標季度: 民國 {target_year} Q{target_quarter}")
+        result = update_quarter(target_year, target_quarter)
+        return result
+        
+    except Exception as e:
+        print(f"⚠️ 季度財報更新失敗（不中斷流程）: {e}")
+        return False
+
+
+def print_summary_report(price_count, revenue_ok, financial_ok, elapsed):
+    """
+    印出更新流程的統計摘要
+    
+    Args:
+        price_count: 股價更新筆數
+        revenue_ok: 月營收是否成功
+        financial_ok: 季度財報是否成功
+        elapsed: 總耗時秒數
+    """
+    engine = get_db_engine()
+    
+    print(f"\n{'='*60}")
+    print("📊 V35 每日更新流程 - 統計摘要")
+    print(f"{'='*60}")
+    
+    # 各表筆數統計
+    try:
+        with engine.connect() as conn:
+            price_total = conn.execute(text("SELECT COUNT(*) FROM daily_market_data")).scalar() or 0
+            financial_total = conn.execute(text("SELECT COUNT(*) FROM financial_statements")).scalar() or 0
+            
+            try:
+                revenue_total = conn.execute(text("SELECT COUNT(*) FROM monthly_revenue")).scalar() or 0
+            except Exception:
+                revenue_total = 0
+            
+        print(f"\n📋 資料表統計:")
+        print(f"  {'daily_market_data':<25} {price_total:>10,} 筆（本次新增 {price_count}）")
+        print(f"  {'monthly_revenue':<25} {revenue_total:>10,} 筆")
+        print(f"  {'financial_statements':<25} {financial_total:>10,} 筆")
+    except Exception as e:
+        print(f"  ⚠️ 統計查詢失敗: {e}")
+    
+    print(f"\n📋 更新狀態:")
+    print(f"  {'📈 股價行情':<15} {'✅ 完成' if price_count > 0 else '💤 已是最新'}")
+    print(f"  {'💰 月營收':<15} {'✅ 完成' if revenue_ok else '⚠️ 跳過/失敗'}")
+    print(f"  {'📊 季度財報':<15} {'✅ 完成' if financial_ok else '⚠️ 跳過/失敗'}")
+    print(f"\n⏱️ 總耗時: {elapsed // 60:.0f} 分 {elapsed % 60:.0f} 秒")
+    print(f"{'='*60}\n")
+
+
+if __name__ == "__main__":
+    print(f"\n{'='*60}")
+    print("🚀 Stock Linbot V35 - 每日資料庫統一更新")
+    print(f"📅 執行時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*60}")
+    
+    start_time = datetime.now()
+    
+    print(f"\n🔗 連線資料庫...")
+    engine = get_db_engine()
+    
+    # 步驟 1: 股價行情
+    price_count = run_price_update(engine)
+    
+    # 步驟 2: 月營收
+    revenue_ok = run_monthly_revenue_update()
+    
+    # 步驟 3: 季度財報
+    financial_ok = run_financial_update()
+    
+    # 總結報告
+    elapsed = (datetime.now() - start_time).total_seconds()
+    print_summary_report(price_count, revenue_ok, financial_ok, elapsed)
+    
+    print("🎉 每日更新流程完成！")

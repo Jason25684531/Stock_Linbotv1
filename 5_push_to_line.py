@@ -109,10 +109,12 @@ def main():
                     LEFT JOIN (
                         SELECT stock_id, rd_expense, revenue
                         FROM financial_statements fs1
-                        WHERE (year * 10 + quarter) = (
+                        WHERE fs1.year >= 1911
+                          AND (year * 10 + quarter) = (
                             SELECT MAX(year * 10 + quarter)
                             FROM financial_statements fs2
                             WHERE fs2.stock_id = fs1.stock_id
+                              AND fs2.year >= 1911
                         )
                     ) fs ON dr.stock_id = fs.stock_id
                     WHERE dr.trade_date = :date AND dr.strategy = :strategy

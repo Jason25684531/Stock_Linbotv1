@@ -4,7 +4,7 @@
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證  
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表  
-> 📅 **最後更新**: 2026-02-02
+> 📅 **最後更新**: 2026-02-10
 
 ---
 
@@ -46,7 +46,8 @@
 ┌────────────▼────────────────────────────────────────────┐
 │                 📊 策略層 (Multi-Strategy)              │
 │   tool/strategy_manager.py (策略工廠，支援多策略並行)     │
-│   tool/strategies/ (V31, V33, V34, V35)                 │
+│   tool/strategies/base.py (BaseStrategy 抽象基底)        │
+│   tool/strategies/ (V31, V33, V34, V35 繼承 base)       │
 │   tool/strategy.py (V30/V31 共用邏輯)                    │
 └────────────┬────────────────────────────────────────────┘
              │ 策略依賴技術指標與資料查詢
@@ -81,7 +82,7 @@
 | **多策略並行** | `StrategyManager` 支援列表形式 | 同時運行 V33+V34，分散風險 |
 | **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入 | 防止資料外洩 |
 | **統一入口** | 所有 DB 操作經 `tool.db_helper` | 防 SQL Injection、易測試 |
-| **無重複代碼** | 共用函數取代本地實作 | 減少 150+ 行代碼 |
+| **無重複代碼** | 共用函數取代本地實作 | 減少 450+ 行代碼 |
 
 ---
 
@@ -223,8 +224,16 @@ Stock_Linbotv1/
 │   └── templates/               # Web Dashboard
 │
 ├── ⚙️ 核心模組 (tool/) - 統一共用函數
-│   ├── strategy.py              # V30/V31 選股邏輯
-│   ├── calc_indicators.py       # 技術指標 + 特徵計算
+│   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry)
+│   ├── strategies/              # 策略實作目錄
+│   │   ├── base.py              # BaseStrategy 抽象基底 (共用日期提取/大盤熔斷)
+│   │   ├── v31_hybrid.py        # V31 混合策略 (V30+XGBoost)
+│   │   ├── v33_low_vol.py       # V33 低波動策略
+│   │   ├── v34_turbo.py         # V34 高成長策略
+│   │   └── v35_innovation.py    # V35 創新策略
+│   ├── strategy.py              # V30/V31 選股邏輯 (輕量委派)
+│   ├── calc_indicators.py       # 技術指標 + 特徵計算 (唯一來源)
+│   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
 │   ├── db_helper.py             # 資料庫操作 (唯一入口)
 │   └── news_agent.py            # 情緒分析
 │
@@ -247,19 +256,25 @@ Stock_Linbotv1/
 ### 模組依賴關係
 
 ```
-應用層 (app.py, 腳本)
+應用層 (app.py, 1-6_*.py 腳本)
     ↓
-策略層 (tool/strategy.py)
+回測/視覺化層 (4_run_backtest.py, tool/viz_helper.py)
     ↓
-工具層 (tool/db_helper.py, tool/calc_indicators.py)
+策略層 (tool/strategy_manager.py → tool/strategies/base.py → V31/V33/V34/V35)
     ↓
-設定層 (config.py)
+指標層 (tool/calc_indicators.py)
+    ↓
+資料層 (tool/db_helper.py)
+    ↓
+設定層 (config.py + .env)
 ```
 
 **設計原則**:
 - 所有資料庫操作必須通過 `tool/db_helper.py`
-- 所有技術指標計算必須通過 `tool/calc_indicators.py`
+- 所有技術指標計算必須通過 `tool/calc_indicators.py`（唯一真理來源）
+- 所有策略繼承 `BaseStrategy`，共用日期提取與大盤熔斷邏輯
 - 所有常數定義必須在 `config.py`
+- Web API 回測指標統一由 `tool/viz_helper.get_backtest_summary()` 提供
 
 ---
 
@@ -296,8 +311,10 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V33 Phase 2+ Multi-Strategy (2026-01-31)  
+**版本**: V35 Phase 5+ Architecture Cleanup (2026-02-10)  
 **授權**: MIT License  
-**新增功能**:
-- ✅ Phase 1: 環境變數隔離 + Web 登入驗證
-- ✅ Phase 2: 多策略並行架構 (同時運行多個策略)
+**最新變更**:
+- ✅ 架構深度清理：消除 8 處重複/死碼，減少 300+ 行
+- ✅ BaseStrategy 提取共用方法（`_extract_date_str`, `_check_market_filter`）
+- ✅ 修正 V35 不可達代碼 bug
+- ✅ 回測指標統一由 `get_backtest_summary()` 提供

@@ -7,10 +7,14 @@ BaseStrategy - 策略抽象基類
 - 抽象類別定義共同介面
 - 各策略類別實現具體邏輯
 - Manager 負責動態切換
+
+🔄 V35 架構清理:
+- 新增共用方法 _extract_date_str() / _check_market_filter()
+- 消除各策略中重複的日期提取與市場熔斷檢查邏輯
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import pandas as pd
 
 
@@ -121,6 +125,49 @@ class BaseStrategy(ABC):
     # 共用方法 (所有策略可用)
     # ============================================
     
+    def _extract_date_str(self, df: pd.DataFrame) -> str:
+        """從 DataFrame 提取日期字串（共用邏輯，避免各策略重複實作）
+        
+        Args:
+            df: 含有 trade_date 欄位的 DataFrame
+        
+        Returns:
+            str: 日期字串 (YYYY-MM-DD 格式)
+        """
+        date_val = df['trade_date'].max()
+        if hasattr(date_val, 'strftime'):
+            return date_val.strftime('%Y-%m-%d')
+        return str(date_val)
+    
+    def _check_market_filter(self, date_str: str, strategy_label: str = '') -> bool:
+        """共用市場熔斷檢查（大盤 < MA60 時禁止買入）
+        
+        Args:
+            date_str: 日期字串
+            strategy_label: 策略標籤（用於日誌）
+        
+        Returns:
+            bool: True 表示市場允許買入，False 表示觸發熔斷
+        """
+        from config import Config
+        if not Config.USE_MARKET_FILTER:
+            return True
+        
+        try:
+            from tool.db_helper import get_market_trend
+            market_trend = get_market_trend(date_str)
+            
+            label = strategy_label or self.name
+            if market_trend != 'BULL':
+                print(f"⛔ 市場熔斷觸發（{date_str}）：大盤未處於多頭，{label} 暫停選股")
+                return False
+            else:
+                print(f"✅ 市場狀態良好（{date_str}）：大盤處於多頭，允許選股")
+                return True
+        except Exception as e:
+            print(f"⚠️ 市場趨勢檢查失敗: {e}")
+            return True  # 失敗時不阻擋
+
     def _validate_attributes(self):
         """驗證策略屬性是否完整"""
         required_attrs = [

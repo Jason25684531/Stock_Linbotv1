@@ -133,7 +133,7 @@ def test_merge_financial_data():
             conn.execute(text("""
                 INSERT INTO financial_statements 
                 (stock_id, year, quarter, revenue, rd_expense, eps)
-                VALUES ('9999', 113, 3, 1000000, 50000, 1.5)
+                VALUES ('9999', 2024, 3, 1000000, 50000, 1.5)
             """))
             conn.commit()
             print("✅ 測試數據插入成功")

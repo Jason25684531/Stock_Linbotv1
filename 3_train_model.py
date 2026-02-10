@@ -8,6 +8,7 @@ import os
 from config import Config
 from tool.news_agent import NewsSentimentAgent
 from tool.db_helper import get_db_engine
+from tool.calc_indicators import calculate_ratio_features
 
 # ============================================
 # ⚙️ V33 Phase 2: 動態策略參數
@@ -35,32 +36,7 @@ except Exception as e:
 # 時間序列拆分參數
 TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
 
-
-def calculate_ratio_features(df):
-    """
-    計算比例特徵（籌碼面標準化）
-    """
-    print("📊 計算比例特徵（籌碼面標準化）...")
-    
-    # 避免除以零
-    df['volume'] = df['volume'].replace(0, 1)
-    
-    # 計算成交量相對於 20 日均量的比例（量能強度）
-    df['volume_ma20'] = df.groupby('stock_id')['volume'].transform(
-        lambda x: x.rolling(20, min_periods=1).mean()
-    )
-    df['volume_ratio'] = df['volume'] / df['volume_ma20'].replace(0, 1)
-    
-    # 籌碼面比例（外資/投信 參與度）
-    df['foreign_ratio'] = df['foreign_buy'] / df['volume']
-    df['trust_ratio'] = df['trust_buy'] / df['volume']
-    
-    # 限制極端值（避免異常數據影響模型）
-    df['foreign_ratio'] = df['foreign_ratio'].clip(-0.5, 0.5)
-    df['trust_ratio'] = df['trust_ratio'].clip(-0.5, 0.5)
-    df['volume_ratio'] = df['volume_ratio'].clip(0, 5)
-    
-    return df
+# Note: calculate_ratio_features 已統一由 tool.calc_indicators 提供
 
 
 def calculate_future_target(df, look_ahead_days, target_return):

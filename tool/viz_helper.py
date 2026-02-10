@@ -400,3 +400,49 @@ def generate_report_from_csv(
     
     # 生成報告
     return visualizer.generate_full_report(benchmark_data)
+
+
+def get_backtest_summary(
+    equity_csv: str = 'ML_Data/backtest_profit_report.csv',
+    trades_csv: str = 'ML_Data/backtest_result.csv'
+) -> Optional[Dict[str, Any]]:
+    """從 CSV 檔案計算回測摘要統計（供 API 共用）
+    
+    Args:
+        equity_csv: 權益曲線 CSV 路徑
+        trades_csv: 交易明細 CSV 路徑
+    
+    Returns:
+        Dict: {total_roi, win_rate, mdd, sharpe, trade_count, avg_hold_days} 
+        或 None（檔案不存在時）
+    """
+    import os
+    
+    if not os.path.exists(equity_csv):
+        return None
+    
+    equity_data = pd.read_csv(equity_csv)
+    trades_data = pd.read_csv(trades_csv) if os.path.exists(trades_csv) else pd.DataFrame()
+    
+    visualizer = PerformanceVisualizer(equity_data, trades_data)
+    m = visualizer.metrics
+    
+    result = {
+        'total_roi': round(m.get('total_return', 0), 2),
+        'max_drawdown': round(m.get('max_drawdown', 0) * 100, 2),
+        'sharpe_ratio': round(m.get('sharpe_ratio', 0), 2),
+        'win_rate': round(m.get('win_rate', 0), 2),
+    }
+    
+    # 交易明細統計
+    if not trades_data.empty:
+        result['trade_count'] = len(trades_data)
+        if 'days' in trades_data.columns:
+            result['avg_hold_days'] = round(trades_data['days'].mean(), 1)
+        else:
+            result['avg_hold_days'] = 0
+    else:
+        result['trade_count'] = 0
+        result['avg_hold_days'] = 0
+    
+    return result

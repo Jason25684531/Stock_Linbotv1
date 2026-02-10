@@ -24,7 +24,6 @@ V34 雙渦輪飆股策略 (Twin-Turbo Strategy)
 from typing import List
 import pandas as pd
 from .base import BaseStrategy
-from config import Config
 
 
 class V34TurboStrategy(BaseStrategy):
@@ -137,11 +136,7 @@ class V34TurboStrategy(BaseStrategy):
         # ============================================
         # 取得日期
         # ============================================
-        date_str = df['trade_date'].max()
-        if hasattr(date_str, 'strftime'):
-            date_str = date_str.strftime('%Y-%m-%d')
-        else:
-            date_str = str(date_str)
+        date_str = self._extract_date_str(df)
         
         print(f"\n🚀 V34 雙渦輪策略篩選 ({date_str})")
         print(f"   目標：高成長 + 價格突破")
@@ -149,18 +144,8 @@ class V34TurboStrategy(BaseStrategy):
         # ============================================
         # 市場熔斷檢查（V34 只在多頭市場運作）
         # ============================================
-        if Config.USE_MARKET_FILTER:
-            try:
-                from tool.db_helper import get_market_trend
-                market_trend = get_market_trend(date_str)
-                
-                if market_trend != 'BULL':
-                    print(f"⛔ 市場非多頭：V34 暫停選股（大盤需 > MA60）")
-                    return pd.DataFrame()
-                else:
-                    print(f"✅ 市場狀態：多頭確認")
-            except Exception as e:
-                print(f"⚠️ 市場趨勢檢查失敗: {e}")
+        if not self._check_market_filter(date_str, 'V34'):
+            return pd.DataFrame()
         
         # ============================================
         # V34 核心篩選

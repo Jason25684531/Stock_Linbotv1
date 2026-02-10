@@ -90,20 +90,16 @@ def check_sentiment_filter(date_str: str) -> Optional[Dict[str, any]]:
 
 
 def check_market_trend(date_str: str) -> Optional[str]:
-    """檢查市場趨勢
+    """檢查市場趨勢（代理至 db_helper.get_market_trend）
     
     Args:
         date_str: 日期字串 (YYYY-MM-DD)
     
     Returns:
-        'BULL' | 'BEAR' | 'NEUTRAL' | None (失敗時)
+        'BULL' | 'BEAR' | None (失敗時)
     """
-    try:
-        from tool.db_helper import get_market_trend
-        return get_market_trend(date_str)
-    except Exception as e:
-        print(f"⚠️ 市場趨勢檢查失敗: {e}")
-        return None
+    from tool.db_helper import get_market_trend
+    return get_market_trend(date_str)
 
 
 def _load_v31_model() -> Tuple[Optional[Any], Optional[List[str]]]:
@@ -296,14 +292,7 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     """
     V30/V31 策略候選股票篩選器
     
-    🔥 V33 Phase 2 Refactor: 使用策略工廠動態取得篩選邏輯
-    
-    篩選條件由當前啟用的策略決定，預設為 V31:
-    1. 市場趨勢檢查（熊市不選股）
-    2. 均線排列：收盤價 > MA20 > MA60
-    3. 🔥 強制趨勢濾網：收盤價 > MA60（降低 MDD）
-    4. 成交量：> 300萬股
-    5. RSI：40 < RSI < 70
+    🔥 V33 Phase 2 Refactor: 委託策略工廠動態執行篩選邏輯
     
     Args:
         df: DataFrame，必須包含 close_price, ma20, ma60, volume, rsi
@@ -314,112 +303,30 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
     
-    # 🔥 V33 Phase 2: 使用策略工廠
+    # 使用策略工廠
     strategy = _get_strategy()
     
     if strategy is not None:
-        # 使用策略物件的 filter_candidates 方法
         try:
-            candidates = strategy.filter_candidates(df)
-            return candidates
+            return strategy.filter_candidates(df)
         except Exception as e:
             print(f"⚠️ 策略篩選執行失敗: {e}")
-            # 繼續使用下方的回退邏輯
     
-    # ============================================
-    # 回退邏輯（向後兼容）
-    # ============================================
-    print(f"⚠️ 使用回退篩選邏輯（V31 硬編碼）")
-    
-    # 取得日期
-    date_str = df['trade_date'].max()
-    if hasattr(date_str, 'strftime'):
-        date_str = date_str.strftime('%Y-%m-%d')
-    else:
-        date_str = str(date_str)
-    
-    # ============================================
-    # 🔥 V33 Phase 2: 市場熔斷機制（Circuit Breaker）
-    # ============================================
-    if Config.USE_MARKET_FILTER:
-        market_trend = check_market_trend(date_str)
-        
-        if market_trend != 'BULL':
-            print(f"⛔ 市場熔斷觸發（{date_str}）：大盤未處於明確多頭（收盤 < MA60），V30 策略全面暫停")
-            return pd.DataFrame()
-        else:
-            print(f"✅ 市場狀態良好（{date_str}）：大盤處於多頭（收盤 > MA60），允許選股")
-    
-    # 確保必要欄位存在
+    # 極簡回退邏輯（僅在策略工廠完全不可用時啟用）
+    print(f"⚠️ 策略工廠不可用，使用最小回退篩選邏輯")
     required_cols = ['close_price', 'ma20', 'ma60', 'volume', 'rsi']
     for col in required_cols:
         if col not in df.columns:
             print(f"⚠️ 缺少必要欄位: {col}")
             return pd.DataFrame()
     
-    # 🔥 V33 Phase 2: 個股趨勢濾網（收盤 > MA60）
-    if Config.USE_TREND_FILTER:
-        before_count = len(df)
-        df = df[df['close_price'] > df['ma60']].copy()
-        if df.empty:
-            print(f"⚠️ 個股趨勢濾網生效：所有標的收盤價皆低於 MA60，暫停選股")
-            return pd.DataFrame()
-        print(f"✨ 個股趨勢濾網：{before_count} → {len(df)} 檔（篩除收盤 < MA60）")
-    
-    # 嚴格篩選
     candidates = df[
-        (df['close_price'] > df['ma20']) &           # 收盤 > MA20
-        (df['ma20'] > df['ma60']) &                  # MA20 > MA60
-        (df['volume'] > Config.V30_VOLUME_THRESHOLD) &  # 量能充足
-        (df['rsi'] > Config.V30_RSI_LOW) &           # RSI 不過低
-        (df['rsi'] < Config.V30_RSI_HIGH)            # RSI 不過高
+        (df['close_price'] > df['ma20']) &
+        (df['ma20'] > df['ma60']) &
+        (df['volume'] > Config.V30_VOLUME_THRESHOLD) &
+        (df['rsi'] > Config.V30_RSI_LOW) &
+        (df['rsi'] < Config.V30_RSI_HIGH)
     ].copy()
-    
-    # ============================================
-    # 🆕 V33 Phase 2: 進階濾網 (Opt-in)
-    # ============================================
-    
-    # 1️⃣ KD 黃金交叉濾網（超賣反彈策略）
-    if Config.USE_KD_FILTER and not candidates.empty:
-        try:
-            # 檢查是否有 kd_k 欄位（資料庫通常只有 K 值）
-            if 'kd_k' in candidates.columns:
-                # 🔥 V33 Phase 2 簡化邏輯：K < 30 (超賣區間)
-                # 因資料庫可能無 D 值，僅用 K 值判斷超賣
-                kd_filter = (candidates['kd_k'] < 30)
-                
-                before_count = len(candidates)
-                candidates = candidates[kd_filter].copy()
-                after_count = len(candidates)
-                
-                print(f"✨ KD 超賣濾網啟用：篩選前 {before_count} 檔 → 篩選後 {after_count} 檔 (K < 30)")
-            else:
-                print(f"⚠️ 資料庫無 KD 指標，跳過 KD 濾網")
-        except Exception as e:
-            print(f"⚠️ KD 濾網執行失敗: {e}")
-    
-    # 2️⃣ 布林通道壓縮突破濾網
-    if Config.USE_BB_FILTER and not candidates.empty:
-        try:
-            # 檢查 bb_width 欄位是否存在
-            if 'bb_width' in candidates.columns:
-                # 篩選條件：通道壓縮 (寬度 < 門檻)
-                bb_squeeze = candidates['bb_width'] < Config.BB_SQUEEZE_THRESHOLD
-                
-                # 突破方向判斷
-                if Config.BB_BREAKOUT_POSITION == 'upper':
-                    # 價格接近上軌 (收盤價 > MA20，趨勢向上)
-                    bb_filter = bb_squeeze & (candidates['close_price'] > candidates['ma20'])
-                elif Config.BB_BREAKOUT_POSITION == 'lower':
-                    # 價格接近下軌 (收盤價 < MA20，超跌反彈)
-                    bb_filter = bb_squeeze & (candidates['close_price'] < candidates['ma20'])
-                else:
-                    bb_filter = bb_squeeze  # 只篩選壓縮，不管方向
-                
-                candidates = candidates[bb_filter].copy()
-                print(f"✨ 布林通道壓縮突破濾網啟用，剩餘 {len(candidates)} 檔")
-        except Exception as e:
-            print(f"⚠️ BB 濾網執行失敗: {e}")
     
     return candidates
 
