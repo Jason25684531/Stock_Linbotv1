@@ -1,6 +1,12 @@
 """
 Migrate financial_statements.year to AD (Gregorian) format.
 """
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import argparse
 from datetime import datetime
 

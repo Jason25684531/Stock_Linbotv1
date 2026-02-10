@@ -148,6 +148,14 @@ class V34TurboStrategy(BaseStrategy):
             return pd.DataFrame()
         
         # ============================================
+        # 資料清理：處理 None/NaN 值
+        # ============================================
+        numeric_cols = ['close_price', 'high_price', 'ma20', 'volume', 'volume_ratio', 'revenue_yoy']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # ============================================
         # V34 核心篩選
         # ============================================
         

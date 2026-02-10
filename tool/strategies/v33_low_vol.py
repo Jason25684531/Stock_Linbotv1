@@ -146,6 +146,14 @@ class V33LowVolStrategy(BaseStrategy):
             return pd.DataFrame()
         
         # ============================================
+        # 資料清理：處理 None/NaN 值
+        # ============================================
+        numeric_cols = ['close_price', 'ma60', 'volume', 'natr', 'rsi', 'std_20']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # ============================================
         # V33 核心篩選
         # ============================================
         

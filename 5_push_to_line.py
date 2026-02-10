@@ -41,8 +41,14 @@ def get_market_status(engine, date_str):
         return "⚪ 資料不足", 0
     
     data = df.iloc[0]
-    ma60 = data.get('ma60', data['close_price'])
-    bias = (data['close_price'] - ma60) / ma60 * 100 if ma60 > 0 else 0
+    ma60 = data.get('ma60')
+    close = data.get('close_price')
+    
+    # 🔥 安全檢查：避免 None 比較錯誤
+    if ma60 is None or close is None or ma60 == 0:
+        return "⚪ 資料不足", 0
+    
+    bias = (close - ma60) / ma60 * 100
     
     # 根據趨勢返回狀態
     if trend == 'BULL':
@@ -104,7 +110,8 @@ def main():
                         dr.rsi, 
                         dr.volume,
                         fs.rd_expense,
-                        fs.revenue
+                        fs.revenue,
+                        NULL as revenue_yoy
                     FROM daily_recommendations dr
                     LEFT JOIN (
                         SELECT stock_id, rd_expense, revenue
@@ -121,9 +128,36 @@ def main():
                     ORDER BY dr.ai_score DESC
                     LIMIT 5
                 """), {"date": date_str, "strategy": strategy.name})
+            # 🚀 V34: 需要額外查詢月營收 YoY
+            elif strategy.name == 'v34_turbo':
+                result = conn.execute(text("""
+                    SELECT 
+                        dr.stock_id, 
+                        dr.close_price, 
+                        dr.ai_score, 
+                        dr.rsi, 
+                        dr.volume,
+                        NULL as rd_expense,
+                        NULL as revenue,
+                        mr.revenue_yoy
+                    FROM daily_recommendations dr
+                    LEFT JOIN (
+                        SELECT stock_id, revenue_yoy
+                        FROM monthly_revenue mr1
+                        WHERE (year * 100 + month) = (
+                            SELECT MAX(year * 100 + month)
+                            FROM monthly_revenue mr2
+                            WHERE mr2.stock_id = mr1.stock_id
+                        )
+                    ) mr ON dr.stock_id = mr.stock_id
+                    WHERE dr.trade_date = :date AND dr.strategy = :strategy
+                    ORDER BY dr.ai_score DESC
+                    LIMIT 5
+                """), {"date": date_str, "strategy": strategy.name})
             else:
                 result = conn.execute(text("""
-                    SELECT stock_id, close_price, ai_score, rsi, volume, NULL as rd_expense, NULL as revenue
+                    SELECT stock_id, close_price, ai_score, rsi, volume, 
+                           NULL as rd_expense, NULL as revenue, NULL as revenue_yoy
                     FROM daily_recommendations
                     WHERE trade_date = :date AND strategy = :strategy
                     ORDER BY ai_score DESC
@@ -144,12 +178,17 @@ def main():
                 volume = p[4]
                 rd_expense = p[5] if len(p) > 5 else None
                 revenue = p[6] if len(p) > 6 else None
+                revenue_yoy = p[7] if len(p) > 7 else None
                 
                 msg += f"🎫 {stock_id} (${price:.2f})"
                 
                 # AI分數
                 if ai_score:
                     msg += f" | 🤖 {ai_score:.0%}"
+                
+                # 🚀 V34: 顯示營收 YoY
+                if strategy.name == 'v34_turbo' and revenue_yoy is not None:
+                    msg += f" | 🔥 YoY {revenue_yoy:.1f}%"
                 
                 # 🧪 V35: 顯示研發佔比
                 if strategy.name == 'v35_innovation' and rd_expense and revenue and revenue > 0:

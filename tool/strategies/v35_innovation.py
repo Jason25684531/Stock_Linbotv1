@@ -115,11 +115,13 @@ class V35InnovationStrategy(BaseStrategy):
         
         print(f"\n🔍 [V35] 原始候選股票數：{len(df)}")
         
-        # 補齊欄位
-        required_cols = ['rd_ratio', 'revenue_yoy', 'eps', 'close', 'ma60', 'volume_ratio']
+        # 補齊欄位並清理 None/NaN 值
+        required_cols = ['rd_ratio', 'revenue_yoy', 'eps', 'close_price', 'ma60', 'volume_ratio']
         for col in required_cols:
             if col not in df.columns:
                 df[col] = 0.0
+            else:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         # === 自動切換模式 ===
         # 如果全市場研發費用都是 0 (代表 CSV 沒這欄)，則跳過研發篩選
@@ -148,12 +150,16 @@ class V35InnovationStrategy(BaseStrategy):
         print(f"  ✓ 有獲利 (EPS>0)：{len(df_eps)} 檔")
         
         # 篩選 4：多頭排列
-        mask_ma = df_eps['close'] > df_eps['ma60']
+        mask_ma = df_eps['close_price'] > df_eps['ma60']  # 修正：使用 close_price
         df_ma = df_eps[mask_ma].copy()
+        print(f"  ✓ 多頭排列 (收盤>MA60)：{len(df_ma)} 檔")
         
         # 篩選 5：成交量
         mask_vol = df_ma['volume_ratio'] > 0.8
         df_final = df_ma[mask_vol].copy()
+        print(f"  ✓ 流動性足夠：{len(df_final)} 檔")
+        
+        print(f"\n✅ V35 篩選完成：{len(df_final)} 檔研發動能股")
         
         return df_final
     

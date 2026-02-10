@@ -237,8 +237,12 @@ def get_market_trend(date_str):
             return 'BEAR'  # 🔥 預設為 BEAR（保守策略）
         
         data = df.iloc[0]
-        close = data['close_price']
-        ma60 = data.get('ma60', close)
+        close = data.get('close_price')
+        ma60 = data.get('ma60')
+        
+        # 🔥 安全檢查：任一數值為 None 時預設為 BEAR
+        if close is None or ma60 is None:
+            return 'BEAR'
         
         # 🔥 嚴格條件：只有收盤 > MA60 才視為多頭
         if close > ma60:
