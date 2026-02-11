@@ -439,10 +439,22 @@ function dashboardData() {
         },
         
         renderChart() {
+            // 🔧 修復 1：銷毀舊的 Chart 實例（避免重複初始化錯誤）
+            if (this.chart) {
+                this.chart.destroy();
+                this.chart = null;
+            }
+            
             const ctx = document.getElementById('equityChart').getContext('2d');
             
+            // 🔧 修復 2：驗證數據存在（避免 undefined 錯誤）
+            if (!this.performance.roi || this.performance.roi.length === 0) {
+                console.warn('無回測數據，跳過圖表渲染');
+                return;
+            }
+            
             // 決定線條顏色（根據最終 ROI）
-            const finalROI = this.performance.roi[this.performance.roi.length - 1];
+            const finalROI = this.performance.roi[this.performance.roi.length - 1] || 0;
             const lineColor = finalROI >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
             const fillColor = finalROI >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
             
@@ -488,9 +500,11 @@ function dashboardData() {
                                 label: function(context) {
                                     const value = context.parsed.y;
                                     const roi = this.performance.roi[context.dataIndex];
+                                    // 🔧 修復 3：安全處理 roi 可能為 undefined 的情況
+                                    const roiText = roi !== undefined ? roi.toFixed(2) + '%' : 'N/A';
                                     return [
                                         '資產: $' + value.toLocaleString('zh-TW', {maximumFractionDigits: 0}),
-                                        'ROI: ' + roi.toFixed(2) + '%'
+                                        'ROI: ' + roiText
                                     ];
                                 }.bind(this)
                             }
@@ -536,6 +550,10 @@ function dashboardData() {
         },
         
         formatPercent(value) {
+            // 🔧 修復 4：安全處理可能為 undefined 的數值
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'N/A';
+            }
             return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
         }
     }

@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
 > **最後更新**: 2026-02-11  
-> **當前版本**: V35 Phase 5+ Multi-Model Pipeline (多模型批次訓練與推論)  
+> **當前版本**: V35 Phase 5+ Multi-Model Pipeline (多模型批次訓練、推論與回測)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,7 +10,7 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
-| [Multi-Model Pipeline](#multi-model-pipeline-多模型批次訓練-2026-02-11) | 2026-02-11 | 多策略獨立 AI 模型 + 動態載入推論 | ✅ 完成 |
+| [Multi-Model Pipeline](#multi-model-pipeline-多模型批次訓練-2026-02-11) | 2026-02-11 | 多策略獨立 AI 模型 + 動態載入推論 + 回測引擎 | ✅ 完成 |
 | [V35 Strategy Optimization](#v35-strategy-optimization-策略優化-2026-02-11) | 2026-02-11 | V35 營業利益率聚焦 + 測試模式強制多頭 | ✅ 完成 |
 | [V35 Final Verification](#v35-final-verification-最終驗證-2026-02-10) | 2026-02-10 | Crash 修復 + Line 格式增強 + 回測驗證 | ✅ 完成 |
 | [V35 Integration Verification](#v35-integration-verification-整合驗證-2026-02-10) | 2026-02-10 | 架構完整性驗證 + 功能測試 + 文檔更新 | ✅ 完成 |
@@ -89,8 +89,39 @@ V35 經營效益策略 推薦 Top 5:
 | 訓練模式 | 單一策略單一模型 | 多策略批次訓練 |
 | 模型識別 | 固定檔名 `stock_ai_model.pkl` | 策略後綴 `stock_ai_model_{name}.pkl` |
 | 推論載入 | 單次全域載入 | 每策略動態載入專屬模型 |
+| 回測載入 | 僅 V31 載入單一模型 | 各策略自動載入專屬模型 |
 | DB 讀取 | 訓練時讀一次 | 訓練時讀一次（不變） |
 | 容錯 | 單策略失敗=全停 | 單策略失敗不影響其他 |
+
+#### **4. `4_run_backtest.py` 重構 - 回測引擎動態模型載入**
+
+**架構變更**：
+- ✖ 移除 `__init__` 中 `if self.mode == 'v31'` 硬編碼判斷
+- ✖ 移除 `_load_model` 中固定 `MODEL_PATH` 路徑
+- ✖ 移除 AI 評分門檻中 `self.mode == 'v31'` 限制
+- ✔ 新增 `_get_model_path()` 方法，根據策略模式智能選擇模型路徑
+- ✔ `_load_model()` 改為動態路徑載入（各策略載入專屬模型）
+- ✔ AI 評分邏輯開放給所有已載入模型的策略（不再限定 V31）
+
+**模型載入規則**：
+| 模式 | 行為 | 模型檔案 |
+|------|------|---------|
+| `v30` | 不載入模型（純技術面） | 無 |
+| `v31` | 載入預設模型 | `stock_ai_model.pkl` |
+| `v33_low_vol` | 載入專屬模型 | `stock_ai_model_v33_low_vol.pkl` |
+| `v34_turbo` | 載入專屬模型 | `stock_ai_model_v34_turbo.pkl` |
+| `v35_innovation` | 載入專屬模型 | `stock_ai_model_v35_innovation.pkl` |
+
+**Fallback 機制**：專屬模型 → 通用模型 → 純規則篩選
+
+**測試結果**：
+```
+v30              -> 無模型 (純技術面)                    ✅
+v31              -> stock_ai_model.pkl (9 特徵)         ✅
+v33_low_vol      -> stock_ai_model_v33_low_vol.pkl (9)  ✅
+v34_turbo        -> stock_ai_model_v34_turbo.pkl (9)    ✅
+v35_innovation   -> stock_ai_model_v35_innovation.pkl (10) ✅
+```
 
 ---
 

@@ -1,14 +1,16 @@
 """
-V31 統一回測引擎
+多策略回測引擎
 ============================================
-支援兩種模式：
+支援多種模式：
   1. V30 模式：純技術面策略（不需 AI 模型）
   2. V31 模式：V30 篩選 + AI 模型排名
+  3. 策略模式：v33_low_vol / v34_turbo / v35_innovation（各自載入專屬模型）
 
 用法：
   python 4_run_backtest.py          # 預設 V31 模式
   python 4_run_backtest.py --v30    # 純 V30 模式
   python 4_run_backtest.py --v31    # V31 混合模式
+  python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
 """
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -50,8 +52,8 @@ BOND_SYMBOL = Config.BOND_SYMBOL
 
 class BacktestEngine:
     """
-    V31 統一回測引擎
-    支援 V30（純技術）和 V31（技術 + AI）兩種模式
+    多策略回測引擎
+    支援 V30（純技術）、V31（技術 + AI）及多策略模式（v33/v34/v35 各自載入專屬模型）
     """
     
     def __init__(self, mode='v31'):
@@ -59,7 +61,8 @@ class BacktestEngine:
         初始化回測引擎
         
         Args:
-            mode: 'v30' = 純技術面, 'v31' = 技術 + AI
+            mode: 'v30' = 純技術面, 'v31' = 技術 + AI,
+                  'v33_low_vol' / 'v34_turbo' / 'v35_innovation' = 策略專屬模型
         """
         self.mode = mode.lower()
         self.engine = get_db_engine()
@@ -76,10 +79,10 @@ class BacktestEngine:
         # 載入策略參數
         self._load_params()
         
-        # V31 模式才載入 AI 模型
+        # V30 以外的模式都嘗試載入 AI 模型（各策略載入專屬模型）
         self.model = None
         self.features = None
-        if self.mode == 'v31':
+        if self.mode != 'v30':
             self._load_model()
     
     def _load_params(self):
@@ -98,27 +101,48 @@ class BacktestEngine:
         tp_display = f"{self.take_profit_pct*100:.0f}%" if self.take_profit_pct > 0 else "不停利"
         print(f"📊 策略參數: 停損={self.stop_loss_pct*100:.0f}% | 停利={tp_display} | 持有={self.max_hold_days}天")
     
+    def _get_model_path(self) -> str:
+        """根據策略模式取得對應的模型檔案路徑
+        
+        Returns:
+            模型檔案路徑
+        """
+        if self.mode == 'v31':
+            # V31 使用預設模型
+            return MODEL_PATH
+        
+        # 策略專屬模型：ML_Data/pkl/stock_ai_model_{strategy_name}.pkl
+        model_dir = os.path.dirname(MODEL_PATH)
+        strategy_model = os.path.join(model_dir, f'stock_ai_model_{self.mode}.pkl')
+        
+        if os.path.exists(strategy_model):
+            return strategy_model
+        
+        # Fallback: 通用模型
+        print(f"⚠️ 找不到 {self.mode} 專屬模型，嘗試載入通用模型")
+        return MODEL_PATH
+    
     def _load_model(self):
-        """載入 V31 AI 模型"""
-        if not os.path.exists(MODEL_PATH):
-            print(f"⚠️ 找不到 AI 模型，切換為 V30 模式")
-            self.mode = 'v30'
+        """動態載入 AI 模型（根據策略模式選擇對應檔案）"""
+        model_path = self._get_model_path()
+        
+        if not os.path.exists(model_path):
+            print(f"⚠️ 找不到 AI 模型 ({model_path})，切換為純規則模式")
             return
         
         try:
-            data = joblib.load(MODEL_PATH)
+            data = joblib.load(model_path)
             if isinstance(data, dict) and 'model' in data:
                 self.model = data['model']
                 self.features = data.get('features', Config.FEATURES)
-                print(f"🧠 V31 AI 模型載入成功！({len(self.features)} 個特徵)")
+                print(f"🧠 [{self.mode}] AI 模型載入成功！({len(self.features)} 個特徵, {os.path.basename(model_path)})")
             else:
                 # 舊格式相容
                 self.model = data
                 self.features = Config.FEATURES
-                print("🧠 AI 模型載入成功（舊格式）")
+                print(f"🧠 [{self.mode}] AI 模型載入成功（舊格式）")
         except Exception as e:
-            print(f"⚠️ AI 模型載入失敗: {e}，切換為 V30 模式")
-            self.mode = 'v30'
+            print(f"⚠️ [{self.mode}] AI 模型載入失敗: {e}，切換為純規則模式")
     
     def get_data(self, stock_id, date_str):
         """取得個股當日資料"""
@@ -163,8 +187,8 @@ class BacktestEngine:
         if candidates.empty:
             return []
         
-        # V31 模式：加入 AI 評分排序
-        if self.mode == 'v31' and self.model is not None:
+        # AI 模式：加入 AI 評分排序（V31 及各策略專屬模型）
+        if self.model is not None:
             # 準備特徵
             for f in self.features:
                 if f not in candidates.columns:

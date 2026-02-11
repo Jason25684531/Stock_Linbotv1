@@ -1,9 +1,7 @@
 {
   "version": "2.0",
-  "last_updated": "2026-02-10T00:00:00.000000",
+  "last_updated": "2026-02-11T18:10:16.230665",
   "active_strategies": [
-    "v33_low_vol",
-    "v34_turbo",
-    "v35_innovation"
+    "v33_low_vol"
   ]
 }

@@ -15,11 +15,10 @@ from datetime import datetime
 from tool.db_helper import get_db_engine, get_stock_data
 from tool.strategy_manager import StrategyManager
 from tool.calc_indicators import calculate_ratio_features
+from tool.model_utils import load_model
 from config import Config
-import joblib
 
 # 模型存放目錄（與 3_train_model.py 一致）
-MODEL_DIR = os.path.dirname(Config.MODEL_PATH) or 'ML_Data/pkl'
 
 
 def merge_financial_data(df: pd.DataFrame, engine) -> pd.DataFrame:
@@ -179,48 +178,19 @@ def merge_revenue_data(df: pd.DataFrame, engine) -> pd.DataFrame:
 
 
 def load_strategy_model(strategy_name: str):
-    """載入策略專屬 AI 模型
-    
-    依序嘗試：
-    1. 策略專屬模型 (stock_ai_model_{strategy_name}.pkl)
-    2. 通用模型 (stock_ai_model.pkl) 作為 fallback
-    
-    Args:
-        strategy_name: 策略名稱
-    
-    Returns:
-        (model, features) tuple，若無可用模型則返回 (None, None)
-    """
-    # 優先載入策略專屬模型
-    model_path = os.path.join(MODEL_DIR, f'stock_ai_model_{strategy_name}.pkl')
-    
-    if os.path.exists(model_path):
-        try:
-            model_data = joblib.load(model_path)
-            model = model_data.get('model') if isinstance(model_data, dict) else model_data
-            features = model_data.get('features') if isinstance(model_data, dict) else None
-            if model and hasattr(model, 'predict_proba'):
-                print(f"🧠 [AI] 已載入專屬模型: {strategy_name}")
-                return model, features
-        except Exception as e:
-            print(f"⚠️ [AI] 載入專屬模型失敗 ({model_path}): {e}")
-    
-    # Fallback: 嘗試通用模型
-    fallback_path = Config.MODEL_PATH
-    if os.path.exists(fallback_path):
-        try:
-            model_data = joblib.load(fallback_path)
-            model = model_data.get('model') if isinstance(model_data, dict) else model_data
-            features = model_data.get('features') if isinstance(model_data, dict) else None
-            if model and hasattr(model, 'predict_proba'):
-                print(f"🧠 [AI] 使用通用模型 (fallback): {strategy_name}")
-                return model, features
-        except Exception:
-            pass
-    
-    print(f"⚠️ [AI] 找不到可用模型，{strategy_name} 使用純規則篩選")
-    return None, None
+    """Load strategy model with fallback."""
+    model, features, model_path, used_fallback = load_model(
+        strategy_name=strategy_name,
+        allow_fallback=True,
+        require_predict_proba=True,
+    )
+    if model:
+        tag = "fallback" if used_fallback else "primary"
+        print(f"[AI] model ({tag}) {strategy_name}: {os.path.basename(model_path)}")
+        return model, features
 
+    print(f"[AI] model not found for {strategy_name}")
+    return None, None
 
 def run_strategy(strategy, df, date_str, engine):
     """執行單一策略的選股流程（自動載入策略專屬模型）"""

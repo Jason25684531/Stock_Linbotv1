@@ -877,5 +877,6 @@ if __name__ == "__main__":
     print("[START] Line Bot V3.0 啟動中 (V30策略增強版)")
     print(f"[MODEL] 模型狀態: {'已載入' if model else '未載入'}")
     print(f"[INFO] 主要策略: V30 純技術分析 (40%報酬實績)")
+    print(f"[PORT] 伺服器端口: 8866")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=8866, debug=False)

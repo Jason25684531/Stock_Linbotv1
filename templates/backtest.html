@@ -53,7 +53,7 @@
                             <i class="fas fa-calendar-alt"></i> 開始日期
                         </label>
                         <input type="date" class="form-control" id="start_date" name="start_date" 
-                               value="{{ (now() - timedelta(days=365)).strftime('%Y-%m-%d') }}">
+                               value="2025-06-01">
                         <small class="text-muted">預設為 1 年前</small>
                     </div>
                     <div class="col-md-6">
@@ -61,7 +61,7 @@
                             <i class="fas fa-calendar-check"></i> 結束日期
                         </label>
                         <input type="date" class="form-control" id="end_date" name="end_date" 
-                               value="{{ now().strftime('%Y-%m-%d') }}">
+                               value="2026-02-11">
                         <small class="text-muted">預設為今日</small>
                     </div>
                 </div>
