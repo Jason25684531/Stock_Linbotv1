@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-02-10  
-> **當前版本**: V35 Phase 5+ Final Verification (最終驗證與上線準備)  
+> **最後更新**: 2026-02-11  
+> **當前版本**: V35 Phase 5+ Multi-Model Pipeline (多模型批次訓練與推論)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,8 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [Multi-Model Pipeline](#multi-model-pipeline-多模型批次訓練-2026-02-11) | 2026-02-11 | 多策略獨立 AI 模型 + 動態載入推論 | ✅ 完成 |
+| [V35 Strategy Optimization](#v35-strategy-optimization-策略優化-2026-02-11) | 2026-02-11 | V35 營業利益率聚焦 + 測試模式強制多頭 | ✅ 完成 |
 | [V35 Final Verification](#v35-final-verification-最終驗證-2026-02-10) | 2026-02-10 | Crash 修復 + Line 格式增強 + 回測驗證 | ✅ 完成 |
 | [V35 Integration Verification](#v35-integration-verification-整合驗證-2026-02-10) | 2026-02-10 | 架構完整性驗證 + 功能測試 + 文檔更新 | ✅ 完成 |
 | [V35 Architecture Cleanup](#v35-architecture-cleanup-架構深度清理-2026-02-10) | 2026-02-10 | 消除 8 處重複邏輯 + BaseStrategy 共用方法 + 死碼移除 | ✅ 完成 |
@@ -21,7 +23,213 @@
 
 ---
 
-## � V35 Integration Verification (整合驗證) (2026-02-10)
+## 🧠 Multi-Model Pipeline (多模型批次訓練) (2026-02-11)
+
+### 🎯 目標
+重構訓練與推論管線，讓每個策略擁有獨立的 AI 模型，解決「單一模型全策略共用」的特徵不匹配問題。
+
+### ✅ 完成項目
+
+#### **1. `3_train_model.py` 重構 - 多策略批次訓練**
+
+**架構變更**：
+- ✖ 移除模組層級的單一策略參數（FEATURES, LOOK_AHEAD_DAYS 等全域變數）
+- ✔ 新增 `load_and_prepare_data()` 共用資料載入（只讀 DB 一次）
+- ✔ 新增 `train_single_strategy()` 單策略訓練函式
+- ✔ 新增 `train_all_strategies()` 批次訓練主函式
+- ✔ 新增 `get_model_path()` 統一模型路徑管理
+
+**模型輸出**（每策略獨立檔案）：
+```
+ML_Data/pkl/stock_ai_model_v33_low_vol.pkl
+ML_Data/pkl/stock_ai_model_v34_turbo.pkl
+ML_Data/pkl/stock_ai_model_v35_innovation.pkl
+```
+
+**容錯機制**：任一策略訓練失敗不影響其他策略（try-except 包裝）
+
+#### **2. `2_rundaily.py` 重構 - 動態模型載入**
+
+**架構變更**：
+- ✖ 移除全域模型載入（原本一次載入固定 `stock_ai_model.pkl`）
+- ✔ 新增 `load_strategy_model()` 函式，根據策略名稱載入專屬模型
+- ✔ `run_strategy()` 簽名簡化（移除 model 參數，內部自動載入）
+- ✔ Fallback 機制：專屬模型 → 通用模型 → 純規則篩選
+
+**模型載入優先級**：
+```
+1. stock_ai_model_{strategy_name}.pkl  (專屬模型)
+2. stock_ai_model.pkl                  (通用 fallback)
+3. None                              (純規則篩選)
+```
+
+#### **3. 測試驗證**
+
+**訓練結果**：
+```
+策略                       準確率    精準率   特徵數   狀態
+V33 低波動穩健策略       44.03%   65.20%     9      ✅
+V34 雙渦輪飆股策略       58.92%   37.60%     9      ✅
+V35 經營效益策略        56.75%   42.93%    10      ✅
+```
+
+**推論結果**：
+```
+🧠 [AI] 已載入專屬模型: v35_innovation
+✅ AI 評分完成（特徵數: 10）
+V35 經營效益策略 推薦 Top 5:
+  1. 1102 ($35.65) - AI: 19.57% - OpMg: 12.4%
+  2. 6239 ($243.00) - AI: 19.57% - OpMg: 10.2%
+```
+
+### 📊 架構改進
+
+| 項目 | 舊架構 | 新架構 |
+|------|--------|--------|
+| 訓練模式 | 單一策略單一模型 | 多策略批次訓練 |
+| 模型識別 | 固定檔名 `stock_ai_model.pkl` | 策略後綴 `stock_ai_model_{name}.pkl` |
+| 推論載入 | 單次全域載入 | 每策略動態載入專屬模型 |
+| DB 讀取 | 訓練時讀一次 | 訓練時讀一次（不變） |
+| 容錯 | 單策略失敗=全停 | 單策略失敗不影響其他 |
+
+---
+
+## 🚀 V35 Strategy Optimization (策略優化) (2026-02-11)
+
+### 🎯 目標
+優化 V35 創新策略，專注於營業利益率指標，並新增測試模式以便在熊市環境下驗證策略邏輯。
+
+### ✅ 完成項目
+
+#### **1. V35 策略重構 - 聚焦營業利益率**
+
+**變更檔案**: [`tool/strategies/v35_innovation.py`](tool/strategies/v35_innovation.py)
+
+**核心變更**:
+- ❌ **移除**: R&D 研發費用相關檢查邏輯
+  - 移除 `rd_ratio > 0.03` 篩選條件
+  - 移除 "⚠️ 偵測到無研發數據" 警告訊息
+  - 移除自動降級模式（CSV 簡表模式）
+  
+- ✅ **新增**: 營業利益率核心篩選
+  - 篩選條件: `op_profit_margin > 0.10` (營業利益率 > 10%)
+  - 結合現有條件: 營收成長 + EPS > 0 + 多頭排列 + 流動性
+
+**策略重命名**:
+```python
+# 舊名稱
+display_name: 'V35 研發動能策略'
+description: '研發投入高 (>3%) + 營收成長 + 多頭趨勢，中長線穩健成長'
+
+# 新名稱
+display_name: 'V35 經營效益策略'  
+description: '營業利益率高 (>10%) + 營收成長 + 多頭趨勢，中長線穩健成長'
+```
+
+**Features 調整**:
+```python
+# 變更前: ['revenue_yoy', 'rd_ratio', 'rsi', 'bias', ...]
+# 變更後: ['revenue_yoy', 'op_profit_margin', 'rsi', 'bias', ...]
+```
+
+#### **2. 測試模式 - 強制多頭市場**
+
+**變更檔案**: [`tool/strategies/base.py`](tool/strategies/base.py)
+
+**新增功能**: 環境變數控制的測試模式
+```python
+def _check_market_filter(self, date_str: str, strategy_label: str = '') -> bool:
+    # [TEST MODE] 測試模式強制覆蓋
+    import os
+    if os.getenv('FORCE_BULL_MARKET', 'false').lower() == 'true':
+        print(f"⚡ [測試模式] 強制設定市場為多頭 (BULL) - 忽略實際市場狀態")
+        return True
+    # 原有市場趨勢檢查邏輯...
+```
+
+**使用方式**:
+```powershell
+# PowerShell - 啟用測試模式
+$env:FORCE_BULL_MARKET="true"; python 2_rundaily.py
+
+# 關閉測試模式
+Remove-Item Env:FORCE_BULL_MARKET; python 2_rundaily.py
+```
+
+**適用場景**:
+- 熊市環境下驗證 V34 雙渦輪策略邏輯
+- 測試策略篩選條件是否正確運作
+- 開發階段調試選股流程
+
+#### **3. 測試驗證結果**
+
+```
+✅ 策略已載入: V35 經營效益策略 (v35_innovation)
+
+🔍 [V35] 原始候選股票數：14621
+  ✓ 營業利益率 > 10%：343 檔       # ✅ 新篩選條件運作
+  ✓ 營收正成長：222 檔
+  ✓ 有獲利 (EPS>0)：219 檔
+  ✓ 多頭排列 (收盤>MA60)：219 檔
+  ✓ 流動性足夠：219 檔
+
+✅ V35 篩選完成：219 檔高效益成長股
+
+🎯 V35 經營效益策略 推薦 (Top 5):
+  1. 1102 ($35.40) - OpMg: 12.4%
+  2. 1104 ($29.45) - OpMg: 14.0%
+  3. 1109 ($15.35) - OpMg: 10.0%
+```
+
+**驗證確認**:
+- ✅ 沒有出現 "⚠️ 偵測到無研發數據" 警告
+- ✅ 策略名稱顯示為 "V35 經營效益策略"
+- ✅ 使用營業利益率作為核心篩選條件
+- ✅ 測試模式正常觸發（顯示 "⚡ [測試模式]"）
+- ✅ V34 策略在熊市也能執行（測試模式下）
+
+### 📊 架構改進總結
+
+**V35 篩選條件對比**:
+
+| 篩選條件 | 舊版 (研發動能) | 新版 (經營效益) |
+|---------|---------------|----------------|
+| **核心指標** | `rd_ratio > 0.03` | `op_profit_margin > 0.10` |
+| **策略定位** | 科技股研發投入 | 經營效率優質股 |
+| **適用範圍** | 高研發產業（電子、生技） | 全產業（製造、服務、金融） |
+| **降級模式** | ✅ 有（CSV 簡表） | ❌ 無（專注單一指標） |
+
+**代碼清理**:
+- 移除重複的研發費用邏輯分支（自動降級模式）
+- 統一使用營業利益率作為企業經營效率指標
+- 保持架構清晰，避免策略名稱與實際邏輯不符
+
+**可擴展性**:
+- 測試模式不侵入業務邏輯，使用環境變數控制
+- 所有策略共享 BaseStrategy 的測試模式功能
+- 易於在 CI/CD 流程中整合自動化測試
+
+### 🔄 後續建議
+
+1. **模型重訓練**: V35 features 已變更，建議執行:
+   ```powershell
+   python 3_train_model.py
+   ```
+
+2. **回測驗證**: 使用新策略運行回測:
+   ```powershell
+   python 4_run_backtest.py --v35
+   ```
+
+3. **生產部署**: 確認測試模式已移除:
+   ```powershell
+   Remove-Item Env:FORCE_BULL_MARKET -ErrorAction SilentlyContinue
+   python 2_rundaily.py
+   ```
+
+---
+
+## 📊 V35 Integration Verification (整合驗證) (2026-02-10)
 
 ### 🎯 目標
 

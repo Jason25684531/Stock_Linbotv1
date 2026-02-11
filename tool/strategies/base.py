@@ -149,6 +149,14 @@ class BaseStrategy(ABC):
         Returns:
             bool: True 表示市場允許買入，False 表示觸發熔斷
         """
+        # ============================================
+        # [TEST MODE] 測試模式強制覆蓋 - 僅供開發測試使用
+        # ============================================
+        import os
+        if os.getenv('FORCE_BULL_MARKET', 'false').lower() == 'true':
+            print(f"⚡ [測試模式] 強制設定市場為多頭 (BULL) - 忽略實際市場狀態")
+            return True
+        
         from config import Config
         if not Config.USE_MARKET_FILTER:
             return True

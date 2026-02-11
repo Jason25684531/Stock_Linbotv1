@@ -18,6 +18,9 @@ from tool.calc_indicators import calculate_ratio_features
 from config import Config
 import joblib
 
+# 模型存放目錄（與 3_train_model.py 一致）
+MODEL_DIR = os.path.dirname(Config.MODEL_PATH) or 'ML_Data/pkl'
+
 
 def merge_financial_data(df: pd.DataFrame, engine) -> pd.DataFrame:
     """
@@ -175,8 +178,52 @@ def merge_revenue_data(df: pd.DataFrame, engine) -> pd.DataFrame:
         return df
 
 
-def run_strategy(strategy, df, date_str, model, engine):
-    """執行單一策略的選股流程"""
+def load_strategy_model(strategy_name: str):
+    """載入策略專屬 AI 模型
+    
+    依序嘗試：
+    1. 策略專屬模型 (stock_ai_model_{strategy_name}.pkl)
+    2. 通用模型 (stock_ai_model.pkl) 作為 fallback
+    
+    Args:
+        strategy_name: 策略名稱
+    
+    Returns:
+        (model, features) tuple，若無可用模型則返回 (None, None)
+    """
+    # 優先載入策略專屬模型
+    model_path = os.path.join(MODEL_DIR, f'stock_ai_model_{strategy_name}.pkl')
+    
+    if os.path.exists(model_path):
+        try:
+            model_data = joblib.load(model_path)
+            model = model_data.get('model') if isinstance(model_data, dict) else model_data
+            features = model_data.get('features') if isinstance(model_data, dict) else None
+            if model and hasattr(model, 'predict_proba'):
+                print(f"🧠 [AI] 已載入專屬模型: {strategy_name}")
+                return model, features
+        except Exception as e:
+            print(f"⚠️ [AI] 載入專屬模型失敗 ({model_path}): {e}")
+    
+    # Fallback: 嘗試通用模型
+    fallback_path = Config.MODEL_PATH
+    if os.path.exists(fallback_path):
+        try:
+            model_data = joblib.load(fallback_path)
+            model = model_data.get('model') if isinstance(model_data, dict) else model_data
+            features = model_data.get('features') if isinstance(model_data, dict) else None
+            if model and hasattr(model, 'predict_proba'):
+                print(f"🧠 [AI] 使用通用模型 (fallback): {strategy_name}")
+                return model, features
+        except Exception:
+            pass
+    
+    print(f"⚠️ [AI] 找不到可用模型，{strategy_name} 使用純規則篩選")
+    return None, None
+
+
+def run_strategy(strategy, df, date_str, engine):
+    """執行單一策略的選股流程（自動載入策略專屬模型）"""
     print(f"\n{'='*40}")
     print(f"📊 執行策略: {strategy.display_name} ({strategy.name})")
     print(f"🎯 目標報酬: {strategy.target_return}%")
@@ -191,9 +238,13 @@ def run_strategy(strategy, df, date_str, model, engine):
         print(f"💤 {strategy.name}: 今日無符合條件的股票")
         return candidates
     
+    # 載入此策略專屬的 AI 模型
+    model, model_features = load_strategy_model(strategy.name)
+    
     # AI 預測
-    if model and hasattr(model, 'predict_proba'):
-        features = strategy.features
+    if model:
+        # 使用模型記錄的特徵（優先）或策略定義的特徵
+        features = model_features if model_features else strategy.features
         for f in features:
             if f not in candidates.columns:
                 candidates[f] = 0
@@ -201,7 +252,7 @@ def run_strategy(strategy, df, date_str, model, engine):
         X = candidates[features].fillna(0)
         candidates['ai_score'] = model.predict_proba(X)[:, 1]
         candidates = candidates.sort_values('ai_score', ascending=False)
-        print(f"✅ AI 評分完成")
+        print(f"✅ AI 評分完成（特徵數: {len(features)}）")
     
     # 存入資料庫
     try:
@@ -285,18 +336,10 @@ def main():
     df = merge_revenue_data(df, engine)
     print("✅ 月營收合併完成\n")
     
-    # 7. 載入 AI 模型
-    model = None
-    if os.path.exists(Config.MODEL_PATH):
-        try:
-            model = joblib.load(Config.MODEL_PATH)
-            if hasattr(model, 'predict_proba'): print("✅ AI模型已載入\n")
-        except: pass
-    
-    # 8. 遍歷所有策略執行選股
+    # 7. 遍歷所有策略執行選股（每策略動態載入專屬模型）
     all_results = {}
     for strategy in strategies:
-        candidates = run_strategy(strategy, df, date_str, model, engine)
+        candidates = run_strategy(strategy, df, date_str, engine)
         all_results[strategy.name] = candidates
     
     # 9. 總結

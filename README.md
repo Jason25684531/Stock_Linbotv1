@@ -1,11 +1,14 @@
 # Stock AI Line Bot V35
 
-> 🔥 **V35 Phase 5+ Final Verification** | 已完成最終整合驗證  
-> ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
+> 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論  
+> 🔥 **V35 Phase 5+ Multi-Model** | 多策略批次訓練與推論架構  
+> 💼 **V35 經營效益策略** | 專注營業利益率高效益成長股  
+> 🧪 **Test Mode** | 環境變數控制的市場測試模式  
+> ⚔️ **PK System 人機對決** | 模擬交易與AI 績效比較  
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證  
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表  
-> 📅 **最後更新**: 2026-02-10  
-> ✅ **系統狀態**: 穩定運行（已修復所有已知 Crash + Line 格式增強）
+> 📅 **最後更新**: 2026-02-11  
+> ✅ **系統狀態**: 穩定運行（多模型管線 + V35 策略優化完成）
 
 ---
 
@@ -96,12 +99,23 @@
 | 🔥 大盤熔斷 | 收盤 < MA60 時禁止買入 | `USE_MARKET_FILTER = True` |
 | 📈 趨勢濾網 | 個股收盤 > MA60 | `USE_TREND_FILTER = True` |
 | 🛡️ ATR 動態停損 | 波動大則寬，波動小則窄 | `USE_ATR_STOP = True` |
+| 🧪 測試模式 | 強制多頭市場（開發測試用） | `$env:FORCE_BULL_MARKET="true"` |
 
 ### ATR 停損計算
 
 ```python
 # 停損價格 = 收盤價 - (ATR × 乘數)
 stop_loss = close - (atr * Config.ATR_MULTIPLIER)  # 預設乘數 2.0
+```
+
+### 測試模式使用
+
+```powershell
+# 啟用測試模式（強制多頭市場）
+$env:FORCE_BULL_MARKET="true"; python 2_rundaily.py
+
+# 關閉測試模式（正式環境）
+Remove-Item Env:FORCE_BULL_MARKET; python 2_rundaily.py
 ```
 
 ---
@@ -198,8 +212,9 @@ python app.py
 # 執行回測
 python 4_run_backtest.py
 
-# 重新訓練模型
+# 重新訓練模型（為每個策略生成獨立 AI 模型）
 python 3_train_model.py
+# 輸出: stock_ai_model_v33_low_vol.pkl, stock_ai_model_v34_turbo.pkl, ...
 
 # 參數最佳化 (可選)
 python 6_optimize_params.py --objective roi --n-trials 100
@@ -214,7 +229,7 @@ Stock_Linbotv1/
 ├── 📊 每日流程腳本 (依執行順序編號)
 │   ├── 1_update_database.py     # 爬取股價 + 籌碼
 │   ├── 2_rundaily.py            # 整合腳本 (一鍵執行)
-│   ├── 3_train_model.py         # XGBoost 訓練
+│   ├── 3_train_model.py         # 多策略 XGBoost 批次訓練
 │   ├── 4_run_backtest.py        # 統一回測引擎
 │   ├── 5_push_to_line.py        # Line 推播
 │   └── 6_optimize_params.py     # Optuna 參數優化
@@ -231,7 +246,7 @@ Stock_Linbotv1/
 │   │   ├── v31_hybrid.py        # V31 混合策略 (V30+XGBoost)
 │   │   ├── v33_low_vol.py       # V33 低波動策略
 │   │   ├── v34_turbo.py         # V34 高成長策略
-│   │   └── v35_innovation.py    # V35 創新策略
+│   │   └── v35_innovation.py    # V35 經營效益策略（營業利益率）
 │   ├── strategy.py              # V30/V31 選股邏輯 (輕量委派)
 │   ├── calc_indicators.py       # 技術指標 + 特徵計算 (唯一來源)
 │   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
@@ -240,7 +255,7 @@ Stock_Linbotv1/
 │
 ├── 📦 數據與模型
 │   └── ML_Data/                 # 模型 + 回測結果
-│       ├── pkl/                 # XGBoost 模型
+│       ├── pkl/                 # XGBoost 模型 (每策略獨立檔案)
 │       └── *.csv                # 回測報告
 │
 ├── 📄 設定檔
@@ -312,10 +327,10 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V35 Phase 5+ Architecture Cleanup (2026-02-10)  
+**版本**: V35 Phase 5+ Multi-Model Pipeline (2026-02-11)  
 **授權**: MIT License  
 **最新變更**:
-- ✅ 架構深度清理：消除 8 處重複/死碼，減少 300+ 行
-- ✅ BaseStrategy 提取共用方法（`_extract_date_str`, `_check_market_filter`）
-- ✅ 修正 V35 不可達代碼 bug
-- ✅ 回測指標統一由 `get_backtest_summary()` 提供
+- ✅ 多模型批次訓練：每策略獨立 AI 模型（V33/V34/V35 分別訓練）
+- ✅ 動態模型載入：推論時自動載入策略專屬模型 + fallback 機制
+- ✅ V35 策略優化：營業利益率 > 10% 替代研發費用比
+- ✅ 測試模式：`FORCE_BULL_MARKET` 環境變數控制市場趨勢

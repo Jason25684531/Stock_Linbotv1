@@ -1,6 +1,17 @@
+"""
+多策略 AI 模型批次訓練腳本 (Multi-Model Batch Training)
+============================================
+為每個啟用的策略訓練獨立的 XGBoost 模型，
+各模型使用策略專屬特徵，存檔以策略名稱區分。
+
+輸出範例:
+  ML_Data/pkl/stock_ai_model_v33_low_vol.pkl
+  ML_Data/pkl/stock_ai_model_v34_turbo.pkl
+  ML_Data/pkl/stock_ai_model_v35_innovation.pkl
+"""
+
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
 from xgboost import XGBClassifier
 from sklearn.metrics import classification_report, accuracy_score, precision_score
 import joblib
@@ -9,34 +20,13 @@ from config import Config
 from tool.news_agent import NewsSentimentAgent
 from tool.db_helper import get_db_engine
 from tool.calc_indicators import calculate_ratio_features
-
-# ============================================
-# ⚙️ V33 Phase 2: 動態策略參數
-# ============================================
-
-# 🔥 從 StrategyManager 動態取得當前策略參數
-try:
-    from tool.strategy_manager import get_active_strategy
-    _strategy = get_active_strategy()
-    LOOK_AHEAD_DAYS = _strategy.look_ahead_days
-    TARGET_RETURN = _strategy.target_return
-    FEATURES = _strategy.features + ['sentiment_score']  # 加入情緒分數
-    
-    print(f"✅ 使用策略: {_strategy.display_name}")
-    print(f"   預測天數: {LOOK_AHEAD_DAYS} 天")
-    print(f"   目標報酬: {TARGET_RETURN*100:.1f}%")
-    print(f"   特徵數量: {len(FEATURES)} 個")
-except Exception as e:
-    # 回退到預設值（V31）
-    print(f"⚠️ 無法載入策略設定，使用 V31 預設值: {e}")
-    LOOK_AHEAD_DAYS = 7
-    TARGET_RETURN = 0.08
-    FEATURES = Config.FEATURES + ['sentiment_score']
+from tool.strategy_manager import StrategyManager
 
 # 時間序列拆分參數
 TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
 
-# Note: calculate_ratio_features 已統一由 tool.calc_indicators 提供
+# 模型存放目錄
+MODEL_DIR = os.path.dirname(Config.MODEL_PATH) or 'ML_Data/pkl'
 
 
 def calculate_future_target(df, look_ahead_days, target_return):
@@ -151,25 +141,37 @@ def time_series_split(df, train_ratio=0.8):
     return train_df, test_df
 
 
-def train_xgboost():
-    """
-    XGBoost V31 混合策略訓練主函數
-    """
-    print("🚀 正在啟動 XGBoost V31 混合策略訓練引擎...")
+def get_model_path(strategy_name: str) -> str:
+    """取得策略專屬模型檔案路徑
     
-    engine = get_db_engine()
+    Args:
+        strategy_name: 策略名稱，例如 'v33_low_vol'
     
-    # 1. 讀取數據
+    Returns:
+        模型檔案完整路徑
+    """
+    return os.path.join(MODEL_DIR, f'stock_ai_model_{strategy_name}.pkl')
+
+
+def load_and_prepare_data(engine) -> pd.DataFrame:
+    """載入並準備共用訓練資料（所有策略共用，只需讀取一次）
+    
+    Args:
+        engine: 資料庫引擎
+    
+    Returns:
+        預處理完成的 DataFrame
+    """
     print("📥 從資料庫讀取訓練資料...")
     try:
         df = pd.read_sql("SELECT * FROM daily_market_data", engine)
     except Exception as e:
         print(f"❌ 資料庫讀取失敗: {e}")
-        return
+        return pd.DataFrame()
 
     if df.empty:
         print("❌ 資料庫是空的！請先跑 1_update_database.py")
-        return
+        return pd.DataFrame()
 
     print(f"📦 原始數據: {len(df):,} 筆")
     df['trade_date'] = pd.to_datetime(df['trade_date'])
@@ -179,12 +181,36 @@ def train_xgboost():
     if 'foreign_buy' not in df.columns: df['foreign_buy'] = 0
     if 'trust_buy' not in df.columns: df['trust_buy'] = 0
     
-    # 2. 特徵工程
+    # 特徵工程（共用）
     df = calculate_ratio_features(df)
     df = merge_sentiment_features(df)
     
-    # 3. 計算未來收益目標 (✅ 這裡使用了修復後的函數)
-    df = calculate_future_target(df, LOOK_AHEAD_DAYS, TARGET_RETURN)
+    return df
+
+
+def train_single_strategy(strategy, base_df: pd.DataFrame) -> dict:
+    """為單一策略訓練 XGBoost 模型
+    
+    Args:
+        strategy: 策略物件
+        base_df: 已完成基礎特徵工程的 DataFrame
+    
+    Returns:
+        訓練結果摘要 dict，失敗時返回含 error 的 dict
+    """
+    strategy_name = strategy.name
+    features = strategy.features + ['sentiment_score']
+    look_ahead_days = strategy.look_ahead_days
+    target_return = strategy.target_return
+    
+    print(f"\n{'='*60}")
+    print(f"🧠 訓練策略: {strategy.display_name} ({strategy_name})")
+    print(f"   預測天數: {look_ahead_days} 天 | 目標報酬: {target_return*100:.1f}%")
+    print(f"   特徵數量: {len(features)} 個")
+    print(f"{'='*60}")
+    
+    # 1. 計算此策略專用的目標變數
+    df = calculate_future_target(base_df.copy(), look_ahead_days, target_return)
     
     # 清洗：移除無法計算目標的樣本
     data = df.dropna(subset=['target', 'future_max_return'])
@@ -192,20 +218,24 @@ def train_xgboost():
     print(f"📊 有效樣本數: {len(data):,} 筆")
     print(f"📈 正樣本比例: {data['target'].mean():.2%}")
     
-    # 4. 時間序列拆分
+    # 2. 時間序列拆分
     train_df, test_df = time_series_split(data, train_ratio=TRAIN_RATIO)
     
-    # 準備特徵
-    available_features = [f for f in FEATURES if f in data.columns]
-    print(f"📋 使用特徵: {available_features}\n")
+    # 3. 準備特徵（只使用當前策略定義的特徵）
+    available_features = [f for f in features if f in data.columns]
+    missing_features = [f for f in features if f not in data.columns]
+    if missing_features:
+        print(f"⚠️ 缺少特徵（已跳過）: {missing_features}")
     
-    X_train = train_df[available_features]
+    print(f"📋 使用特徵: {available_features}")
+    
+    X_train = train_df[available_features].fillna(0)
     y_train = train_df['target']
-    X_test = test_df[available_features]
+    X_test = test_df[available_features].fillna(0)
     y_test = test_df['target']
     
-    # 5. 訓練 XGBoost
-    print("🏋️ XGBoost 正在極限訓練中...")
+    # 4. 訓練 XGBoost
+    print("🏋️ XGBoost 訓練中...")
     pos_weight = (len(y_train) - sum(y_train)) / max(sum(y_train), 1)
     
     model = XGBClassifier(
@@ -223,33 +253,105 @@ def train_xgboost():
     
     model.fit(X_train, y_train)
     
-    # 6. 評估模型
+    # 5. 評估
     y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    prec = precision_score(y_test, y_pred, zero_division=0)
     
-    print("\n" + "=" * 60)
-    print("📊 模型成績單 (XGBoost V31 - 時間序列驗證)")
-    print("=" * 60)
+    print(f"\n📊 {strategy.display_name} 模型成績單")
+    print("-" * 40)
     print(classification_report(y_test, y_pred, zero_division=0))
-    print(f"📈 準確率 (Accuracy): {accuracy_score(y_test, y_pred):.2%}")
-    print(f"🎯 精準率 (Precision): {precision_score(y_test, y_pred, zero_division=0):.2%}")
-    print("=" * 60)
+    print(f"📈 準確率: {acc:.2%} | 🎯 精準率: {prec:.2%}")
     
-    # 7. 保存模型
-    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+    # 6. 存檔
+    model_path = get_model_path(strategy_name)
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
     
     model_data = {
         'model': model,
         'features': available_features,
-        'version': 'V31-TimeSeries',
+        'strategy': strategy_name,
+        'version': f'{strategy_name}-TimeSeries',
         'training_date': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'look_ahead_days': LOOK_AHEAD_DAYS,
-        'target_return': TARGET_RETURN,
-        'accuracy': accuracy_score(y_test, y_pred),
+        'look_ahead_days': look_ahead_days,
+        'target_return': target_return,
+        'accuracy': acc,
+        'precision': prec,
     }
-    joblib.dump(model_data, MODEL_PATH)
+    joblib.dump(model_data, model_path)
     
-    print(f"\n✅ 模型已儲存至: {MODEL_PATH}")
-    print("\n🎉 V31 混合策略訓練完成！")
+    print(f"✅ 模型已儲存: {model_path}")
+    
+    return {
+        'strategy': strategy_name,
+        'display_name': strategy.display_name,
+        'accuracy': acc,
+        'precision': prec,
+        'features_count': len(available_features),
+        'train_samples': len(X_train),
+        'test_samples': len(X_test),
+        'model_path': model_path,
+        'error': None,
+    }
+
+
+def train_all_strategies():
+    """
+    多策略批次訓練主函數
+    逐一為所有啟用策略訓練獨立模型，任一策略失敗不影響其他策略。
+    """
+    print("\n" + "=" * 60)
+    print("🚀 多策略 AI 模型批次訓練引擎")
+    print("=" * 60)
+    
+    # 1. 取得所有啟用策略
+    manager = StrategyManager()
+    strategies = manager.get_active_strategies()
+    
+    print(f"📊 啟用策略數量: {len(strategies)}")
+    for s in strategies:
+        print(f"   • {s.display_name} ({s.name})")
+    
+    # 2. 載入共用資料（只讀一次 DB）
+    engine = get_db_engine()
+    base_df = load_and_prepare_data(engine)
+    if base_df.empty:
+        return
+    
+    # 3. 依序訓練每個策略的模型
+    results = []
+    for strategy in strategies:
+        try:
+            result = train_single_strategy(strategy, base_df)
+            results.append(result)
+        except Exception as e:
+            print(f"\n❌ {strategy.name} 訓練失敗: {e}")
+            results.append({
+                'strategy': strategy.name,
+                'display_name': strategy.display_name,
+                'error': str(e),
+            })
+    
+    # 4. 列印總結
+    print("\n" + "=" * 60)
+    print("📊 多策略模型訓練報告")
+    print("=" * 60)
+    print(f"{'策略':<25} {'準確率':>8} {'精準率':>8} {'特徵數':>6} {'狀態':>6}")
+    print("-" * 60)
+    
+    success_count = 0
+    for r in results:
+        if r.get('error'):
+            print(f"{r['display_name']:<25} {'—':>8} {'—':>8} {'—':>6} {'❌ 失敗':>6}")
+        else:
+            success_count += 1
+            print(f"{r['display_name']:<25} {r['accuracy']:>7.2%} {r['precision']:>7.2%} {r['features_count']:>6} {'✅':>6}")
+    
+    print("-" * 60)
+    print(f"成功: {success_count}/{len(results)} | 模型目錄: {MODEL_DIR}/")
+    print("=" * 60)
+    print("\n🎉 多策略批次訓練完成！")
+
 
 if __name__ == "__main__":
-    train_xgboost()
+    train_all_strategies()
