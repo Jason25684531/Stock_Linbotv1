@@ -1,24 +1,205 @@
 """每日選股執行腳本 (V33 Strategy Factory - Multi-Strategy Support)"""
 import sys
 import os
-import io
 
 # 修復 Windows 終端機 UTF-8 編碼問題
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 import pandas as pd
+import numpy as np
 from sqlalchemy import text
 from datetime import datetime
 
 from tool.db_helper import get_db_engine, get_stock_data
 from tool.strategy_manager import StrategyManager
-from tool.calc_indicators import calculate_ratio_features
+from tool.calc_indicators import (
+    calculate_ratio_features,
+    calculate_rsi, calculate_macd, calculate_kd,
+    calculate_bb_width, calculate_atr, calculate_natr,
+    calculate_std_20, calculate_bias,
+)
 from tool.model_utils import load_model
 from config import Config
 
 # 模型存放目錄（與 3_train_model.py 一致）
+
+
+def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
+    """
+    從歷史資料計算技術指標，並回傳最新一天含指標的完整 DataFrame。
+
+    因為 daily_market_data 中只有原始行情（MA/RSI/NATR 等為 NULL），
+    需要載入足夠長度的歷史資料才能正確計算滾動窗口指標。
+
+    流程：
+    1. 從 DB 載入最近 150 天全市場資料
+    2. 逐股票計算 MA5/MA20/MA60、RSI、MACD、KD、BB、ATR、NATR、STD_20
+    3. 取最新交易日的橫截面資料
+    4. 同步回寫指標到 daily_market_data（供 get_market_trend 使用）
+
+    Args:
+        date_str: 目標日期字串 (YYYY-MM-DD)
+        engine: SQLAlchemy engine
+
+    Returns:
+        DataFrame: 最新日含完整技術指標的全市場資料
+    """
+    print("📊 計算技術指標（載入歷史資料中）...")
+
+    sql = text("""
+        SELECT * FROM daily_market_data
+        WHERE trade_date >= DATE_SUB(:date, INTERVAL 150 DAY)
+        ORDER BY stock_id, trade_date
+    """)
+    df = pd.read_sql(sql, engine, params={'date': date_str})
+    print(f"  ✓ 載入 {len(df)} 筆歷史資料（約 150 天）")
+
+    if df.empty:
+        return pd.DataFrame()
+
+    # 數值清洗
+    num_cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume']
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    df = df.dropna(subset=['close_price'])
+    df['trade_date'] = pd.to_datetime(df['trade_date'])
+    df = df.sort_values(['stock_id', 'trade_date'])
+
+    # ---- 計算滾動指標（groupby stock_id）----
+    print("  ✓ 計算 MA5 / MA20 / MA60...")
+    df['ma5'] = df.groupby('stock_id')['close_price'].transform(lambda x: x.rolling(5, min_periods=3).mean())
+    df['ma20'] = df.groupby('stock_id')['close_price'].transform(lambda x: x.rolling(20, min_periods=10).mean())
+    df['ma60'] = df.groupby('stock_id')['close_price'].transform(lambda x: x.rolling(60, min_periods=30).mean())
+
+    print("  ✓ 計算 Bias / RSI / MACD...")
+    df['bias'] = (df['close_price'] - df['ma20']) / df['ma20'].replace(0, np.nan) * 100
+    df['bias'] = df['bias'].fillna(0)
+    df['rsi'] = df.groupby('stock_id')['close_price'].transform(calculate_rsi)
+    df['macd_hist'] = df.groupby('stock_id')['close_price'].transform(calculate_macd)
+
+    print("  ✓ 計算 KD / BB / ATR / NATR / STD_20...")
+    df['kd_k'] = df.groupby('stock_id').apply(
+        lambda g: calculate_kd(g), include_groups=False
+    ).reset_index(level=0, drop=True)
+
+    df['bb_width'] = df.groupby('stock_id')['close_price'].transform(calculate_bb_width)
+
+    df['atr'] = df.groupby('stock_id').apply(
+        lambda g: calculate_atr(g), include_groups=False
+    ).reset_index(level=0, drop=True)
+
+    df['natr'] = df.groupby('stock_id').apply(
+        lambda g: calculate_natr(g), include_groups=False
+    ).reset_index(level=0, drop=True)
+
+    df['std_20'] = df.groupby('stock_id')['close_price'].transform(calculate_std_20)
+
+    # 填補 NaN
+    indicator_cols = ['ma5', 'ma20', 'ma60', 'bias', 'rsi', 'macd_hist',
+                      'kd_k', 'bb_width', 'atr', 'natr', 'std_20']
+    for col in indicator_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna(0)
+
+    # ---- 取最新交易日橫截面 ----
+    latest_date = df['trade_date'].max()
+    latest_df = df[df['trade_date'] == latest_date].copy()
+
+    has_ma60 = (latest_df['ma60'] > 0).sum()
+    has_rsi = (latest_df['rsi'] > 0).sum()
+    has_natr = (latest_df['natr'] > 0).sum()
+    print(f"  ✓ 最新日 {latest_date.strftime('%Y-%m-%d')}: {len(latest_df)} 檔")
+    print(f"    MA60: {has_ma60} 檔 | RSI: {has_rsi} 檔 | NATR: {has_natr} 檔")
+
+    # ---- 回寫指標到 DB（供 get_market_trend 等使用）----
+    _write_indicators_to_db(latest_df, engine)
+
+    return latest_df
+
+
+def _write_indicators_to_db(df: pd.DataFrame, engine):
+    """
+    批次回寫技術指標到 daily_market_data（僅更新最新日的指標欄位）
+
+    使用臨時表 + JOIN UPDATE 的高效批量寫入方式，
+    避免逐筆 UPDATE 造成的鎖超時問題。
+    
+    🔥 V35 更新: 新增 revenue_yoy 欄位回寫（支援 V34/V35 策略）
+    """
+    if df.empty:
+        return
+
+    # 🔥 新增 revenue_yoy 到更新欄位列表
+    indicator_cols = ['ma5', 'ma20', 'ma60', 'bias', 'rsi', 'macd_hist',
+                      'kd_k', 'bb_width', 'atr', 'natr', 'std_20', 'revenue_yoy']
+
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("DESCRIBE daily_market_data"))
+            existing_cols = {row[0] for row in result.fetchall()}
+
+        cols_to_update = [c for c in indicator_cols if c in existing_cols and c in df.columns]
+        if not cols_to_update:
+            return
+
+        date_val = df['trade_date'].iloc[0]
+        date_str = date_val.strftime('%Y-%m-%d') if hasattr(date_val, 'strftime') else str(date_val)
+
+        # 準備臨時表資料
+        tmp_df = df[['stock_id'] + cols_to_update].copy()
+        for c in cols_to_update:
+            tmp_df[c] = pd.to_numeric(tmp_df[c], errors='coerce').fillna(0)
+
+        with engine.connect() as conn:
+            # 設定較長的鎖等待時間
+            conn.execute(text("SET innodb_lock_wait_timeout = 600"))
+
+            # 1. 建立臨時表
+            col_defs = ', '.join([f"{c} DOUBLE" for c in cols_to_update])
+            conn.execute(text("DROP TABLE IF EXISTS _tmp_indicators"))
+            conn.execute(text(f"""
+                CREATE TABLE _tmp_indicators (
+                    stock_id VARCHAR(20) PRIMARY KEY,
+                    {col_defs}
+                )
+            """))
+            conn.commit()
+
+            # 2. 寫入臨時表（pandas to_sql 很快）
+            tmp_df.to_sql('_tmp_indicators', conn, if_exists='append', index=False, chunksize=5000)
+
+            # 3. 分批 UPDATE（每批 2000 筆避免鎖超時）
+            set_clause = ', '.join([f"d.{c} = t.{c}" for c in cols_to_update])
+            stock_ids = tmp_df['stock_id'].tolist()
+            batch_size = 2000
+            updated = 0
+            for i in range(0, len(stock_ids), batch_size):
+                batch = stock_ids[i:i + batch_size]
+                placeholders = ','.join([f"'{sid}'" for sid in batch])
+                conn.execute(text(f"""
+                    UPDATE daily_market_data d
+                    INNER JOIN _tmp_indicators t ON d.stock_id = t.stock_id
+                    SET {set_clause}
+                    WHERE d.trade_date = :trade_date
+                    AND d.stock_id IN ({placeholders})
+                """), {'trade_date': date_str})
+                conn.commit()
+                updated += len(batch)
+                print(f"    寫回進度: {updated}/{len(stock_ids)}")
+
+            # 4. 清理臨時表
+            conn.execute(text("DROP TABLE IF EXISTS _tmp_indicators"))
+            conn.commit()
+
+        print(f"  ✓ 已回寫 {len(tmp_df)} 檔指標到 daily_market_data")
+    except Exception as e:
+        print(f"  ⚠️ 回寫指標失敗（不影響選股）: {e}")
 
 
 def merge_financial_data(df: pd.DataFrame, engine) -> pd.DataFrame:
@@ -169,12 +350,63 @@ def merge_revenue_data(df: pd.DataFrame, engine) -> pd.DataFrame:
         has_yoy = (df['revenue_yoy'] != 0).sum()
         print(f"  ✓ 有營收 YoY：{has_yoy} 檔 ({has_yoy/len(df)*100:.1f}%)")
         
+        # 🔥 V35: 將 revenue_yoy 寫回 daily_market_data
+        _write_revenue_yoy_to_db(df, engine)
+        
         return df
         
     except Exception as e:
         print(f"  ⚠️ 合併月營收失敗（可能表不存在）: {e}")
         df['revenue_yoy'] = 0.0
         return df
+
+
+def _write_revenue_yoy_to_db(df: pd.DataFrame, engine):
+    """
+    將 revenue_yoy 寫回 daily_market_data 表
+    
+    🔥 V35 新增: 讓 V34/V35 回測能正確讀取營收 YoY 數據
+    """
+    if df.empty or 'revenue_yoy' not in df.columns:
+        return
+    
+    try:
+        # 只取最新日期的資料
+        date_val = df['trade_date'].iloc[0]
+        date_str = date_val.strftime('%Y-%m-%d') if hasattr(date_val, 'strftime') else str(date_val)
+        
+        # 準備更新資料
+        update_df = df[['stock_id', 'revenue_yoy']].copy()
+        update_df['revenue_yoy'] = pd.to_numeric(update_df['revenue_yoy'], errors='coerce').fillna(0)
+        
+        # 過濾掉 YoY=0 的資料（減少更新量）
+        update_df = update_df[update_df['revenue_yoy'] != 0]
+        
+        if update_df.empty:
+            print(f"  ⚠️ 無有效 revenue_yoy 需寫入")
+            return
+        
+        with engine.connect() as conn:
+            # 批次更新
+            updated = 0
+            batch_size = 500
+            stock_list = update_df.to_dict('records')
+            
+            for i in range(0, len(stock_list), batch_size):
+                batch = stock_list[i:i + batch_size]
+                for row in batch:
+                    conn.execute(text("""
+                        UPDATE daily_market_data 
+                        SET revenue_yoy = :yoy
+                        WHERE stock_id = :sid AND trade_date = :dt
+                    """), {'yoy': row['revenue_yoy'], 'sid': row['stock_id'], 'dt': date_str})
+                conn.commit()
+                updated += len(batch)
+            
+            print(f"  ✓ 已回寫 {updated} 檔 revenue_yoy 到 daily_market_data")
+    
+    except Exception as e:
+        print(f"  ⚠️ 回寫 revenue_yoy 失敗: {e}")
 
 
 def load_strategy_model(strategy_name: str):
@@ -281,15 +513,23 @@ def main():
     
     # 2. 載入資料
     print("📂 載入股市資料...")
-    df, date_str = get_stock_data()
-    if df.empty:
+    engine = get_db_engine()
+
+    # 取得最新交易日期
+    from tool.db_helper import get_latest_trade_date
+    latest_date = get_latest_trade_date()
+    if not latest_date:
         print("❌ 無資料可用")
         return
+    date_str = latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date)
     print(f"✅ 資料日期: {date_str}")
-    print(f"✅ 總計 {len(df)} 檔股票\n")
-    
-    # 3. 取得資料庫引擎
-    engine = get_db_engine()
+
+    # 3. 從歷史資料計算完整技術指標（核心步驟）
+    df = compute_indicators_from_history(date_str, engine)
+    if df.empty:
+        print("❌ 計算指標後無資料")
+        return
+    print(f"✅ 總計 {len(df)} 檔股票（含完整技術指標）\n")
     
     # 4. 計算比率特徵
     print("🔧 計算比率特徵...")

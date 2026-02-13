@@ -10,17 +10,19 @@ Line Bot 主程式 (V31 混合策略版)
 """
 # -*- coding: utf-8 -*-
 import sys
-import io
 
 # 修復 Windows 終端機 UTF-8 編碼問題
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 import pandas as pd
-from sqlalchemy import create_engine, text
 import joblib
 import os
+import re
+import unicodedata
 from flask import Flask, request, abort, render_template, jsonify, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
@@ -40,14 +42,60 @@ from config import Config
 
 # 引入策略模組
 from tool.strategy import (
-    calculate_pivot_strategy, format_strategy_message, calculate_position_size, 
     calculate_v30_signal, get_best_stocks_v31_hybrid, get_v30_params_from_db,
     format_v30_recommendation, format_v31_recommendation, format_stock_query
 )
+
+V34_MODE_PRESETS = {
+    'aggressive': {
+        'v34_revenue_yoy_min': '14.0',
+        'v34_breakout_ratio': '0.91',
+        'v34_volume_ratio_min': '0.75',
+        'v34_relaxed_revenue_yoy_min': '6.0',
+        'v34_relaxed_breakout_ratio': '0.88',
+        'v34_relaxed_volume_ratio_min': '0.55',
+    },
+    'conservative': {
+        'v34_revenue_yoy_min': '22.0',
+        'v34_breakout_ratio': '0.96',
+        'v34_volume_ratio_min': '1.00',
+        'v34_relaxed_revenue_yoy_min': '14.0',
+        'v34_relaxed_breakout_ratio': '0.92',
+        'v34_relaxed_volume_ratio_min': '0.80',
+    },
+}
+
+V35_MODE_PRESETS = {
+    'aggressive': {
+        'v35_op_margin_min': '0.05',
+        'v35_revenue_yoy_min': '-2.0',
+        'v35_volume_ratio_min': '0.70',
+        'v35_relaxed_op_margin_min': '0.03',
+        'v35_relaxed_revenue_yoy_min': '-8.0',
+        'v35_relaxed_volume_ratio_min': '0.50',
+    },
+    'conservative': {
+        'v35_op_margin_min': '0.08',
+        'v35_revenue_yoy_min': '3.0',
+        'v35_volume_ratio_min': '0.90',
+        'v35_relaxed_op_margin_min': '0.05',
+        'v35_relaxed_revenue_yoy_min': '0.0',
+        'v35_relaxed_volume_ratio_min': '0.70',
+    },
+}
 # 引入資料庫輔助模組
-from tool.db_helper import get_setting, update_setting, validate_setting, get_stock_data
+from tool.db_helper import (
+    get_setting,
+    update_setting,
+    validate_setting,
+    get_stock_data,
+    create_user_simulation_trade,
+    supplement_financial_data,
+)
 # 引入策略工廠
 from tool.strategy_manager import StrategyManager
+# 引入診斷報告工具
+from tool.report_helper import get_stock_report, format_stock_diagnosis
 
 app = Flask(__name__)
 app.secret_key = Config.FLASK_SECRET_KEY
@@ -121,6 +169,93 @@ print(f"[OK] 當前策略: {strategy_manager.get_active_strategy_name()}")
 # ============================================
 
 
+def _normalize_backtest_dates(start_date, end_date):
+    from datetime import datetime, timedelta
+
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    if not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+
+    return start_date, end_date
+
+
+def _get_backtest_module():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    if base_dir not in sys.path:
+        sys.path.insert(0, base_dir)
+
+    from importlib import import_module
+
+    return import_module('4_run_backtest')
+
+
+def _run_portfolio_backtest(selected_strategies, start_date=None, end_date=None):
+    start_date, end_date = _normalize_backtest_dates(start_date, end_date)
+    backtest_module = _get_backtest_module()
+
+    engine = backtest_module.PortfolioBacktestEngine(
+        strategies=selected_strategies,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    result = engine.run_portfolio_backtest()
+    return result, start_date, end_date
+
+
+def _load_backtest_summary_or_error(error_message):
+    from tool.viz_helper import get_backtest_summary
+
+    summary = get_backtest_summary()
+    if summary is None:
+        return None, (jsonify({'error': error_message}), 404)
+
+    return summary, None
+
+
+def _apply_settings_batch(updates):
+    return all(update_setting(key, value) for key, value in updates.items())
+
+
+def _build_summary_response(summary):
+    return {
+        'total_roi': summary['total_roi'],
+        'win_rate': summary['win_rate'],
+        'mdd': summary['max_drawdown'],
+        'sharpe': summary['sharpe_ratio'],
+        'trade_count': summary['trade_count'],
+        'avg_hold_days': summary['avg_hold_days']
+    }
+
+
+def _normalize_line_text(text: str) -> str:
+    """Normalize LINE input to reduce command mismatch by unicode/spacing artifacts."""
+    raw = text or ''
+    normalized = unicodedata.normalize('NFKC', raw)
+    normalized = ''.join(ch for ch in normalized if unicodedata.category(ch) != 'Cf')
+    return normalized.strip()
+
+
+def _compact_command_key(text: str) -> str:
+    """Create compact key for intent matching (remove spaces/symbols, lowercase latin)."""
+    normalized = _normalize_line_text(text)
+    compact = re.sub(r'[\s\-_/,，。．、:：;；!！?？\[\]()（）【】{}"\'\`]+', '', normalized)
+    return compact.lower()
+
+
+def _is_quick_mode_cmd(text: str, version: str, style: str) -> bool:
+    """Match V34/V35 aggressive/conservative commands with spacing/case variants."""
+    compact = _compact_command_key(text)
+    aliases = {
+        ('34', 'aggressive'): ['v34積極', '設定v34積極'],
+        ('34', 'conservative'): ['v34保守', '設定v34保守'],
+        ('35', 'aggressive'): ['v35積極', '設定v35積極'],
+        ('35', 'conservative'): ['v35保守', '設定v35保守'],
+    }
+    return compact in aliases.get((version, style), [])
+
+
 def get_v30_recommendation():
     """
     V30 策略選股（均線突破 + 量能確認）
@@ -192,6 +327,128 @@ def get_ai_recommendation():
         return f"❌ 運算錯誤: {str(e)[:100]}"
 
 
+def get_strategy_recommendation():
+    """
+    根據當前活躍策略推薦股票（含 AI 排名）
+    
+    流程：
+    1. 載入當前策略 (StrategyManager)
+    2. 撈取最新市場資料 (get_stock_data)
+    3. 策略硬篩選 (filter_candidates) 
+    4. AI 排名 (XGBoost)
+    5. 格式化前 5 名輸出
+    
+    Returns:
+        推薦訊息字串
+    """
+    try:
+        # 1. 取得當前策略
+        mgr = StrategyManager()
+        active = mgr.get_active_strategy()
+        if active is None:
+            return "❌ 策略載入失敗，請先輸入「切換V30」設定策略"
+        
+        strategy_name = active.display_name
+        
+        # 2. 撈取最新資料
+        df, date_str = get_stock_data()
+        if df.empty:
+            return "💤 今日無資料\n請確認已執行 python 1_update_database.py"
+        
+        # 2.5 補充財務資料（V34/V35 需要 revenue_yoy / op_profit_margin）
+        df = supplement_financial_data(df)
+        
+        # 3. 策略篩選
+        candidates = active.filter_candidates(df)
+        if candidates.empty:
+            return (
+                f"🔍 【{strategy_name}】選股結果\n"
+                f"日期：{date_str}\n\n"
+                f"❌ 今日無符合條件的股票\n\n"
+                f"💡 建議：\n"
+                f"• 觀望等待進場訊號\n"
+                f"• 嘗試「切換V33」低波動等其他策略\n"
+                f"• 輸入「查看策略」檢視篩選條件"
+            )
+        
+        # 4. AI 排名（如果模型可用）
+        if model is not None:
+            try:
+                features = active.features
+                # 確保所有特徵欄位存在
+                df_score = candidates.copy()
+                for f in features:
+                    if f not in df_score.columns:
+                        df_score[f] = 0
+                
+                probs = model.predict_proba(df_score[features].fillna(0))[:, 1]
+                candidates = candidates.copy()
+                candidates['ai_score'] = probs
+                candidates = candidates.sort_values('ai_score', ascending=False)
+                has_ai = True
+            except Exception as e:
+                print(f"⚠️ AI 排名失敗（使用原始排序）: {e}")
+                has_ai = False
+        else:
+            has_ai = False
+        
+        # 5. 格式化輸出
+        top_n = candidates.head(5)
+        total_count = len(candidates)
+        
+        reply = f"🎯 【{strategy_name}】推薦\n"
+        reply += f"📅 日期：{date_str}\n"
+        if has_ai:
+            reply += f"🤖 AI 排名：已啟用\n"
+        reply += "-" * 28 + "\n\n"
+        
+        for i, (_, row) in enumerate(top_n.iterrows(), 1):
+            stock_id = row.get('stock_id', 'N/A')
+            close = row.get('close_price', 0)
+            rsi = row.get('rsi', 0)
+            volume = row.get('volume', 0)
+            ma20 = row.get('ma20', 0)
+            ma60 = row.get('ma60', 0)
+            
+            # 計算停損停利價位
+            sl_price = close * (1 - active.stop_loss)
+            tp_price = close * (1 + active.take_profit) if active.take_profit > 0 else 0
+            
+            reply += f"{'🥇🥈🥉'[i-1] if i <= 3 else '▪️'} {i}. {stock_id}\n"
+            reply += f"   💰 收盤：{close:.2f}"
+            if has_ai:
+                ai_pct = row.get('ai_score', 0) * 100
+                reply += f"  🤖 {ai_pct:.0f}分"
+            reply += "\n"
+            reply += f"   📊 RSI: {rsi:.1f}"
+            if volume > 0:
+                reply += f"  📈 量: {volume/10000:.0f}萬"
+            reply += "\n"
+            reply += f"   🛡️ 停損: {sl_price:.2f}"
+            if tp_price > 0:
+                reply += f"  🎯 停利: {tp_price:.2f}"
+            reply += "\n\n"
+        
+        reply += "-" * 28 + "\n"
+        reply += f"📊 共篩選出 {total_count} 檔"
+        if total_count > 5:
+            reply += f"（顯示前 5 名）"
+        reply += f"\n⏰ 最長持有：{active.max_hold_days} 天\n"
+        reply += f"⚠️ 僅供參考，請自行評估風險"
+        
+        return reply
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ 策略推薦失敗: {e}")
+        traceback.print_exc()
+        # Fallback 到舊版推薦
+        try:
+            return get_ai_recommendation()
+        except:
+            return f"❌ 策略推薦失敗: {str(e)[:100]}"
+
+
 def query_stock(stock_id):
     """
     個股查詢（V2.0 完整策略報告版）
@@ -249,6 +506,21 @@ def get_settings_info():
         v30_take_profit = float(get_setting('v30_take_profit', str(Config.V30_PARAMS['TAKE_PROFIT'])))
         v30_max_hold = int(get_setting('v30_max_hold_days', str(Config.V30_PARAMS['MAX_HOLD_DAYS'])))
         
+        # V34 / V35（優先 DB 設定，否則用 Config）
+        v34_yoy = float(get_setting('v34_revenue_yoy_min', str(Config.V34_REVENUE_YOY_MIN)))
+        v34_breakout = float(get_setting('v34_breakout_ratio', str(Config.V34_BREAKOUT_RATIO)))
+        v34_volume = float(get_setting('v34_volume_ratio_min', str(Config.V34_VOLUME_RATIO_MIN)))
+        v34_relaxed_yoy = float(get_setting('v34_relaxed_revenue_yoy_min', str(Config.V34_RELAXED_REVENUE_YOY_MIN)))
+        v34_relaxed_breakout = float(get_setting('v34_relaxed_breakout_ratio', str(Config.V34_RELAXED_BREAKOUT_RATIO)))
+        v34_relaxed_volume = float(get_setting('v34_relaxed_volume_ratio_min', str(Config.V34_RELAXED_VOLUME_RATIO_MIN)))
+
+        v35_op = float(get_setting('v35_op_margin_min', str(Config.V35_OP_MARGIN_MIN)))
+        v35_revenue = float(get_setting('v35_revenue_yoy_min', str(Config.V35_REVENUE_YOY_MIN)))
+        v35_volume = float(get_setting('v35_volume_ratio_min', str(Config.V35_VOLUME_RATIO_MIN)))
+        v35_relaxed_op = float(get_setting('v35_relaxed_op_margin_min', str(Config.V35_RELAXED_OP_MARGIN_MIN)))
+        v35_relaxed_revenue = float(get_setting('v35_relaxed_revenue_yoy_min', str(Config.V35_RELAXED_REVENUE_YOY_MIN)))
+        v35_relaxed_volume = float(get_setting('v35_relaxed_volume_ratio_min', str(Config.V35_RELAXED_VOLUME_RATIO_MIN)))
+
         msg = "⚙️ 【當前設定】\n"
         msg += "-" * 30 + "\n"
         msg += "🚀 V30 策略參數:\n"
@@ -259,6 +531,16 @@ def get_settings_info():
             msg += f"  🎯 停利: 不停利（持有至到期）\n"
         msg += f"  ⏰ 最長持有: {v30_max_hold}天\n"
         msg += "\n"
+        msg += "🚀 V34 參數（嚴格 / 放寬）:\n"
+        msg += f"  📈 YoY: {v34_yoy:.1f}% / {v34_relaxed_yoy:.1f}%\n"
+        msg += f"  💥 突破: {v34_breakout:.2f} / {v34_relaxed_breakout:.2f}\n"
+        msg += f"  📦 量比: {v34_volume:.2f} / {v34_relaxed_volume:.2f}\n"
+        msg += "\n"
+        msg += "💼 V35 參數（嚴格 / 放寬）:\n"
+        msg += f"  🏢 營業利益率: {v35_op*100:.1f}% / {v35_relaxed_op*100:.1f}%\n"
+        msg += f"  📈 營收YoY: {v35_revenue:.1f}% / {v35_relaxed_revenue:.1f}%\n"
+        msg += f"  📦 量比: {v35_volume:.2f} / {v35_relaxed_volume:.2f}\n"
+        msg += "\n"
         msg += "🧠 AI 參數:\n"
         msg += f"  AI 門檻: {int(ai_threshold*100)}%\n"
         msg += "-" * 30 + "\n"
@@ -266,7 +548,11 @@ def get_settings_info():
         msg += "• 設定停損 5 (設為5%)\n"
         msg += "• 設定停利 20 (設為20%)\n"
         msg += "• 設定停利 0 (不停利)\n"
-        msg += "• 設定信心 60 (AI門檻60%)"
+        msg += "• 設定信心 60 (AI門檻60%)\n"
+        msg += "• V34積極 / V34保守\n"
+        msg += "• V35積極 / V35保守\n"
+        msg += "• 設定V34 18 0.93 0.9\n"
+        msg += "• 設定V35 6 0 0.8"
         
         return msg
     except Exception as e:
@@ -426,14 +712,13 @@ def api_trades():
 def api_summary():
     """
     API: 取得回測摘要統計
-    Returns: JSON {total_roi, max_drawdown, sharpe_ratio, win_rate}
+    Returns: JSON {total_roi, mdd, sharpe, win_rate, trade_count, avg_hold_days}
     """
     try:
-        from tool.viz_helper import get_backtest_summary
-        summary = get_backtest_summary()
-        if summary is None:
-            return jsonify({'error': '回測數據不存在'}), 404
-        return jsonify(summary)
+        summary, error_response = _load_backtest_summary_or_error('回測數據不存在')
+        if error_response:
+            return error_response
+        return jsonify(_build_summary_response(summary))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -458,20 +743,13 @@ def api_user_trade():
             return jsonify({'error': '缺少必要參數'}), 400
         
         # 插入資料庫
-        from tool.db_helper import get_db_engine
-        engine = get_db_engine()
-        with engine.connect() as conn:
-            conn.execute(text("""
-                INSERT INTO user_simulation_trades 
-                (user_id, stock_id, buy_price, buy_date, status)
-                VALUES (:user_id, :stock_id, :buy_price, :buy_date, 'HOLDING')
-            """), {
-                'user_id': user_id,
-                'stock_id': stock_id,
-                'buy_price': float(buy_price),
-                'buy_date': buy_date
-            })
-            conn.commit()
+        if not create_user_simulation_trade(
+            user_id=user_id,
+            stock_id=stock_id,
+            buy_price=buy_price,
+            buy_date=buy_date,
+        ):
+            return jsonify({'error': '資料庫寫入失敗'}), 500
         
         return jsonify({'success': True, 'message': '模擬交易記錄成功'})
     except Exception as e:
@@ -521,20 +799,10 @@ def api_live_signals():
     Returns: JSON {total_roi, win_rate, mdd, sharpe, trade_count, avg_hold_days}
     """
     try:
-        from tool.viz_helper import get_backtest_summary
-        summary = get_backtest_summary()
-        if summary is None:
-            return jsonify({'error': '數據不存在'}), 404
-        
-        # 重新映射鍵名以符合前端期望
-        return jsonify({
-            'total_roi': summary['total_roi'],
-            'win_rate': summary['win_rate'],
-            'mdd': summary['max_drawdown'],
-            'sharpe': summary['sharpe_ratio'],
-            'trade_count': summary['trade_count'],
-            'avg_hold_days': summary['avg_hold_days']
-        })
+        summary, error_response = _load_backtest_summary_or_error('數據不存在')
+        if error_response:
+            return error_response
+        return jsonify(_build_summary_response(summary))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -613,10 +881,7 @@ def backtest():
     # POST: 執行回測
     try:
         from tool.viz_helper import generate_report_from_csv
-        from datetime import datetime, timedelta
-        import sys
-        import os
-        
+
         # 取得表單資料
         selected_strategies = request.form.getlist('strategies')  # 多選策略
         start_date = request.form.get('start_date')
@@ -626,24 +891,12 @@ def backtest():
             flash('請至少選擇一個策略', 'error')
             return redirect(url_for('backtest'))
         
-        # 設定預設日期（最近 1 年）
-        if not start_date:
-            start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-        if not end_date:
-            end_date = datetime.now().strftime('%Y-%m-%d')
-        
         # 執行組合回測
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from importlib import import_module
-        backtest_module = import_module('4_run_backtest')
-        
-        engine = backtest_module.PortfolioBacktestEngine(
-            strategies=selected_strategies,
+        result, start_date, end_date = _run_portfolio_backtest(
+            selected_strategies,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )
-        
-        result = engine.run_portfolio_backtest()
         
         # 生成視覺化報告
         report = generate_report_from_csv()
@@ -676,33 +929,17 @@ def api_run_backtest():
     Returns: JSON {success, data}
     """
     try:
-        from datetime import datetime, timedelta
-        import sys
-        import os
-        
-        data = request.get_json()
+        data = request.get_json() or {}
         selected_strategies = data.get('strategies', ['v31_hybrid'])
         start_date = data.get('start_date')
         end_date = data.get('end_date')
-        
-        # 設定預設日期
-        if not start_date:
-            start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-        if not end_date:
-            end_date = datetime.now().strftime('%Y-%m-%d')
-        
+
         # 執行回測
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from importlib import import_module
-        backtest_module = import_module('4_run_backtest')
-        
-        engine = backtest_module.PortfolioBacktestEngine(
-            strategies=selected_strategies,
+        result, start_date, end_date = _run_portfolio_backtest(
+            selected_strategies,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )
-        
-        result = engine.run_portfolio_backtest()
         
         return jsonify({
             'success': True,
@@ -738,20 +975,178 @@ def handle_message(event):
     """
     Line 訊息處理中心（V2.0 完整指令版）
     """
-    msg_text = event.message.text.strip()
+    raw_text = event.message.text if event.message and event.message.text else ''
+    msg_text = _normalize_line_text(raw_text)
+    msg_key = _compact_command_key(msg_text)
     
     # ========== 設定管理指令 ==========
-    if msg_text == "切換積極":
+    if msg_key == "切換積極":
         if update_setting('mode', 'aggressive'):
-            reply = "😈 已切換至【積極模式】\n放寬篩選條件，提高選股數量"
+            updates = {**V34_MODE_PRESETS['aggressive'], **V35_MODE_PRESETS['aggressive']}
+            all_ok = _apply_settings_batch(updates)
+            if all_ok:
+                reply = (
+                    "😈 已切換至【積極模式】\n"
+                    "V34/V35 已同步放寬（嚴格與放寬門檻）\n"
+                    "💡 直接輸入「推薦」即可生效"
+                )
+            else:
+                reply = "⚠️ 模式已切換，但部分 V34/V35 參數更新失敗"
         else:
             reply = "❌ 切換失敗，請稍後再試"
             
-    elif msg_text == "切換穩健":
+    elif msg_key == "切換穩健":
         if update_setting('mode', 'conservative'):
-            reply = "🛡️ 已切換至【穩健模式】\n嚴格篩選，只選站上月線股票"
+            updates = {**V34_MODE_PRESETS['conservative'], **V35_MODE_PRESETS['conservative']}
+            all_ok = _apply_settings_batch(updates)
+            if all_ok:
+                reply = (
+                    "🛡️ 已切換至【穩健模式】\n"
+                    "V34/V35 已同步收緊（嚴格與放寬門檻）\n"
+                    "💡 直接輸入「推薦」即可生效"
+                )
+            else:
+                reply = "⚠️ 模式已切換，但部分 V34/V35 參數更新失敗"
         else:
             reply = "❌ 切換失敗，請稍後再試"
+
+    elif _is_quick_mode_cmd(msg_text, '34', 'aggressive'):
+        all_ok = _apply_settings_batch(V34_MODE_PRESETS['aggressive'])
+        if all_ok:
+            reply = "🚀 V34 已設為積極檔位\n嚴格: YoY>14%, 突破>=0.91, 量比>0.75\n放寬: YoY>6%, 突破>=0.88, 量比>0.55"
+        else:
+            reply = "❌ V34 積極設定失敗"
+
+    elif _is_quick_mode_cmd(msg_text, '34', 'conservative'):
+        all_ok = _apply_settings_batch(V34_MODE_PRESETS['conservative'])
+        if all_ok:
+            reply = "🛡️ V34 已設為保守檔位\n嚴格: YoY>22%, 突破>=0.96, 量比>1.00\n放寬: YoY>14%, 突破>=0.92, 量比>0.80"
+        else:
+            reply = "❌ V34 保守設定失敗"
+
+    elif _is_quick_mode_cmd(msg_text, '35', 'aggressive'):
+        all_ok = _apply_settings_batch(V35_MODE_PRESETS['aggressive'])
+        if all_ok:
+            reply = "🚀 V35 已設為積極檔位\n嚴格: 利益率>5%, YoY>-2%, 量比>0.70\n放寬: 利益率>3%, YoY>-8%, 量比>0.50"
+        else:
+            reply = "❌ V35 積極設定失敗"
+
+    elif _is_quick_mode_cmd(msg_text, '35', 'conservative'):
+        all_ok = _apply_settings_batch(V35_MODE_PRESETS['conservative'])
+        if all_ok:
+            reply = "🛡️ V35 已設為保守檔位\n嚴格: 利益率>8%, YoY>3%, 量比>0.90\n放寬: 利益率>5%, YoY>0%, 量比>0.70"
+        else:
+            reply = "❌ V35 保守設定失敗"
+
+    elif re.match(r'^設定\s*[Vv]34\s*放寬\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s*$', msg_text):
+        try:
+            value_str = re.sub(r'^設定\s*[Vv]34\s*放寬\s+', '', msg_text).strip()
+            parts = value_str.split()
+            if len(parts) != 3:
+                reply = "❌ 格式錯誤\n用法：設定V34放寬 10 0.90 0.7"
+            else:
+                yoy_min = float(parts[0])
+                breakout_ratio = float(parts[1])
+                vol_min = float(parts[2])
+
+                if not (-50 <= yoy_min <= 300 and 0.70 <= breakout_ratio <= 1.10 and 0.0 <= vol_min <= 5.0):
+                    reply = "❌ 參數超出範圍\nYoY: -50~300, 突破: 0.70~1.10, 量比: 0~5"
+                else:
+                    updates = {
+                        'v34_relaxed_revenue_yoy_min': str(yoy_min),
+                        'v34_relaxed_breakout_ratio': str(breakout_ratio),
+                        'v34_relaxed_volume_ratio_min': str(vol_min),
+                    }
+                    ok = all(update_setting(k, v) for k, v in updates.items())
+                    reply = (
+                        f"✅ V34 放寬參數已更新\nYoY>{yoy_min:.1f}% / 突破>={breakout_ratio:.2f} / 量比>{vol_min:.2f}"
+                        if ok else "❌ V34 放寬參數更新失敗"
+                    )
+        except ValueError:
+            reply = "❌ 格式錯誤\n用法：設定V34放寬 10 0.90 0.7"
+
+    elif re.match(r'^設定\s*[Vv]34\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s*$', msg_text):
+        try:
+            value_str = re.sub(r'^設定\s*[Vv]34\s+', '', msg_text).strip()
+            parts = value_str.split()
+            if len(parts) != 3:
+                reply = "❌ 格式錯誤\n用法：設定V34 18 0.93 0.9"
+            else:
+                yoy_min = float(parts[0])
+                breakout_ratio = float(parts[1])
+                vol_min = float(parts[2])
+
+                if not (-50 <= yoy_min <= 300 and 0.70 <= breakout_ratio <= 1.10 and 0.0 <= vol_min <= 5.0):
+                    reply = "❌ 參數超出範圍\nYoY: -50~300, 突破: 0.70~1.10, 量比: 0~5"
+                else:
+                    updates = {
+                        'v34_revenue_yoy_min': str(yoy_min),
+                        'v34_breakout_ratio': str(breakout_ratio),
+                        'v34_volume_ratio_min': str(vol_min),
+                    }
+                    ok = all(update_setting(k, v) for k, v in updates.items())
+                    reply = (
+                        f"✅ V34 嚴格參數已更新\nYoY>{yoy_min:.1f}% / 突破>={breakout_ratio:.2f} / 量比>{vol_min:.2f}"
+                        if ok else "❌ V34 嚴格參數更新失敗"
+                    )
+        except ValueError:
+            reply = "❌ 格式錯誤\n用法：設定V34 18 0.93 0.9"
+
+    elif re.match(r'^設定\s*[Vv]35\s*放寬\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s*$', msg_text):
+        try:
+            value_str = re.sub(r'^設定\s*[Vv]35\s*放寬\s+', '', msg_text).strip()
+            parts = value_str.split()
+            if len(parts) != 3:
+                reply = "❌ 格式錯誤\n用法：設定V35放寬 4 -5 0.6"
+            else:
+                op_margin_pct = float(parts[0])
+                revenue_yoy = float(parts[1])
+                vol_min = float(parts[2])
+                op_margin = op_margin_pct / 100
+
+                if not (-20 <= op_margin_pct <= 100 and -100 <= revenue_yoy <= 300 and 0.0 <= vol_min <= 5.0):
+                    reply = "❌ 參數超出範圍\n利益率%: -20~100, YoY: -100~300, 量比: 0~5"
+                else:
+                    updates = {
+                        'v35_relaxed_op_margin_min': str(op_margin),
+                        'v35_relaxed_revenue_yoy_min': str(revenue_yoy),
+                        'v35_relaxed_volume_ratio_min': str(vol_min),
+                    }
+                    ok = all(update_setting(k, v) for k, v in updates.items())
+                    reply = (
+                        f"✅ V35 放寬參數已更新\n利益率>{op_margin_pct:.1f}% / YoY>{revenue_yoy:.1f}% / 量比>{vol_min:.2f}"
+                        if ok else "❌ V35 放寬參數更新失敗"
+                    )
+        except ValueError:
+            reply = "❌ 格式錯誤\n用法：設定V35放寬 4 -5 0.6"
+
+    elif re.match(r'^設定\s*[Vv]35\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s*$', msg_text):
+        try:
+            value_str = re.sub(r'^設定\s*[Vv]35\s+', '', msg_text).strip()
+            parts = value_str.split()
+            if len(parts) != 3:
+                reply = "❌ 格式錯誤\n用法：設定V35 6 0 0.8"
+            else:
+                op_margin_pct = float(parts[0])
+                revenue_yoy = float(parts[1])
+                vol_min = float(parts[2])
+                op_margin = op_margin_pct / 100
+
+                if not (-20 <= op_margin_pct <= 100 and -100 <= revenue_yoy <= 300 and 0.0 <= vol_min <= 5.0):
+                    reply = "❌ 參數超出範圍\n利益率%: -20~100, YoY: -100~300, 量比: 0~5"
+                else:
+                    updates = {
+                        'v35_op_margin_min': str(op_margin),
+                        'v35_revenue_yoy_min': str(revenue_yoy),
+                        'v35_volume_ratio_min': str(vol_min),
+                    }
+                    ok = all(update_setting(k, v) for k, v in updates.items())
+                    reply = (
+                        f"✅ V35 嚴格參數已更新\n利益率>{op_margin_pct:.1f}% / YoY>{revenue_yoy:.1f}% / 量比>{vol_min:.2f}"
+                        if ok else "❌ V35 嚴格參數更新失敗"
+                    )
+        except ValueError:
+            reply = "❌ 格式錯誤\n用法：設定V35 6 0 0.8"
             
     elif msg_text.startswith("設定信心"):
         try:
@@ -789,7 +1184,7 @@ def handle_message(event):
         try:
             value_str = msg_text.replace("設定停利", "").strip()
             if value_str == "0" or value_str.lower() == "不停利":
-                if update_setting('v30_take_profit', '0'):
+                if update_setting('v30_take_profit', '0.0'):
                     params = get_v30_params_from_db()
                     reply = f"🎯 V30停利已取消\n將持有至停損或到期（{params['MAX_HOLD_DAYS']}天）"
                 else:
@@ -808,6 +1203,87 @@ def handle_message(event):
             
     elif msg_text == "查看設定":
         reply = get_settings_info()
+    
+    # ========== 策略切換指令 ==========
+    elif msg_text.lower() in ["切換v30", "v30策略", "切v30"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v31_hybrid'):
+                reply = "🔄 已切換至【V31 混合策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• 均線多頭 + RSI 中性 + 量能放大\n"
+                reply += "• XGBoost AI 智慧排名\n"
+                reply += "• 經回測驗證（ROI: 22.86%）\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+    
+    elif msg_text.lower() in ["切換v33", "v33策略", "切v33", "低波動"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v33_low_vol'):
+                reply = "🔄 已切換至【V33 低波動策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• 波動率 NATR < 4%\n"
+                reply += "• 穩定成長優先\n"
+                reply += "• 適合保守型投資者\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+    
+    elif msg_text.lower() in ["切換v34", "v34策略", "切v34", "飆股", "渦輪"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v34_turbo'):
+                reply = "🔄 已切換至【V34 雙渦輪飆股策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• 營收高成長 + 近60日高突破\n"
+                reply += "• 接近 60 日新高（價格突破）\n"
+                reply += "• 高風險高報酬，適合積極投資者\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+    
+    elif msg_text.lower() in ["切換v35", "v35策略", "切v35", "創新", "經營效益"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v35_innovation'):
+                reply = "🔄 已切換至【V35 經營效益策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• 營業利益率 + 營收成長 + 多頭趨勢\n"
+                reply += "• 營收正成長 + 多頭趨勢\n"
+                reply += "• 中長線穩健，適合價值投資者\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+    
+    elif msg_text in ["查看策略", "目前策略", "策略狀態"]:
+        try:
+            mgr = StrategyManager()
+            active = mgr.get_active_strategy()
+            all_names = mgr.get_active_strategy_names()
+            
+            reply = "📊 【目前使用策略】\n\n"
+            reply += f"🎯 策略：{active.display_name}\n"
+            reply += f"📝 說明：{active.description}\n"
+            reply += f"🛡️ 停損：{active.stop_loss*100:.0f}%\n"
+            reply += f"🎯 停利：{active.take_profit*100:.0f}%\n"
+            reply += f"⏰ 最長持有：{active.max_hold_days} 天\n\n"
+            reply += "💡 可用切換指令：\n"
+            reply += "• 切換V30 → V31 混合策略（均衡）\n"
+            reply += "• 切換V33 → 低波動策略（穩健）\n"
+            reply += "• 切換V34 → 雙渦輪策略（積極）\n"
+            reply += "• 切換V35 → 經營效益策略（價值）\n"
+        except Exception as e:
+            reply = f"❌ 查詢策略失敗: {e}"
         
     # ========== 核心功能指令 ==========
     elif msg_text in ["V30", "v30", "策略"]:
@@ -815,10 +1291,16 @@ def handle_message(event):
         reply = get_v30_recommendation()
         
     elif msg_text in ["推薦", "選股", "AI"]:
-        reply = get_ai_recommendation()
+        # 🆕 根據當前活躍策略推薦股票（含 AI 排名）
+        reply = get_strategy_recommendation()
         
     elif msg_text.isdigit() and len(msg_text) == 4:  # 股票代號（4碼）
-        reply = query_stock(msg_text)
+        # 優先使用 AI 健康診斷報告
+        report = get_stock_report(msg_text)
+        if report is not None:
+            reply = format_stock_diagnosis(report)
+        else:
+            reply = query_stock(msg_text)
         
     elif msg_text.startswith("查詢"):
         stock_id = msg_text.replace("查詢", "").strip()
@@ -841,25 +1323,45 @@ def handle_message(event):
             
     # ========== 說明選單 ==========
     else:
+        # 顯示當前策略
+        try:
+            mgr = StrategyManager()
+            current = mgr.get_active_strategy()
+            current_name = current.display_name if current else 'V31 混合策略'
+        except:
+            current_name = '未知'
+        
         reply = f"🤖 【StockAI Line Bot V3.0】\n"
+        reply += f"📌 目前策略：{current_name}\n"
         reply += "\n📋 指令清單:\n"
         reply += "-" * 30 + "\n"
-        reply += "【選股功能】\n"
-        reply += "• V30 → 🔥純技術分析 (40%報酬)\n"
-        reply += "• 推薦 → 🧠V30篩選+AI評分 (實驗)\n"
-        reply += "• 2330 → 個股診斷\n"
-        reply += "\n【V32 新功能】✨\n"
+        reply += "【🎯 選股功能】\n"
+        reply += "• 推薦 → 使用當前策略選出前5名\n"
+        reply += "• V30 → 純技術分析選股\n"
+        reply += "• 2330 → 個股 AI 健康診斷\n"
+        reply += "\n【🔄 策略切換】\n"
+        reply += "• 切換V30 → V31 混合（均衡型）\n"
+        reply += "• 切換V33 → 低波動（穩健型）\n"
+        reply += "• 切換V34 → 雙渦輪（積極型）\n"
+        reply += "• 切換V35 → 經營效益（價值型）\n"
+        reply += "• 查看策略 → 顯示目前策略詳情\n"
+        reply += "\n【📊 Dashboard】\n"
         reply += "• dashboard → 開啟視覺化儀表板\n"
-        reply += "\n【V30 參數調整】\n"
+        reply += "\n【⚙️ V30 參數調整】\n"
         reply += "• 設定停損 5 (停損5%)\n"
         reply += "• 設定停利 20 (停利20%)\n"
         reply += "• 設定停利 0 (不停利)\n"
         reply += "• 查看設定\n"
-        reply += "\n【AI 設定】\n"
-        reply += "• 設定信心 60 (AI門檻60%)\n"
+        reply += "\n【🚀 V34/V35 參數調整】\n"
+        reply += "• V34積極 / V34保守\n"
+        reply += "• V35積極 / V35保守\n"
+        reply += "• 設定V34 18 0.93 0.9\n"
+        reply += "• 設定V34放寬 10 0.90 0.7\n"
+        reply += "• 設定V35 6 0 0.8\n"
+        reply += "• 設定V35放寬 4 -5 0.6\n"
         reply += "-" * 30 + "\n"
-        reply += "💡 建議優先使用「V30」\n"
-        reply += "⚠️ AI功能僅供參考"
+        reply += "💡 輸入「推薦」開始選股\n"
+        reply += "⚠️ 所有推薦僅供參考"
     
     # 使用 Line Bot SDK v3 回覆訊息
     with ApiClient(configuration) as api_client:

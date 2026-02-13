@@ -254,8 +254,7 @@ def get_v30_params_from_db() -> Dict[str, Any]:
         Dict[str, Any]: 參數字典
     """
     try:
-        from tool.db_helper import get_strategy_params
-        result = get_strategy_params()
+        from tool.db_helper import get_setting
         
         params = {
             'VOLUME_THRESHOLD': Config.V30_VOLUME_THRESHOLD,
@@ -266,14 +265,18 @@ def get_v30_params_from_db() -> Dict[str, Any]:
             'MAX_HOLD_DAYS': Config.V30_MAX_HOLD_DAYS,
         }
         
-        if result:
-            for key, value in result.items():
-                if key == 'v30_stop_loss':
-                    params['STOP_LOSS'] = float(value)
-                elif key == 'v30_take_profit':
-                    params['TAKE_PROFIT'] = float(value)  # 0 表示不停利
-                elif key == 'v30_max_hold_days':
-                    params['MAX_HOLD_DAYS'] = int(value)
+        # 從 user_settings 表讀取使用者自訂值
+        v30_sl = get_setting('v30_stop_loss')
+        if v30_sl is not None:
+            params['STOP_LOSS'] = float(v30_sl)
+        
+        v30_tp = get_setting('v30_take_profit')
+        if v30_tp is not None:
+            params['TAKE_PROFIT'] = float(v30_tp)
+        
+        v30_mhd = get_setting('v30_max_hold_days')
+        if v30_mhd is not None:
+            params['MAX_HOLD_DAYS'] = int(v30_mhd)
         
         return params
     except Exception:
@@ -320,12 +323,17 @@ def get_v30_candidates(df: pd.DataFrame) -> pd.DataFrame:
             print(f"⚠️ 缺少必要欄位: {col}")
             return pd.DataFrame()
     
-    candidates = df[
-        (df['close_price'] > df['ma20']) &
-        (df['ma20'] > df['ma60']) &
-        (df['volume'] > Config.V30_VOLUME_THRESHOLD) &
-        (df['rsi'] > Config.V30_RSI_LOW) &
-        (df['rsi'] < Config.V30_RSI_HIGH)
+    # 🔥 修復：填充 None/NaN 值以避免比較失敗
+    df_clean = df.copy()
+    for col in required_cols:
+        df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0)
+    
+    candidates = df_clean[
+        (df_clean['close_price'] > df_clean['ma20']) &
+        (df_clean['ma20'] > df_clean['ma60']) &
+        (df_clean['volume'] > Config.V30_VOLUME_THRESHOLD) &
+        (df_clean['rsi'] > Config.V30_RSI_LOW) &
+        (df_clean['rsi'] < Config.V30_RSI_HIGH)
     ].copy()
     
     return candidates
@@ -373,8 +381,11 @@ def calculate_v30_signal(row, custom_params=None):
         # 傳統固定百分比停損
         stop_loss = close * (1 - params['STOP_LOSS'])
     
-    # 計算停利
-    take_profit = close * (1 + params['TAKE_PROFIT']) if params['TAKE_PROFIT'] > 0 else None  # None 表示不停利
+    # 計算停利（修复 NoneType 错误：确保总是返回数值）
+    if params.get('TAKE_PROFIT') and params['TAKE_PROFIT'] > 0:
+        take_profit = close * (1 + params['TAKE_PROFIT'])
+    else:
+        take_profit = 0  # 0 表示不停利（而非 None）
     
     # 訊號判斷
     conditions_met = sum([is_above_ma, volume_ok, rsi_ok])

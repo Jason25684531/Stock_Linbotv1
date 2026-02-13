@@ -1,14 +1,14 @@
 # Stock AI Line Bot V35
 
 > 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論  
-> 🔥 **V35 Phase 5+ Multi-Model** | 多策略批次訓練與推論架構  
+> 🔥 **Strategy Decoupling** | 出場邏輯委派 `check_exit_signal` + 參數化 SQL  
 > 💼 **V35 經營效益策略** | 專注營業利益率高效益成長股  
-> 🧪 **Test Mode** | 環境變數控制的市場測試模式  
+> 📲 **Line Bot 診斷** | 輸入股票代號即取得 AI 健康診斷書  
 > ⚔️ **PK System 人機對決** | 模擬交易與AI 績效比較  
-> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證  
-> 📊 **Backtesting Engine** | 組合回測 + 互動式圖表  
-> 📅 **最後更新**: 2026-02-11  
-> ✅ **系統狀態**: 穩定運行（多模型管線 + V35 策略優化完成）
+> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復  
+> 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復  
+> 📅 **最後更新**: 2026-02-13  
+> ✅ **系統狀態**: 穩定運行（策略解耦 + 重複邏輯整併 + 文件同步）
 
 ---
 
@@ -25,8 +25,16 @@
 | 🔐 登入驗證 | Web Dashboard 需密碼登入 | `/login` |
 | 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 | 輸入「推薦」 |
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 大盤熔斷 | 輸入「V30」 |
-| 🎫 個股診斷 | 完整策略報告 + ATR 動態停損 | 輸入股票代號 |
-| 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:5000` |
+| 🎫 個股 AI 診斷 | 三維度健康診斷（技術面+基本面+AI分數） | 輸入 4 碼股票代號 |
+| 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:8866` |
+
+### 🧭 當前策略門檻（2026-02）
+
+| 策略 | 目前核心條件 | 說明 |
+|------|-------------|------|
+| V33 低波動 | `NATR < 3.5%` + `收盤 > MA20 > MA60` + `量比 > 1.0` | 第二階段微調，降低停損噪音 |
+| V34 雙渦輪 | `revenue_yoy > 18%` + `收盤 >= 60日高 * 0.93` + `volume_ratio > 0.9` | 修正單日資料卡點後可正常出手 |
+| V35 經營效益 | `op_profit_margin > 6%` + `revenue_yoy > 0` + `EPS > 0` | 已由 10% 放寬至 6% |
 
 ---
 
@@ -43,16 +51,17 @@
              │ 統一使用共用函數，無重複代碼
 ┌────────────▼────────────────────────────────────────────┐
 │         📊 回測層 (Backtesting & Visualization)         │
-│   4_run_backtest.py (單一/組合回測引擎，各策略載入專屬AI模型) │
+│   4_run_backtest.py (策略委派出場 → check_exit_signal)   │
 │   tool/viz_helper.py (Plotly 視覺化)                     │
 └────────────┬────────────────────────────────────────────┘
              │ 回測依賴策略邏輯
 ┌────────────▼────────────────────────────────────────────┐
 │                 📊 策略層 (Multi-Strategy)              │
 │   tool/strategy_manager.py (策略工廠，支援多策略並行)     │
-│   tool/strategies/base.py (BaseStrategy 抽象基底)        │
+│   tool/strategies/base.py (BaseStrategy + check_exit)    │
 │   tool/strategies/ (V31, V33, V34, V35 繼承 base)       │
 │   tool/strategy.py (V30/V31 共用邏輯)                    │
+│   tool/report_helper.py (個股 AI 診斷報告)               │
 └────────────┬────────────────────────────────────────────┘
              │ 策略依賴技術指標與資料查詢
 ┌────────────▼────────────────────────────────────────────┐
@@ -68,6 +77,7 @@
 │   - get_stock_data(): 股票資料查詢                       │
 │   - get_market_trend(): 市場趨勢判斷                     │
 │   - get/update_setting(): 參數管理                       │
+│   - create_user_simulation_trade(): PK 模擬交易寫入       │
 └────────────┬────────────────────────────────────────────┘
              │
 ┌────────────▼────────────────────────────────────────────┐
@@ -81,10 +91,11 @@
 
 | 原則 | 實施方式 | 效益 |
 |------|---------|------|
+| **策略解耦** | `BaseStrategy.check_exit_signal()` 統一出場邏輯 | 回測引擎只做調度，不含策略判斷 |
 | **組合回測** | `PortfolioBacktestEngine` 支援多策略，各策略載入專屬 AI 模型 | 驗證策略組合績效 |
 | **視覺化** | Plotly 互動式圖表 | 直觀展示權益曲線與回撤 |
 | **多策略並行** | `StrategyManager` 支援列表形式 | 同時運行 V33+V34，分散風險 |
-| **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入 | 防止資料外洩 |
+| **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入，SQL 參數化 | 防止 SQL 注入與資料外洩 |
 | **統一入口** | 所有 DB 操作經 `tool.db_helper` | 防 SQL Injection、易測試 |
 | **無重複代碼** | 共用函數取代本地實作 | 減少 450+ 行代碼 |
 
@@ -168,6 +179,22 @@ python -c "from tool.calc_indicators import fix_database_indicators; fix_databas
 python 5_push_to_line.py                              # Line 推播
 ```
 
+### 啟動與關閉（Windows / 虛擬環境）
+
+```powershell
+# 啟動虛擬環境
+.\myenv\Scripts\Activate.ps1
+
+# 啟動 Web + Line Bot（port 8866）
+python app.py
+
+# 關閉服務
+# 在執行中的終端按 Ctrl + C
+
+# 退出虛擬環境
+deactivate
+```
+
 ### 回測與視覺化 (Phase 5 新功能)
 
 ```powershell
@@ -179,7 +206,7 @@ python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
 
 # Web 回測（推薦）
 python app.py
-# 瀏覽器開啟 http://localhost:5000/backtest
+# 瀏覽器開啟 http://localhost:8866/backtest
 # 1. 選擇策略組合（可多選）
 # 2. 設定回測期間（預設 1 年）
 # 3. 查看互動式圖表與績效指標
@@ -219,6 +246,35 @@ python 3_train_model.py
 # 參數最佳化 (可選)
 python 6_optimize_params.py --objective roi --n-trials 100
 ```
+
+## ✅ 全功能測試方式（建議順序）
+
+```powershell
+# 0) 進入虛擬環境
+.\myenv\Scripts\Activate.ps1
+
+# 1) 語法檢查（核心入口）
+python -m py_compile app.py
+python -m py_compile 2_rundaily.py
+python -m py_compile 4_run_backtest.py
+
+# 2) 單元/整合測試（核心）
+python -m pytest test/test_strategy_factory.py -v
+python -m pytest test/test_phase3_integration.py -v
+
+# 3) 回測冒煙測試
+python 4_run_backtest.py --v31
+
+# 4) 日常流程冒煙測試
+python 2_rundaily.py
+
+# 5) 啟動 Web 並手動驗證 API
+python app.py
+# 瀏覽器: http://localhost:8866/dashboard
+# API: /api/summary, /api/live_signals, /api/daily-signals
+```
+
+> 若僅需快速回歸，至少執行步驟 1 + 2 + 3。
 
 ---
 
@@ -332,5 +388,7 @@ Stock_Linbotv1/
 **最新變更**:
 - ✅ 多模型批次訓練：每策略獨立 AI 模型（V33/V34/V35 分別訓練）
 - ✅ 動態模型載入：推論時自動載入策略專屬模型 + fallback 機制
-- ✅ V35 策略優化：營業利益率 > 10% 替代研發費用比
+- ✅ V35 策略優化：營業利益率門檻調整為 > 6%
+- ✅ V34 策略調整：營收門檻調整為 `YoY > 18%`，突破/量能條件同步優化
+- ✅ V33 第二階段微調：趨勢、量能與風控參數優化，回測表現改善
 - ✅ 測試模式：`FORCE_BULL_MARKET` 環境變數控制市場趨勢

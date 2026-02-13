@@ -3,9 +3,9 @@ import sys
 import os
 
 # 修復編碼
-import io
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 from tool.strategy_manager import StrategyManager
 

@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-02-11  
-> **當前版本**: V35 Phase 5+ Multi-Model Pipeline (多模型批次訓練、推論與回測)  
+> **最後更新**: 2026-02-13  
+> **當前版本**: V35 Architecture Hygiene (重複邏輯整併 + 產物清理 + 文件同步)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,9 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V35 Architecture Hygiene](#v35-architecture-hygiene-結構清洗與整併-2026-02-13) | 2026-02-13 | app.py 重複邏輯整併 + 快取/覆蓋率產物清理 + 測試流程文件化 | ✅ 完成 |
+| [V35 Strategy Decoupling](#v35-strategy-decoupling-策略解耦--前端修復-2026-02-12) | 2026-02-12 | check_exit_signal 解耦 + Line Bot 診斷 + MDD/API 修復 + SQL 注入修復 | ✅ 完成 |
+| [V35 API Cleanup](#v35-api-cleanup-2026-02-12) | 2026-02-12 | 回測 API 共用化 + PK 寫入封裝 + 清理 app.py SQL | ✅ 完成 |
 | [Multi-Model Pipeline](#multi-model-pipeline-多模型批次訓練-2026-02-11) | 2026-02-11 | 多策略獨立 AI 模型 + 動態載入推論 + 回測引擎 | ✅ 完成 |
 | [V35 Strategy Optimization](#v35-strategy-optimization-策略優化-2026-02-11) | 2026-02-11 | V35 營業利益率聚焦 + 測試模式強制多頭 | ✅ 完成 |
 | [V35 Final Verification](#v35-final-verification-最終驗證-2026-02-10) | 2026-02-10 | Crash 修復 + Line 格式增強 + 回測驗證 | ✅ 完成 |
@@ -20,6 +23,118 @@
 | [Phase 5: Backtesting & Visualization](#phase-5-backtesting--visualization-2026-02-02) | 2026-02-02 | 多策略組合回測 + Plotly 視覺化 + Web 整合 | ✅ 完成 |
 | [V33 Phase 2+ Multi-Strategy](#v33-phase-2-multi-strategy-多策略並行--安全強化-2026-01-31) | 2026-01-31 | 多策略並行 + 環境變數隔離 + Web 登入 | ✅ 完成 |
 | [V33 Phase 2 Refactor](#v33-phase-2-refactor-深度代碼清理-2026-01-27) | 2026-01-27 | 全面清理重複代碼 + 架構優化 | ✅ 完成 |
+
+---
+
+## ✅ V35 Architecture Hygiene (結構清洗與整併) (2026-02-13)
+
+### 🎯 變更重點
+- 整併 `app.py` 內重複設定邏輯：V34/V35 檔位參數改為集中常數 `V34_MODE_PRESETS` / `V35_MODE_PRESETS`。
+- 新增共用函式 `_apply_settings_batch()`，避免多段重複 `for + update_setting()`。
+- 新增共用函式 `_build_summary_response()`，統一 `/api/summary` 與 `/api/live_signals` 的 payload 映射。
+- 刪除根目錄冗餘產物資料夾：`.pytest_cache`、`__pycache__`、`htmlcov`。
+
+### ✅ 影響檔案
+- `app.py`
+  - 抽出 V34/V35 模式 preset，減少指令處理重複定義
+  - API 摘要輸出改為共用映射函式，避免 key 映射分岐
+  - 移除未使用 import，降低雜訊
+- `README.md`
+  - 補充啟動/停止與全功能測試流程
+- `openspec/changes/0212_Finish/tasklist.md`
+  - 新增本次清洗任務勾選紀錄
+
+### 🧪 驗證摘要
+- `app.py` 語法檢查通過
+- `pytest` 策略工廠與整合測試通過（詳見 README 測試章節）
+
+### 🔮 下一步預期發展
+- 將 `handle_message` 的指令解析再拆分為 command router（`dict + handler`）以降低分支深度。
+- 將 V34/V35 參數解析（嚴格/放寬）抽為共用 parser，降低 regex 重複。
+- 補齊 API smoke tests（`/api/summary`, `/api/live_signals`, `/api/daily-signals`）進入 CI。
+
+---
+
+## ✅ V35 Strategy Decoupling (策略解耦 + 前端修復) (2026-02-12)
+
+### 🎯 變更重點
+- **Phase 1 — 策略邏輯解耦**：將回測引擎的賣出判斷統一委派 `BaseStrategy.check_exit_signal()`，消除 `4_run_backtest.py` 中 50+ 行重複 if/elif。
+- **Phase 2 — Line Bot 互動升級**：新增 `tool/report_helper.py`，使用者在 Line 輸入 4 碼股票代號即可取得 AI 健康診斷書（技術面 + 基本面 + AI 評分）。
+- **Phase 3 — 前端回測修復**：修復 Dashboard MDD/Sharpe 顯示 N/A、MDD 雙重乘算、每日資產缺漏導致 MDD 50%+ 異常值。
+- **Phase 4 — 安全強化**：修復 6+ 處 f-string SQL 注入漏洞為參數化查詢。
+
+### ✅ 影響檔案
+
+#### 新增檔案
+- `tool/report_helper.py`
+  - `get_stock_report(stock_id)`: 匯總個股資料（收盤價、MA 趨勢、RSI、AI Score、營業利益率、營收 YoY）
+  - `format_stock_diagnosis(report)`: 格式化為 Line Bot 回覆訊息（三維度診斷）
+  - `_generate_comment(report)`: 評分制智能評語
+
+#### 修改檔案
+- `tool/strategies/base.py`
+  - 新增 `check_exit_signal(stock_id, current_price, current_date, position_info, market_trend) → Tuple[str, str, float]`
+  - 實作三階移動停損（+10%→鎖 1%, +20%→鎖 15%, +30%→鎖 25%）、停利、持有天數、趨勢轉空
+
+- `4_run_backtest.py`
+  - 新增 `_load_strategy_object()` 透過 `StrategyManager` 載入策略物件
+  - `_load_params()` 優先使用策略物件參數 > DB 參數 > Config 預設
+  - `BacktestEngine.run()` 賣出邏輯改為 `strategy_obj.check_exit_signal()` 委派
+  - `PortfolioBacktestEngine.run()` 也採用相同委派模式
+  - 修復每日資產計算：無資料時使用 `last_price` 快取（消除 50%+ MDD 異常值）
+  - 修復 6+ 處 SQL 注入（f-string → `:param` 參數化）
+
+- `app.py`
+  - `handle_message`: 4 碼股票代號觸發 `get_stock_report()` + `format_stock_diagnosis()`
+  - `/api/summary`: 修復鍵值映射 `max_drawdown→mdd`, `sharpe_ratio→sharpe`
+
+- `tool/viz_helper.py`
+  - `get_backtest_summary()` 移除 MDD `* 100` 雙重乘算
+
+- `tool/strategy.py`
+  - `get_v30_params_from_db()` 修復死引用 `get_strategy_params()` → 改用 `get_setting()`
+
+### 📈 回測驗證結果 (V31 模式)
+| 指標 | 數值 |
+|------|------|
+| 回測期間 | 2025-06-02 ~ 2026-02-11 (177 天) |
+| 總報酬率 | +22.86% |
+| 交易次數 | 74 筆 |
+| 勝率 | 47.3% |
+| 賺賠比 | 1.53 |
+| 平均持有天數 | 6.6 天 |
+| Sharpe Ratio | 1.017 |
+
+### 🔒 安全修復
+- `4_run_backtest.py` 中 `get_data()`、`find_candidates()`、日期查詢、結算查詢等 6+ 處 f-string SQL 全部轉為參數化查詢
+- `tool/strategy.py` 死引用修復避免 runtime crash
+
+### 🧪 測試
+- `python 4_run_backtest.py --v31` 驗證通過
+- `check_exit_signal` 委派正常運作（停損/停利/時間到 均正確觸發）
+- Dashboard `/api/summary` 正確回傳 `mdd` 與 `sharpe` 鍵值
+
+---
+
+## ✅ V35 API Cleanup (2026-02-12)
+
+### 🎯 變更重點
+- 回測 API 改用共用工具：統一日期預設、模組載入與引擎呼叫流程。
+- PK 交易寫入移至 `tool/db_helper.py`，避免 `app.py` 直接 SQL。
+- `api_summary`/`api_live_signals` 統一摘要取得邏輯，減少重複碼。
+
+### ✅ 影響檔案
+- `app.py`
+  - 新增 `_normalize_backtest_dates()` / `_get_backtest_module()` / `_run_portfolio_backtest()` / `_load_backtest_summary_or_error()`
+  - `backtest` 與 `api_run_backtest` 共用回測流程
+  - `api_user_trade` 改用 `create_user_simulation_trade()`
+- `tool/db_helper.py`
+  - 新增 `create_user_simulation_trade()`
+- `README.md`
+  - 補充 `db_helper` 新增方法說明
+
+### 🧪 測試
+- `pytest`（失敗：ValueError: I/O operation on closed file，發生於 pytest capture teardown）
 
 ---
 

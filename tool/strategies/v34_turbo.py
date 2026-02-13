@@ -4,7 +4,7 @@ V34 雙渦輪飆股策略 (Twin-Turbo Strategy)
 專注於高營收成長 + 價格突破的爆發股
 
 🎯 策略特色：
-- 核心邏輯：營收 YoY > 30% + 接近 60 日新高
+- 核心邏輯：營收 YoY > 18% + 接近 60 日新高
 - 高風險高報酬：追求月報酬 10% 以上
 - 適用場景：多頭市場、積極型投資人
 
@@ -15,14 +15,16 @@ V34 雙渦輪飆股策略 (Twin-Turbo Strategy)
 - 持有期：短線（5-7 天）
 
 🔍 篩選邏輯：
-1. revenue_yoy > 30%（高成長核心）
-2. 收盤價 >= 60日高點 * 0.95（接近突破）
-3. volume_ratio > 1.0（有量配合）
+1. revenue_yoy > 18%（高成長核心）
+2. 收盤價 >= 60日高點 * 0.93（接近突破）
+3. volume_ratio > 0.9（有量配合）
 4. 收盤 > MA20（短線多頭）
 """
 
 from typing import List
 import pandas as pd
+from config import Config
+from tool.db_helper import get_setting
 from .base import BaseStrategy
 
 
@@ -43,7 +45,7 @@ class V34TurboStrategy(BaseStrategy):
     
     @property
     def description(self) -> str:
-        return '高營收成長 (YoY>30%) + 價格突破 (近60日高)，追求短線爆發'
+        return '高營收成長 (YoY>18%) + 價格突破 (近60日高)，追求短線爆發'
     
     @property
     def features(self) -> List[str]:
@@ -95,14 +97,23 @@ class V34TurboStrategy(BaseStrategy):
     # ============================================
     # V34 核心篩選邏輯
     # ============================================
+
+    @staticmethod
+    def _get_float_setting(key: str, default_value: float) -> float:
+        """優先讀取 DB 設定，失敗時回退到 Config 預設值。"""
+        try:
+            value = get_setting(key, str(default_value))
+            return float(value)
+        except Exception:
+            return float(default_value)
     
     def filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
         """V34 雙渦輪篩選邏輯
         
         篩選條件：
-        1. revenue_yoy > 30%（高成長核心）
-        2. 收盤價 >= 60日高點 * 0.95（接近突破）
-        3. volume_ratio > 1.0（量能放大）
+        1. revenue_yoy > 18%（高成長核心）
+        2. 收盤價 >= 60日高點 * 0.93（接近突破）
+        3. volume_ratio > 0.9（量能放大）
         4. 收盤 > MA20（短線多頭）
         
         Args:
@@ -163,52 +174,74 @@ class V34TurboStrategy(BaseStrategy):
         print(f"   📊 計算 60 日高點...")
         df_sorted = df.sort_values(['stock_id', 'trade_date'])
         df_sorted['high_60'] = df_sorted.groupby('stock_id')['high_price'].transform(
-            lambda x: x.rolling(60, min_periods=20).max()
+            lambda x: x.rolling(60, min_periods=1).max()
         )
+        df_sorted['high_60'] = df_sorted['high_60'].fillna(df_sorted['high_price'])
         
         # 取最新資料
         latest_date = df_sorted['trade_date'].max()
         candidates = df_sorted[df_sorted['trade_date'] == latest_date].copy()
         
-        # 2. 營收成長篩選（核心）
-        if 'revenue_yoy' in candidates.columns:
-            before_count = len(candidates)
-            candidates = candidates[candidates['revenue_yoy'] > 30.0].copy()
-            print(f"   ✅ 營收篩選：{before_count} → {len(candidates)} 檔（YoY > 30%）")
-            
-            if candidates.empty:
-                print(f"   ❌ 無高成長股票（所有 revenue_yoy ≤ 30%）")
-                return pd.DataFrame()
-        
-        # 3. 價格突破篩選（接近 60 日高）
-        if 'high_60' in candidates.columns:
-            before_count = len(candidates)
-            candidates = candidates[
-                candidates['close_price'] >= candidates['high_60'] * 0.95
-            ].copy()
-            print(f"   ✅ 突破篩選：{before_count} → {len(candidates)} 檔（收盤 >= 60日高*0.95）")
-            
-            if candidates.empty:
-                print(f"   ❌ 無接近突破的股票")
-                return pd.DataFrame()
-        
-        # 4. 量能篩選
-        if 'volume_ratio' in candidates.columns:
-            before_count = len(candidates)
-            candidates = candidates[candidates['volume_ratio'] > 1.0].copy()
-            print(f"   ✅ 量能篩選：{before_count} → {len(candidates)} 檔（量比 > 1.0）")
-            
-            if candidates.empty:
-                print(f"   ❌ 量能不足（所有量比 ≤ 1.0）")
-                return pd.DataFrame()
-        
-        # 5. 短線多頭篩選
-        before_count = len(candidates)
-        candidates = candidates[candidates['close_price'] > candidates['ma20']].copy()
-        print(f"   ✅ 趨勢篩選：{before_count} → {len(candidates)} 檔（收盤 > MA20）")
-        
+        strict_yoy = self._get_float_setting('v34_revenue_yoy_min', Config.V34_REVENUE_YOY_MIN)
+        strict_breakout = self._get_float_setting('v34_breakout_ratio', Config.V34_BREAKOUT_RATIO)
+        strict_vol = self._get_float_setting('v34_volume_ratio_min', Config.V34_VOLUME_RATIO_MIN)
+
+        relaxed_yoy = self._get_float_setting('v34_relaxed_revenue_yoy_min', Config.V34_RELAXED_REVENUE_YOY_MIN)
+        relaxed_breakout = self._get_float_setting('v34_relaxed_breakout_ratio', Config.V34_RELAXED_BREAKOUT_RATIO)
+        relaxed_vol = self._get_float_setting('v34_relaxed_volume_ratio_min', Config.V34_RELAXED_VOLUME_RATIO_MIN)
+
+        base_candidates = candidates.copy()
+
+        def apply_v34_filters(source: pd.DataFrame, yoy_min: float, breakout_ratio: float, vol_min: float, label: str) -> pd.DataFrame:
+            result = source.copy()
+
+            if 'revenue_yoy' in result.columns:
+                before_count = len(result)
+                result = result[result['revenue_yoy'] > yoy_min].copy()
+                print(f"   ✅ [{label}] 營收篩選：{before_count} → {len(result)} 檔（YoY > {yoy_min:.1f}%）")
+                if result.empty:
+                    return result
+
+            if 'high_60' in result.columns:
+                before_count = len(result)
+                result = result[result['close_price'] >= result['high_60'] * breakout_ratio].copy()
+                print(f"   ✅ [{label}] 突破篩選：{before_count} → {len(result)} 檔（收盤 >= 60日高*{breakout_ratio:.2f}）")
+                if result.empty:
+                    return result
+
+            if 'volume_ratio' in result.columns:
+                before_count = len(result)
+                result = result[result['volume_ratio'] > vol_min].copy()
+                print(f"   ✅ [{label}] 量能篩選：{before_count} → {len(result)} 檔（量比 > {vol_min:.2f}）")
+                if result.empty:
+                    return result
+
+            before_count = len(result)
+            result = result[result['close_price'] > result['ma20']].copy()
+            print(f"   ✅ [{label}] 趨勢篩選：{before_count} → {len(result)} 檔（收盤 > MA20）")
+
+            return result
+
+        candidates = apply_v34_filters(
+            base_candidates,
+            strict_yoy,
+            strict_breakout,
+            strict_vol,
+            '嚴格'
+        )
+
         if candidates.empty:
-            print(f"   ❌ 無短線多頭股票")
+            print("   ⚠️ 嚴格條件無候選，啟用 V34 放寬參數重試")
+            candidates = apply_v34_filters(
+                base_candidates,
+                relaxed_yoy,
+                relaxed_breakout,
+                relaxed_vol,
+                '放寬'
+            )
+
+        if candidates.empty:
+            print(f"   ❌ V34 放寬後仍無符合條件股票")
             return pd.DataFrame()
         
         # ============================================
@@ -245,6 +278,6 @@ class V34TurboStrategy(BaseStrategy):
             'max_drawdown_target': '20%',
             'win_rate_target': '50%',
             'holding_period': f'{self.max_hold_days} 天',
-            'core_logic': 'revenue_yoy > 30% + 接近60日高 + 量能放大',
+            'core_logic': 'revenue_yoy > 18% + 接近60日高 + 量能放大',
             'suitable_for': '積極型投資人、多頭市場'
         }

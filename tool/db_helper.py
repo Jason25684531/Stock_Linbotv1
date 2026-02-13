@@ -11,9 +11,26 @@ from sqlalchemy import create_engine, text
 from config import Config
 
 
+# 🔥 Singleton 引擎 + 連線池（避免 Too many connections）
+_engine_instance = None
+
+
 def get_db_engine():
-    """獲取資料庫引擎"""
-    return create_engine(Config.SQLALCHEMY_DATABASE_URI)
+    """獲取資料庫引擎（Singleton + 連線池）
+    
+    使用全域唯一引擎，透過 SQLAlchemy 連線池管理連線數量，
+    避免每次呼叫都建立新引擎導致 MySQL 1040 Too many connections。
+    """
+    global _engine_instance
+    if _engine_instance is None:
+        _engine_instance = create_engine(
+            Config.SQLALCHEMY_DATABASE_URI,
+            pool_size=5,          # 常駐連線數
+            max_overflow=10,      # 超額連線上限
+            pool_recycle=1800,    # 連線回收（30分鐘）
+            pool_pre_ping=True,   # 自動偵測斷線
+        )
+    return _engine_instance
 
 
 def get_setting(key, default_value=None):
@@ -225,6 +242,9 @@ def get_market_trend(date_str):
     🔥 嚴格邏輯：只在收盤 > MA60 時返回 BULL，否則一律 BEAR
     目的：避免在下跌趨勢中買入，降低 MDD
     
+    若 MA60 未計算（為 NULL / 0），則使用 60 日歷史收盤價
+    自行計算簡易 MA60，避免因指標缺失造成永久 BEAR 的誤判。
+    
     Args:
         date_str: 日期字串
     
@@ -233,22 +253,56 @@ def get_market_trend(date_str):
     """
     try:
         df, _ = get_stock_data(Config.MARKET_SYMBOL, date_str)
-        if df.empty or 'ma60' not in df.columns:
+        if df.empty:
             return 'BEAR'  # 🔥 預設為 BEAR（保守策略）
         
         data = df.iloc[0]
         close = data.get('close_price')
         ma60 = data.get('ma60')
         
-        # 🔥 安全檢查：任一數值為 None 時預設為 BEAR
-        if close is None or ma60 is None:
+        # 🔥 安全檢查：close 為 None 時預設為 BEAR
+        if close is None:
             return 'BEAR'
         
-        # 🔥 嚴格條件：只有收盤 > MA60 才視為多頭
-        if close > ma60:
-            return 'BULL'
-        else:
-            return 'BEAR'  # 其他情況一律視為空頭，禁止買入
+        # 若 MA60 有效（非 None / 非 0），直接比對
+        if ma60 is not None and float(ma60) > 0:
+            if float(close) > float(ma60):
+                return 'BULL'
+            else:
+                return 'BEAR'
+        
+        # ---- Fallback: MA60 未計算，從歷史資料自行推算 ----
+        try:
+            engine = get_db_engine()
+            query = text("""
+                SELECT close_price FROM daily_market_data
+                WHERE stock_id = :sid
+                  AND trade_date <= :date
+                ORDER BY trade_date DESC
+                LIMIT 60
+            """)
+            with engine.connect() as conn:
+                result = conn.execute(query, {'sid': Config.MARKET_SYMBOL, 'date': date_str})
+                rows = result.fetchall()
+            
+            if len(rows) < 20:
+                # 歷史資料不足，保守回傳 BEAR
+                return 'BEAR'
+            
+            prices = [float(r[0]) for r in rows if r[0] is not None]
+            if not prices:
+                return 'BEAR'
+            
+            computed_ma60 = sum(prices) / len(prices)
+            current_close = prices[0]  # 最新收盤
+            
+            if current_close > computed_ma60:
+                return 'BULL'
+            else:
+                return 'BEAR'
+        except Exception:
+            return 'BEAR'
+        
     except Exception as e:
         print(f"⚠️ 市場趨勢判斷失敗: {e}")
         return 'BEAR'  # 🔥 錯誤時預設為 BEAR（保守策略）
@@ -257,6 +311,33 @@ def get_market_trend(date_str):
 # ==========================================
 # 🎮 V33 Phase 3: PK System 資料庫初始化
 # ==========================================
+def create_user_simulation_trade(user_id, stock_id, buy_price, buy_date, status='HOLDING'):
+    """
+    新增使用者模擬交易紀錄
+
+    Returns:
+        bool: 是否成功
+    """
+    try:
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO user_simulation_trades 
+                (user_id, stock_id, buy_price, buy_date, status)
+                VALUES (:user_id, :stock_id, :buy_price, :buy_date, :status)
+            """), {
+                'user_id': user_id,
+                'stock_id': stock_id,
+                'buy_price': float(buy_price),
+                'buy_date': buy_date,
+                'status': status
+            })
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ 新增模擬交易失敗: {e}")
+        return False
+
 def init_pk_tables():
     """
     建立 PK System 所需資料表
@@ -288,3 +369,88 @@ def init_pk_tables():
     except Exception as e:
         print(f"❌ init_pk_tables 失敗: {e}")
         return False
+
+
+def supplement_financial_data(df):
+    """
+    為 DataFrame 補充 revenue_yoy / op_profit_margin / eps 等財務欄位。
+    
+    用途：LineBot / Dashboard 即時推薦時，daily_market_data 不含財務資料，
+    V34/V35 策略需要 revenue_yoy / op_profit_margin 才能正確篩選。
+    
+    Args:
+        df: 包含 stock_id 欄位的 DataFrame（來自 daily_market_data）
+    
+    Returns:
+        補充財務欄位後的 DataFrame
+    """
+    if df.empty:
+        return df
+    
+    engine = get_db_engine()
+    
+    try:
+        with engine.connect() as conn:
+            # 補充 revenue_yoy（月營收年增率）
+            needs_revenue = (
+                'revenue_yoy' not in df.columns 
+                or df['revenue_yoy'].isna().all() 
+                or (df['revenue_yoy'] == 0).all()
+            )
+            if needs_revenue:
+                rev_query = text("""
+                    SELECT mr1.stock_id, mr1.revenue_yoy
+                    FROM monthly_revenue mr1
+                    INNER JOIN (
+                        SELECT stock_id, MAX(year * 100 + month) as max_period
+                        FROM monthly_revenue
+                        GROUP BY stock_id
+                    ) mr2 ON mr1.stock_id = mr2.stock_id 
+                         AND (mr1.year * 100 + mr1.month) = mr2.max_period
+                """)
+                rev_df = pd.read_sql(rev_query, conn)
+                if not rev_df.empty:
+                    rev_df['revenue_yoy'] = rev_df['revenue_yoy'].clip(-100, 500)
+                    rev_map = rev_df.set_index('stock_id')['revenue_yoy'].to_dict()
+                    df['revenue_yoy'] = df['stock_id'].map(rev_map).fillna(0)
+                else:
+                    df['revenue_yoy'] = 0
+            
+            # 補充 op_profit_margin / eps（季度財報）
+            needs_financial = (
+                'op_profit_margin' not in df.columns 
+                or df['op_profit_margin'].isna().all() 
+                or (df['op_profit_margin'] == 0).all()
+            )
+            if needs_financial:
+                fin_query = text("""
+                    SELECT fs1.stock_id, 
+                           fs1.operating_margin / 100 as op_profit_margin,
+                           fs1.eps
+                    FROM financial_statements fs1
+                    INNER JOIN (
+                        SELECT stock_id, MAX(year * 10 + quarter) as max_period
+                        FROM financial_statements
+                        GROUP BY stock_id
+                    ) fs2 ON fs1.stock_id = fs2.stock_id 
+                         AND (fs1.year * 10 + fs1.quarter) = fs2.max_period
+                """)
+                fin_df = pd.read_sql(fin_query, conn)
+                if not fin_df.empty:
+                    op_map = fin_df.set_index('stock_id')['op_profit_margin'].to_dict()
+                    eps_map = fin_df.set_index('stock_id')['eps'].to_dict()
+                    df['op_profit_margin'] = df['stock_id'].map(op_map).fillna(0)
+                    if 'eps' not in df.columns or df['eps'].isna().all():
+                        df['eps'] = df['stock_id'].map(eps_map).fillna(0)
+                else:
+                    df['op_profit_margin'] = 0
+                    if 'eps' not in df.columns:
+                        df['eps'] = 0
+    except Exception as e:
+        print(f"⚠️ supplement_financial_data 失敗: {e}")
+        if 'revenue_yoy' not in df.columns:
+            df['revenue_yoy'] = 0
+        if 'op_profit_margin' not in df.columns:
+            df['op_profit_margin'] = 0
+    
+    return df

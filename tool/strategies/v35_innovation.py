@@ -15,7 +15,7 @@ V35 經營效益策略 (Operating Efficiency Strategy)
 - 持有期：中長線（30-60 天）
 
 🔍 篩選邏輯：
-1. op_profit_margin > 0.10（營業利益率 > 10%）
+1. op_profit_margin > 0.06（營業利益率 > 6%）
 2. revenue_yoy > 0（營收正成長）
 3. close > ma60（多頭排列）
 4. volume_ratio > 0.8（流動性足夠）
@@ -29,6 +29,8 @@ V35 經營效益策略 (Operating Efficiency Strategy)
 
 from typing import List
 import pandas as pd
+from config import Config
+from tool.db_helper import get_setting
 from .base import BaseStrategy
 
 
@@ -49,7 +51,7 @@ class V35InnovationStrategy(BaseStrategy):
     
     @property
     def description(self) -> str:
-        return '營業利益率高 (>10%) + 營收成長 + 多頭趨勢，中長線穩健成長'
+        return '營業利益率高 (>6%) + 營收成長 + 多頭趨勢，中長線穩健成長'
     
     @property
     def features(self) -> List[str]:
@@ -105,10 +107,23 @@ class V35InnovationStrategy(BaseStrategy):
     # ============================================
     # V35 核心篩選邏輯
     # ============================================
+
+    @staticmethod
+    def _get_float_setting(key: str, default_value: float) -> float:
+        """優先讀取 DB 設定，失敗時回退到 Config 預設值。"""
+        try:
+            value = get_setting(key, str(default_value))
+            return float(value)
+        except Exception:
+            return float(default_value)
     
     def filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         V35 篩選邏輯 - 專注於營業利益率
+        
+        🎯 V35 放寬版本（2026-02）：
+        - 營業利益率: 6% (原 10%)
+        - 適應市場平均利潤率
         """
         if df.empty:
             return df
@@ -123,39 +138,50 @@ class V35InnovationStrategy(BaseStrategy):
             else:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # 篩選 1：營業利益率 > 10%
-        mask_op = df['op_profit_margin'] > 0.10
-        df_op = df[mask_op].copy()
-        print(f"  ✓ 營業利益率 > 10%：{len(df_op)} 檔")
-        
-        if df_op.empty: 
-            return pd.DataFrame()
-        
-        # 篩選 2：營收成長
-        mask_rev = df_op['revenue_yoy'] > 0
-        df_rev = df_op[mask_rev].copy()
-        print(f"  ✓ 營收正成長：{len(df_rev)} 檔")
-        
-        if df_rev.empty: 
-            return pd.DataFrame()
+        strict_op = self._get_float_setting('v35_op_margin_min', Config.V35_OP_MARGIN_MIN)
+        strict_rev = self._get_float_setting('v35_revenue_yoy_min', Config.V35_REVENUE_YOY_MIN)
+        strict_vol = self._get_float_setting('v35_volume_ratio_min', Config.V35_VOLUME_RATIO_MIN)
 
-        # 篩選 3：有獲利 (EPS > 0)
-        mask_eps = df_rev['eps'] > 0
-        df_eps = df_rev[mask_eps].copy()
-        print(f"  ✓ 有獲利 (EPS>0)：{len(df_eps)} 檔")
-        
-        # 篩選 4：多頭排列
-        mask_ma = df_eps['close_price'] > df_eps['ma60']  # 修正：使用 close_price
-        df_ma = df_eps[mask_ma].copy()
-        print(f"  ✓ 多頭排列 (收盤>MA60)：{len(df_ma)} 檔")
-        
-        # 篩選 5：成交量
-        mask_vol = df_ma['volume_ratio'] > 0.8
-        df_final = df_ma[mask_vol].copy()
-        print(f"  ✓ 流動性足夠：{len(df_final)} 檔")
-        
+        relaxed_op = self._get_float_setting('v35_relaxed_op_margin_min', Config.V35_RELAXED_OP_MARGIN_MIN)
+        relaxed_rev = self._get_float_setting('v35_relaxed_revenue_yoy_min', Config.V35_RELAXED_REVENUE_YOY_MIN)
+        relaxed_vol = self._get_float_setting('v35_relaxed_volume_ratio_min', Config.V35_RELAXED_VOLUME_RATIO_MIN)
+
+        def apply_v35_filters(source: pd.DataFrame, op_min: float, rev_min: float, vol_min: float, label: str) -> pd.DataFrame:
+            result = source.copy()
+
+            result = result[result['op_profit_margin'] > op_min].copy()
+            print(f"  ✓ [{label}] 營業利益率 > {op_min*100:.1f}%：{len(result)} 檔")
+            if result.empty:
+                return result
+
+            result = result[result['revenue_yoy'] > rev_min].copy()
+            print(f"  ✓ [{label}] 營收成長 > {rev_min:.1f}%：{len(result)} 檔")
+            if result.empty:
+                return result
+
+            result = result[result['eps'] > 0].copy()
+            print(f"  ✓ [{label}] 有獲利 (EPS>0)：{len(result)} 檔")
+            if result.empty:
+                return result
+
+            result = result[result['close_price'] > result['ma60']].copy()
+            print(f"  ✓ [{label}] 多頭排列 (收盤>MA60)：{len(result)} 檔")
+            if result.empty:
+                return result
+
+            result = result[result['volume_ratio'] > vol_min].copy()
+            print(f"  ✓ [{label}] 流動性足夠 (量比>{vol_min:.2f})：{len(result)} 檔")
+
+            return result
+
+        df_final = apply_v35_filters(df, strict_op, strict_rev, strict_vol, '嚴格')
+
+        if df_final.empty:
+            print("  ⚠️ 嚴格條件無候選，啟用 V35 放寬參數重試")
+            df_final = apply_v35_filters(df, relaxed_op, relaxed_rev, relaxed_vol, '放寬')
+
         print(f"\n✅ V35 篩選完成：{len(df_final)} 檔高效益成長股")
-        
+
         return df_final
     
     # ============================================

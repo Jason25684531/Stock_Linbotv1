@@ -429,7 +429,7 @@ def get_backtest_summary(
     
     result = {
         'total_roi': round(m.get('total_return', 0), 2),
-        'max_drawdown': round(m.get('max_drawdown', 0) * 100, 2),
+        'max_drawdown': round(m.get('max_drawdown', 0), 2),
         'sharpe_ratio': round(m.get('sharpe_ratio', 0), 2),
         'win_rate': round(m.get('win_rate', 0), 2),
     }

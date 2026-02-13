@@ -15,10 +15,10 @@ V33 低波動穩健策略 (Low Volatility Strategy)
 - 持有期：較長（10-15 天）
 
 🔍 篩選邏輯：
-1. NATR < 4%（波動度低於 4%，價格穩定）
-2. 收盤價 > MA60（處於多頭趨勢）
-3. 成交量 > 500 萬股（排除冷門股）
-4. STD_20 排序（選波動最低的）
+1. NATR < 3.5%（波動度更低，降低雜訊）
+2. 收盤價 > MA20 > MA60（確認趨勢強度）
+3. 成交量 > 500 萬股 + 量比 > 1.0（排除冷門與弱量）
+4. RSI 45~65 + STD_20 排序（選波動最低的穩健股）
 """
 
 from typing import List
@@ -43,7 +43,7 @@ class V33LowVolStrategy(BaseStrategy):
     
     @property
     def description(self) -> str:
-        return '低波動 (NATR<4%) + 多頭趨勢 (收盤>MA60)，追求穩定報酬、低回撤'
+        return '低波動 (NATR<3.5%) + 趨勢強化 (收盤>MA20>MA60)，追求穩定報酬、低回撤'
     
     @property
     def features(self) -> List[str]:
@@ -79,18 +79,18 @@ class V33LowVolStrategy(BaseStrategy):
     
     @property
     def stop_loss(self) -> float:
-        """嚴格停損 5%"""
-        return 0.05
+        """停損 6%（第二階段微調：降低震盪洗出）"""
+        return 0.06
     
     @property
     def take_profit(self) -> float:
-        """停利 10%"""
-        return 0.10
+        """停利 12%（第二階段微調：放大趨勢段收益）"""
+        return 0.12
     
     @property
     def max_hold_days(self) -> int:
-        """最長持有 15 天"""
-        return 15
+        """最長持有 12 天（第二階段微調：加速資金輪動）"""
+        return 12
     
     # ============================================
     # V33 核心篩選邏輯
@@ -100,10 +100,10 @@ class V33LowVolStrategy(BaseStrategy):
         """V33 低波動篩選邏輯
         
         篩選條件：
-        1. NATR < 4%（低波動核心）
-        2. 收盤價 > MA60（多頭趨勢）
-        3. 成交量 > 500 萬股（排除冷門股）
-        4. RSI 40~70（避免超買超賣）
+        1. NATR < 3.5%（低波動核心）
+        2. 收盤價 > MA20 > MA60（多頭趨勢強化）
+        3. 成交量 > 500 萬股 + 量比 > 1.0（排除冷門弱勢股）
+        4. RSI 45~65（避免極端位置）
         
         Args:
             df: DataFrame，包含股票資料與技術指標
@@ -118,7 +118,7 @@ class V33LowVolStrategy(BaseStrategy):
         # 欄位檢查與優雅降級
         # ============================================
         required_cols = ['close_price', 'ma60', 'volume']
-        optional_cols = ['natr', 'std_20', 'rsi']
+        optional_cols = ['natr', 'std_20', 'rsi', 'ma20', 'volume_ratio', 'macd_hist', 'bias']
         
         # 檢查必要欄位
         for col in required_cols:
@@ -148,7 +148,7 @@ class V33LowVolStrategy(BaseStrategy):
         # ============================================
         # 資料清理：處理 None/NaN 值
         # ============================================
-        numeric_cols = ['close_price', 'ma60', 'volume', 'natr', 'rsi', 'std_20']
+        numeric_cols = ['close_price', 'ma20', 'ma60', 'volume', 'volume_ratio', 'natr', 'rsi', 'std_20', 'macd_hist', 'bias']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -158,25 +158,32 @@ class V33LowVolStrategy(BaseStrategy):
         # ============================================
         
         # 1. 基本篩選：多頭趨勢 + 量能
-        candidates = df[
-            (df['close_price'] > df['ma60']) &      # 收盤 > MA60（多頭）
-            (df['volume'] > 500_0000)                # 量能 > 500萬（排除冷門股）
-        ].copy()
+        trend_mask = (df['close_price'] > df['ma60'])
+        if 'ma20' in df.columns:
+            trend_mask = trend_mask & (df['close_price'] > df['ma20']) & (df['ma20'] > df['ma60'])
+
+        liquidity_mask = (df['volume'] > 500_0000)
+        if 'volume_ratio' in df.columns:
+            liquidity_mask = liquidity_mask & (df['volume_ratio'] > 1.0)
+
+        candidates = df[trend_mask & liquidity_mask].copy()
         
         if candidates.empty:
             print(f"   ❌ 基本篩選：無符合條件的股票（需收盤>MA60 且量能足夠）")
             return pd.DataFrame()
         
-        print(f"   ✅ 基本篩選：{len(candidates)} 檔（收盤>MA60 + 量能>500萬）")
+        trend_desc = "收盤>MA20>MA60" if 'ma20' in df.columns else "收盤>MA60"
+        vol_desc = "量能>500萬 + 量比>1.0" if 'volume_ratio' in df.columns else "量能>500萬"
+        print(f"   ✅ 基本篩選：{len(candidates)} 檔（{trend_desc} + {vol_desc}）")
         
         # 2. NATR 篩選（核心）
         if 'natr' in candidates.columns:
             before_count = len(candidates)
-            candidates = candidates[candidates['natr'] < 4.0].copy()
-            print(f"   ✅ NATR 篩選：{before_count} → {len(candidates)} 檔（NATR < 4%）")
+            candidates = candidates[candidates['natr'] < 3.5].copy()
+            print(f"   ✅ NATR 篩選：{before_count} → {len(candidates)} 檔（NATR < 3.5%）")
             
             if candidates.empty:
-                print(f"   ❌ 無低波動股票（所有 NATR ≥ 4%）")
+                print(f"   ❌ 無低波動股票（所有 NATR ≥ 3.5%）")
                 return pd.DataFrame()
         else:
             print(f"   ⚠️ 跳過 NATR 篩選（欄位不存在）")
@@ -185,13 +192,28 @@ class V33LowVolStrategy(BaseStrategy):
         if 'rsi' in candidates.columns:
             before_count = len(candidates)
             candidates = candidates[
-                (candidates['rsi'] > 40) & 
-                (candidates['rsi'] < 70)
+                (candidates['rsi'] > 45) & 
+                (candidates['rsi'] < 65)
             ].copy()
-            print(f"   ✅ RSI 篩選：{before_count} → {len(candidates)} 檔（40 < RSI < 70）")
+            print(f"   ✅ RSI 篩選：{before_count} → {len(candidates)} 檔（45 < RSI < 65）")
         
         if candidates.empty:
             print(f"   ❌ RSI 篩選後無剩餘股票")
+            return pd.DataFrame()
+
+        # 4.5 動能/乖離微調（第二階段）：避免逆勢下跌股
+        if 'macd_hist' in candidates.columns:
+            before_count = len(candidates)
+            candidates = candidates[candidates['macd_hist'] > -0.2].copy()
+            print(f"   ✅ MACD 篩選：{before_count} → {len(candidates)} 檔（MACD_hist > -0.2）")
+
+        if 'bias' in candidates.columns:
+            before_count = len(candidates)
+            candidates = candidates[(candidates['bias'] > -6) & (candidates['bias'] < 12)].copy()
+            print(f"   ✅ BIAS 篩選：{before_count} → {len(candidates)} 檔（-6 < BIAS < 12）")
+
+        if candidates.empty:
+            print(f"   ❌ 動能微調後無剩餘股票")
             return pd.DataFrame()
         
         # ============================================
@@ -227,6 +249,6 @@ class V33LowVolStrategy(BaseStrategy):
             'max_drawdown_target': '8%',
             'win_rate_target': '70%',
             'holding_period': f'{self.max_hold_days} 天',
-            'core_logic': 'NATR < 4% + 收盤 > MA60',
+            'core_logic': 'NATR < 3.5% + 收盤 > MA20 > MA60 + 量比 > 1.0',
             'suitable_for': '保守型投資人、熊市避險'
         }

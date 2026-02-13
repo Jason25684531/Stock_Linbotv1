@@ -124,6 +124,12 @@ class V31HybridStrategy(BaseStrategy):
             if col not in df.columns:
                 print(f"⚠️ 缺少必要欄位: {col}")
                 return pd.DataFrame()
+
+        # 數值清理：避免 None/NaN 比較造成篩選錯誤
+        numeric_cols = required_cols + ['kd_k', 'bb_width']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # ============================================
         # 🔥 個股趨勢濾網（收盤 > MA60）

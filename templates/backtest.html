@@ -68,11 +68,11 @@
                 
                 <!-- 提交按鈕 -->
                 <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary btn-lg">
-                        <i class="fas fa-play-circle"></i> 執行回測
+                    <button type="submit" class="btn btn-success btn-lg shadow-lg" style="font-size: 1.25rem; padding: 1rem; border-radius: 0.5rem; font-weight: bold;">
+                        <i class="fas fa-play-circle fa-lg me-2"></i> 🚀 執行回測
                     </button>
-                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left"></i> 返回 Dashboard
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-lg" style="padding: 0.75rem;">
+                        <i class="fas fa-arrow-left me-2"></i> 返回 Dashboard
                     </a>
                 </div>
             </form>
@@ -81,37 +81,37 @@
     
     <!-- 快速預設組合 -->
     <div class="mt-4">
-        <h5><i class="fas fa-star"></i> 快速預設組合</h5>
+        <h5 class="mb-3"><i class="fas fa-star text-warning"></i> 快速預設組合</h5>
         <div class="row">
             <div class="col-md-4">
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h6 class="card-title">🛡️ 穩健組合</h6>
-                        <p class="card-text small">V31 + V33（低風險）</p>
-                        <button class="btn btn-sm btn-outline-primary" onclick="selectPreset(['v31_hybrid', 'v33_low_vol'])">
-                            選擇
+                <div class="card mb-3 border-primary shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">🛡️ 穩健組合</h5>
+                        <p class="card-text">V31 + V33<br><small class="text-muted">低波動 | 風險較低</small></p>
+                        <button class="btn btn-primary btn-lg w-100 shadow" onclick="selectPreset(['v31_hybrid', 'v33_low_vol'])" style="font-weight: bold;">
+                            <i class="fas fa-check-circle me-2"></i>選擇此組合
                         </button>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h6 class="card-title">⚡ 積極組合</h6>
-                        <p class="card-text small">V34 + V35（高報酬）</p>
-                        <button class="btn btn-sm btn-outline-warning" onclick="selectPreset(['v34_turbo', 'v35_innovation'])">
-                            選擇
+                <div class="card mb-3 border-warning shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">⚡ 積極組合</h5>
+                        <p class="card-text">V34 + V35<br><small class="text-muted">高動能 | 報酬潛力大</small></p>
+                        <button class="btn btn-warning btn-lg w-100 shadow" onclick="selectPreset(['v34_turbo', 'v35_innovation'])" style="font-weight: bold;">
+                            <i class="fas fa-bolt me-2"></i>選擇此組合
                         </button>
                     </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h6 class="card-title">🎯 平衡組合</h6>
-                        <p class="card-text small">全部策略（分散風險）</p>
-                        <button class="btn btn-sm btn-outline-success" onclick="selectAll()">
-                            選擇
+                <div class="card mb-3 border-success shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">🎯 平衡組合</h5>
+                        <p class="card-text">全部策略<br><small class="text-muted">多元分散 | 風險中等</small></p>
+                        <button class="btn btn-success btn-lg w-100 shadow" onclick="selectAll()" style="font-weight: bold;">
+                            <i class="fas fa-layer-group me-2"></i>選擇此組合
                         </button>
                     </div>
                 </div>

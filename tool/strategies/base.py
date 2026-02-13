@@ -14,7 +14,7 @@ BaseStrategy - 策略抽象基類
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import pandas as pd
 
 
@@ -121,6 +121,96 @@ class BaseStrategy(ABC):
         """
         pass
     
+    # ============================================
+    # 出場邏輯 (Exit Signal - 階梯式移動停損)
+    # ============================================
+    
+    def check_exit_signal(
+        self,
+        stock_id: str,
+        current_price: float,
+        current_date: str,
+        position_info: Dict[str, Any],
+        market_trend: str = 'BULL'
+    ) -> Tuple[str, str, float]:
+        """判斷是否賣出（階梯式移動停損 + 持有天數檢查）
+        
+        預設實作包含：
+        1. 階梯式移動停損 (Level 1: +10%, Level 2: +20%, Level 3: +30%)
+        2. 固定停損 / 停利
+        3. 最長持有天數
+        4. 趨勢轉空且虧損時強制出場
+        
+        子類別可覆寫此方法以自訂出場規則。
+        
+        Args:
+            stock_id: 股票代碼
+            current_price: 當前價格
+            current_date: 當前日期字串
+            position_info: 持倉資訊 dict, 需包含:
+                - cost: 買入成本
+                - stop_loss: 當前停損價
+                - days: 已持有天數
+                - highest: 歷史最高價
+            market_trend: 市場趨勢 ('BULL' / 'BEAR' / 'NEUTRAL')
+        
+        Returns:
+            Tuple[action, reason, updated_stop_loss]:
+                action: 'SELL' 或 'HOLD'
+                reason: 賣出原因 (如 '停損', '停利', '時間到', '趨勢轉空')
+                updated_stop_loss: 更新後的停損價
+        """
+        cost = position_info['cost']
+        old_stop = position_info['stop_loss']
+        days = position_info['days']
+        change = (current_price - cost) / cost
+        
+        new_stop = old_stop
+
+        # ============================================
+        # 階梯式移動停損 (Stepped Trailing Stop)
+        # ============================================
+        if change >= 0.30:
+            # Level 3: 獲利 >= 30%，鎖定 25% 利潤
+            candidate = cost * 1.25
+            if candidate > new_stop:
+                new_stop = candidate
+                print(f"  🔒 {stock_id} 進入 Level 3，停損上移至 {new_stop:.2f} (鎖定+25%)")
+        elif change >= 0.20:
+            # Level 2: 獲利 >= 20%，鎖定 15% 利潤
+            candidate = cost * 1.15
+            if candidate > new_stop:
+                new_stop = candidate
+                print(f"  🔒 {stock_id} 進入 Level 2，停損上移至 {new_stop:.2f} (鎖定+15%)")
+        elif change >= 0.10:
+            # Level 1: 獲利 >= 10%，保本 + 手續費
+            candidate = cost * 1.01
+            if candidate > new_stop:
+                new_stop = candidate
+                print(f"  🔒 {stock_id} 進入 Level 1，停損上移至 {new_stop:.2f} (保本+1%)")
+        
+        # ============================================
+        # 賣出判斷
+        # ============================================
+        
+        # 1. 觸及停損
+        if current_price <= new_stop:
+            return ('SELL', '停損', new_stop)
+        
+        # 2. 達到停利目標
+        if self.take_profit > 0 and change >= self.take_profit:
+            return ('SELL', '停利', new_stop)
+        
+        # 3. 超過最長持有天數
+        if days >= self.max_hold_days:
+            return ('SELL', '時間到', new_stop)
+        
+        # 4. 市場趨勢轉空且虧損
+        if market_trend == 'BEAR' and change < 0:
+            return ('SELL', '趨勢轉空', new_stop)
+        
+        return ('HOLD', '', new_stop)
+
     # ============================================
     # 共用方法 (所有策略可用)
     # ============================================

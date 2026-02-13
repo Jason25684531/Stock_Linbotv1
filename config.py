@@ -149,6 +149,30 @@ class Config:
     USE_ATR_STOP = True             # 🔥 啟用 ATR 動態停損（波動大則寬，波動小則窄）
     ATR_MULTIPLIER = 2.0            # 停損 = 收盤價 - ATR * 2.0
     ATR_PERIOD = 14                 # ATR 計算週期
+
+    # ==========================================
+    # 🚀 V34 策略門檻（可調參）
+    # ==========================================
+    V34_REVENUE_YOY_MIN = float(os.getenv('V34_REVENUE_YOY_MIN', '18.0'))
+    V34_BREAKOUT_RATIO = float(os.getenv('V34_BREAKOUT_RATIO', '0.93'))
+    V34_VOLUME_RATIO_MIN = float(os.getenv('V34_VOLUME_RATIO_MIN', '0.9'))
+
+    # V34 空集合時啟用的放寬參數
+    V34_RELAXED_REVENUE_YOY_MIN = float(os.getenv('V34_RELAXED_REVENUE_YOY_MIN', '10.0'))
+    V34_RELAXED_BREAKOUT_RATIO = float(os.getenv('V34_RELAXED_BREAKOUT_RATIO', '0.90'))
+    V34_RELAXED_VOLUME_RATIO_MIN = float(os.getenv('V34_RELAXED_VOLUME_RATIO_MIN', '0.7'))
+
+    # ==========================================
+    # 💼 V35 策略門檻（可調參）
+    # ==========================================
+    V35_OP_MARGIN_MIN = float(os.getenv('V35_OP_MARGIN_MIN', '0.06'))
+    V35_REVENUE_YOY_MIN = float(os.getenv('V35_REVENUE_YOY_MIN', '0.0'))
+    V35_VOLUME_RATIO_MIN = float(os.getenv('V35_VOLUME_RATIO_MIN', '0.8'))
+
+    # V35 空集合時啟用的放寬參數
+    V35_RELAXED_OP_MARGIN_MIN = float(os.getenv('V35_RELAXED_OP_MARGIN_MIN', '0.04'))
+    V35_RELAXED_REVENUE_YOY_MIN = float(os.getenv('V35_RELAXED_REVENUE_YOY_MIN', '-5.0'))
+    V35_RELAXED_VOLUME_RATIO_MIN = float(os.getenv('V35_RELAXED_VOLUME_RATIO_MIN', '0.6'))
     
     # ==========================================
     # � V33 Phase 2+: 市場情緒分析與熔斷機制
