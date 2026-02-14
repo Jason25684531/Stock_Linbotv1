@@ -451,13 +451,13 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V36 Phase 4 — Architecture Deep Cleanup (2026-02-16)  
+**版本**: V35 Phase 2 — Chip Data Infrastructure (2026-02-14)  
 **授權**: MIT License  
 **最新變更**:
-- ✅ 重複函式整併：`safe_float`/`safe_int`/`get_open_holdings` 統一至 `db_helper`
-- ✅ 冗餘刪除：`archive/` 目錄 + 3 個過期測試 = 16 檔案移除
-- ✅ 資料驅動模式切換：`MODE_CMD_MAP` + `V34/V35 Presets` 集中管理於 `config.py`
-- ✅ 測試 Fixture 共用化：`test/conftest.py` 提供 `manager()` + `empty_df()`
-- ✅ Bug 修復：`StrategyManager.get_strategy()` 公開方法
-- ✅ 8 策略註冊：V31/V33/V34/V35/V36/V37/V38 全線支援
-- ✅ 117 項測試全部通過
+- ✅ 融資融券爬蟲：`chip_data_scraper.py`（TWSE MI_MARGN + TPEx margin_bal）
+- ✅ 自營商買賣超：T86/3itrade 擴充擷取 `dealer_buy`
+- ✅ 6 項新指標：`dealer_ratio`、`foreign_consec_days`、`trust_consec_days`、`margin_change_pct`、`chip_score`
+- ✅ `chip_score` 加權綜合分數 (0~100)：外資 40% + 投信 30% + 自營商 15% + 融資信號 15%
+- ✅ `fix_database_indicators()` 擴展至 17 指標欄位批次 UPDATE
+- ✅ 16 項 Phase 2 測試全部通過
+- ✅ 測試模式：`FORCE_BULL_MARKET` 環境變數控制市場趨勢
