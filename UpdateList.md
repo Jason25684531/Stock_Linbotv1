@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-02-13  
-> **當前版本**: V35 Architecture Hygiene (重複邏輯整併 + 產物清理 + 文件同步)  
+> **最後更新**: 2026-02-16  
+> **當前版本**: V36 Phase 4 — Architecture Deep Cleanup (架構深度清洗)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,11 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V36 Phase 4 — Architecture Deep Cleanup](#v36-phase-4--architecture-deep-cleanup-架構深度清洗-2026-02-16) | 2026-02-16 | 重複函式整併 + 冗餘檔案刪除 + 測試 Fixture 共用化 + V37/V38 策略支援 | ✅ 完成 |
+| [V35 Phase 3 — V36 Chip Momentum](#v35-phase-3--v36-chip-momentum-strategy-2026-02-15) | 2026-02-15 | V36 籌碼動能策略 + 訓練管線增強 + 每日選股籌碼指標 | ✅ 完成 |
+| [V35 Phase 2 — Chip Data Infrastructure](#v35-phase-2--chip-data-infrastructure-2026-02-14) | 2026-02-14 | 融資融券爬蟲 + 自營商擷取 + 6 項籌碼指標 + chip_score 綜合分數 | ✅ 完成 |
+| [V35 Phase 1 — Architecture Robustness](#v35-phase-1--architecture-robustness-2026-02-15) | 2026-02-15 | 死碼歸檔 + DB 安全強化 + Config 統一 + 設定 V3 + 訓練管線清理 | ✅ 完成 |
+| [V35 Refactor & Flex Message](#v35-refactor--flex-message-2026-02-14) | 2026-02-14 | 回測出場共用化 + Flex 卡片 + strategy.py 深度清理 | ✅ 完成 |
 | [V35 Architecture Hygiene](#v35-architecture-hygiene-結構清洗與整併-2026-02-13) | 2026-02-13 | app.py 重複邏輯整併 + 快取/覆蓋率產物清理 + 測試流程文件化 | ✅ 完成 |
 | [V35 Strategy Decoupling](#v35-strategy-decoupling-策略解耦--前端修復-2026-02-12) | 2026-02-12 | check_exit_signal 解耦 + Line Bot 診斷 + MDD/API 修復 + SQL 注入修復 | ✅ 完成 |
 | [V35 API Cleanup](#v35-api-cleanup-2026-02-12) | 2026-02-12 | 回測 API 共用化 + PK 寫入封裝 + 清理 app.py SQL | ✅ 完成 |
@@ -23,6 +28,350 @@
 | [Phase 5: Backtesting & Visualization](#phase-5-backtesting--visualization-2026-02-02) | 2026-02-02 | 多策略組合回測 + Plotly 視覺化 + Web 整合 | ✅ 完成 |
 | [V33 Phase 2+ Multi-Strategy](#v33-phase-2-multi-strategy-多策略並行--安全強化-2026-01-31) | 2026-01-31 | 多策略並行 + 環境變數隔離 + Web 登入 | ✅ 完成 |
 | [V33 Phase 2 Refactor](#v33-phase-2-refactor-深度代碼清理-2026-01-27) | 2026-01-27 | 全面清理重複代碼 + 架構優化 | ✅ 完成 |
+
+---
+
+## ✅ V36 Phase 4 — Architecture Deep Cleanup (架構深度清洗) (2026-02-16)
+
+### 🎯 變更重點
+
+本次為全面性架構清洗，整併重複函式、刪除冗餘檔案、統一測試 Fixture，確保程式庫乾淨且可擴展。
+
+#### 1. 重複函式整併
+
+| 原位置 | 整併至 | 說明 |
+|--------|--------|------|
+| `app.py` 內聯 `_safe_float()` / `_safe_int()` | `tool/db_helper.py` → `safe_float()` / `safe_int()` | 消除 app.py 中 2 處行內閉包 |
+| `app.py` 內聯 holdings 原生 SQL | `tool/db_helper.py` → `get_open_holdings()` | 封裝持股查詢，移除 app.py 中 raw SQL |
+| `app.py` 66 行 V34/V35 Preset 字典 | `config.py` → `V34_MODE_PRESETS` / `V35_MODE_PRESETS` | Preset 資料集中管理 |
+| `app.py` ~120 行重複模式切換 if/elif | `config.py` → `MODE_CMD_MAP` / `MODE_EMOJI` / `MODE_REPLY_TEMPLATE` | 資料驅動取代硬編碼分支 |
+| `app.py` 冗餘 `/api/live_signals` 路由 | 已刪除（與 `/api/summary` 完全重複） | 減少 API 端點重複 |
+| `app.py` 死碼 `get_ai_recommendation()` | 已刪除 | 移除無調用者的僵屍函式 |
+| `config.py` `V30_PARAMS` 值硬編碼 | 改為引用 class 屬性 + `get_v30_params()` | 消除參數重複定義 |
+
+#### 2. 新增公開方法
+
+- `StrategyManager.get_strategy(strategy_name)`: 修復 app.py 第 1021 行呼叫不存在方法的 bug，封裝 `_get_or_load_strategy()`
+
+#### 3. 刪除冗餘檔案
+
+| 檔案 / 目錄 | 行數 | 理由 |
+|-------------|------|------|
+| `archive/` 整個目錄（9 個 .py + Crawerl/ 子目錄 4 個檔案） | ~1200+ 行 | 全為死碼，功能已遷移至 `tool/` 模組 |
+| `test/test_new_strategies.py` | 302 行 | 僅測 V33/V34，使用 print-based 斷言，已過期 |
+| `test/test_phase3_integration.py` | 244 行 | 引用已刪除的爬蟲屬性，無法通過 |
+| `test/test_phase4_integration.py` | 245 行 | 僅測 V31/V33/V34，使用 subprocess 模式，已被新測試覆蓋 |
+
+#### 4. 測試 Fixture 共用化
+
+- 新增 `test/conftest.py`：定義 `manager()` 與 `empty_df()` 共用 Fixture
+- `test/test_v36_chip_momentum.py`：移除重複 fixture，改用 conftest
+- `test/test_v37_v38_strategies.py`：移除重複 fixture，改用 conftest
+
+#### 5. Import 清理
+
+- `init_settings.py`: 移除未使用的 `create_engine` 匯入
+- `1_update_database.py`: 移除未使用的 `create_engine` 匯入
+
+### 📊 清洗統計
+
+| 指標 | 數值 |
+|------|------|
+| 刪除行數（app.py 內移除） | ~180 行 |
+| 刪除檔案 | 16 個（archive/ 13 + test/ 3） |
+| 新增共用函式 | 3 個（safe_float, safe_int, get_open_holdings in db_helper） |
+| 新增公開方法 | 1 個（StrategyManager.get_strategy） |
+| 新增配置項 | 5 個（V34/V35 Presets + MODE_CMD_MAP + MODE_EMOJI + MODE_REPLY_TEMPLATE） |
+| Bug 修復 | 1 個（get_strategy() 方法不存在） |
+| 測試結果 | ✅ 117 passed, 0 failed |
+
+### 🧪 測試通過清單
+
+```
+test/test_phase2_chip_data.py      — 16 passed (籌碼指標)
+test/test_strategy_factory.py      —  3 passed (策略載入)
+test/test_v35_refactor_flex.py     — 13 passed (Flex + 出場)
+test/test_v36_chip_momentum.py     — 29 passed (V36 籌碼動能)
+test/test_v37_v38_strategies.py    — 56 passed (V37/V38)
+─────────────────────────────────────
+合計                               — 117 passed ✅
+```
+
+### 🔮 下一步預期發展
+
+#### 短期（1-2 週）
+1. **tool/strategy.py 遷移完畢**: 將 `calculate_v30_signal`、`format_v30_recommendation` 等剩餘 V30/V31 邏輯遷入 `tool/strategies/v31_hybrid.py` + `tool/line_message_builder.py`，最終刪除 `tool/strategy.py`
+2. **回測手續費精算**: 整合現行出場邏輯強化 Slippage + 券稅分離計算
+3. **CI/CD Pipeline**: 建立 GitHub Actions，每次 push 自動執行 `pytest test/ -v`
+
+#### 中期（2-4 週）
+4. **V37/V38 回測驗證**: 實際回測 V37 均值回歸 + V38 高殖利率策略，調參上線
+5. **情緒面整合**: 結合 `news_agent.py` RSS 新聞情緒與策略篩選權重
+6. **Dashboard 即時監控**: 新增策略即時切換 UI + 部位損益即時更新
+
+#### 長期（1-2 月）
+7. **多因子模型**: 結合技術面 + 籌碼面 + 基本面 + 情緒面的多因子排名系統
+8. **部署自動化**: Docker Compose 一鍵部署含 MySQL + Flask + 排程（APScheduler）
+9. **Line Bot Rich Menu**: 圖形選單取代純文字指令
+
+---
+
+## ✅ V35 Phase 3 — V36 Chip Momentum Strategy (2026-02-15)
+
+### 🎯 變更重點
+
+#### 1. V36 籌碼動能策略 (`tool/strategies/v36_chip_momentum.py`) — NEW
+- **核心理念**: 三大法人連續買超 + 融資減少 = 主力佈局訊號
+- **篩選邏輯**: 4 階段過濾
+  - Stage 1: 趨勢確認 — 多頭排列 (close > MA20 > MA60) + 基本流動性
+  - Stage 2: 籌碼強度 — chip_score ≥ 55 + 外資連買 ≥ 3 天 / 投信連買 ≥ 2 天
+  - Stage 3: 量能確認 — volume_ratio ≥ 0.8
+  - Stage 4: 技術過濾 — RSI 40~80, bias < 15%
+- **特徵**: chip_score, foreign_consec_days, trust_consec_days, foreign_ratio, trust_ratio, dealer_ratio, margin_change_pct, volume_ratio, rsi, bias, macd_hist (11 個)
+- **出場**: 覆寫 `check_exit_signal()` — chip_score < 30 加速出場, chip_score < 20 崩潰止損
+- **參數**: target_return=7%, look_ahead=10 天, stop_loss=7%, take_profit=15%, max_hold=12 天
+
+#### 2. Config V36 常數 (`config.py`)
+- 新增 12 項 V36 可調參數（皆支援 .env 覆寫）:
+  - `V36_CHIP_SCORE_MIN=55`, `V36_FOREIGN_CONSEC_MIN=3`, `V36_TRUST_CONSEC_MIN=2`
+  - `V36_VOLUME_THRESHOLD=500`, `V36_VOLUME_RATIO_MIN=0.8`
+  - `V36_RSI_LOW=40`, `V36_RSI_HIGH=80`, `V36_BIAS_HIGH=15`
+  - `V36_STOP_LOSS=0.07`, `V36_TAKE_PROFIT=0.15`, `V36_MAX_HOLD_DAYS=12`
+
+#### 3. 策略註冊 (`tool/strategy_manager.py`)
+- V36 加入 `STRATEGY_REGISTRY`，支援 StrategyManager 動態載入
+
+#### 4. 每日選股籌碼指標 (`2_rundaily.py`)
+- `compute_indicators_from_history()` 新增 7 項籌碼指標計算:
+  - dealer_ratio, foreign_ratio, trust_ratio (法人比例)
+  - foreign_consec_days, trust_consec_days (連買天數)
+  - margin_change_pct (融資日變動率)
+  - chip_score (綜合分數)
+- `_write_indicators_to_db()` 欄位列表擴充至 19 欄（含籌碼面）
+
+#### 5. 訓練管線增強 (`3_train_model.py`)
+- 新增 chip indicator 函數 import (consec_days, margin_change, chip_score)
+- 訓練完成後自動輸出 「特徵重要性 Top-10」報告（含視覺化 bar）
+
+#### 6. 測試 (`test/test_v36_chip_momentum.py`) — NEW
+- 8 個測試類別、29 項測試案例：
+  - 策略註冊 & 載入 (4 tests)
+  - 特徵定義驗證 (3 tests)
+  - 參數範圍檢查 (5 tests)
+  - Config 常數檢查 (5 tests)
+  - 篩選邏輯 — 含 monkeypatch 繞過 DB (6 tests)
+  - 出場訊號 — chip_score 衰減加速出場 (3 tests)
+  - Strategy info dict (1 test)
+  - 多策略共存切換 (2 tests)
+
+### 📁 變更檔案
+
+| 檔案 | 操作 | 說明 |
+|------|------|------|
+| `tool/strategies/v36_chip_momentum.py` | 🆕 新增 | V36 籌碼動能策略 |
+| `config.py` | ✏️ 修改 | +12 項 V36 常數 |
+| `tool/strategy_manager.py` | ✏️ 修改 | STRATEGY_REGISTRY 加入 v36_chip_momentum |
+| `2_rundaily.py` | ✏️ 修改 | +7 籌碼指標計算 + 回寫欄位擴充 |
+| `3_train_model.py` | ✏️ 修改 | +chip imports + 特徵重要性報告 |
+| `test/test_v36_chip_momentum.py` | 🆕 新增 | 29 項測試 (全部通過) |
+
+---
+
+## ✅ V35 Phase 2 — Chip Data Infrastructure (2026-02-14)
+
+### 🎯 變更重點
+
+#### 1. 融資融券爬蟲 (`tool/crawlers/chip_data_scraper.py`) — NEW
+- `fetch_margin_balance_twse(date_str)`: 抓取上市融資融券餘額（MI_MARGN API，動態欄位匹配）
+- `fetch_margin_balance_tpex(date_str)`: 抓取上櫃融資融券餘額（margin_bal_result API）
+- `fetch_margin_balance(date_str)`: 統一入口，合併上市 + 上櫃後去重
+- 內建: 隨機延遲 + 重試 3 次 + 反爬蟲 Header + 數字清洗
+
+#### 2. 自營商買賣超擷取 (`1_update_database.py`)
+- TWSE T86: 新增動態欄位匹配 `"自營商" in col and "買賣超" in col`（排除「自行」「避險」子欄位，取合計）
+- TPEx 3itrade: 擴展 `iloc[:, [0, 10, 13]]` → `[0, 10, 13, 16]`，新增 `dealer_buy`
+- 兩端均有 fallback: 若擷取失敗，`dealer_buy` 兜底為 0
+
+#### 3. 融資融券管線整合
+- 每日更新迴圈中，股價 + 籌碼合併後，額外呼叫 `fetch_margin_balance()` 取得 `margin_balance` + `short_balance`
+- `process_and_save()` 擴充支援 `dealer_buy`, `margin_balance`, `short_balance` 三個新欄位（缺欄位自動補 0）
+
+#### 4. 六項新籌碼指標 (`tool/calc_indicators.py`)
+| 指標名 | 計算邏輯 | 用途 |
+|--------|---------|------|
+| `dealer_ratio` | 自營商買超 / 成交量 | 法人結構佔比 |
+| `foreign_consec_days` | 外資連續淨買超天數 | 外資趨勢強度 |
+| `trust_consec_days` | 投信連續淨買超天數 | 投信趨勢強度 |
+| `margin_change_pct` | 融資餘額日變動率 (%) | 散戶籌碼壓力 |
+| `chip_score` | 加權綜合分數 (0~100) | 籌碼健康度一站式指標 |
+| `foreign_ratio` / `trust_ratio` | 持續化至 DB（原僅 runtime） | 指標一致性 |
+
+#### 5. chip_score 權重設計 (Config)
+| 分量 | 權重 | 正面信號 |
+|------|------|---------|
+| 外資買超 | 0.4 | `foreign_ratio > 0`（愈大愈好） |
+| 投信買超 | 0.3 | `trust_ratio > 0` |
+| 自營商買超 | 0.15 | `dealer_ratio > 0` |
+| 融資減少 | 0.15 | `margin_change_pct < 0`（融資減 = 散戶退 = 正面） |
+
+#### 6. `fix_database_indicators()` 擴充
+- 新增 7 欄位至 `ensure_indicator_columns()` 自動 ALTER TABLE
+- 批次 UPDATE SQL 擴展至 17 指標欄位
+
+### ✅ 影響檔案
+
+#### 新增檔案
+| 檔案 | 說明 |
+|------|------|
+| `tool/crawlers/chip_data_scraper.py` | 融資融券爬蟲（TWSE MI_MARGN + TPEx margin_bal） |
+| `test/test_phase2_chip_data.py` | 16 項測試（指標計算 + 爬蟲載入 + 管線相容性 + Config 常數） |
+
+#### 修改檔案
+| 檔案 | 變更說明 |
+|------|---------|
+| `config.py` | 新增 `CHIP_WEIGHT_*` 4 項 + `CHIP_CONSEC_DAYS_WINDOW` + `CHIP_MARGIN_DANGER_RATIO` |
+| `1_update_database.py` | T86 新增 dealer_buy 擷取 + 管線整合 margin_balance/short_balance + `process_and_save` 擴充 |
+| `tool/calc_indicators.py` | 新增 4 函數 + `add_all_indicators`/`fix_database_indicators` 含 7 新指標欄位 |
+
+### 🧪 驗證摘要
+- Phase 2 測試: 16 passed（chip indicators + scraper import + pipeline compat + config）
+- 全套回歸: 49 passed, 1 failed（`test_database` — MySQL 未啟動）
+- 所有修改檔案通過 `py_compile` 語法檢查
+
+### 🔮 下一步預期發展
+1. **Phase 3 — 新策略 + 訓練管線提升**: V36 Chip Momentum（以 `chip_score` + `foreign_consec_days` 為核心）、V37 Mean Reversion、V38 Dividend Yield
+2. **Phase 4 — 測試基建**: SQLite mock DB、calc_indicators 單元測試、pytest CI markers
+
+---
+
+## ✅ V35 Phase 1 — Architecture Robustness (2026-02-15)
+
+### 🎯 變更重點
+
+#### 1. 死碼歸檔與遺留清理
+- 歸檔 `tool/fix_db_schema.py`（import 壞掉且無法運行）→ `archive/`
+- 歸檔 `tool/migrate_financial_year_to_ad.py`（一次性遷移已完成）→ `archive/`
+- 歸檔 `Crawerl/` 目錄（已被 `tool/update_monthly_revenue.py` 取代）→ `archive/`
+- 修復 `diagnose_strategies.py`：移除對不存在的 `temp_indicators` 表的查詢，改用 `daily_market_data` 指標完整性檢查
+
+#### 2. news_agent.py 深度清理
+- 移除整個 `NewsSentimentAgent` 類別（~110 行死碼，sentiment_score 始終為 0）
+- Line SDK v2 → v3 升級：`LineBotApi` → `MessagingApi` / `ApiClient` / `Configuration`
+- 移除 `hashlib`、`Dict` 等未使用 import
+
+#### 3. 策略共用方法提取
+- 將 `_get_float_setting()` 提升至 `BaseStrategy`（含惰性 import），消除 V34/V35 重複定義
+- V34、V35 移除各自的 `_get_float_setting` 副本及多餘的 `from tool.db_helper import get_setting`
+
+#### 4. Config 常數統一化
+- 新增 `FEE_RATE`(0.001425)、`TAX_RATE`(0.003)、`TRAIN_RATIO`(0.8)、`BACKTEST_MIN_PRICE`/`MAX_PRICE`
+- 新增 V33 閾值常數 8 項：`V33_VOLUME_THRESHOLD`、`V33_NATR_MAX`、`V33_RSI_LOW`/`HIGH`、`V33_MACD_HIST_MIN`、`V33_BIAS_LOW`/`HIGH`、`V33_VOLUME_RATIO_MIN`
+- V33 策略 `filter_candidates()` 中 6 處 magic number → `Config.V33_*` 常數
+
+#### 5. DB 安全強化
+- `upsert_stock_data()` 新增 `_ALLOWED_TABLES` 白名單驗證，阻斷 table name injection
+- `get_db_engine()` 新增 3 次重試 + 指數退避 + 連線驗證
+- 新增 `ensure_indicator_columns()`：自動偵測並 ALTER TABLE 補齊缺失的指標欄位
+- `calc_indicators.fix_database_indicators()` 原 `to_sql(if_exists='replace')` 改為安全批次 UPDATE（5000 筆/批）
+
+#### 6. 訓練管線噪音清除
+- 移除 `3_train_model.py` 中的 `NewsSentimentAgent` import 及 `merge_sentiment_features()` 函式（~35 行）
+- 移除 `+ ['sentiment_score']` 特徵注入（該值始終為 0，為模型噪音）
+- `TRAIN_RATIO` 改用 `Config.TRAIN_RATIO`
+
+#### 7. 設定檔 V3 升級
+- `strategy_settings.json` 從 V2 升級至 V3 格式：新增 `per_strategy_overrides: {}` + `backtest_defaults`
+- `StrategyManager.DEFAULT_SETTINGS` 同步更新為 V3
+- `_load_settings()` 新增 V2→V3 自動遷移邏輯（補齊 `per_strategy_overrides`、`backtest_defaults`）
+- 新增 `get_strategy_overrides(name)` 和 `get_backtest_defaults()` 存取方法
+
+### ✅ 影響檔案
+
+#### 歸檔檔案
+| 原路徑 | 目標 | 原因 |
+|--------|------|------|
+| `tool/fix_db_schema.py` | `archive/` | import 壞掉，無法執行 |
+| `tool/migrate_financial_year_to_ad.py` | `archive/` | 一次性遷移已完成 |
+| `Crawerl/` | `archive/` | 已由 `tool/update_monthly_revenue.py` 取代 |
+
+#### 修改檔案
+| 檔案 | 變更說明 |
+|------|---------|
+| `config.py` | 新增 `FEE_RATE`/`TAX_RATE`/`TRAIN_RATIO`/`BACKTEST_*` + V33 閾值常數 8 項 |
+| `tool/db_helper.py` | 新增 `_ALLOWED_TABLES`、`get_db_engine` 重試、`ensure_indicator_columns()` |
+| `tool/calc_indicators.py` | `fix_database_indicators()` 改為安全批次 UPDATE |
+| `tool/news_agent.py` | 移除 `NewsSentimentAgent`，Line SDK v2→v3 |
+| `tool/strategies/base.py` | 新增 `_get_float_setting()` 靜態方法 |
+| `tool/strategies/v33_low_vol.py` | magic numbers → `Config.V33_*` |
+| `tool/strategies/v34_turbo.py` | 移除重複 `_get_float_setting` |
+| `tool/strategies/v35_innovation.py` | 移除重複 `_get_float_setting` |
+| `tool/strategy_manager.py` | V3 DEFAULT_SETTINGS + V2→V3 遷移 + 新存取方法 |
+| `3_train_model.py` | 移除 sentiment 相關、改用 `Config.TRAIN_RATIO` |
+| `diagnose_strategies.py` | 修復 `temp_indicators` → `daily_market_data` |
+| `strategy_settings.json` | V2 → V3 格式升級 |
+
+### 🧪 驗證摘要
+- 全部 11 個修改檔案通過 `py_compile` 語法檢查
+- `pytest test/ -v`：18 passed, 1 failed（`test_database` 因 MySQL 未啟動，非本次變更）
+- V3 設定向後相容：V1→V2→V3 自動遷移鏈驗證通過
+
+### 🔮 下一步預期發展（Phase 2-4 路線圖）
+1. **Phase 2 — 籌碼面資料擴充**：融資融券 (`MI_MARGN`)、自營商、外資持股 (`MI_QFIIS`) 爬蟲 + 新指標（`foreign_consec_days`、`chip_score`、`margin_ratio`）
+2. **Phase 3 — 新策略 + 訓練管線提升**：V36 Chip Momentum、V37 Mean Reversion、V38 Dividend Yield + walk-forward CV + feature importance report
+3. **Phase 4 — 測試基建**：SQLite mock DB、calc_indicators 單元測試、pytest CI markers
+
+---
+
+## ✅ V35 Refactor & Flex Message (2026-02-14)
+
+### 🎯 變更重點
+
+#### Phase 1: 回測出場邏輯共用化
+- 新增 `BacktestEngine.check_and_execute_exit()` 共用方法，消除 `PortfolioBacktestEngine` 中 25+ 行重複的停損/停利判斷。
+- `BacktestEngine.run()` 與 `PortfolioBacktestEngine` 賣出迴圈統一委派此方法。
+- 策略出場邏輯唯一入口：`BaseStrategy.check_exit_signal()` → 回測引擎不再包含任何交易規則。
+
+#### Phase 2: Line Bot Flex Message 卡片
+- 新增 `tool/line_message_builder.py`：使用 Line Bot SDK v3 建構 Flex Bubble 卡片。
+- 使用者輸入 4 碼股票代號時，回傳視覺化卡片（股價 + AI 信心 + 營業利益率 + 營收 YoY + Goodinfo 連結按鈕）。
+- 降級機制：若 Flex 建構失敗，自動降級為純文字格式 (`format_stock_diagnosis`)。
+
+#### Phase 3: 深度死碼清除
+- `tool/strategy.py` 精簡 ~300 行：
+  - 移除 `_load_v31_model()` → 改用 `tool.model_utils.load_model()`
+  - 移除 `check_market_trend()` proxy → 直接呼叫 `tool.db_helper.get_market_trend()`
+  - 移除 `check_sentiment_filter()` 死碼 (ENABLE_SENTIMENT_FILTER=False)
+  - 移除 `calculate_position_size()` 死碼 (PEG ratio 未使用)
+  - 移除 `_cached_model` / `_cached_features` / `_sentiment_agent` 全域快取
+- `get_best_stocks_v31_hybrid()` 的市場趨勢檢查改為直接呼叫 `db_helper`。
+
+### ✅ 影響檔案
+
+#### 新增檔案
+| 檔案 | 說明 |
+|------|------|
+| `tool/line_message_builder.py` | Flex Message 建構器（Bubble Header/Hero/Body/Footer） |
+| `test/test_v35_refactor_flex.py` | 15 項測試（Flex 建構 + exit signal + 向後相容 + report_helper） |
+
+#### 修改檔案
+| 檔案 | 變更說明 |
+|------|---------|
+| `4_run_backtest.py` | 新增 `check_and_execute_exit()` 共用方法；`run()` 與 Portfolio 都改用委派 |
+| `app.py` | import `create_stock_flex_message`；4 碼股票代號回覆 Flex Message + 降級機制 |
+| `tool/strategy.py` | 移除 4 個死函式 + 3 個死快取；`get_best_stocks_v31_hybrid` 改用 `db_helper` 直接呼叫 |
+
+### 🧪 驗證摘要
+- `pytest test/` 全通過：33 passed, 1 skipped (MySQL 未啟動)
+- Flex Message JSON 結構驗證通過（完整資料 + 缺失資料場景）
+- `check_exit_signal` 五項單元測試通過（Level1 / Level3 / 停損 / 時間到 / 趨勢轉空）
+- 向後相容性確認：`get_v30_candidates`, `format_*` 等舊 import 路徑正常
+
+### 🔮 下一步預期發展
+1. **Command Router 重構**：將 `handle_message` 的 if/elif 指令解析拆為 `dict + handler` 模式，降低分支深度。
+2. **V34/V35 參數解析共用化**：抽取嚴格/放寬 regex 解析為共用 parser，消除 200 行重複 regex。
+3. **Flex Message 推薦清單**：將「推薦」指令也改為 Flex Carousel（多張卡片橫滑瀏覽）。
+4. **API Smoke Tests**：補齊 `/api/summary`, `/api/live_signals`, `/api/daily-signals` 進入 CI。
+5. ~~**news_agent.py 歸檔**~~：✅ 已在 Phase 1 完成（`NewsSentimentAgent` 移除，Line SDK v3 升級）。
 
 ---
 

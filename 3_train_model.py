@@ -17,13 +17,16 @@ from sklearn.metrics import classification_report, accuracy_score, precision_sco
 import joblib
 import os
 from config import Config
-from tool.news_agent import NewsSentimentAgent
 from tool.db_helper import get_db_engine
-from tool.calc_indicators import calculate_ratio_features
+from tool.calc_indicators import (
+    calculate_ratio_features,
+    calculate_consec_days, calculate_margin_change_pct,
+    calculate_chip_score,
+)
 from tool.strategy_manager import StrategyManager
 
 # 時間序列拆分參數
-TRAIN_RATIO = 0.8        # 前 80% 數據用於訓練
+TRAIN_RATIO = Config.TRAIN_RATIO
 
 # 模型存放目錄
 MODEL_DIR = os.path.dirname(Config.MODEL_PATH) or 'ML_Data/pkl'
@@ -69,43 +72,6 @@ def calculate_future_target(df, look_ahead_days, target_return):
 
     # 清理暫存欄位
     df = df.drop(columns=['future_max_price'])
-    
-    return df
-
-
-def merge_sentiment_features(df):
-    """
-    整合市場情緒特徵到訓練數據 (V33 Phase 2+)
-    """
-    print("📰 整合市場情緒特徵...")
-    
-    try:
-        # 初始化情緒分析代理（使用 Mock Mode）
-        sentiment_agent = NewsSentimentAgent(mock_mode=True)
-        
-        # 取得所有唯一日期
-        unique_dates = df['trade_date'].unique()
-        sentiment_map = {}
-        
-        print(f"   正在計算 {len(unique_dates)} 個交易日的情緒分數...")
-        
-        # 批次計算所有日期的情緒分數
-        for date in unique_dates:
-            date_str = pd.to_datetime(date).strftime('%Y-%m-%d')
-            sentiment_result = sentiment_agent.get_daily_sentiment(date_str)
-            sentiment_map[date] = sentiment_result['score']
-        
-        # 映射到原始數據
-        df['sentiment_score'] = df['trade_date'].map(sentiment_map)
-        
-        # 填充缺失值為 0（中性）
-        df['sentiment_score'] = df['sentiment_score'].fillna(0)
-        
-        print(f"   ✅ 情緒特徵整合完成")
-        
-    except Exception as e:
-        print(f"   ⚠️ 情緒特徵整合失敗: {e}")
-        df['sentiment_score'] = 0
     
     return df
 
@@ -180,10 +146,35 @@ def load_and_prepare_data(engine) -> pd.DataFrame:
     # 補齊缺失的籌碼欄位
     if 'foreign_buy' not in df.columns: df['foreign_buy'] = 0
     if 'trust_buy' not in df.columns: df['trust_buy'] = 0
+    if 'dealer_buy' not in df.columns: df['dealer_buy'] = 0
     
-    # 特徵工程（共用）
+    # 特徵工程（共用 — 基礎 ratio）
     df = calculate_ratio_features(df)
-    df = merge_sentiment_features(df)
+
+    # 🆕 Phase 3: 籌碼面進階指標（V36 所需，若 DB 已有則保留）
+    vol_safe = df['volume'].replace(0, 1)
+
+    if 'dealer_ratio' not in df.columns or df['dealer_ratio'].eq(0).all():
+        df['dealer_ratio'] = (df['dealer_buy'] / vol_safe).clip(-0.5, 0.5)
+
+    if 'foreign_consec_days' not in df.columns or df['foreign_consec_days'].eq(0).all():
+        df['foreign_consec_days'] = df.groupby('stock_id')['foreign_buy'].transform(calculate_consec_days)
+
+    if 'trust_consec_days' not in df.columns or df['trust_consec_days'].eq(0).all():
+        df['trust_consec_days'] = df.groupby('stock_id')['trust_buy'].transform(calculate_consec_days)
+
+    if 'margin_balance' in df.columns:
+        if 'margin_change_pct' not in df.columns or df['margin_change_pct'].eq(0).all():
+            df['margin_change_pct'] = df.groupby('stock_id')['margin_balance'].transform(calculate_margin_change_pct)
+    else:
+        if 'margin_change_pct' not in df.columns:
+            df['margin_change_pct'] = 0
+
+    if 'chip_score' not in df.columns or df['chip_score'].eq(0).all():
+        df['chip_score'] = calculate_chip_score(df)
+
+    print(f"📊 籌碼欄位狀態: chip_score 非零 {(df['chip_score'] != 0).sum():,} 筆"
+          f" | foreign_consec 非零 {(df['foreign_consec_days'] != 0).sum():,} 筆")
     
     return df
 
@@ -199,7 +190,7 @@ def train_single_strategy(strategy, base_df: pd.DataFrame) -> dict:
         訓練結果摘要 dict，失敗時返回含 error 的 dict
     """
     strategy_name = strategy.name
-    features = strategy.features + ['sentiment_score']
+    features = strategy.features
     look_ahead_days = strategy.look_ahead_days
     target_return = strategy.target_return
     
@@ -262,6 +253,15 @@ def train_single_strategy(strategy, base_df: pd.DataFrame) -> dict:
     print("-" * 40)
     print(classification_report(y_test, y_pred, zero_division=0))
     print(f"📈 準確率: {acc:.2%} | 🎯 精準率: {prec:.2%}")
+
+    # 🆕 Phase 3: 特徵重要性報告
+    if available_features:
+        importance = model.feature_importances_
+        feat_imp = sorted(zip(available_features, importance), key=lambda x: x[1], reverse=True)
+        print(f"\n📊 特徵重要性 Top-{min(10, len(feat_imp))}:")
+        for feat_name, imp in feat_imp[:10]:
+            bar = '█' * int(imp * 50)
+            print(f"   {feat_name:<25} {imp:.4f} {bar}")
     
     # 6. 存檔
     model_path = get_model_path(strategy_name)

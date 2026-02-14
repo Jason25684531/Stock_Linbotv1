@@ -1,28 +1,19 @@
-"""策略模組 - V31 混合策略實作
+"""策略模組 - V31 混合策略實作 (精簡版)
 
 此模組包含：
-- V31 混合策略（V30 硬篩選 + XGBoost 智慧排名）
-- V30 純技術面策略
-- 格式化輸出函數
-- 資金管理建議
+- V30/V31 篩選邏輯 (get_v30_candidates, get_best_stocks_v31_hybrid)
+- V30 訊號計算 (calculate_v30_signal, calculate_pivot_strategy)
+- Line Bot 訊息格式化 (format_v30_recommendation, format_v31_recommendation, etc.)
 
-🔥 V31 Optimization (2026-01):
-- 放寬停損至 10%（提升波動容忍度）
-- 提高停利至 20%（提升盈虧比）
-- 加入市場趨勢過濾器（熊市暫停買進）
-
-🔥 V33 Phase 2+ (2026-01):
-- 整合市場情緒分析（Circuit Breaker 熔斷機制）
-- 情緒分數低於門檻時自動暫停交易
-
-🔄 V33 Phase 2 Refactor (2026-01-31):
-- 引入策略工廠模式（Strategy Factory Pattern）
-- get_v30_candidates 現在使用 StrategyManager 動態取得策略
-- 保持向後兼容性
+🔄 V35 Refactor (2026-02-14):
+- 移除重複的 _load_v31_model() → 改用 tool.model_utils.load_model()
+- 移除 check_market_trend() proxy → 直接呼叫 db_helper.get_market_trend()
+- 移除 check_sentiment_filter() 死碼 (ENABLE_SENTIMENT_FILTER=False)
+- 移除 calculate_position_size() 死碼 (PEG ratio 未使用)
+- 格式化函式保留供 app.py / 5_push_to_line.py 使用
 """
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
-import joblib
 import os
 from config import Config
 
@@ -41,106 +32,15 @@ def _get_strategy():
 # ============================================
 # 💾 快取變數 (Module-level cache)
 # ============================================
-_cached_model: Optional[Any] = None
-_cached_features: Optional[List[str]] = None
-_sentiment_agent: Optional[Any] = None  # 情緒分析代理快取
+# 模型載入已統一由 tool.model_utils 處理，不再需要 module-level 快取
 
 
 # ============================================
 # 🔧 Helper Functions
 # ============================================
-
-def check_sentiment_filter(date_str: str) -> Optional[Dict[str, any]]:
-    """檢查市場情緒熔斷機制
-    
-    Args:
-        date_str: 日期字串 (YYYY-MM-DD)
-    
-    Returns:
-        dict | None: 如果觸發熔斷返回情緒資訊，否則返回 None
-    """
-    # 如果未啟用情緒過濾，直接返回
-    if not Config.ENABLE_SENTIMENT_FILTER:
-        return None
-    
-    try:
-        global _sentiment_agent
-        
-        # 延遲載入情緒分析代理（避免循環導入）
-        if _sentiment_agent is None:
-            from tool.news_agent import NewsSentimentAgent
-            _sentiment_agent = NewsSentimentAgent(mock_mode=Config.SENTIMENT_MOCK_MODE)
-        
-        # 取得當日情緒分數
-        sentiment = _sentiment_agent.get_daily_sentiment(date_str)
-        score = sentiment['score']
-        
-        # 檢查是否觸發熔斷
-        if score < Config.SENTIMENT_THRESHOLD:
-            print(f"📉 市場情緒過低 (Score: {score:.2f}, 門檻: {Config.SENTIMENT_THRESHOLD})")
-            print(f"🔥 觸發熔斷機制，暫停買進！")
-            return sentiment
-        else:
-            print(f"✅ 市場情緒正常 (Score: {score:.2f}, 情緒: {sentiment['mood']})")
-            return None
-            
-    except Exception as e:
-        print(f"⚠️ 情緒分析檢查失敗: {e}")
-        return None  # 失敗時不阻擋交易
-
-
-def check_market_trend(date_str: str) -> Optional[str]:
-    """檢查市場趨勢（代理至 db_helper.get_market_trend）
-    
-    Args:
-        date_str: 日期字串 (YYYY-MM-DD)
-    
-    Returns:
-        'BULL' | 'BEAR' | None (失敗時)
-    """
-    from tool.db_helper import get_market_trend
-    return get_market_trend(date_str)
-
-
-def _load_v31_model() -> Tuple[Optional[Any], Optional[List[str]]]:
-    """載入 V31 混合策略模型（帶快取與特徵驗證）
-    
-    Returns:
-        Tuple[model, features]: 模型物件和特徵清單，失敗時返回 (None, None)
-    """
-    global _cached_model, _cached_features
-    
-    if _cached_model is not None:
-        return _cached_model, _cached_features
-    
-    # 嘗試多個路徑
-    paths = [Config.MODEL_PATH, 'stock_ai_model.pkl', os.path.join('ML_Data', 'pkl', 'stock_ai_model.pkl')]
-    
-    for path in paths:
-        if os.path.exists(path):
-            try:
-                data = joblib.load(path)
-                # V31 格式：包含 model 和 features
-                if isinstance(data, dict) and 'model' in data:
-                    _cached_model = data['model']
-                    _cached_features = data.get('features', [])
-                    
-                    # 無論如何，都使用模型儲存的特徵列表（避免維度錯誤）
-                    print(f"✅ V31 模型載入成功: {path}")
-                    print(f"📋 使用特徵列表: {_cached_features}")
-                    return _cached_model, _cached_features
-                else:
-                    # 舊格式：直接是模型，使用 Config 定義的特徵
-                    _cached_model = data
-                    _cached_features = Config.FEATURES
-                    print(f"⚠️ 載入舊版模型格式: {path}")
-                    print(f"📋 使用 Config 預設特徵: {_cached_features}")
-                    return _cached_model, _cached_features
-            except Exception as e:
-                print(f"⚠️ 載入模型失敗 ({path}): {e}")
-    
-    print("❌ 未找到可用的模型文件")
-    return None, None
+# check_sentiment_filter() 已移除 (ENABLE_SENTIMENT_FILTER=False)
+# check_market_trend() 已移除 → 直接使用 tool.db_helper.get_market_trend()
+# _load_v31_model() 已移除 → 使用 tool.model_utils.load_model()
 
 
 def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame:
@@ -168,7 +68,7 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
         return pd.DataFrame()
     
     # ============================================
-    # 🆕 Step 0a: 市場情緒熔斷檢查（V33 Phase 2+）
+    # Step 0: 市場趨勢過濾器
     # ============================================
     date_str = df['trade_date'].max()
     if hasattr(date_str, 'strftime'):
@@ -176,17 +76,8 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
     else:
         date_str = str(date_str)
     
-    sentiment_alert = check_sentiment_filter(date_str)
-    if sentiment_alert is not None:
-        # 觸發熔斷：返回空結果
-        print(f"⛔ Circuit Breaker 已觸發：市場情緒 {sentiment_alert['mood']} (分數: {sentiment_alert['score']:.2f})")
-        return pd.DataFrame()
-    
-    # ============================================
-    # 🆕 Step 0b: 市場趨勢過濾器（V31 Optimization）
-    # ============================================
-    
-    market_trend = check_market_trend(date_str)
+    from tool.db_helper import get_market_trend
+    market_trend = get_market_trend(date_str)
     
     if market_trend == 'BEAR':
         print(f"📉 市場趨勢偏空（{date_str}），暫停買進")
@@ -205,9 +96,12 @@ def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame
         return pd.DataFrame()
     
     # ============================================
-    # Step 2: 載入 ML 模型
+    # Step 2: 載入 ML 模型（使用 model_utils）
     # ============================================
-    model, feature_list = _load_v31_model()
+    from tool.model_utils import load_model
+    result = load_model('v31_hybrid')
+    model = result[0] if result else None
+    feature_list = result[1] if result else None
     
     if model is None:
         print("⚠️ ML 模型未載入，僅使用 V30 篩選")
@@ -512,34 +406,6 @@ def format_strategy_message(stock_id, trade_date, close_price, ai_prob, strat_re
         
     return msg
 
-def calculate_position_size(prob, peg, capital=100000):
-    """
-    資金控管建議 (V20 放寬版)
-    """
-    # 🟢 [修正] 放寬 PEG 門檻，不然永遠都是觀望
-    # 只要 PEG < 2.5 且 信心 > 50% 就給過
-    if prob > 0.5 and peg < 2.5:
-        # 凱利公式簡化版 (Kelly Criterion Lite)
-        # f = p - q (贏率 - 輸率)
-        # 這裡我們保守一點，只用一半的凱利值
-        f = (prob - (1-prob)) * 0.5
-        
-        # 限制最大單筆 20%
-        f = max(0, min(f, 0.2)) 
-        
-        amount = int(capital * f)
-        
-        if f >= 0.15:
-            return "🔥 重倉出擊 (15%~20%)", amount
-        elif f >= 0.05:
-            return "📈 建立基本倉 (5%~10%)", amount
-        else:
-             return "🤏 試單 (1%~5%)", amount
-    else:
-        reason = "PEG太高" if peg >= 2.5 else "信心不足"
-        return f"☕ 觀望 ({reason})", 0
-
-
 def format_v30_recommendation(picks, date_str):
     """
     格式化 V30 策略推薦訊息
@@ -644,16 +510,6 @@ def format_stock_query(stock_id, date_str, row, ai_prob, enable_strategy=True):
             strat_res,
             extra_data=row
         )
-        
-        # 加入資金建議
-        advice, money = calculate_position_size(
-            ai_prob, 
-            row.get('pe_ratio', 0), 
-            capital=1000000
-        )
-        msg += f"\n💰 資金建議: {advice}"
-        if money > 0:
-            msg += f" (${money:,})"
     else:
         # 簡化版：基本資訊
         price = row['close_price']

@@ -26,17 +26,21 @@ def main():
         result = conn.execute(text("SELECT MAX(trade_date) FROM daily_market_data"))
         market_date = result.fetchone()[0]
         
-        result = conn.execute(text("SELECT MAX(trade_date) FROM temp_indicators"))
-        indicator_date = result.fetchone()[0]
-        
         print(f"\n【1. 資料時效性】")
-        print(f"  price data (daily_market_data): {market_date}")
-        print(f"  indicators (temp_indicators): {indicator_date}")
+        print(f"  price + indicators (daily_market_data): {market_date}")
         
-        if indicator_date < market_date:
-            print(f"  ⚠️ 指標過期! 請執行: python 2_rundaily.py")
+        # 檢查指標是否已計算
+        result = conn.execute(text("""
+            SELECT COUNT(ma60) FROM daily_market_data
+            WHERE trade_date = (SELECT MAX(trade_date) FROM daily_market_data)
+              AND ma60 IS NOT NULL AND ma60 > 0
+        """))
+        indicator_count = result.fetchone()[0]
+        
+        if indicator_count == 0:
+            print(f"  ⚠️ 指標未計算! 請執行: python 2_rundaily.py")
         else:
-            print(f"  ✅ 指標已更新")
+            print(f"  ✅ 指標已計算 ({indicator_count} 檔有 MA60)")
         
         # 2. Check indicator completeness
         query = text("""

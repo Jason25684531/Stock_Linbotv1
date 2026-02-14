@@ -15,11 +15,17 @@ from .v31_hybrid import V31HybridStrategy
 from .v33_low_vol import V33LowVolStrategy
 from .v34_turbo import V34TurboStrategy
 from .v35_innovation import V35InnovationStrategy
+from .v36_chip_momentum import V36ChipMomentumStrategy
+from .v37_mean_reversion import V37MeanReversionStrategy
+from .v38_value_dividend import V38ValueDividendStrategy
 
 __all__ = [
     'BaseStrategy', 
     'V31HybridStrategy', 
     'V33LowVolStrategy', 
     'V34TurboStrategy',
-    'V35InnovationStrategy'
+    'V35InnovationStrategy',
+    'V36ChipMomentumStrategy',
+    'V37MeanReversionStrategy',
+    'V38ValueDividendStrategy',
 ]

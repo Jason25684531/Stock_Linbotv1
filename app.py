@@ -22,6 +22,7 @@ import pandas as pd
 import joblib
 import os
 import re
+import json
 import unicodedata
 from flask import Flask, request, abort, render_template, jsonify, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -39,50 +40,16 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from config import Config
+from config import (
+    V34_MODE_PRESETS, V35_MODE_PRESETS,
+    MODE_CMD_MAP, MODE_EMOJI, MODE_REPLY_TEMPLATE,
+)
 
 # 引入策略模組
 from tool.strategy import (
     calculate_v30_signal, get_best_stocks_v31_hybrid, get_v30_params_from_db,
     format_v30_recommendation, format_v31_recommendation, format_stock_query
 )
-
-V34_MODE_PRESETS = {
-    'aggressive': {
-        'v34_revenue_yoy_min': '14.0',
-        'v34_breakout_ratio': '0.91',
-        'v34_volume_ratio_min': '0.75',
-        'v34_relaxed_revenue_yoy_min': '6.0',
-        'v34_relaxed_breakout_ratio': '0.88',
-        'v34_relaxed_volume_ratio_min': '0.55',
-    },
-    'conservative': {
-        'v34_revenue_yoy_min': '22.0',
-        'v34_breakout_ratio': '0.96',
-        'v34_volume_ratio_min': '1.00',
-        'v34_relaxed_revenue_yoy_min': '14.0',
-        'v34_relaxed_breakout_ratio': '0.92',
-        'v34_relaxed_volume_ratio_min': '0.80',
-    },
-}
-
-V35_MODE_PRESETS = {
-    'aggressive': {
-        'v35_op_margin_min': '0.05',
-        'v35_revenue_yoy_min': '-2.0',
-        'v35_volume_ratio_min': '0.70',
-        'v35_relaxed_op_margin_min': '0.03',
-        'v35_relaxed_revenue_yoy_min': '-8.0',
-        'v35_relaxed_volume_ratio_min': '0.50',
-    },
-    'conservative': {
-        'v35_op_margin_min': '0.08',
-        'v35_revenue_yoy_min': '3.0',
-        'v35_volume_ratio_min': '0.90',
-        'v35_relaxed_op_margin_min': '0.05',
-        'v35_relaxed_revenue_yoy_min': '0.0',
-        'v35_relaxed_volume_ratio_min': '0.70',
-    },
-}
 # 引入資料庫輔助模組
 from tool.db_helper import (
     get_setting,
@@ -91,11 +58,21 @@ from tool.db_helper import (
     get_stock_data,
     create_user_simulation_trade,
     supplement_financial_data,
+    get_open_holdings,
+    safe_float,
+    safe_int,
 )
 # 引入策略工廠
 from tool.strategy_manager import StrategyManager
 # 引入診斷報告工具
 from tool.report_helper import get_stock_report, format_stock_diagnosis
+# 引入 Flex Message 建構器
+from tool.line_message_builder import (
+    create_stock_flex_message,
+    create_recommendation_carousel,
+    create_backtest_summary_flex,
+    create_holdings_flex,
+)
 
 app = Flask(__name__)
 app.secret_key = Config.FLASK_SECRET_KEY
@@ -245,12 +222,16 @@ def _compact_command_key(text: str) -> str:
 
 
 def _is_quick_mode_cmd(text: str, version: str, style: str) -> bool:
-    """Match V34/V35 aggressive/conservative commands with spacing/case variants."""
+    """Match V34/V35 aggressive/balanced/loose commands with spacing/case variants."""
     compact = _compact_command_key(text)
     aliases = {
         ('34', 'aggressive'): ['v34積極', '設定v34積極'],
+        ('34', 'balanced'): ['v34平衡', '設定v34平衡'],
+        ('34', 'loose'): ['v34寬鬆', '設定v34寬鬆', 'v34放寬'],
         ('34', 'conservative'): ['v34保守', '設定v34保守'],
         ('35', 'aggressive'): ['v35積極', '設定v35積極'],
+        ('35', 'balanced'): ['v35平衡', '設定v35平衡'],
+        ('35', 'loose'): ['v35寬鬆', '設定v35寬鬆', 'v35放寬'],
         ('35', 'conservative'): ['v35保守', '設定v35保守'],
     }
     return compact in aliases.get((version, style), [])
@@ -301,33 +282,7 @@ def get_v30_recommendation():
         return f"❌ 運算錯誤: {str(e)[:100]}"
 
 
-def get_ai_recommendation():
-    """
-    V31 混合策略選股（V30 篩選 + ML 智慧排名）
-    
-    Returns:
-        推薦訊息字串
-    """
-    try:
-        # 1. 撈取最新資料
-        df, date_str = get_stock_data()
-        if df.empty: 
-            return "💤 今日無資料"
-
-        # 2. 使用 V31 混合策略選股
-        picks = get_best_stocks_v31_hybrid(df, top_n=5)
-        
-        # 3. 使用 Strategy 模組的格式化函數
-        return format_v31_recommendation(picks, date_str)
-        
-    except Exception as e:
-        import traceback
-        print(f"❌ V31 推薦失敗: {e}")
-        traceback.print_exc()
-        return f"❌ 運算錯誤: {str(e)[:100]}"
-
-
-def get_strategy_recommendation():
+def get_strategy_recommendation(as_flex: bool = False):
     """
     根據當前活躍策略推薦股票（含 AI 排名）
     
@@ -338,8 +293,11 @@ def get_strategy_recommendation():
     4. AI 排名 (XGBoost)
     5. 格式化前 5 名輸出
     
+    Args:
+        as_flex: True 回傳 FlexMessage Carousel, False 回傳純文字
+
     Returns:
-        推薦訊息字串
+        str (純文字) 或 FlexMessage (Flex Carousel)
     """
     try:
         # 1. 取得當前策略
@@ -395,7 +353,28 @@ def get_strategy_recommendation():
         # 5. 格式化輸出
         top_n = candidates.head(5)
         total_count = len(candidates)
-        
+
+        # ── Flex Carousel 模式 ──
+        if as_flex:
+            picks_list = []
+            for _, row in top_n.iterrows():
+                close = row.get('close_price', 0)
+                picks_list.append({
+                    'stock_id': str(row.get('stock_id', '????')),
+                    'close_price': close,
+                    'ai_score': row.get('ai_score', 0) if has_ai else 0,
+                    'rsi': row.get('rsi', 0),
+                    'volume': row.get('volume', 0),
+                    'stop_loss_price': close * (1 - active.stop_loss),
+                    'take_profit_price': close * (1 + active.take_profit) if active.take_profit > 0 else 0,
+                })
+            return create_recommendation_carousel(
+                picks=picks_list,
+                strategy_name=strategy_name,
+                date_str=date_str,
+            )
+
+        # ── 純文字模式（相容舊版）──
         reply = f"🎯 【{strategy_name}】推薦\n"
         reply += f"📅 日期：{date_str}\n"
         if has_ai:
@@ -442,11 +421,7 @@ def get_strategy_recommendation():
         import traceback
         print(f"❌ 策略推薦失敗: {e}")
         traceback.print_exc()
-        # Fallback 到舊版推薦
-        try:
-            return get_ai_recommendation()
-        except:
-            return f"❌ 策略推薦失敗: {str(e)[:100]}"
+        return f"❌ 策略推薦失敗: {str(e)[:100]}"
 
 
 def query_stock(stock_id):
@@ -549,8 +524,9 @@ def get_settings_info():
         msg += "• 設定停利 20 (設為20%)\n"
         msg += "• 設定停利 0 (不停利)\n"
         msg += "• 設定信心 60 (AI門檻60%)\n"
-        msg += "• V34積極 / V34保守\n"
-        msg += "• V35積極 / V35保守\n"
+        msg += "• 切換積極 / 切換平衡 / 切換寬鬆\n"
+        msg += "• V34積極 / V34平衡 / V34寬鬆\n"
+        msg += "• V35積極 / V35平衡 / V35寬鬆\n"
         msg += "• 設定V34 18 0.93 0.9\n"
         msg += "• 設定V35 6 0 0.8"
         
@@ -623,7 +599,8 @@ def dashboard():
     return render_template('dashboard.html', 
                          active_strategies=active_strategies,
                          strategy_options=strategy_options,
-                         current_strategy=active_strategies[0] if active_strategies else 'v31_hybrid')
+                         current_strategy=active_strategies[0] if active_strategies else 'v31_hybrid',
+                         current_mode=str(get_setting('mode', 'balanced')))
 
 
 @app.route('/update_strategy', methods=['POST'])
@@ -655,6 +632,40 @@ def update_strategy():
         flash(f'❌ 切換失敗: {str(e)}', 'error')
         print(f"[ERROR] 策略切換失敗: {e}")
     
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/update_mode', methods=['POST'])
+@login_required
+def update_mode():
+    """切換 V34/V35 共用模式：積極 / 平衡 / 寬鬆"""
+    try:
+        mode_map = {
+            'aggressive': ('積極', 'aggressive'),
+            'balanced': ('平衡', 'balanced'),
+            'loose': ('寬鬆', 'loose'),
+            # 向後相容
+            'conservative': ('穩健', 'conservative'),
+        }
+        req_mode = (request.form.get('mode') or '').strip().lower()
+        if req_mode not in mode_map:
+            flash('❌ 未知模式，請使用 積極/平衡/寬鬆', 'error')
+            return redirect(url_for('dashboard'))
+
+        mode_label, preset_key = mode_map[req_mode]
+        updates = {**V34_MODE_PRESETS[preset_key], **V35_MODE_PRESETS[preset_key]}
+        ok_mode = update_setting('mode', req_mode)
+        ok_params = _apply_settings_batch(updates)
+
+        if ok_mode and ok_params:
+            flash(f'✅ 已切換至【{mode_label}模式】（V34/V35 同步更新）', 'success')
+        elif ok_mode:
+            flash(f'⚠️ 已切換模式，但部分參數更新失敗（{mode_label}）', 'error')
+        else:
+            flash('❌ 模式切換失敗', 'error')
+    except Exception as e:
+        flash(f'❌ 模式切換異常: {e}', 'error')
+
     return redirect(url_for('dashboard'))
 
 
@@ -792,28 +803,76 @@ def api_pk_battle():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route("/api/live_signals")
-def api_live_signals():
+@app.route("/api/strategies")
+def api_strategies():
     """
-    API: 取得回測總結數據
-    Returns: JSON {total_roi, win_rate, mdd, sharpe, trade_count, avg_hold_days}
+    API: 取得所有策略清單及當前啟用策略
+    Returns: JSON {strategies: [...], active: [...]}
     """
     try:
-        summary, error_response = _load_backtest_summary_or_error('數據不存在')
-        if error_response:
-            return error_response
-        return jsonify(_build_summary_response(summary))
+        mgr = StrategyManager()
+        available = mgr.list_available_strategies()
+        active_names = mgr.get_active_strategy_names()
+        
+        strategies = []
+        for name, display in available.items():
+            try:
+                strategy = mgr._get_or_load_strategy(name)
+                info = strategy.get_strategy_info() if hasattr(strategy, 'get_strategy_info') else {}
+                strategies.append({
+                    'name': name,
+                    'display_name': display,
+                    'type': info.get('type', ''),
+                    'risk_level': info.get('risk_level', ''),
+                    'description': info.get('description', strategy.description if hasattr(strategy, 'description') else ''),
+                    'active': name in active_names,
+                })
+            except Exception:
+                strategies.append({
+                    'name': name,
+                    'display_name': display,
+                    'active': name in active_names,
+                })
+        
+        return jsonify({
+            'strategies': strategies,
+            'active': active_names,
+            'count': len(strategies)
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
+# /api/live_signals 已整併至 /api/summary（相同邏輯），前端請改用 /api/summary
+
 @app.route("/api/daily-signals")
 def api_daily_signals():
     """
-    V32 Phase 4: 取得今日選股訊號
+    取得今日選股訊號
+    Query Params:
+      - strategy: 策略名稱（可選，預設為目前啟用策略）
+      - top_n: 顯示筆數（可選，預設 5，範圍 1~20）
     Returns: JSON list of recommended stocks for today
     """
     try:
+        # 讀取查詢參數
+        requested_strategy = (request.args.get('strategy') or '').strip()
+        try:
+            top_n = int(request.args.get('top_n', 5))
+        except (TypeError, ValueError):
+            top_n = 5
+        top_n = max(1, min(top_n, 20))
+
+        strategy_alias = {
+            'v31': 'v31_hybrid',
+            'v33': 'v33_low_vol',
+            'v34': 'v34_turbo',
+            'v35': 'v35_innovation',
+            'v36': 'v36_chip_momentum',
+            'v37': 'v37_mean_reversion',
+            'v38': 'v38_value_dividend',
+        }
+
         # 取得最新資料
         df, date_str = get_stock_data()
         
@@ -821,36 +880,120 @@ def api_daily_signals():
             return jsonify({
                 'error': '無最新資料',
                 'date': None,
+                'strategy_key': None,
+                'strategy_display': None,
+                'top_n': top_n,
                 'signals': []
             })
+
+        # 補充財務欄位（供 V34/V35/V38 與詳細資訊顯示）
+        df = supplement_financial_data(df)
         
-        # 使用 V31 混合策略選股
-        picks = get_best_stocks_v31_hybrid(df, top_n=5)
+        # 使用指定策略或目前啟用策略
+        try:
+            mgr = StrategyManager()
+
+            if requested_strategy:
+                key = requested_strategy.lower().strip()
+                strategy_key = strategy_alias.get(key, key)
+                active = mgr.get_strategy(strategy_key)
+                if active is None:
+                    return jsonify({
+                        'error': f'無效策略: {requested_strategy}',
+                        'date': date_str,
+                        'strategy_key': strategy_key,
+                        'strategy_display': None,
+                        'top_n': top_n,
+                        'signals': []
+                    }), 400
+            else:
+                active = mgr.get_active_strategy()
+                strategy_key = mgr.get_active_strategy_names()[0] if mgr.get_active_strategy_names() else 'v31_hybrid'
+
+            strategy_name = active.display_name
+            candidates = active.filter_candidates(df.copy())
+
+            if model is not None and not candidates.empty:
+                try:
+                    features = active.features
+                    score_df = candidates.copy()
+                    for feature_name in features:
+                        if feature_name not in score_df.columns:
+                            score_df[feature_name] = 0
+                    probs = model.predict_proba(score_df[features].fillna(0))[:, 1]
+                    candidates = candidates.copy()
+                    candidates['ai_score'] = probs
+                    candidates = candidates.sort_values('ai_score', ascending=False)
+                except Exception as score_error:
+                    print(f"⚠️ /api/daily-signals AI 排名失敗: {score_error}")
+            
+            if candidates.empty:
+                return jsonify({
+                    'date': date_str,
+                    'strategy_key': strategy_key,
+                    'strategy_display': strategy_name,
+                    'top_n': top_n,
+                    'signals': [],
+                    'message': f'今日 {strategy_name} 無符合條件的股票'
+                })
+            
+            picks = candidates.head(top_n)
+        except Exception:
+            # Fallback: 使用 V31 混合策略
+            picks = get_best_stocks_v31_hybrid(df, top_n=top_n)
+            strategy_key = 'v31_hybrid'
+            strategy_name = 'V31 混合策略'
         
         if picks.empty:
             return jsonify({
                 'date': date_str,
+                'strategy_key': strategy_key,
+                'strategy_display': strategy_name,
+                'top_n': top_n,
                 'signals': [],
                 'message': '今日無符合條件的股票'
             })
+
+        # safe_float / safe_int 已從 tool.db_helper 匯入（模組層級共用）
         
         # 格式化輸出
         signals = []
         for _, row in picks.iterrows():
+            close_price = float(row['close_price'])
+            stop_loss_rate = float(getattr(active, 'stop_loss', Config.V30_STOP_LOSS) if 'active' in locals() else Config.V30_STOP_LOSS)
+            take_profit_rate = float(getattr(active, 'take_profit', Config.V30_TAKE_PROFIT) if 'active' in locals() else Config.V30_TAKE_PROFIT)
+
+            suggested_buy = close_price
+            suggested_sell = close_price * (1 + take_profit_rate)
+            suggested_stop = close_price * (1 - stop_loss_rate)
+
             signal = {
                 'stock_id': row['stock_id'],
-                'close_price': float(row['close_price']),
-                'strategy': 'V31 混合策略',
-                'ai_score': float(row.get('ai_score', 0)) if 'ai_score' in row else None,
-                'rsi': float(row.get('rsi', 0)) if 'rsi' in row else None,
-                'volume': int(row.get('volume', 0)) if 'volume' in row else None,
-                'ma20': float(row.get('ma20', 0)) if 'ma20' in row else None,
-                'foreign_buy': int(row.get('foreign_buy', 0)) if 'foreign_buy' in row else None
+                'close_price': close_price,
+                'strategy': strategy_name,
+                'strategy_key': strategy_key,
+                'ai_score': safe_float(row.get('ai_score')) if 'ai_score' in row else None,
+                'rsi': safe_float(row.get('rsi')) if 'rsi' in row else None,
+                'volume': safe_int(row.get('volume')) if 'volume' in row else None,
+                'ma20': safe_float(row.get('ma20')) if 'ma20' in row else None,
+                'ma60': safe_float(row.get('ma60')) if 'ma60' in row else None,
+                'bias': safe_float(row.get('bias')) if 'bias' in row else None,
+                'op_profit_margin': safe_float(row.get('op_profit_margin')) if 'op_profit_margin' in row else None,
+                'revenue_yoy': safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
+                'chip_score': safe_float(row.get('chip_score')) if 'chip_score' in row else None,
+                'foreign_buy': safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
+                'suggested_buy_price': round(suggested_buy, 2),
+                'suggested_sell_price': round(suggested_sell, 2),
+                'suggested_stop_loss_price': round(suggested_stop, 2),
+                'detail_url': f"https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID={row['stock_id']}",
             }
             signals.append(signal)
         
         return jsonify({
             'date': date_str,
+            'strategy_key': strategy_key,
+            'strategy_display': strategy_name,
+            'top_n': top_n,
             'signals': signals,
             'count': len(signals)
         })
@@ -967,6 +1110,30 @@ def callback():
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+    except Exception as e:
+        import traceback
+        print(f"❌ callback 處理失敗: {e}")
+        traceback.print_exc()
+
+        # 防呆：即使內部錯誤，也嘗試回覆使用者，避免看起來「完全沒反應」
+        try:
+            payload = json.loads(body) if body else {}
+            events = payload.get('events', []) if isinstance(payload, dict) else []
+            reply_token = None
+            if events and isinstance(events[0], dict):
+                reply_token = events[0].get('replyToken')
+
+            if reply_token:
+                with ApiClient(configuration) as api_client:
+                    line_bot_api = MessagingApi(api_client)
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[V3TextMessage(text="⚠️ 系統忙碌中，請稍後再試一次")]
+                        )
+                    )
+        except Exception as fallback_error:
+            print(f"⚠️ callback fallback 回覆失敗: {fallback_error}")
     return 'OK'
 
 
@@ -979,64 +1146,39 @@ def handle_message(event):
     msg_text = _normalize_line_text(raw_text)
     msg_key = _compact_command_key(msg_text)
     
-    # ========== 設定管理指令 ==========
-    if msg_key == "切換積極":
-        if update_setting('mode', 'aggressive'):
-            updates = {**V34_MODE_PRESETS['aggressive'], **V35_MODE_PRESETS['aggressive']}
+    # ========== 設定管理指令（資料驅動模式切換）==========
+    # 全域模式切換（積極 / 平衡 / 寬鬆 / 穩健）
+    if msg_key in MODE_CMD_MAP:
+        mode_label, preset_key = MODE_CMD_MAP[msg_key]
+        emoji = MODE_EMOJI.get(preset_key, '')
+        if update_setting('mode', preset_key):
+            updates = {**V34_MODE_PRESETS[preset_key], **V35_MODE_PRESETS[preset_key]}
             all_ok = _apply_settings_batch(updates)
             if all_ok:
-                reply = (
-                    "😈 已切換至【積極模式】\n"
-                    "V34/V35 已同步放寬（嚴格與放寬門檻）\n"
-                    "💡 直接輸入「推薦」即可生效"
-                )
+                reply = f"{emoji} {MODE_REPLY_TEMPLATE[preset_key]}\n💡 直接輸入「推薦」即可生效"
             else:
-                reply = "⚠️ 模式已切換，但部分 V34/V35 參數更新失敗"
-        else:
-            reply = "❌ 切換失敗，請稍後再試"
-            
-    elif msg_key == "切換穩健":
-        if update_setting('mode', 'conservative'):
-            updates = {**V34_MODE_PRESETS['conservative'], **V35_MODE_PRESETS['conservative']}
-            all_ok = _apply_settings_batch(updates)
-            if all_ok:
-                reply = (
-                    "🛡️ 已切換至【穩健模式】\n"
-                    "V34/V35 已同步收緊（嚴格與放寬門檻）\n"
-                    "💡 直接輸入「推薦」即可生效"
-                )
-            else:
-                reply = "⚠️ 模式已切換，但部分 V34/V35 參數更新失敗"
+                reply = f"⚠️ 模式已切換至{mode_label}，但部分 V34/V35 參數更新失敗"
         else:
             reply = "❌ 切換失敗，請稍後再試"
 
-    elif _is_quick_mode_cmd(msg_text, '34', 'aggressive'):
-        all_ok = _apply_settings_batch(V34_MODE_PRESETS['aggressive'])
-        if all_ok:
-            reply = "🚀 V34 已設為積極檔位\n嚴格: YoY>14%, 突破>=0.91, 量比>0.75\n放寬: YoY>6%, 突破>=0.88, 量比>0.55"
-        else:
-            reply = "❌ V34 積極設定失敗"
-
-    elif _is_quick_mode_cmd(msg_text, '34', 'conservative'):
-        all_ok = _apply_settings_batch(V34_MODE_PRESETS['conservative'])
-        if all_ok:
-            reply = "🛡️ V34 已設為保守檔位\n嚴格: YoY>22%, 突破>=0.96, 量比>1.00\n放寬: YoY>14%, 突破>=0.92, 量比>0.80"
-        else:
-            reply = "❌ V34 保守設定失敗"
-
-    elif _is_quick_mode_cmd(msg_text, '35', 'aggressive'):
-        all_ok = _apply_settings_batch(V35_MODE_PRESETS['aggressive'])
-        if all_ok:
-            reply = "🚀 V35 已設為積極檔位\n嚴格: 利益率>5%, YoY>-2%, 量比>0.70\n放寬: 利益率>3%, YoY>-8%, 量比>0.50"
-        else:
-            reply = "❌ V35 積極設定失敗"
-
-    elif _is_quick_mode_cmd(msg_text, '35', 'conservative'):
-        all_ok = _apply_settings_batch(V35_MODE_PRESETS['conservative'])
-        if all_ok:
-            reply = "🛡️ V35 已設為保守檔位\n嚴格: 利益率>8%, YoY>3%, 量比>0.90\n放寬: 利益率>5%, YoY>0%, 量比>0.70"
-        else:
-            reply = "❌ V35 保守設定失敗"
+    # V34/V35 個別模式快捷指令
+    elif any(_is_quick_mode_cmd(msg_text, ver, style)
+             for ver in ('34', '35') for style in ('aggressive', 'balanced', 'loose', 'conservative')):
+        reply = None
+        for ver in ('34', '35'):
+            for style in ('aggressive', 'balanced', 'loose', 'conservative'):
+                if _is_quick_mode_cmd(msg_text, ver, style):
+                    presets = V34_MODE_PRESETS if ver == '34' else V35_MODE_PRESETS
+                    all_ok = _apply_settings_batch(presets[style])
+                    emoji = MODE_EMOJI.get(style, '')
+                    style_label = {'aggressive': '積極', 'balanced': '平衡', 'loose': '寬鬆', 'conservative': '保守'}[style]
+                    if all_ok:
+                        reply = f"{emoji} V{ver} 已設為{style_label}檔位"
+                    else:
+                        reply = f"❌ V{ver} {style_label}設定失敗"
+                    break
+            if reply:
+                break
 
     elif re.match(r'^設定\s*[Vv]34\s*放寬\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s*$', msg_text):
         try:
@@ -1264,7 +1406,52 @@ def handle_message(event):
                 reply = "❌ 切換失敗，請稍後再試"
         except Exception as e:
             reply = f"❌ 切換失敗: {e}"
-    
+
+    elif msg_text.lower() in ["切換v36", "v36策略", "切v36", "籌碼", "法人"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v36_chip_momentum'):
+                reply = "🔄 已切換至【V36 籌碼動能策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• 法人連續買超 + 籌碼評分\n"
+                reply += "• 外資/投信同步追蹤\n"
+                reply += "• 跟隨主力動向，適合趨勢投資者\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+
+    elif msg_text.lower() in ["切換v37", "v37策略", "切v37", "均值回歸", "反轉"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v37_mean_reversion'):
+                reply = "🔄 已切換至【V37 均值回歸策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• KD 超賣回升 + BB 收斂\n"
+                reply += "• 量縮整理後的反彈行情\n"
+                reply += "• 短線反轉操作，持股 5-8 天\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+
+    elif msg_text.lower() in ["切換v38", "v38策略", "切v38", "高殖利", "價值股", "定存股"]:
+        try:
+            mgr = StrategyManager()
+            if mgr.set_active_strategy('v38_value_dividend'):
+                reply = "🔄 已切換至【V38 高殖利率價值策略】\n\n"
+                reply += "🎯 特色：\n"
+                reply += "• 高 EPS + 高營業利益率\n"
+                reply += "• 低波動穩健價值股\n"
+                reply += "• 類定存配置，適合保守投資者\n\n"
+                reply += "💡 輸入「推薦」開始選股"
+            else:
+                reply = "❌ 切換失敗，請稍後再試"
+        except Exception as e:
+            reply = f"❌ 切換失敗: {e}"
+
     elif msg_text in ["查看策略", "目前策略", "策略狀態"]:
         try:
             mgr = StrategyManager()
@@ -1281,7 +1468,10 @@ def handle_message(event):
             reply += "• 切換V30 → V31 混合策略（均衡）\n"
             reply += "• 切換V33 → 低波動策略（穩健）\n"
             reply += "• 切換V34 → 雙渦輪策略（積極）\n"
-            reply += "• 切換V35 → 經營效益策略（價值）\n"
+            reply += "• 切換V35 → 經營效益策略（成長）\n"
+            reply += "• 切換V36 → 籌碼動能策略（追蹤）\n"
+            reply += "• 切換V37 → 均值回歸策略（反轉）\n"
+            reply += "• 切換V38 → 高殖利率策略（價值）\n"
         except Exception as e:
             reply = f"❌ 查詢策略失敗: {e}"
         
@@ -1291,16 +1481,47 @@ def handle_message(event):
         reply = get_v30_recommendation()
         
     elif msg_text in ["推薦", "選股", "AI"]:
-        # 🆕 根據當前活躍策略推薦股票（含 AI 排名）
-        reply = get_strategy_recommendation()
+        # 🆕 Flex Carousel 推薦卡片（降級為純文字）
+        try:
+            flex_msg = get_strategy_recommendation(as_flex=True)
+            if isinstance(flex_msg, str):
+                # 篩選結果為空或錯誤 → 純文字回覆
+                reply = flex_msg
+            else:
+                with ApiClient(configuration) as api_client:
+                    line_bot_api = MessagingApi(api_client)
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[flex_msg]
+                        )
+                    )
+                return
+        except Exception as e:
+            print(f"⚠️ Flex Carousel 建構失敗，降級為純文字: {e}")
+            reply = get_strategy_recommendation(as_flex=False)
         
     elif msg_text.isdigit() and len(msg_text) == 4:  # 股票代號（4碼）
-        # 優先使用 AI 健康診斷報告
+        # 使用 AI 健康診斷報告 + Flex Message 卡片
         report = get_stock_report(msg_text)
         if report is not None:
-            reply = format_stock_diagnosis(report)
+            try:
+                flex_msg = create_stock_flex_message(msg_text, report)
+                # 直接回覆 Flex Message 並 return，不走底部的純文字回覆
+                with ApiClient(configuration) as api_client:
+                    line_bot_api = MessagingApi(api_client)
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[flex_msg]
+                        )
+                    )
+                return
+            except Exception as e:
+                print(f"⚠️ Flex Message 建構失敗，降級為文字: {e}")
+                reply = format_stock_diagnosis(report)
         else:
-            reply = query_stock(msg_text)
+            reply = "❌ 查無此股票資料"
         
     elif msg_text.startswith("查詢"):
         stock_id = msg_text.replace("查詢", "").strip()
@@ -1309,11 +1530,85 @@ def handle_message(event):
         else:
             reply = "❌ 請輸入正確的股票代號"
     
+    # ========== 持股查詢 ==========
+    elif msg_text in ["持股", "目前持股", "AI持股", "庫存"]:
+        try:
+            rows = get_open_holdings(limit=10)
+            
+            if rows:
+                holdings_list = []
+                for r in rows:
+                    entry_p = float(r[2]) if r[2] else 0
+                    current_p = float(r[4]) if r[4] else entry_p
+                    pnl = (current_p - entry_p) / entry_p if entry_p > 0 else 0
+                    trade_dt = r[3]
+                    days = (pd.Timestamp.now() - pd.Timestamp(trade_dt)).days if trade_dt else 0
+                    holdings_list.append({
+                        'stock_id': str(r[0]),
+                        'entry_price': entry_p,
+                        'current_price': current_p,
+                        'pnl_pct': pnl,
+                        'hold_days': days,
+                        'strategy': str(r[1]) if r[1] else '',
+                    })
+                flex_msg = create_holdings_flex(
+                    holdings=holdings_list,
+                    strategy_name=holdings_list[0].get('strategy', ''),
+                    date_str=str(pd.Timestamp.now().date()),
+                )
+                with ApiClient(configuration) as api_client:
+                    line_bot_api = MessagingApi(api_client)
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[flex_msg]
+                        )
+                    )
+                return
+            else:
+                reply = "📭 目前無 AI 持股\n輸入「推薦」取得今日選股建議"
+        except Exception as e:
+            print(f"⚠️ 持股查詢失敗: {e}")
+            reply = "📭 目前無持股紀錄\n輸入「推薦」取得今日選股建議"
+
+    # ========== 回測摘要 ==========
+    elif msg_text in ["回測", "績效", "回測結果", "backtest"]:
+        try:
+            from tool.viz_helper import get_backtest_summary
+            summary = get_backtest_summary()
+            if summary:
+                metrics = {
+                    'total_return': summary.get('total_roi', 0),
+                    'max_drawdown': summary.get('max_drawdown', 0),
+                    'sharpe_ratio': summary.get('sharpe_ratio', 0),
+                    'win_rate': summary.get('win_rate', 0),
+                    'total_trades': summary.get('trade_count', 0),
+                    'period': summary.get('period', '最近回測'),
+                }
+                mgr = StrategyManager()
+                active = mgr.get_active_strategy()
+                sname = active.display_name if active else ''
+                flex_msg = create_backtest_summary_flex(metrics, strategy_name=sname)
+                with ApiClient(configuration) as api_client:
+                    line_bot_api = MessagingApi(api_client)
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[flex_msg]
+                        )
+                    )
+                return
+            else:
+                reply = "📊 尚無回測數據\n請先執行 python 4_run_backtest.py"
+        except Exception as e:
+            print(f"⚠️ 回測摘要失敗: {e}")
+            reply = "📊 尚無回測數據\n請先執行 python 4_run_backtest.py"
+
     # ========== V32: Dashboard 連結 ==========
     elif msg_text in ["dashboard", "儀表板", "Dashboard", "看板"]:
         reply = "📊 【V32 量化交易儀表板】\n\n"
         reply += "🔗 Dashboard URL:\n"
-        reply += "http://localhost:5000/dashboard\n\n"
+        reply += "http://localhost:1688/dashboard\n\n"
         reply += "📈 功能:\n"
         reply += "• 資產曲線圖 (Equity Curve)\n"
         reply += "• 回測績效指標 (ROI, MDD, Sharpe)\n"
@@ -1339,11 +1634,16 @@ def handle_message(event):
         reply += "• 推薦 → 使用當前策略選出前5名\n"
         reply += "• V30 → 純技術分析選股\n"
         reply += "• 2330 → 個股 AI 健康診斷\n"
+        reply += "• 持股 → 查看 AI 模擬持股\n"
+        reply += "• 回測 → 最新回測績效摘要\n"
         reply += "\n【🔄 策略切換】\n"
         reply += "• 切換V30 → V31 混合（均衡型）\n"
         reply += "• 切換V33 → 低波動（穩健型）\n"
         reply += "• 切換V34 → 雙渦輪（積極型）\n"
-        reply += "• 切換V35 → 經營效益（價值型）\n"
+        reply += "• 切換V35 → 經營效益（成長型）\n"
+        reply += "• 切換V36 → 籌碼動能（追蹤型）\n"
+        reply += "• 切換V37 → 均值回歸（反轉型）\n"
+        reply += "• 切換V38 → 高殖利率（價值型）\n"
         reply += "• 查看策略 → 顯示目前策略詳情\n"
         reply += "\n【📊 Dashboard】\n"
         reply += "• dashboard → 開啟視覺化儀表板\n"
@@ -1353,8 +1653,9 @@ def handle_message(event):
         reply += "• 設定停利 0 (不停利)\n"
         reply += "• 查看設定\n"
         reply += "\n【🚀 V34/V35 參數調整】\n"
-        reply += "• V34積極 / V34保守\n"
-        reply += "• V35積極 / V35保守\n"
+        reply += "• 切換積極 / 切換平衡 / 切換寬鬆\n"
+        reply += "• V34積極 / V34平衡 / V34寬鬆\n"
+        reply += "• V35積極 / V35平衡 / V35寬鬆\n"
         reply += "• 設定V34 18 0.93 0.9\n"
         reply += "• 設定V34放寬 10 0.90 0.7\n"
         reply += "• 設定V35 6 0 0.8\n"
@@ -1379,6 +1680,6 @@ if __name__ == "__main__":
     print("[START] Line Bot V3.0 啟動中 (V30策略增強版)")
     print(f"[MODEL] 模型狀態: {'已載入' if model else '未載入'}")
     print(f"[INFO] 主要策略: V30 純技術分析 (40%報酬實績)")
-    print(f"[PORT] 伺服器端口: 8866")
+    print(f"[PORT] 伺服器端口: 1688")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=8866, debug=False)
+    app.run(host='0.0.0.0', port=1688, debug=False)

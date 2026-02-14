@@ -7,7 +7,7 @@
 """
 import requests
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 import time
 import random
 from datetime import datetime, timedelta, date
@@ -95,10 +95,21 @@ def fetch_twse_data(date_str, max_retries=3):
                 df = pd.DataFrame(data['data'], columns=data['fields'])
                 f_col = next((c for c in df.columns if "外" in c and "買賣超股數" in c), None)
                 t_col = next((c for c in df.columns if "投信" in c and "買賣超股數" in c), None)
+                # Phase 2: 自營商買賣超（優先合計欄位，否則排除避險/自行子欄）
+                d_col = next(
+                    (c for c in df.columns if "自營商" in c and "買賣超" in c
+                     and "自行" not in c and "避險" not in c),
+                    None
+                )
                 
                 if f_col and t_col:
-                    chips_df = df[['證券代號', f_col, t_col]]
-                    chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
+                    cols_to_keep = ['證券代號', f_col, t_col]
+                    col_names = ['stock_id', 'foreign_buy', 'trust_buy']
+                    if d_col:
+                        cols_to_keep.append(d_col)
+                        col_names.append('dealer_buy')
+                    chips_df = df[cols_to_keep].copy()
+                    chips_df.columns = col_names
 
             if not chips_df.empty:
                 merged = pd.merge(price_df, chips_df, on='stock_id', how='left')
@@ -106,6 +117,10 @@ def fetch_twse_data(date_str, max_retries=3):
                 merged = price_df
                 merged['foreign_buy'] = 0
                 merged['trust_buy'] = 0
+
+            # 確保 dealer_buy 欄位存在
+            if 'dealer_buy' not in merged.columns:
+                merged['dealer_buy'] = 0
                 
             print(" ✅")
             return merged
@@ -200,8 +215,15 @@ def fetch_tpex_data(date_str, max_retries=3):
                 data = res.json()
                 if data.get('aaData'):
                     df = pd.DataFrame(data['aaData'])
-                    chips_df = df.iloc[:, [0, 10, 13]].copy()
-                    chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
+                    # TPEx 3itrade 欄位: [0]=代號, 外資相關..., 投信相關..., 自營商相關...
+                    # 實測欄位位置: foreign_buy=col10, trust_buy=col13, dealer_buy=col16
+                    try:
+                        chips_df = df.iloc[:, [0, 10, 13, 16]].copy()
+                        chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy', 'dealer_buy']
+                    except (IndexError, KeyError):
+                        # 若欄位不足，降級為不含 dealer
+                        chips_df = df.iloc[:, [0, 10, 13]].copy()
+                        chips_df.columns = ['stock_id', 'foreign_buy', 'trust_buy']
             except:
                 pass
 
@@ -213,6 +235,10 @@ def fetch_tpex_data(date_str, max_retries=3):
                 merged = price_df
                 merged['foreign_buy'] = 0
                 merged['trust_buy'] = 0
+
+            # 確保 dealer_buy 欄位存在
+            if 'dealer_buy' not in merged.columns:
+                merged['dealer_buy'] = 0
                 
             print(" ✅")
             return merged
@@ -244,9 +270,14 @@ def process_and_save(df, date_str, engine):
     """
     if df is None or df.empty: return 0
     
-    cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'pe_ratio', 'foreign_buy', 'trust_buy']
+    cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume',
+            'pe_ratio', 'foreign_buy', 'trust_buy', 'dealer_buy',
+            'margin_balance', 'short_balance']
     for col in cols:
-        df[col] = df[col].apply(clean_number)
+        if col in df.columns:
+            df[col] = df[col].apply(clean_number)
+        else:
+            df[col] = 0
     
     df['trade_date'] = date_str
     df = df[df['close_price'] > 0]
@@ -314,6 +345,18 @@ def run_price_update(engine):
         final_df = pd.DataFrame()
         if twse_data is not None: final_df = pd.concat([final_df, twse_data])
         if tpex_data is not None: final_df = pd.concat([final_df, tpex_data])
+
+        # Phase 2: 融資融券餘額
+        if not final_df.empty:
+            try:
+                from tool.crawlers.chip_data_scraper import fetch_margin_balance
+                margin_df = fetch_margin_balance(date_str)
+                if not margin_df.empty:
+                    final_df['stock_id'] = final_df['stock_id'].astype(str).str.strip()
+                    margin_df['stock_id'] = margin_df['stock_id'].astype(str).str.strip()
+                    final_df = pd.merge(final_df, margin_df, on='stock_id', how='left')
+            except Exception as e:
+                print(f"  ⚠️ 融資融券合併失敗（不中斷）: {e}")
         
         count = process_and_save(final_df, date_str, engine)
         if count > 0:

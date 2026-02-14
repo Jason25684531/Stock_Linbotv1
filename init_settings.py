@@ -4,7 +4,7 @@
 執行方式: python init_settings.py
 功能: 建立 user_settings 表格並插入預設值
 """
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from config import Config
 from tool.db_helper import get_db_engine
 import sys

@@ -110,6 +110,9 @@ class BacktestEngine:
             'v33': 'v33_low_vol',
             'v34': 'v34_turbo',
             'v35': 'v35_innovation',
+            'v36': 'v36_chip_momentum',
+            'v37': 'v37_mean_reversion',
+            'v38': 'v38_value_dividend',
         }
         
         registry_name = MODE_ALIAS.get(self.mode, self.mode)
@@ -208,6 +211,54 @@ class BacktestEngine:
                 WHERE stock_id = :sid AND trade_date = :dt
             """)
             return conn.execute(query, {'sid': stock_id, 'dt': date_str}).mappings().fetchone()
+    
+    def check_and_execute_exit(self, sid: str, date_str: str, trend: str):
+        """共用出場檢查邏輯（委派策略物件或 fallback）
+        
+        同時被 BacktestEngine.run() 和 PortfolioBacktestEngine 使用，
+        消除重複的停損/停利 if-else 判斷區塊。
+        
+        Args:
+            sid: 股票代碼
+            date_str: 當前日期
+            trend: 市場趨勢 ('BULL'/'BEAR'/'NEUTRAL')
+        """
+        self.positions[sid]['days'] += 1
+        curr = self.get_data(sid, date_str)
+        if not curr:
+            return
+        
+        curr_price = curr['close_price']
+        
+        # 更新最高價
+        if curr_price > self.positions[sid]['highest']:
+            self.positions[sid]['highest'] = curr_price
+        
+        # 委派策略物件判斷出場
+        if self.strategy_obj is not None:
+            action, reason, new_stop = self.strategy_obj.check_exit_signal(
+                stock_id=sid,
+                current_price=curr_price,
+                current_date=date_str,
+                position_info=self.positions[sid],
+                market_trend=trend
+            )
+            self.positions[sid]['stop_loss'] = new_stop
+            if action == 'SELL':
+                self.sell(sid, curr_price, date_str, reason)
+        else:
+            # Fallback: 基本停損停利邏輯
+            cost = self.positions[sid]['cost']
+            change = (curr_price - cost) / cost
+            
+            if curr_price <= self.positions[sid]['stop_loss']:
+                self.sell(sid, curr_price, date_str, "停損")
+            elif self.take_profit_pct > 0 and change >= self.take_profit_pct:
+                self.sell(sid, curr_price, date_str, "停利")
+            elif self.positions[sid]['days'] >= self.max_hold_days:
+                self.sell(sid, curr_price, date_str, "時間到")
+            elif trend == 'BEAR' and change < 0:
+                self.sell(sid, curr_price, date_str, "趨勢轉空")
     
     def get_market_trend(self, date_str):
         """判斷大盤趨勢（使用共用函數）"""
@@ -484,44 +535,9 @@ class BacktestEngine:
             self.daily_assets.append(daily_asset)
             self.daily_dates.append(date_str)
             
-            # === 賣出邏輯 ===
+            # === 賣出邏輯（委派 check_and_execute_exit 統一處理）===
             for sid in list(self.positions.keys()):
-                self.positions[sid]['days'] += 1
-                curr = self.get_data(sid, date_str)
-                if not curr:
-                    continue
-                
-                curr_price = curr['close_price']
-                
-                # 更新最高價
-                if curr_price > self.positions[sid]['highest']:
-                    self.positions[sid]['highest'] = curr_price
-                
-                # 委派策略物件判斷出場
-                if self.strategy_obj is not None:
-                    action, reason, new_stop = self.strategy_obj.check_exit_signal(
-                        stock_id=sid,
-                        current_price=curr_price,
-                        current_date=date_str,
-                        position_info=self.positions[sid],
-                        market_trend=trend
-                    )
-                    self.positions[sid]['stop_loss'] = new_stop
-                    if action == 'SELL':
-                        self.sell(sid, curr_price, date_str, reason)
-                else:
-                    # V30/V31 Fallback: 使用基本停損停利邏輯
-                    cost = self.positions[sid]['cost']
-                    change = (curr_price - cost) / cost
-                    
-                    if curr_price <= self.positions[sid]['stop_loss']:
-                        self.sell(sid, curr_price, date_str, "停損")
-                    elif self.take_profit_pct > 0 and change >= self.take_profit_pct:
-                        self.sell(sid, curr_price, date_str, "停利")
-                    elif self.positions[sid]['days'] >= self.max_hold_days:
-                        self.sell(sid, curr_price, date_str, "時間到")
-                    elif trend == 'BEAR' and change < 0:
-                        self.sell(sid, curr_price, date_str, "趨勢轉空")
+                self.check_and_execute_exit(sid, date_str, trend)
             
             # === 買入邏輯 ===
             if trend == 'BULL':
@@ -740,44 +756,9 @@ class PortfolioBacktestEngine:
                 # 執行該策略的交易邏輯（簡化版，只執行一天）
                 trend = strategy_engine.get_market_trend(date_str)
                 
-                # 賣出邏輯 - 委派策略物件
+                # 賣出邏輯 - 委派共用 check_and_execute_exit
                 for sid in list(strategy_engine.positions.keys()):
-                    strategy_engine.positions[sid]['days'] += 1
-                    curr = strategy_engine.get_data(sid, date_str)
-                    if not curr:
-                        continue
-                    
-                    curr_price = curr['close_price']
-                    
-                    # 更新最高價
-                    if curr_price > strategy_engine.positions[sid]['highest']:
-                        strategy_engine.positions[sid]['highest'] = curr_price
-                    
-                    # 委派策略物件判斷出場
-                    if strategy_engine.strategy_obj is not None:
-                        action, reason, new_stop = strategy_engine.strategy_obj.check_exit_signal(
-                            stock_id=sid,
-                            current_price=curr_price,
-                            current_date=date_str,
-                            position_info=strategy_engine.positions[sid],
-                            market_trend=trend
-                        )
-                        strategy_engine.positions[sid]['stop_loss'] = new_stop
-                        if action == 'SELL':
-                            strategy_engine.sell(sid, curr_price, date_str, reason)
-                    else:
-                        # Fallback: 基本停損停利邏輯
-                        cost = strategy_engine.positions[sid]['cost']
-                        change = (curr_price - cost) / cost
-                        
-                        if curr_price <= strategy_engine.positions[sid]['stop_loss']:
-                            strategy_engine.sell(sid, curr_price, date_str, "停損")
-                        elif strategy_engine.take_profit_pct > 0 and change >= strategy_engine.take_profit_pct:
-                            strategy_engine.sell(sid, curr_price, date_str, "停利")
-                        elif strategy_engine.positions[sid]['days'] >= strategy_engine.max_hold_days:
-                            strategy_engine.sell(sid, curr_price, date_str, "時間到")
-                        elif trend == 'BEAR' and change < 0:
-                            strategy_engine.sell(sid, curr_price, date_str, "趨勢轉空")
+                    strategy_engine.check_and_execute_exit(sid, date_str, trend)
                 
                 # 買入邏輯
                 if trend == 'BULL':
@@ -917,6 +898,12 @@ def main():
         mode = 'v34_turbo'
     elif '--v35' in sys.argv:
         mode = 'v35_innovation'
+    elif '--v36' in sys.argv:
+        mode = 'v36_chip_momentum'
+    elif '--v37' in sys.argv:
+        mode = 'v37_mean_reversion'
+    elif '--v38' in sys.argv:
+        mode = 'v38_value_dividend'
     elif '--portfolio' in sys.argv:
         # 多策略組合模式
         strategies = ['v33_low_vol', 'v35_innovation']  # 預設組合

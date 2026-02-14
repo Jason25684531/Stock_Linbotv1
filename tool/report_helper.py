@@ -99,7 +99,7 @@ def get_stock_report(stock_id: str) -> Optional[Dict[str, Any]]:
                         SELECT ai_score, strategy
                         FROM daily_recommendations
                         WHERE stock_id = :sid
-                        ORDER BY recommend_date DESC
+                        ORDER BY trade_date DESC
                         LIMIT 1
                     """),
                     {'sid': stock_id}

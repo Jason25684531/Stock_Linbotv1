@@ -27,6 +27,30 @@ class BaseStrategy(ABC):
     def __init__(self):
         """初始化策略"""
         self._validate_attributes()
+
+    # ============================================
+    # 共用工具 (子類可直接使用)
+    # ============================================
+
+    @staticmethod
+    def _get_float_setting(key: str, default_value: float) -> float:
+        """優先讀取 DB 設定，失敗時回退到預設值。
+        
+        用於策略門檻值可在 user_settings 表動態調整。
+        
+        Args:
+            key: user_settings 中的 setting_key
+            default_value: 讀取失敗時的回退值
+        
+        Returns:
+            float 設定值
+        """
+        try:
+            from tool.db_helper import get_setting
+            value = get_setting(key, str(default_value))
+            return float(value)
+        except Exception:
+            return float(default_value)
     
     # ============================================
     # 抽象屬性 (子類必須定義)

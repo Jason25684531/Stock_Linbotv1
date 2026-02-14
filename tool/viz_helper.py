@@ -156,12 +156,12 @@ class PerformanceVisualizer:
                 'text': '📈 投資組合權益曲線',
                 'x': 0.5,
                 'xanchor': 'center',
-                'font': {'size': 20, 'color': '#2C3E50'}
+                'font': {'size': 20, 'color': '#E0E0E0'}
             },
             xaxis_title='日期',
             yaxis_title='資產價值 (TWD)',
             hovermode='x unified',
-            template='plotly_white',
+            template='plotly_dark',
             height=500,
             margin=dict(l=60, r=60, t=80, b=60),
             legend=dict(
@@ -225,12 +225,12 @@ class PerformanceVisualizer:
                 'text': '📉 回撤分析 (Drawdown)',
                 'x': 0.5,
                 'xanchor': 'center',
-                'font': {'size': 20, 'color': '#2C3E50'}
+                'font': {'size': 20, 'color': '#E0E0E0'}
             },
             xaxis_title='日期',
             yaxis_title='回撤百分比 (%)',
             hovermode='x unified',
-            template='plotly_white',
+            template='plotly_dark',
             height=400,
             margin=dict(l=60, r=60, t=80, b=60)
         )
@@ -252,7 +252,7 @@ class PerformanceVisualizer:
                 x=0.5, y=0.5, showarrow=False,
                 font=dict(size=16, color="gray")
             )
-            fig.update_layout(height=300, template='plotly_white')
+            fig.update_layout(height=300, template='plotly_dark')
             return fig.to_json()
         
         # 轉換日期格式
@@ -287,11 +287,11 @@ class PerformanceVisualizer:
                 'text': '📅 月度報酬熱力圖',
                 'x': 0.5,
                 'xanchor': 'center',
-                'font': {'size': 20, 'color': '#2C3E50'}
+                'font': {'size': 20, 'color': '#E0E0E0'}
             },
             xaxis_title='月份',
             yaxis_title='年份',
-            template='plotly_white',
+            template='plotly_dark',
             height=400,
             margin=dict(l=60, r=60, t=80, b=60)
         )
@@ -351,7 +351,7 @@ def create_simple_equity_chart(dates: List[str], values: List[float], title: str
         title=title,
         xaxis_title='日期',
         yaxis_title='資產價值 (TWD)',
-        template='plotly_white',
+        template='plotly_dark',
         height=400
     )
     

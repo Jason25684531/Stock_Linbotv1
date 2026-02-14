@@ -1,120 +1,127 @@
 {% extends "base.html" %}
 
-{% block title %}回測設定 - Stock AI Bot{% endblock %}
+{% block title %}回測設定 - Stock Linbot{% endblock %}
+{% block nav_backtest %}active{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2 class="mb-4">
-        <i class="fas fa-chart-line"></i> 多策略組合回測
-    </h2>
-    
-    <!-- 說明卡片 -->
-    <div class="alert alert-info" role="alert">
-        <h5><i class="fas fa-info-circle"></i> 回測說明</h5>
-        <p>選擇一個或多個策略進行組合回測。系統會將初始資金平均分配給各策略，並計算組合的總體績效。</p>
-        <ul class="mb-0">
-            <li><strong>V31 Hybrid:</strong> V30 技術篩選 + AI 智慧排名</li>
-            <li><strong>V33 Low Vol:</strong> 低波動穩健策略（波動 <4%）</li>
-            <li><strong>V34 Turbo:</strong> 高動能突破策略（快進快出）</li>
-            <li><strong>V35 Innovation:</strong> 研發動能策略（ROE + 研發費用）</li>
-        </ul>
-    </div>
-    
-    <!-- 回測設定表單 -->
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('backtest') }}">
-                <!-- 策略選擇 -->
-                <div class="mb-4">
-                    <label class="form-label fw-bold">
-                        <i class="fas fa-tasks"></i> 選擇策略（可多選）
-                    </label>
-                    <div class="row">
-                        {% for strategy in strategies %}
-                        <div class="col-md-6 mb-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" 
-                                       name="strategies" value="{{ strategy }}" 
-                                       id="strategy_{{ strategy }}"
-                                       {% if strategy == 'v31_hybrid' %}checked{% endif %}>
-                                <label class="form-check-label" for="strategy_{{ strategy }}">
-                                    {{ strategy }}
-                                </label>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                
-                <!-- 日期範圍 -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <label for="start_date" class="form-label fw-bold">
-                            <i class="fas fa-calendar-alt"></i> 開始日期
-                        </label>
-                        <input type="date" class="form-control" id="start_date" name="start_date" 
-                               value="2025-06-01">
-                        <small class="text-muted">預設為 1 年前</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="end_date" class="form-label fw-bold">
-                            <i class="fas fa-calendar-check"></i> 結束日期
-                        </label>
-                        <input type="date" class="form-control" id="end_date" name="end_date" 
-                               value="2026-02-11">
-                        <small class="text-muted">預設為今日</small>
-                    </div>
-                </div>
-                
-                <!-- 提交按鈕 -->
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-success btn-lg shadow-lg" style="font-size: 1.25rem; padding: 1rem; border-radius: 0.5rem; font-weight: bold;">
-                        <i class="fas fa-play-circle fa-lg me-2"></i> 🚀 執行回測
-                    </button>
-                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-lg" style="padding: 0.75rem;">
-                        <i class="fas fa-arrow-left me-2"></i> 返回 Dashboard
-                    </a>
-                </div>
-            </form>
+<div>
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-2xl font-bold flex items-center">
+                <span class="text-3xl mr-3">🔬</span>
+                多策略組合回測
+            </h2>
+            <p class="text-sm text-gray-400 mt-1">選擇策略組合，執行歷史回測分析</p>
         </div>
     </div>
-    
+
+    <!-- 說明卡片 -->
+    <div class="chart-container mb-6" style="margin-top:0; border-left: 3px solid var(--accent-blue);">
+        <h3 class="text-sm font-bold text-blue-400 mb-2">📋 策略說明</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-xs text-gray-400">
+            <div><span class="badge-v31 px-2 py-0.5 rounded text-xs">V31</span> 均線 + RSI + AI 排名</div>
+            <div><span class="badge-v33 px-2 py-0.5 rounded text-xs">V33</span> 低波動穩健策略</div>
+            <div><span class="badge-v34 px-2 py-0.5 rounded text-xs">V34</span> 高動能突破策略</div>
+            <div><span class="badge-v35 px-2 py-0.5 rounded text-xs">V35</span> 經營效益成長策略</div>
+            <div><span class="badge-v36 px-2 py-0.5 rounded text-xs">V36</span> 法人籌碼動能策略</div>
+            <div><span class="badge-v37 px-2 py-0.5 rounded text-xs">V37</span> KD + BB 均值回歸</div>
+            <div><span class="badge-v38 px-2 py-0.5 rounded text-xs">V38</span> 高殖利率價值股</div>
+        </div>
+    </div>
+
+    <!-- 回測設定表單 -->
+    <div class="chart-container" style="margin-top:0;">
+        <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6">
+            <!-- 策略選擇 -->
+            <div>
+                <label class="block text-sm font-bold text-gray-300 mb-3">🎯 選擇策略（可複選）</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {% for strategy in strategies %}
+                    <label class="flex items-center p-3 bg-gray-800/50 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors">
+                        <input type="checkbox" name="strategies" value="{{ strategy }}" 
+                               id="strategy_{{ strategy }}"
+                               class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                               {% if strategy == 'v31_hybrid' %}checked{% endif %}>
+                        <span class="ml-2 text-sm text-gray-300">
+                            {% if strategy == 'v31_hybrid' %}V31 混合策略
+                            {% elif strategy == 'v33_low_vol' %}V33 低波動
+                            {% elif strategy == 'v34_turbo' %}V34 雙渦輪
+                            {% elif strategy == 'v35_innovation' %}V35 經營效益
+                            {% elif strategy == 'v36_chip_momentum' %}V36 籌碼動能
+                            {% elif strategy == 'v37_mean_reversion' %}V37 均值回歸
+                            {% elif strategy == 'v38_value_dividend' %}V38 高殖利率
+                            {% else %}{{ strategy }}{% endif %}
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- 日期範圍 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="start_date" class="block text-sm font-bold text-gray-300 mb-2">📅 開始日期</label>
+                    <input type="date" id="start_date" name="start_date" value="2025-06-01"
+                           class="w-full bg-gray-800 border border-gray-600 text-gray-300 rounded-lg px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label for="end_date" class="block text-sm font-bold text-gray-300 mb-2">📅 結束日期</label>
+                    <input type="date" id="end_date" name="end_date" value="2026-02-11"
+                           class="w-full bg-gray-800 border border-gray-600 text-gray-300 rounded-lg px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+
+            <!-- 按鈕 -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] text-lg">
+                    🚀 執行回測
+                </button>
+                <a href="{{ url_for('dashboard') }}" class="text-center bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-3 px-6 rounded-lg transition-colors">
+                    ← 返回 Dashboard
+                </a>
+            </div>
+        </form>
+    </div>
+
     <!-- 快速預設組合 -->
-    <div class="mt-4">
-        <h5 class="mb-3"><i class="fas fa-star text-warning"></i> 快速預設組合</h5>
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card mb-3 border-primary shadow-sm h-100">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">🛡️ 穩健組合</h5>
-                        <p class="card-text">V31 + V33<br><small class="text-muted">低波動 | 風險較低</small></p>
-                        <button class="btn btn-primary btn-lg w-100 shadow" onclick="selectPreset(['v31_hybrid', 'v33_low_vol'])" style="font-weight: bold;">
-                            <i class="fas fa-check-circle me-2"></i>選擇此組合
-                        </button>
-                    </div>
-                </div>
+    <div class="mt-6">
+        <h3 class="text-lg font-bold mb-4">⭐ 快速預設組合</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="metric-card border-t-2 border-blue-500 text-center">
+                <div class="text-2xl mb-2">🛡️</div>
+                <h4 class="font-bold text-white mb-1">穩健組合</h4>
+                <p class="text-xs text-gray-400 mb-3">V31 + V33 + V38<br>低波動 | 風險較低</p>
+                <button onclick="selectPreset(['v31_hybrid', 'v33_low_vol', 'v38_value_dividend'])" 
+                        class="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
+                    選擇此組合
+                </button>
             </div>
-            <div class="col-md-4">
-                <div class="card mb-3 border-warning shadow-sm h-100">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">⚡ 積極組合</h5>
-                        <p class="card-text">V34 + V35<br><small class="text-muted">高動能 | 報酬潛力大</small></p>
-                        <button class="btn btn-warning btn-lg w-100 shadow" onclick="selectPreset(['v34_turbo', 'v35_innovation'])" style="font-weight: bold;">
-                            <i class="fas fa-bolt me-2"></i>選擇此組合
-                        </button>
-                    </div>
-                </div>
+            <div class="metric-card border-t-2 border-orange-500 text-center">
+                <div class="text-2xl mb-2">⚡</div>
+                <h4 class="font-bold text-white mb-1">積極組合</h4>
+                <p class="text-xs text-gray-400 mb-3">V34 + V36<br>高動能 | 報酬潛力大</p>
+                <button onclick="selectPreset(['v34_turbo', 'v36_chip_momentum'])" 
+                        class="w-full bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
+                    選擇此組合
+                </button>
             </div>
-            <div class="col-md-4">
-                <div class="card mb-3 border-success shadow-sm h-100">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">🎯 平衡組合</h5>
-                        <p class="card-text">全部策略<br><small class="text-muted">多元分散 | 風險中等</small></p>
-                        <button class="btn btn-success btn-lg w-100 shadow" onclick="selectAll()" style="font-weight: bold;">
-                            <i class="fas fa-layer-group me-2"></i>選擇此組合
-                        </button>
-                    </div>
-                </div>
+            <div class="metric-card border-t-2 border-purple-500 text-center">
+                <div class="text-2xl mb-2">🔄</div>
+                <h4 class="font-bold text-white mb-1">反轉組合</h4>
+                <p class="text-xs text-gray-400 mb-3">V37 + V35<br>成長 + 均值回歸</p>
+                <button onclick="selectPreset(['v37_mean_reversion', 'v35_innovation'])" 
+                        class="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
+                    選擇此組合
+                </button>
+            </div>
+            <div class="metric-card border-t-2 border-green-500 text-center">
+                <div class="text-2xl mb-2">🎯</div>
+                <h4 class="font-bold text-white mb-1">全策略組合</h4>
+                <p class="text-xs text-gray-400 mb-3">V31~V38 全選<br>多元分散 | 風險中等</p>
+                <button onclick="selectAll()" 
+                        class="w-full bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
+                    選擇此組合
+                </button>
             </div>
         </div>
     </div>
@@ -122,9 +129,7 @@
 
 <script>
 function selectPreset(strategies) {
-    // 先取消所有勾選
     document.querySelectorAll('input[name="strategies"]').forEach(cb => cb.checked = false);
-    // 勾選指定策略
     strategies.forEach(s => {
         const cb = document.getElementById('strategy_' + s);
         if (cb) cb.checked = true;
@@ -135,7 +140,6 @@ function selectAll() {
     document.querySelectorAll('input[name="strategies"]').forEach(cb => cb.checked = true);
 }
 
-// 日期範圍驗證
 document.querySelector('form').addEventListener('submit', function(e) {
     const startDate = document.getElementById('start_date').value;
     const endDate = document.getElementById('end_date').value;
@@ -145,8 +149,8 @@ document.querySelector('form').addEventListener('submit', function(e) {
         alert('開始日期不能晚於結束日期');
     }
     
-    const checkedStrategies = document.querySelectorAll('input[name="strategies"]:checked').length;
-    if (checkedStrategies === 0) {
+    const checked = document.querySelectorAll('input[name="strategies"]:checked').length;
+    if (checked === 0) {
         e.preventDefault();
         alert('請至少選擇一個策略');
     }

@@ -24,7 +24,6 @@ V34 雙渦輪飆股策略 (Twin-Turbo Strategy)
 from typing import List
 import pandas as pd
 from config import Config
-from tool.db_helper import get_setting
 from .base import BaseStrategy
 
 
@@ -98,15 +97,6 @@ class V34TurboStrategy(BaseStrategy):
     # V34 核心篩選邏輯
     # ============================================
 
-    @staticmethod
-    def _get_float_setting(key: str, default_value: float) -> float:
-        """優先讀取 DB 設定，失敗時回退到 Config 預設值。"""
-        try:
-            value = get_setting(key, str(default_value))
-            return float(value)
-        except Exception:
-            return float(default_value)
-    
     def filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
         """V34 雙渦輪篩選邏輯
         
@@ -129,7 +119,7 @@ class V34TurboStrategy(BaseStrategy):
         # 欄位檢查與優雅降級
         # ============================================
         required_cols = ['close_price', 'high_price', 'ma20', 'volume']
-        optional_cols = ['revenue_yoy', 'volume_ratio']
+        optional_cols = ['revenue_yoy']
         
         # 檢查必要欄位
         for col in required_cols:
@@ -185,14 +175,23 @@ class V34TurboStrategy(BaseStrategy):
         strict_yoy = self._get_float_setting('v34_revenue_yoy_min', Config.V34_REVENUE_YOY_MIN)
         strict_breakout = self._get_float_setting('v34_breakout_ratio', Config.V34_BREAKOUT_RATIO)
         strict_vol = self._get_float_setting('v34_volume_ratio_min', Config.V34_VOLUME_RATIO_MIN)
+        strict_vol_min = self._get_float_setting('v34_volume_min', Config.V34_VOLUME_MIN)
 
         relaxed_yoy = self._get_float_setting('v34_relaxed_revenue_yoy_min', Config.V34_RELAXED_REVENUE_YOY_MIN)
         relaxed_breakout = self._get_float_setting('v34_relaxed_breakout_ratio', Config.V34_RELAXED_BREAKOUT_RATIO)
         relaxed_vol = self._get_float_setting('v34_relaxed_volume_ratio_min', Config.V34_RELAXED_VOLUME_RATIO_MIN)
+        relaxed_vol_min = self._get_float_setting('v34_relaxed_volume_min', Config.V34_RELAXED_VOLUME_MIN)
 
         base_candidates = candidates.copy()
 
-        def apply_v34_filters(source: pd.DataFrame, yoy_min: float, breakout_ratio: float, vol_min: float, label: str) -> pd.DataFrame:
+        def apply_v34_filters(
+            source: pd.DataFrame,
+            yoy_min: float,
+            breakout_ratio: float,
+            vol_min: float,
+            vol_abs_min: float,
+            label: str
+        ) -> pd.DataFrame:
             result = source.copy()
 
             if 'revenue_yoy' in result.columns:
@@ -209,10 +208,17 @@ class V34TurboStrategy(BaseStrategy):
                 if result.empty:
                     return result
 
-            if 'volume_ratio' in result.columns:
+            ratio_available = 'volume_ratio' in result.columns and (result['volume_ratio'] > 0).any()
+            if ratio_available:
                 before_count = len(result)
                 result = result[result['volume_ratio'] > vol_min].copy()
                 print(f"   ✅ [{label}] 量能篩選：{before_count} → {len(result)} 檔（量比 > {vol_min:.2f}）")
+                if result.empty:
+                    return result
+            else:
+                before_count = len(result)
+                result = result[result['volume'] >= vol_abs_min].copy()
+                print(f"   ✅ [{label}] 量能備援：{before_count} → {len(result)} 檔（成交量 >= {vol_abs_min:.0f}）")
                 if result.empty:
                     return result
 
@@ -227,6 +233,7 @@ class V34TurboStrategy(BaseStrategy):
             strict_yoy,
             strict_breakout,
             strict_vol,
+            strict_vol_min,
             '嚴格'
         )
 
@@ -237,6 +244,7 @@ class V34TurboStrategy(BaseStrategy):
                 relaxed_yoy,
                 relaxed_breakout,
                 relaxed_vol,
+                relaxed_vol_min,
                 '放寬'
             )
 

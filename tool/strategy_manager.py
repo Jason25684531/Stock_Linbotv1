@@ -42,11 +42,16 @@ class StrategyManager:
     # 設定檔路徑
     SETTINGS_FILE = 'strategy_settings.json'
     
-    # 預設設定 (V2: 使用列表)
+    # 預設設定 (V3: 支援 per-strategy overrides + backtest defaults)
     DEFAULT_SETTINGS = {
-        'active_strategies': ['v31_hybrid'],  # 🔄 V2: 改為列表
-        'version': '2.0',
-        'last_updated': None
+        'active_strategies': ['v31_hybrid'],
+        'version': '3.0',
+        'last_updated': None,
+        'per_strategy_overrides': {},
+        'backtest_defaults': {
+            'initial_capital': 1000000,
+            'period_months': 12,
+        },
     }
     
     # 策略註冊表（Lazy Loading，避免循環依賴）
@@ -55,6 +60,9 @@ class StrategyManager:
         'v33_low_vol': 'tool.strategies.v33_low_vol.V33LowVolStrategy',
         'v34_turbo': 'tool.strategies.v34_turbo.V34TurboStrategy',
         'v35_innovation': 'tool.strategies.v35_innovation.V35InnovationStrategy',  # 🧪 V35 研發動能策略
+        'v36_chip_momentum': 'tool.strategies.v36_chip_momentum.V36ChipMomentumStrategy',  # 📊 V36 籌碼動能策略
+        'v37_mean_reversion': 'tool.strategies.v37_mean_reversion.V37MeanReversionStrategy',  # 🔄 V37 均值回歸策略
+        'v38_value_dividend': 'tool.strategies.v38_value_dividend.V38ValueDividendStrategy',  # 💰 V38 高殖利率價值策略
     }
     
     def __new__(cls):
@@ -96,8 +104,15 @@ class StrategyManager:
                 if 'active_strategy' in settings and 'active_strategies' not in settings:
                     old_strategy = settings.pop('active_strategy')
                     settings['active_strategies'] = [old_strategy] if old_strategy else ['v31_hybrid']
-                    settings['version'] = '2.0'
-                    print(f"🔄 設定檔已升級至 V2 多策略格式")
+                    settings['version'] = '3.0'
+                    print(f"🔄 設定檔已升級至 V3 格式（含 per_strategy_overrides）")
+                    self._save_settings(settings)
+                
+                # 🔄 V2→V3 升級：補充 V3 新增欄位
+                if settings.get('version', '2.0') < '3.0':
+                    settings.setdefault('per_strategy_overrides', {})
+                    settings.setdefault('backtest_defaults', {'initial_capital': 1000000, 'period_months': 12})
+                    settings['version'] = '3.0'
                     self._save_settings(settings)
                 
                 return settings
@@ -203,6 +218,17 @@ class StrategyManager:
         """
         strategies = self.get_active_strategies()
         return strategies[0] if strategies else None
+
+    def get_strategy(self, strategy_name: str):
+        """以名稱取得指定策略物件（公開介面）
+        
+        Args:
+            strategy_name: 策略名稱，例如 'v34_turbo'
+        
+        Returns:
+            BaseStrategy 實例或 None
+        """
+        return self._get_or_load_strategy(strategy_name)
     
     def _load_strategy(self, strategy_name: str):
         """動態載入策略類別
@@ -314,7 +340,28 @@ class StrategyManager:
         """
         strategy = self.get_active_strategy()
         return strategy.get_config() if strategy else {}
-    
+
+    def get_strategy_overrides(self, strategy_name: str) -> Dict[str, Any]:
+        """取得特定策略的覆寫參數 (V3)
+
+        Args:
+            strategy_name: 策略名稱，例如 'v33_low_vol'
+
+        Returns:
+            Dict: 該策略的覆寫參數字典，不存在則回傳空字典
+        """
+        settings = self.get_settings()
+        return settings.get('per_strategy_overrides', {}).get(strategy_name, {})
+
+    def get_backtest_defaults(self) -> Dict[str, Any]:
+        """取得回測預設參數 (V3)
+
+        Returns:
+            Dict: 包含 initial_capital, period_months 等回測設定
+        """
+        settings = self.get_settings()
+        return settings.get('backtest_defaults', {'initial_capital': 1000000, 'period_months': 12})
+
     def reset_to_default(self):
         """重置為預設策略"""
         self.set_active_strategies(['v31_hybrid'])

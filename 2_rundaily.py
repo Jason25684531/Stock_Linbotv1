@@ -21,6 +21,8 @@ from tool.calc_indicators import (
     calculate_rsi, calculate_macd, calculate_kd,
     calculate_bb_width, calculate_atr, calculate_natr,
     calculate_std_20, calculate_bias,
+    calculate_consec_days, calculate_margin_change_pct,
+    calculate_chip_score,
 )
 from tool.model_utils import load_model
 from config import Config
@@ -100,9 +102,48 @@ def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
 
     df['std_20'] = df.groupby('stock_id')['close_price'].transform(calculate_std_20)
 
+    # 🆕 Phase 3: 籌碼面指標（V36 Chip Momentum 所需）
+    print("  ✓ 計算籌碼面指標 (chip_score, consec_days, margin_change)...")
+    vol_safe = df['volume'].replace(0, 1)
+
+    if 'dealer_buy' in df.columns:
+        df['dealer_ratio'] = (df['dealer_buy'] / vol_safe).clip(-0.5, 0.5)
+    else:
+        df['dealer_ratio'] = 0
+
+    if 'foreign_buy' in df.columns:
+        df['foreign_ratio'] = (df['foreign_buy'] / vol_safe).clip(-0.5, 0.5)
+    else:
+        df['foreign_ratio'] = 0
+
+    if 'trust_buy' in df.columns:
+        df['trust_ratio'] = (df['trust_buy'] / vol_safe).clip(-0.5, 0.5)
+    else:
+        df['trust_ratio'] = 0
+
+    if 'foreign_buy' in df.columns:
+        df['foreign_consec_days'] = df.groupby('stock_id')['foreign_buy'].transform(calculate_consec_days)
+    else:
+        df['foreign_consec_days'] = 0
+
+    if 'trust_buy' in df.columns:
+        df['trust_consec_days'] = df.groupby('stock_id')['trust_buy'].transform(calculate_consec_days)
+    else:
+        df['trust_consec_days'] = 0
+
+    if 'margin_balance' in df.columns:
+        df['margin_change_pct'] = df.groupby('stock_id')['margin_balance'].transform(calculate_margin_change_pct)
+    else:
+        df['margin_change_pct'] = 0
+
+    df['chip_score'] = calculate_chip_score(df)
+
     # 填補 NaN
     indicator_cols = ['ma5', 'ma20', 'ma60', 'bias', 'rsi', 'macd_hist',
-                      'kd_k', 'bb_width', 'atr', 'natr', 'std_20']
+                      'kd_k', 'bb_width', 'atr', 'natr', 'std_20',
+                      'dealer_ratio', 'foreign_ratio', 'trust_ratio',
+                      'foreign_consec_days', 'trust_consec_days',
+                      'margin_change_pct', 'chip_score']
     for col in indicator_cols:
         if col in df.columns:
             df[col] = df[col].fillna(0)
@@ -135,9 +176,12 @@ def _write_indicators_to_db(df: pd.DataFrame, engine):
     if df.empty:
         return
 
-    # 🔥 新增 revenue_yoy 到更新欄位列表
+    # 🔥 V35+V36: 更新欄位列表（含 revenue_yoy + 籌碼面指標）
     indicator_cols = ['ma5', 'ma20', 'ma60', 'bias', 'rsi', 'macd_hist',
-                      'kd_k', 'bb_width', 'atr', 'natr', 'std_20', 'revenue_yoy']
+                      'kd_k', 'bb_width', 'atr', 'natr', 'std_20', 'revenue_yoy',
+                      'dealer_ratio', 'foreign_ratio', 'trust_ratio',
+                      'foreign_consec_days', 'trust_consec_days',
+                      'margin_change_pct', 'chip_score']
 
     try:
         with engine.connect() as conn:

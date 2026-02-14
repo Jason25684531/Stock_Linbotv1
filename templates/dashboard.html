@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Stock Linbot V32{% endblock %}
+{% block title %}Dashboard - Stock Linbot{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
 <div x-data="dashboardData()" x-init="init()">
@@ -23,12 +24,44 @@
                         策略指揮中心 Strategy Control
                     </h2>
                     <p class="text-sm text-gray-400 mt-1">可同時選擇多個策略，分散風險</p>
+                    <p class="text-xs text-blue-300 mt-1">目前模式：
+                        <span class="font-semibold">
+                            {% if current_mode == 'aggressive' %}積極
+                            {% elif current_mode == 'balanced' %}平衡
+                            {% elif current_mode == 'loose' %}寬鬆
+                            {% elif current_mode == 'conservative' %}穩健（舊模式）
+                            {% else %}{{ current_mode }}{% endif %}
+                        </span>
+                    </p>
                 </div>
                 <div>
                     <a href="/backtest" class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-105" style="display: inline-flex; align-items: center; font-size: 1.1rem;">
                         <span class="text-2xl mr-3">🚀</span>
                         <span>執行回測分析</span>
                     </a>
+                </div>
+            </div>
+
+            <div class="mb-5 p-4 bg-gray-900/40 border border-gray-700 rounded-lg">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-200">V34/V35 篩選模式快速切換</div>
+                        <div class="text-xs text-gray-400 mt-1">同時套用到 LineBot 與網頁選股（積極 / 平衡 / 寬鬆）</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <form method="POST" action="/update_mode">
+                            <input type="hidden" name="mode" value="aggressive">
+                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'aggressive' %}bg-red-600 border-red-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-red-400{% endif %}">積極</button>
+                        </form>
+                        <form method="POST" action="/update_mode">
+                            <input type="hidden" name="mode" value="balanced">
+                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'balanced' %}bg-blue-600 border-blue-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400{% endif %}">平衡</button>
+                        </form>
+                        <form method="POST" action="/update_mode">
+                            <input type="hidden" name="mode" value="loose">
+                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'loose' %}bg-emerald-600 border-emerald-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-emerald-400{% endif %}">寬鬆</button>
+                        </form>
+                    </div>
                 </div>
             </div>
             
@@ -46,12 +79,20 @@
                                     {% if strategy == 'v31_hybrid' %}V31 混合策略
                                     {% elif strategy == 'v33_low_vol' %}V33 低波動
                                     {% elif strategy == 'v34_turbo' %}V34 雙渦輪
+                                    {% elif strategy == 'v35_innovation' %}V35 經營效益
+                                    {% elif strategy == 'v36_chip_momentum' %}V36 籌碼動能
+                                    {% elif strategy == 'v37_mean_reversion' %}V37 均值回歸
+                                    {% elif strategy == 'v38_value_dividend' %}V38 高殖利率
                                     {% else %}{{ strategy }}{% endif %}
                                 </div>
                                 <div class="text-xs text-gray-400">
                                     {% if strategy == 'v31_hybrid' %}均衡型 - 技術+AI
                                     {% elif strategy == 'v33_low_vol' %}穩健型 - 低波動
                                     {% elif strategy == 'v34_turbo' %}進攻型 - 高動能
+                                    {% elif strategy == 'v35_innovation' %}成長型 - 經營效益
+                                    {% elif strategy == 'v36_chip_momentum' %}追蹤型 - 法人籌碼
+                                    {% elif strategy == 'v37_mean_reversion' %}反轉型 - 區間震盪
+                                    {% elif strategy == 'v38_value_dividend' %}價值型 - 類定存股
                                     {% else %}自訂策略{% endif %}
                                 </div>
                             </div>
@@ -133,17 +174,42 @@
         <!-- Live Signals Section -->
         <div class="mt-8">
             <div class="chart-container">
-                <div class="flex items-center justify-between mb-4">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4 gap-3">
                     <div>
                         <h2 class="text-xl font-bold flex items-center">
                             <span class="text-2xl mr-2">⚡</span>
                             即時選股訊號 Live Signals
                         </h2>
                         <p class="text-sm text-gray-400 mt-1" x-show="liveDate" x-text="'更新日期: ' + liveDate"></p>
+                        <p class="text-xs text-blue-300 mt-1" x-show="liveStrategyDisplay" x-text="'目前策略: ' + liveStrategyDisplay"></p>
                     </div>
-                    <div class="text-sm text-gray-400">
-                        <span x-text="liveSignals.length"></span> 檔股票
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-400">TopN</label>
+                        <select x-model.number="liveTopN" @change="loadLiveSignals()"
+                                class="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option :value="3">3</option>
+                            <option :value="5">5</option>
+                            <option :value="8">8</option>
+                            <option :value="10">10</option>
+                        </select>
+                        <button @click="loadLiveSignals()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                            重新載入
+                        </button>
+                        <div class="text-sm text-gray-400 ml-1">
+                            <span x-text="liveSignals.length"></span> 檔股票
+                        </div>
                     </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <template x-for="opt in liveStrategyOptions" :key="opt.value">
+                        <button @click="selectedLiveStrategy = opt.value; loadLiveSignals()"
+                                class="px-3 py-1.5 text-xs rounded-lg border transition-colors"
+                                :class="selectedLiveStrategy === opt.value
+                                    ? 'bg-blue-600 border-blue-500 text-white'
+                                    : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-500'"
+                                x-text="opt.label"></button>
+                    </template>
                 </div>
                 
                 <div x-show="liveSignals.length === 0" class="text-center py-12 text-gray-400">
@@ -167,6 +233,23 @@
                                     <div class="text-xs text-gray-400">收盤價</div>
                                 </div>
                             </div>
+
+                            <div class="mt-3 p-2.5 bg-gray-900/50 border border-gray-700 rounded-lg">
+                                <div class="grid grid-cols-3 gap-2 text-xs">
+                                    <div>
+                                        <div class="text-gray-400">建議買入</div>
+                                        <div class="font-bold text-cyan-300" x-text="'$' + signal.suggested_buy_price.toFixed(2)"></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-400">建議賣出</div>
+                                        <div class="font-bold text-green-300" x-text="'$' + signal.suggested_sell_price.toFixed(2)"></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-400">停損參考</div>
+                                        <div class="font-bold text-red-300" x-text="'$' + signal.suggested_stop_loss_price.toFixed(2)"></div>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div x-show="signal.ai_score !== null">
@@ -187,6 +270,23 @@
                                     <div class="text-gray-400">MA20</div>
                                     <div class="font-bold text-gray-300" x-text="signal.ma20.toFixed(2)"></div>
                                 </div>
+                                <div x-show="signal.ma60 !== null">
+                                    <div class="text-gray-400">MA60</div>
+                                    <div class="font-bold text-gray-300" x-text="signal.ma60.toFixed(2)"></div>
+                                </div>
+                                <div x-show="signal.op_profit_margin !== null">
+                                    <div class="text-gray-400">營業利益率</div>
+                                    <div class="font-bold text-gray-300" x-text="(signal.op_profit_margin * 100).toFixed(1) + '%'"></div>
+                                </div>
+                                <div x-show="signal.revenue_yoy !== null">
+                                    <div class="text-gray-400">營收YoY</div>
+                                    <div class="font-bold" :class="signal.revenue_yoy >= 0 ? 'text-green-400' : 'text-red-400'" x-text="signal.revenue_yoy.toFixed(1) + '%'"></div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between text-xs">
+                                <span class="text-gray-400">更多資訊</span>
+                                <a :href="signal.detail_url" target="_blank" class="text-blue-300 hover:text-blue-200 font-medium">Goodinfo 詳細資料 ↗</a>
                             </div>
                         </div>
                     </template>
@@ -213,6 +313,9 @@
                             <option value="v33_low_vol">V33 低波動</option>
                             <option value="v34_turbo">V34 雙渦輪</option>
                             <option value="v35_innovation">V35 經營效益</option>
+                            <option value="v36_chip_momentum">V36 籌碼動能</option>
+                            <option value="v37_mean_reversion">V37 均值回歸</option>
+                            <option value="v38_value_dividend">V38 高殖利率</option>
                         </select>
                         <div>
                             <div class="text-sm text-gray-400">
@@ -246,13 +349,16 @@
                                     <td class="px-4 py-3">
                                         <span class="px-2 py-1 rounded text-xs font-medium"
                                               :class="{
-                                                  'bg-blue-900/60 text-blue-300 border border-blue-700': trade.strategy === 'v31_hybrid',
-                                                  'bg-green-900/60 text-green-300 border border-green-700': trade.strategy === 'v33_low_vol',
-                                                  'bg-orange-900/60 text-orange-300 border border-orange-700': trade.strategy === 'v34_turbo',
-                                                  'bg-purple-900/60 text-purple-300 border border-purple-700': trade.strategy === 'v35_innovation',
+                                                  'badge-v31': trade.strategy === 'v31_hybrid',
+                                                  'badge-v33': trade.strategy === 'v33_low_vol',
+                                                  'badge-v34': trade.strategy === 'v34_turbo',
+                                                  'badge-v35': trade.strategy === 'v35_innovation',
+                                                  'badge-v36': trade.strategy === 'v36_chip_momentum',
+                                                  'badge-v37': trade.strategy === 'v37_mean_reversion',
+                                                  'badge-v38': trade.strategy === 'v38_value_dividend',
                                                   'bg-gray-700 text-gray-300': !trade.strategy
                                               }"
-                                              x-text="{'v31_hybrid':'V31','v33_low_vol':'V33','v34_turbo':'V34','v35_innovation':'V35'}[trade.strategy] || '未知'"></span>
+                                              x-text="{'v31_hybrid':'V31','v33_low_vol':'V33','v34_turbo':'V34','v35_innovation':'V35','v36_chip_momentum':'V36','v37_mean_reversion':'V37','v38_value_dividend':'V38'}[trade.strategy] || '未知'"></span>
                                     </td>
                                     <td class="px-4 py-3 font-bold" x-text="trade.stock_id"></td>
                                     <td class="px-4 py-3 text-gray-400" x-text="trade.buy_date"></td>
@@ -392,6 +498,17 @@ function dashboardData() {
         trades: [],
         liveSignals: [],
         liveDate: null,
+        liveStrategyDisplay: '',
+        liveTopN: 5,
+        selectedLiveStrategy: '{{ current_strategy }}',
+        liveStrategyOptions: [
+            {% for strategy in strategy_options %}
+            {
+                value: '{{ strategy }}',
+                label: '{% if strategy == "v31_hybrid" %}V31 混合{% elif strategy == "v33_low_vol" %}V33 低波動{% elif strategy == "v34_turbo" %}V34 雙渦輪{% elif strategy == "v35_innovation" %}V35 經營效益{% elif strategy == "v36_chip_momentum" %}V36 籌碼動能{% elif strategy == "v37_mean_reversion" %}V37 均值回歸{% elif strategy == "v38_value_dividend" %}V38 高殖利率{% else %}{{ strategy }}{% endif %}'
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ],
         pkBattle: {
             user_roi: 0,
             ai_roi: 0,
@@ -444,7 +561,11 @@ function dashboardData() {
         
         async loadLiveSignals() {
             try {
-                const response = await fetch('/api/daily-signals');
+                const query = new URLSearchParams({
+                    strategy: this.selectedLiveStrategy,
+                    top_n: this.liveTopN
+                });
+                const response = await fetch('/api/daily-signals?' + query.toString());
                 if (!response.ok) {
                     console.warn('無法載入即時訊號');
                     return;
@@ -452,9 +573,11 @@ function dashboardData() {
                 const data = await response.json();
                 this.liveSignals = data.signals || [];
                 this.liveDate = data.date;
+                this.liveStrategyDisplay = data.strategy_display || '';
             } catch (error) {
                 console.error('載入即時訊號失敗:', error);
                 this.liveSignals = [];
+                this.liveStrategyDisplay = '';
             }
         },
         

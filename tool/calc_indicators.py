@@ -13,7 +13,6 @@
 from typing import Optional, Tuple
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
 import sys
 import os
 
@@ -288,6 +287,104 @@ def calculate_ratio_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ============================================
+# 📊 籌碼面進階指標 (Phase 2)
+# ============================================
+
+def calculate_dealer_ratio(df: pd.DataFrame) -> pd.Series:
+    """
+    計算自營商買超佔成交量比例
+
+    Args:
+        df: 需包含 dealer_buy, volume 欄位
+
+    Returns:
+        dealer_ratio 序列 (-0.5 ~ 0.5)
+    """
+    if 'dealer_buy' not in df.columns:
+        return pd.Series(0, index=df.index)
+
+    vol = df['volume'].replace(0, 1)
+    ratio = df['dealer_buy'] / vol
+    return ratio.clip(-0.5, 0.5)
+
+
+def calculate_consec_days(series: pd.Series) -> pd.Series:
+    """
+    計算連續正值天數（用於外資/投信/自營商連買天數）
+
+    邏輯：
+      - 值 > 0 時連續累計 +1
+      - 值 <= 0 時重置為 0
+
+    Args:
+        series: 買賣超序列（已按時間排序）
+
+    Returns:
+        連續正值天數序列
+    """
+    positive = (series > 0).astype(int)
+    groups = (positive != positive.shift()).cumsum()
+    consec = positive.groupby(groups).cumsum()
+    return consec
+
+
+def calculate_margin_change_pct(series: pd.Series) -> pd.Series:
+    """
+    計算融資餘額日變動率 (%)
+
+    公式: (今日餘額 - 昨日餘額) / 昨日餘額 * 100
+
+    Args:
+        series: 融資餘額序列（已按時間排序）
+
+    Returns:
+        變動率序列 (%)
+    """
+    prev = series.shift(1).replace(0, float('nan'))
+    pct = (series - series.shift(1)) / prev * 100
+    return pct.fillna(0).clip(-50, 50)
+
+
+def calculate_chip_score(df: pd.DataFrame) -> pd.Series:
+    """
+    計算籌碼綜合分數 (0~100)
+
+    根據 Config 中定義的權重，綜合：
+    - 外資買超信號 (foreign_ratio 標準化)
+    - 投信買超信號 (trust_ratio 標準化)
+    - 自營商買超信號 (dealer_ratio 標準化)
+    - 融資減少信號 (margin_change_pct < 0 為正面)
+
+    Args:
+        df: 需包含 foreign_ratio, trust_ratio, dealer_ratio,
+            margin_change_pct 欄位（或使用 0 兜底）
+
+    Returns:
+        chip_score 序列 (0~100)
+    """
+    w_f = Config.CHIP_WEIGHT_FOREIGN
+    w_t = Config.CHIP_WEIGHT_TRUST
+    w_d = Config.CHIP_WEIGHT_DEALER
+    w_m = Config.CHIP_WEIGHT_MARGIN
+
+    def _norm_ratio(s: pd.Series) -> pd.Series:
+        """將 ratio (-0.5~0.5) 映射至 (0~100)"""
+        return ((s + 0.5) / 1.0 * 100).clip(0, 100)
+
+    # 各分量分數（0~100）
+    f_score = _norm_ratio(df.get('foreign_ratio', pd.Series(0, index=df.index)))
+    t_score = _norm_ratio(df.get('trust_ratio', pd.Series(0, index=df.index)))
+    d_score = _norm_ratio(df.get('dealer_ratio', pd.Series(0, index=df.index)))
+
+    # 融資信號：融資減少（margin_change_pct < 0）→ 正面信號
+    margin_pct = df.get('margin_change_pct', pd.Series(0, index=df.index))
+    m_score = ((-margin_pct).clip(-50, 50) + 50) / 100 * 100  # 映射 -50~50 → 0~100
+
+    score = (w_f * f_score + w_t * t_score + w_d * d_score + w_m * m_score)
+    return score.clip(0, 100).round(2)
+
+
 def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     一次性計算所有技術指標 (便捷函數，用於單一股票)
@@ -314,6 +411,9 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['atr'] = calculate_atr(df)  # 🆕 V33 Phase 1+: ATR 動態停損
     df['natr'] = calculate_natr(df)  # 🆕 V33 Phase 1: 標準化波動度
     df['std_20'] = calculate_std_20(df['close_price'])  # 🆕 V33 Phase 1: 20日標準差
+    
+    # 🆕 Phase 2: 籌碼面指標
+    df['dealer_ratio'] = calculate_dealer_ratio(df)
     
     return df
 
@@ -373,12 +473,116 @@ def fix_database_indicators():
     
     df['std_20'] = df.groupby('stock_id')['close_price'].transform(calculate_std_20)
 
+    # 🆕 Phase 2: 籌碼面進階指標
+    print("📊 計算籌碼面指標 (dealer_ratio, consec_days, margin_change, chip_score)...")
+
+    # 自營商比例
+    vol_safe = df['volume'].replace(0, 1)
+    if 'dealer_buy' in df.columns:
+        df['dealer_ratio'] = (df['dealer_buy'] / vol_safe).clip(-0.5, 0.5)
+    else:
+        df['dealer_ratio'] = 0
+
+    # 外資/投信/自營商比例（用於 chip_score）
+    if 'foreign_buy' in df.columns:
+        df['foreign_ratio'] = (df['foreign_buy'] / vol_safe).clip(-0.5, 0.5)
+    else:
+        df['foreign_ratio'] = 0
+
+    if 'trust_buy' in df.columns:
+        df['trust_ratio'] = (df['trust_buy'] / vol_safe).clip(-0.5, 0.5)
+    else:
+        df['trust_ratio'] = 0
+
+    # 連續買超天數（每支股票獨立計算）
+    if 'foreign_buy' in df.columns:
+        df['foreign_consec_days'] = df.groupby('stock_id')['foreign_buy'].transform(calculate_consec_days)
+    else:
+        df['foreign_consec_days'] = 0
+
+    if 'trust_buy' in df.columns:
+        df['trust_consec_days'] = df.groupby('stock_id')['trust_buy'].transform(calculate_consec_days)
+    else:
+        df['trust_consec_days'] = 0
+
+    # 融資餘額日變動率（%）
+    if 'margin_balance' in df.columns:
+        df['margin_change_pct'] = df.groupby('stock_id')['margin_balance'].transform(calculate_margin_change_pct)
+    else:
+        df['margin_change_pct'] = 0
+
+    # 籌碼綜合分數
+    df['chip_score'] = calculate_chip_score(df)
+
     df = df.fillna(0)
     
-    # 3. 存回資料庫
-    print("💾 正在升級資料庫 (寫入新特徵)...")
-    df.to_sql('daily_market_data', engine, if_exists='replace', index=False, chunksize=5000)
-    print("✅ 資料庫升級完成！現在包含 MACD, KD, NATR, STD_20。")
+    # 3. 安全寫回資料庫（使用 batch UPDATE，不 DROP 表）
+    print("💾 正在升級資料庫 (批次更新指標欄位)...")
+    from tool.db_helper import get_db_engine as _get_engine, ensure_indicator_columns
+    from sqlalchemy import text as _text
+    
+    # 確保欄位存在（自動 ALTER TABLE ADD COLUMN）
+    indicator_cols = [
+        'ma5', 'ma20', 'ma60', 'bias', 'macd_hist', 'kd_k', 'bb_width', 'rsi', 'natr', 'std_20',
+        # Phase 2: 籌碼面指標
+        'dealer_ratio', 'foreign_ratio', 'trust_ratio',
+        'foreign_consec_days', 'trust_consec_days',
+        'margin_change_pct', 'chip_score',
+    ]
+    ensure_indicator_columns(indicator_cols)
+    
+    # 批次 UPDATE
+    update_sql = _text("""
+        UPDATE daily_market_data
+        SET ma5 = :ma5, ma20 = :ma20, ma60 = :ma60,
+            bias = :bias, macd_hist = :macd_hist, kd_k = :kd_k,
+            bb_width = :bb_width, rsi = :rsi, natr = :natr, std_20 = :std_20,
+            dealer_ratio = :dealer_ratio, foreign_ratio = :foreign_ratio,
+            trust_ratio = :trust_ratio,
+            foreign_consec_days = :foreign_consec_days,
+            trust_consec_days = :trust_consec_days,
+            margin_change_pct = :margin_change_pct, chip_score = :chip_score
+        WHERE stock_id = :stock_id AND trade_date = :trade_date
+    """)
+    
+    batch_size = 5000
+    total_updated = 0
+    with engine.connect() as conn:
+        batch = []
+        for _, row in df.iterrows():
+            batch.append({
+                'stock_id': row['stock_id'],
+                'trade_date': row['trade_date'],
+                'ma5': float(row.get('ma5', 0)),
+                'ma20': float(row.get('ma20', 0)),
+                'ma60': float(row.get('ma60', 0)),
+                'bias': float(row.get('bias', 0)),
+                'macd_hist': float(row.get('macd_hist', 0)),
+                'kd_k': float(row.get('kd_k', 0)),
+                'bb_width': float(row.get('bb_width', 0)),
+                'rsi': float(row.get('rsi', 0)),
+                'natr': float(row.get('natr', 0)),
+                'std_20': float(row.get('std_20', 0)),
+                'dealer_ratio': float(row.get('dealer_ratio', 0)),
+                'foreign_ratio': float(row.get('foreign_ratio', 0)),
+                'trust_ratio': float(row.get('trust_ratio', 0)),
+                'foreign_consec_days': float(row.get('foreign_consec_days', 0)),
+                'trust_consec_days': float(row.get('trust_consec_days', 0)),
+                'margin_change_pct': float(row.get('margin_change_pct', 0)),
+                'chip_score': float(row.get('chip_score', 0)),
+            })
+            if len(batch) >= batch_size:
+                conn.execute(update_sql, batch)
+                conn.commit()
+                total_updated += len(batch)
+                print(f"   進度: {total_updated:,} / {len(df):,}")
+                batch = []
+        if batch:
+            conn.execute(update_sql, batch)
+            conn.commit()
+            total_updated += len(batch)
+    
+    print(f"✅ 資料庫升級完成！更新 {total_updated:,} 筆（含 MACD, KD, NATR, STD_20）")
 
 if __name__ == "__main__":
     fix_database_indicators()

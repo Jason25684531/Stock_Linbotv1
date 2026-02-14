@@ -2,10 +2,7 @@ import feedparser
 import google.generativeai as genai
 import datetime
 import time
-import hashlib
-from typing import Dict
-from linebot import LineBotApi
-from linebot.models import TextSendMessage
+from linebot.v3.messaging import MessagingApi, ApiClient, Configuration, TextMessage, BroadcastRequest
 from config import Config
 
 # ==========================================
@@ -21,118 +18,6 @@ RSS_SOURCES = {
     # Yahoo 奇摩股市 (Yahoo 的 RSS 目前通常還健在，如果壞了也可以改用 Google 代理)
     "📢 Yahoo奇摩 (焦點)": "https://tw.stock.yahoo.com/rss?category=trends"
 }
-
-# ==========================================
-# 🧠 市場情緒分析引擎 (V33 Phase 2+)
-# ==========================================
-
-class NewsSentimentAgent:
-    """市場情緒分析代理
-    
-    功能：
-    1. Mock Mode: 基於日期生成確定性模擬情緒分數（開發階段）
-    2. Real Mode: 整合 Gemini AI 分析新聞情緒（未來擴展）
-    
-    情緒分數範圍: -1.0 (極度悲觀) ~ +1.0 (極度樂觀)
-    """
-    
-    def __init__(self, mock_mode: bool = True):
-        """初始化情緒分析代理
-        
-        Args:
-            mock_mode: 是否使用模擬模式（True: 模擬數據，False: 真實API）
-        """
-        self.mock_mode = mock_mode
-        print(f"🧠 NewsSentimentAgent 初始化 (Mock Mode: {mock_mode})")
-    
-    def get_daily_sentiment(self, date_str: str) -> Dict[str, any]:
-        """取得指定日期的市場情緒分數
-        
-        Args:
-            date_str: 日期字串 (格式: YYYY-MM-DD)
-        
-        Returns:
-            dict: {
-                'date': str,
-                'score': float (-1.0 ~ 1.0),
-                'mood': str ('樂觀' | '中性' | '悲觀'),
-                'source': str ('mock' | 'gemini')
-            }
-        """
-        if self.mock_mode or Config.SENTIMENT_MOCK_MODE:
-            return self._mock_sentiment(date_str)
-        else:
-            return self._analyze_with_gemini(date_str)
-    
-    def _mock_sentiment(self, date_str: str) -> Dict[str, any]:
-        """模擬模式：基於日期哈希生成確定性情緒分數
-        
-        策略：
-        - 使用 MD5 哈希確保同一日期總是生成相同分數
-        - 正態分佈模擬：平均值 0.1（輕微樂觀），標準差 0.4
-        - 符合真實市場：多數時間中性，偶爾極端情緒
-        
-        Args:
-            date_str: 日期字串
-        
-        Returns:
-            dict: 情緒分析結果
-        """
-        # 使用日期哈希生成確定性種子
-        hash_obj = hashlib.md5(date_str.encode())
-        seed = int(hash_obj.hexdigest()[:8], 16) % 10000
-        
-        # 將種子映射到 -1.0 ~ 1.0 範圍
-        # 使用正弦函數模擬正態分佈特性
-        import math
-        normalized = (seed / 10000) * 2 - 1  # 轉換到 -1 ~ 1
-        score = math.sin(normalized * math.pi / 2) * 0.6 + 0.1  # 增加變化性
-        score = max(-1.0, min(1.0, score))  # 確保在範圍內
-        
-        # 判斷情緒類型
-        if score > 0.3:
-            mood = "樂觀"
-        elif score < -0.3:
-            mood = "悲觀"
-        else:
-            mood = "中性"
-        
-        return {
-            'date': date_str,
-            'score': round(score, 3),
-            'mood': mood,
-            'source': 'mock'
-        }
-    
-    def _analyze_with_gemini(self, date_str: str) -> Dict[str, any]:
-        """真實模式：使用 Gemini AI 分析新聞情緒
-        
-        TODO: 未來實作步驟
-        1. 呼叫 fetch_rss_news() 抓取當日新聞
-        2. 使用 Gemini 提示詞：要求輸出 -1.0 ~ 1.0 情緒分數
-        3. 解析回應並返回結構化數據
-        
-        Args:
-            date_str: 日期字串
-        
-        Returns:
-            dict: 情緒分析結果（目前回退到模擬模式）
-        """
-        print(f"⚠️ Gemini 真實分析尚未實作，使用 Mock 數據代替")
-        return self._mock_sentiment(date_str)
-    
-    def analyze_market_mood(self, date: str) -> float:
-        """便捷方法：直接返回情緒分數（向後兼容）
-        
-        Args:
-            date: 日期字串
-        
-        Returns:
-            float: 情緒分數 (-1.0 ~ 1.0)
-        """
-        result = self.get_daily_sentiment(date)
-        return result['score']
-
 
 # ==========================================
 # 🚀 程式主體 (原有功能保持不變)
@@ -251,12 +136,16 @@ def main():
     # 3. 發送 Line
     print("🚀 正在發送報告...")
     try:
-        line_bot_api = LineBotApi(Config.LINE_CHANNEL_ACCESS_TOKEN)
+        configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
+        with ApiClient(configuration) as api_client:
+            messaging_api = MessagingApi(api_client)
         
-        # 加上 Header
-        final_msg = f"📰 【AI 財經早報】\n(來源: 鉅亨網/Yahoo)\n\n{report}"
+            # 加上 Header
+            final_msg = f"📰 【AI 財經早報】\n(來源: 鉅亨網/Yahoo)\n\n{report}"
         
-        line_bot_api.broadcast(TextSendMessage(text=final_msg))
+            messaging_api.broadcast(BroadcastRequest(
+                messages=[TextMessage(text=final_msg)]
+            ))
         print(f"✅ 發送成功！耗時 {time.time() - start_time:.1f} 秒")
         
         # 本地端也印出來檢查

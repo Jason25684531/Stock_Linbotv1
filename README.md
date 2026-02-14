@@ -1,14 +1,17 @@
-# Stock AI Line Bot V35
+# Stock AI Line Bot V36
 
 > 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論  
-> 🔥 **Strategy Decoupling** | 出場邏輯委派 `check_exit_signal` + 參數化 SQL  
+> 🔥 **8 Strategy Factory** | V31/V33/V34/V35/V36/V37/V38 策略工廠 + BaseStrategy 繼承體系  
+> 📊 **Chip Data Infrastructure** | 融資融券 + 自營商 + `chip_score` 籌碼綜合分數  
 > 💼 **V35 經營效益策略** | 專注營業利益率高效益成長股  
-> 📲 **Line Bot 診斷** | 輸入股票代號即取得 AI 健康診斷書  
-> ⚔️ **PK System 人機對決** | 模擬交易與AI 績效比較  
-> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復  
+> 🔄 **V37 均值回歸** | KD 黃金交叉 + 布林收斂 + 低基期反轉  
+> 💰 **V38 高殖利率** | 營業利益率 + EPS 正成長 + 低波動價值股  
+> 📲 **Line Bot Flex Message** | 輸入股票代號即取得 AI 健康診斷卡片  
+> ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
+> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試  
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復  
-> 📅 **最後更新**: 2026-02-13  
-> ✅ **系統狀態**: 穩定運行（策略解耦 + 重複邏輯整併 + 文件同步）
+> 📅 **最後更新**: 2026-02-16  
+> ✅ **系統狀態**: 穩定運行（Phase 4 架構深度清洗：重複函式整併 + 冗餘刪除 + 117 測試通過）
 
 ---
 
@@ -20,27 +23,31 @@
 
 | 功能 | 說明 | 命令/路徑 |
 |------|------|---------|
-| 🎯 多策略並行 | 同時啟用多個策略 (V31/V33/V34/V35)，分散風險 | Web Dashboard 核取方塊 |
+| 🎯 多策略並行 | 同時啟用多個策略 (V31/V33/V34/V35/V36/V37/V38)，分散風險 | Web Dashboard 核取方塊 |
 | 📊 組合回測 | 多策略投資組合回測 + Plotly 視覺化 | `/backtest` |
 | 🔐 登入驗證 | Web Dashboard 需密碼登入 | `/login` |
 | 🔥 V31 混合策略 | V30 篩選 + XGBoost 排名 | 輸入「推薦」 |
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 大盤熔斷 | 輸入「V30」 |
-| 🎫 個股 AI 診斷 | 三維度健康診斷（技術面+基本面+AI分數） | 輸入 4 碼股票代號 |
-| 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:8866` |
+| 🎫 個股 AI 診斷 (Flex) | 三維度健康診斷卡片（技術面+基本面+AI分數）| 輸入 4 碼股票代號 |
+| 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:1688` |
 
 ### 🧭 當前策略門檻（2026-02）
 
 | 策略 | 目前核心條件 | 說明 |
 |------|-------------|------|
-| V33 低波動 | `NATR < 3.5%` + `收盤 > MA20 > MA60` + `量比 > 1.0` | 第二階段微調，降低停損噪音 |
-| V34 雙渦輪 | `revenue_yoy > 18%` + `收盤 >= 60日高 * 0.93` + `volume_ratio > 0.9` | 修正單日資料卡點後可正常出手 |
-| V35 經營效益 | `op_profit_margin > 6%` + `revenue_yoy > 0` + `EPS > 0` | 已由 10% 放寬至 6% |
+| V31 混合 | V30 技術篩選 + XGBoost AI 排名 | 均衡型基準策略 |
+| V33 低波動 | `NATR < 3.5%` + `收盤 > MA20 > MA60` + `量比 > 1.0` | 穩健型，降低停損噪音 |
+| V34 雙渦輪 | `revenue_yoy > 18%` + `收盤 >= 60日高 * 0.93` + `volume_ratio > 0.9` | 積極型高成長飆股 |
+| V35 經營效益 | `op_profit_margin > 6%` + `revenue_yoy > 0` + `EPS > 0` | 成長型，專注營業利益率 |
+| V36 籌碼動能 | `chip_score ≥ 55` + `外資連買 ≥ 3 天` + `投信連買 ≥ 2 天` | 追蹤型，跟隨法人佈局 |
+| V37 均值回歸 | KD 黃金交叉 + BB 收斂 + `RSI 25~45` | 反轉型，低基期反彈 |
+| V38 高殖利率 | `op_margin > 8%` + `EPS > 0.5` + `NATR < 3%` + `STD_20 < 2.5` | 價值型，穩配息低波動 |
 
 ---
 
-## 🏗️ 系統架構 (V35 Phase 5)
+## 🏗️ 系統架構 (V36 Phase 4)
 
-**設計原則**：DRY + 單一職責 + 統一介面 + 安全優先
+**設計原則**：DRY + 單一職責 + 統一介面 + 安全優先 + 資料驅動
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -57,11 +64,12 @@
              │ 回測依賴策略邏輯
 ┌────────────▼────────────────────────────────────────────┐
 │                 📊 策略層 (Multi-Strategy)              │
-│   tool/strategy_manager.py (策略工廠，支援多策略並行)     │
+│   tool/strategy_manager.py (策略工廠，支援 8 策略並行)    │
 │   tool/strategies/base.py (BaseStrategy + check_exit)    │
-│   tool/strategies/ (V31, V33, V34, V35 繼承 base)       │
-│   tool/strategy.py (V30/V31 共用邏輯)                    │
+│   tool/strategies/ (V31, V33, V34, V35, V36, V37, V38)  │
+│   tool/strategy.py (V30/V31 共用邏輯，遷移中)            │
 │   tool/report_helper.py (個股 AI 診斷報告)               │
+│   tool/line_message_builder.py (Flex Message 卡片建構)    │
 └────────────┬────────────────────────────────────────────┘
              │ 策略依賴技術指標與資料查詢
 ┌────────────▼────────────────────────────────────────────┐
@@ -87,17 +95,19 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 🔑 關鍵設計決策 (V35 Phase 5)
+### 🔑 關鍵設計決策 (V36 Phase 4)
 
 | 原則 | 實施方式 | 效益 |
 |------|---------|------|
 | **策略解耦** | `BaseStrategy.check_exit_signal()` 統一出場邏輯 | 回測引擎只做調度，不含策略判斷 |
 | **組合回測** | `PortfolioBacktestEngine` 支援多策略，各策略載入專屬 AI 模型 | 驗證策略組合績效 |
 | **視覺化** | Plotly 互動式圖表 | 直觀展示權益曲線與回撤 |
-| **多策略並行** | `StrategyManager` 支援列表形式 | 同時運行 V33+V34，分散風險 |
+| **多策略並行** | `StrategyManager` 支援列表形式，8 策略註冊 | 同時運行 V33+V34+V36…，分散風險 |
 | **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入，SQL 參數化 | 防止 SQL 注入與資料外洩 |
-| **統一入口** | 所有 DB 操作經 `tool.db_helper` | 防 SQL Injection、易測試 |
-| **無重複代碼** | 共用函數取代本地實作 | 減少 450+ 行代碼 |
+| **統一入口** | 所有 DB 操作經 `tool.db_helper`（含 safe_float/safe_int/get_open_holdings） | 防 SQL Injection、易測試 |
+| **Flex Message** | `line_message_builder.py` 建構互動卡片 | 取代純文字，視覺化診斷 |
+| **資料驅動** | 模式切換 / Preset 參數集中於 `config.py`（MODE_CMD_MAP 等） | 新增模式只改 config，不改 app.py |
+| **Fixture 共用** | `test/conftest.py` 統一 manager + empty_df | 測試 DRY，新策略零 boilerplate |
 
 ---
 
@@ -185,7 +195,7 @@ python 5_push_to_line.py                              # Line 推播
 # 啟動虛擬環境
 .\myenv\Scripts\Activate.ps1
 
-# 啟動 Web + Line Bot（port 8866）
+# 啟動 Web + Line Bot（port 1688）
 python app.py
 
 # 關閉服務
@@ -206,7 +216,7 @@ python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
 
 # Web 回測（推薦）
 python app.py
-# 瀏覽器開啟 http://localhost:8866/backtest
+# 瀏覽器開啟 http://localhost:1688/backtest
 # 1. 選擇策略組合（可多選）
 # 2. 設定回測期間（預設 1 年）
 # 3. 查看互動式圖表與績效指標
@@ -258,23 +268,30 @@ python -m py_compile app.py
 python -m py_compile 2_rundaily.py
 python -m py_compile 4_run_backtest.py
 
-# 2) 單元/整合測試（核心）
-python -m pytest test/test_strategy_factory.py -v
-python -m pytest test/test_phase3_integration.py -v
+# 2) 全量單元 / 整合測試（一鍵執行）
+python -m pytest test/ -v --tb=short
+# 預期結果: 117 passed
 
-# 3) 回測冒煙測試
+# 3) 依模組分別測試（選擇性執行）
+python -m pytest test/test_strategy_factory.py -v      # 策略載入 & 篩選 (3 tests)
+python -m pytest test/test_v35_refactor_flex.py -v     # Flex Message + 出場邏輯 (13 tests)
+python -m pytest test/test_phase2_chip_data.py -v      # 籌碼指標計算 (16 tests)
+python -m pytest test/test_v36_chip_momentum.py -v     # V36 籌碼動能策略 (29 tests)
+python -m pytest test/test_v37_v38_strategies.py -v    # V37 均值回歸 + V38 高殖利率 (56 tests)
+
+# 4) 回測冒煙測試
 python 4_run_backtest.py --v31
 
-# 4) 日常流程冒煙測試
+# 5) 日常流程冒煙測試
 python 2_rundaily.py
 
-# 5) 啟動 Web 並手動驗證 API
+# 6) 啟動 Web 並手動驗證 API
 python app.py
-# 瀏覽器: http://localhost:8866/dashboard
-# API: /api/summary, /api/live_signals, /api/daily-signals
+# 瀏覽器: http://localhost:1688/dashboard
+# API 端點: /api/summary, /api/daily-signals, /api/backtest-result
 ```
 
-> 若僅需快速回歸，至少執行步驟 1 + 2 + 3。
+> 若僅需快速回歸，至少執行步驟 1 + 2 + 4。
 
 ---
 
@@ -291,23 +308,41 @@ Stock_Linbotv1/
 │   └── 6_optimize_params.py     # Optuna 參數優化
 │
 ├── 🌐 使用者介面
-│   ├── app.py                   # Flask + Line Bot
-│   ├── debug_local.py           # 本地互動測試
-│   └── templates/               # Web Dashboard
+│   ├── app.py                   # Flask + Line Bot (port 1688)
+│   └── templates/               # Web Dashboard (Jinja2)
+│       ├── base.html            # Layout 基底
+│       ├── dashboard.html       # 儀表板
+│       ├── backtest.html        # 回測頁面
+│       ├── backtest_result.html # 回測結果
+│       └── login.html           # 登入頁
 │
-├── ⚙️ 核心模組 (tool/) - 統一共用函數
-│   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry)
+├── ⚙️ 核心模組 (tool/) — 統一共用函數，禁止 raw SQL
+│   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry, 8 策略)
 │   ├── strategies/              # 策略實作目錄
-│   │   ├── base.py              # BaseStrategy 抽象基底 (共用日期提取/大盤熔斷)
+│   │   ├── base.py              # BaseStrategy 抽象基底
 │   │   ├── v31_hybrid.py        # V31 混合策略 (V30+XGBoost)
 │   │   ├── v33_low_vol.py       # V33 低波動策略
 │   │   ├── v34_turbo.py         # V34 高成長策略
-│   │   └── v35_innovation.py    # V35 經營效益策略（營業利益率）
-│   ├── strategy.py              # V30/V31 選股邏輯 (輕量委派)
-│   ├── calc_indicators.py       # 技術指標 + 特徵計算 (唯一來源)
+│   │   ├── v35_innovation.py    # V35 經營效益策略
+│   │   ├── v36_chip_momentum.py # V36 籌碼動能策略
+│   │   ├── v37_mean_reversion.py# V37 均值回歸策略
+│   │   └── v38_value_dividend.py# V38 高殖利率價值策略
+│   ├── strategy.py              # V30/V31 選股邏輯 (遷移中，委派 model_utils)
+│   ├── line_message_builder.py  # Line Flex Message 卡片建構器
+│   ├── report_helper.py         # 個股 AI 診斷報告聚合
+│   ├── calc_indicators.py       # 技術指標 + 籌碼指標 (唯一來源)
 │   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
-│   ├── db_helper.py             # 資料庫操作 (唯一入口)
-│   └── news_agent.py            # 情緒分析
+│   ├── db_helper.py             # 資料庫操作 (唯一入口，含 safe_float/safe_int/get_open_holdings)
+│   ├── model_utils.py           # XGBoost 模型載入工具
+│   └── news_agent.py            # RSS 新聞 + Gemini 分析 + Line 推播
+│
+├── 🧪 測試 (test/) — pytest + conftest 共用 Fixture
+│   ├── conftest.py              # 共用 Fixture (manager, empty_df)
+│   ├── test_strategy_factory.py # 策略載入 & 篩選 (3 tests)
+│   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 (13 tests)
+│   ├── test_phase2_chip_data.py # 籌碼指標 (16 tests)
+│   ├── test_v36_chip_momentum.py# V36 策略 (29 tests)
+│   └── test_v37_v38_strategies.py# V37+V38 策略 (56 tests)
 │
 ├── 📦 數據與模型
 │   └── ML_Data/                 # 模型 + 回測結果
@@ -315,7 +350,8 @@ Stock_Linbotv1/
 │       └── *.csv                # 回測報告
 │
 ├── 📄 設定檔
-│   ├── config.py                # 統一設定中心 (唯一真理)
+│   ├── config.py                # 統一設定中心 (含 V34/V35 Presets + MODE_CMD_MAP)
+│   ├── strategy_settings.json   # 策略活動狀態 (V3 格式)
 │   ├── requirements.txt         # Python 依賴
 │   └── docker-compose.yaml      # Docker 部署
 │
@@ -332,34 +368,66 @@ Stock_Linbotv1/
     ↓
 回測/視覺化層 (4_run_backtest.py, tool/viz_helper.py)
     ↓
-策略層 (tool/strategy_manager.py → tool/strategies/base.py → V31/V33/V34/V35)
+策略層 (tool/strategy_manager.py → tool/strategies/base.py → V31/V33/V34/V35/V36/V37/V38)
     ↓
 指標層 (tool/calc_indicators.py)
     ↓
 資料層 (tool/db_helper.py)
     ↓
-設定層 (config.py + .env)
+設定層 (config.py + .env + strategy_settings.json)
 ```
 
 **設計原則**:
-- 所有資料庫操作必須通過 `tool/db_helper.py`
+- 所有資料庫操作必須通過 `tool/db_helper.py`（含 `safe_float`, `safe_int`, `get_open_holdings`）
 - 所有技術指標計算必須通過 `tool/calc_indicators.py`（唯一真理來源）
 - 所有策略繼承 `BaseStrategy`，共用日期提取與大盤熔斷邏輯
-- 所有常數定義必須在 `config.py`
+- 所有常數定義必須在 `config.py`（含 V34/V35 Presets、MODE_CMD_MAP）
 - Web API 回測指標統一由 `tool/viz_helper.get_backtest_summary()` 提供
+- 測試 Fixture 統一由 `test/conftest.py` 提供
 
 ---
 
 ## 📱 Line Bot 指令
 
+### 🎯 選股功能
+
 | 指令 | 功能 | 說明 |
 |------|------|------|
-| `推薦` / `AI` | V31 混合策略 | V30 篩選 + XGBoost Top 5 |
+| `推薦` / `選股` / `AI` | 當前策略選股 | 根據活躍策略推薦前 5 名（支援 Flex 卡片） |
 | `V30` / `策略` | 純技術選股 | 均線突破 + 量能確認 |
-| `2330` | 個股診斷 | 輸入 4 碼股票代號 |
-| `設定停損 5` | 調整停損 | 範圍 1%-20% |
-| `查看設定` | 查看參數 | 顯示所有策略設定 |
-| `dashboard` | 儀表板連結 | 取得 Web 連結 |
+| `2330`（4 碼數字） | 個股 AI 診斷 | Flex 卡片：技術面 + 基本面 + AI 分數 |
+| `查詢 台積電` | 名稱搜股 | 模糊搜尋股票名稱 |
+| `持股` / `AI持股` / `庫存` | 查看持股 | AI 模擬交易持倉明細 |
+| `回測` / `績效` / `backtest` | 回測摘要 | 最新回測績效報告 |
+| `dashboard` / `儀表板` | 儀表板連結 | 取得 Web Dashboard URL |
+
+### 🔄 策略切換
+
+| 指令 | 對應策略 | 風格 |
+|------|---------|------|
+| `切換V30` / `切V30` | V31 混合策略 | 均衡型 |
+| `切換V33` / `低波動` | V33 低波動 | 穩健型 |
+| `切換V34` / `飆股` / `渦輪` | V34 雙渦輪 | 積極型 |
+| `切換V35` / `經營效益` / `創新` | V35 經營效益 | 成長型 |
+| `切換V36` / `籌碼` / `法人` | V36 籌碼動能 | 追蹤型 |
+| `切換V37` / `均值回歸` / `反轉` | V37 均值回歸 | 反轉型 |
+| `切換V38` / `高殖利` / `定存股` | V38 高殖利率 | 價值型 |
+| `查看策略` / `目前策略` | 顯示策略詳情 | — |
+
+### ⚙️ 參數調整
+
+| 指令 | 功能 | 範例 |
+|------|------|------|
+| `設定停損 5` | V30 停損 5% | 範圍 1%-20% |
+| `設定停利 20` | V30 停利 20% | `設定停利 0` = 不停利 |
+| `查看設定` | 查看所有參數 | 顯示 V30/V34/V35 設定值 |
+| `切換積極` / `切換平衡` / `切換寬鬆` | 全域模式切換 | 同時調整 V34+V35 參數 |
+| `V34積極` / `V34平衡` / `V34寬鬆` | V34 個別模式 | 僅調整 V34 參數 |
+| `V35積極` / `V35平衡` / `V35寬鬆` | V35 個別模式 | 僅調整 V35 參數 |
+| `設定V34 18 0.93 0.9` | V34 嚴格參數 | YoY% / 突破比 / 量比 |
+| `設定V34放寬 10 0.90 0.7` | V34 放寬參數 | 放寬版三參數 |
+| `設定V35 6 0 0.8` | V35 嚴格參數 | 利益率% / YoY / 量比 |
+| `設定V35放寬 4 -5 0.6` | V35 放寬參數 | 放寬版三參數 |
 
 ---
 
@@ -383,12 +451,13 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V35 Phase 5+ Multi-Model Pipeline (2026-02-11)  
+**版本**: V36 Phase 4 — Architecture Deep Cleanup (2026-02-16)  
 **授權**: MIT License  
 **最新變更**:
-- ✅ 多模型批次訓練：每策略獨立 AI 模型（V33/V34/V35 分別訓練）
-- ✅ 動態模型載入：推論時自動載入策略專屬模型 + fallback 機制
-- ✅ V35 策略優化：營業利益率門檻調整為 > 6%
-- ✅ V34 策略調整：營收門檻調整為 `YoY > 18%`，突破/量能條件同步優化
-- ✅ V33 第二階段微調：趨勢、量能與風控參數優化，回測表現改善
-- ✅ 測試模式：`FORCE_BULL_MARKET` 環境變數控制市場趨勢
+- ✅ 重複函式整併：`safe_float`/`safe_int`/`get_open_holdings` 統一至 `db_helper`
+- ✅ 冗餘刪除：`archive/` 目錄 + 3 個過期測試 = 16 檔案移除
+- ✅ 資料驅動模式切換：`MODE_CMD_MAP` + `V34/V35 Presets` 集中管理於 `config.py`
+- ✅ 測試 Fixture 共用化：`test/conftest.py` 提供 `manager()` + `empty_df()`
+- ✅ Bug 修復：`StrategyManager.get_strategy()` 公開方法
+- ✅ 8 策略註冊：V31/V33/V34/V35/V36/V37/V38 全線支援
+- ✅ 117 項測試全部通過

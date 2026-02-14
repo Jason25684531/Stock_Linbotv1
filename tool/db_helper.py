@@ -7,6 +7,7 @@
 3. 資料查詢輔助函數
 """
 import pandas as pd
+import time
 from sqlalchemy import create_engine, text
 from config import Config
 
@@ -14,22 +15,47 @@ from config import Config
 # 🔥 Singleton 引擎 + 連線池（避免 Too many connections）
 _engine_instance = None
 
+# 允許的資料表名稱（防止 SQL Injection）
+_ALLOWED_TABLES = {
+    'daily_market_data', 'user_settings', 'user_simulation_trades',
+    'monthly_revenue', 'financial_statements', 'daily_recommendations',
+}
 
-def get_db_engine():
-    """獲取資料庫引擎（Singleton + 連線池）
+
+def get_db_engine(max_retries: int = 3):
+    """獲取資料庫引擎（Singleton + 連線池 + 重試）
     
     使用全域唯一引擎，透過 SQLAlchemy 連線池管理連線數量，
     避免每次呼叫都建立新引擎導致 MySQL 1040 Too many connections。
+    
+    Args:
+        max_retries: 連線失敗時的重試次數 (預設 3)
     """
     global _engine_instance
     if _engine_instance is None:
-        _engine_instance = create_engine(
-            Config.SQLALCHEMY_DATABASE_URI,
-            pool_size=5,          # 常駐連線數
-            max_overflow=10,      # 超額連線上限
-            pool_recycle=1800,    # 連線回收（30分鐘）
-            pool_pre_ping=True,   # 自動偵測斷線
-        )
+        last_err = None
+        for attempt in range(max_retries):
+            try:
+                _engine_instance = create_engine(
+                    Config.SQLALCHEMY_DATABASE_URI,
+                    pool_size=5,          # 常駐連線數
+                    max_overflow=10,      # 超額連線上限
+                    pool_recycle=1800,    # 連線回收（30分鐘）
+                    pool_pre_ping=True,   # 自動偵測斷線
+                )
+                # 驗證連線可用
+                with _engine_instance.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                break
+            except Exception as e:
+                last_err = e
+                _engine_instance = None
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt  # exponential backoff: 1s, 2s, 4s
+                    print(f"⚠️ DB 連線失敗 (attempt {attempt+1}/{max_retries}): {e}，{wait}秒後重試...")
+                    time.sleep(wait)
+        if _engine_instance is None:
+            raise ConnectionError(f"❌ 無法連線資料庫（已重試 {max_retries} 次）: {last_err}")
     return _engine_instance
 
 
@@ -197,7 +223,7 @@ def upsert_stock_data(df, table_name='daily_market_data'):
     
     Args:
         df: DataFrame，包含股票資料
-        table_name: 目標資料表名稱
+        table_name: 目標資料表名稱 (必須在允許清單中)
     
     Returns:
         成功插入/更新的筆數
@@ -205,13 +231,12 @@ def upsert_stock_data(df, table_name='daily_market_data'):
     if df is None or df.empty:
         return 0
     
+    # 資料表名稱安全檢查
+    if table_name not in _ALLOWED_TABLES:
+        raise ValueError(f"❌ 不允許的資料表名稱: {table_name}（允許: {_ALLOWED_TABLES}）")
+
     try:
         engine = get_db_engine()
-        
-        # 使用 to_sql 的 method 參數實現 upsert
-        # 注意：這裡使用簡化版本，利用 pandas 的 replace 方法
-        # 實際生產環境可以用 executemany 配合自定義 upsert SQL 提升性能
-        
         with engine.connect() as conn:
             # 方案：使用 REPLACE INTO（MySQL 特有）
             # REPLACE = DELETE + INSERT，但是原子性操作
@@ -371,6 +396,42 @@ def init_pk_tables():
         return False
 
 
+def ensure_indicator_columns(columns: list, table: str = 'daily_market_data'):
+    """確保 daily_market_data 表有所需的指標欄位，不存在則自動新增。
+    
+    使用 ALTER TABLE ADD COLUMN IF NOT EXISTS 語法（MySQL 8.0+）。
+    對於不支援的版本，先查詢現有欄位再決定是否新增。
+    
+    Args:
+        columns: 需要確保存在的欄位名稱列表
+        table: 資料表名稱（預設 'daily_market_data'）
+    """
+    if table not in _ALLOWED_TABLES:
+        raise ValueError(f"❌ 不允許的資料表名稱: {table}")
+    
+    engine = get_db_engine()
+    try:
+        with engine.connect() as conn:
+            # 查詢現有欄位
+            result = conn.execute(text(f"SHOW COLUMNS FROM {table}"))
+            existing = {row[0] for row in result.fetchall()}
+            
+            missing = [c for c in columns if c not in existing]
+            if missing:
+                for col in missing:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} FLOAT DEFAULT 0"))
+                        print(f"   ✅ 新增欄位: {table}.{col}")
+                    except Exception as e:
+                        if 'Duplicate column' not in str(e):
+                            print(f"   ⚠️ 新增欄位 {col} 失敗: {e}")
+                conn.commit()
+            else:
+                print(f"   ✅ 所有指標欄位已存在")
+    except Exception as e:
+        print(f"⚠️ ensure_indicator_columns 失敗: {e}")
+
+
 def supplement_financial_data(df):
     """
     為 DataFrame 補充 revenue_yoy / op_profit_margin / eps 等財務欄位。
@@ -454,3 +515,59 @@ def supplement_financial_data(df):
             df['op_profit_margin'] = 0
     
     return df
+
+
+def get_open_holdings(limit: int = 10):
+    """查詢目前持有中的 AI 推薦持股
+
+    從 daily_recommendations 取得最近 20 天、狀態為 OPEN 的推薦，
+    並 LEFT JOIN 最新收盤價計算未實現損益。
+
+    Args:
+        limit: 最大回傳筆數（預設 10）
+
+    Returns:
+        list[dict]: 持股資料列表，每筆含 stock_id, strategy, entry_price,
+                    trade_date, current_price
+    """
+    engine = get_db_engine()
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT r.stock_id, r.strategy, r.close_price AS entry_price,
+                   r.trade_date, d.close_price AS current_price
+            FROM daily_recommendations r
+            LEFT JOIN daily_market_data d 
+                ON r.stock_id = d.stock_id AND d.trade_date = (
+                    SELECT MAX(trade_date) FROM daily_market_data
+                )
+            WHERE r.trade_date >= DATE_SUB(CURDATE(), INTERVAL 20 DAY)
+              AND r.status = 'OPEN'
+            ORDER BY r.trade_date DESC
+            LIMIT :lim
+        """), {'lim': limit})
+        rows = result.fetchall()
+    return rows
+
+
+def safe_float(value):
+    """將可能為 NaN / None 的值轉為 float 或 None（API 回傳安全值）"""
+    if value is None:
+        return None
+    try:
+        import math
+        f = float(value)
+        return None if math.isnan(f) else f
+    except (TypeError, ValueError):
+        return None
+
+
+def safe_int(value):
+    """將可能為 NaN / None 的值轉為 int 或 None（API 回傳安全值）"""
+    if value is None:
+        return None
+    try:
+        import math
+        f = float(value)
+        return None if math.isnan(f) else int(f)
+    except (TypeError, ValueError):
+        return None

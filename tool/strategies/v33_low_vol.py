@@ -23,6 +23,7 @@ V33 低波動穩健策略 (Low Volatility Strategy)
 
 from typing import List
 import pandas as pd
+from config import Config
 from .base import BaseStrategy
 
 
@@ -162,9 +163,9 @@ class V33LowVolStrategy(BaseStrategy):
         if 'ma20' in df.columns:
             trend_mask = trend_mask & (df['close_price'] > df['ma20']) & (df['ma20'] > df['ma60'])
 
-        liquidity_mask = (df['volume'] > 500_0000)
+        liquidity_mask = (df['volume'] > Config.V33_VOLUME_THRESHOLD)
         if 'volume_ratio' in df.columns:
-            liquidity_mask = liquidity_mask & (df['volume_ratio'] > 1.0)
+            liquidity_mask = liquidity_mask & (df['volume_ratio'] > Config.V33_VOLUME_RATIO_MIN)
 
         candidates = df[trend_mask & liquidity_mask].copy()
         
@@ -173,14 +174,14 @@ class V33LowVolStrategy(BaseStrategy):
             return pd.DataFrame()
         
         trend_desc = "收盤>MA20>MA60" if 'ma20' in df.columns else "收盤>MA60"
-        vol_desc = "量能>500萬 + 量比>1.0" if 'volume_ratio' in df.columns else "量能>500萬"
+        vol_desc = f"量能>{Config.V33_VOLUME_THRESHOLD//10000}萬 + 量比>{Config.V33_VOLUME_RATIO_MIN}" if 'volume_ratio' in df.columns else f"量能>{Config.V33_VOLUME_THRESHOLD//10000}萬"
         print(f"   ✅ 基本篩選：{len(candidates)} 檔（{trend_desc} + {vol_desc}）")
         
         # 2. NATR 篩選（核心）
         if 'natr' in candidates.columns:
             before_count = len(candidates)
-            candidates = candidates[candidates['natr'] < 3.5].copy()
-            print(f"   ✅ NATR 篩選：{before_count} → {len(candidates)} 檔（NATR < 3.5%）")
+            candidates = candidates[candidates['natr'] < Config.V33_NATR_MAX].copy()
+            print(f"   ✅ NATR 篩選：{before_count} → {len(candidates)} 檔（NATR < {Config.V33_NATR_MAX}%）")
             
             if candidates.empty:
                 print(f"   ❌ 無低波動股票（所有 NATR ≥ 3.5%）")
@@ -192,10 +193,10 @@ class V33LowVolStrategy(BaseStrategy):
         if 'rsi' in candidates.columns:
             before_count = len(candidates)
             candidates = candidates[
-                (candidates['rsi'] > 45) & 
-                (candidates['rsi'] < 65)
+                (candidates['rsi'] > Config.V33_RSI_LOW) & 
+                (candidates['rsi'] < Config.V33_RSI_HIGH)
             ].copy()
-            print(f"   ✅ RSI 篩選：{before_count} → {len(candidates)} 檔（45 < RSI < 65）")
+            print(f"   ✅ RSI 篩選：{before_count} → {len(candidates)} 檔（{Config.V33_RSI_LOW} < RSI < {Config.V33_RSI_HIGH}）")
         
         if candidates.empty:
             print(f"   ❌ RSI 篩選後無剩餘股票")
@@ -204,13 +205,13 @@ class V33LowVolStrategy(BaseStrategy):
         # 4.5 動能/乖離微調（第二階段）：避免逆勢下跌股
         if 'macd_hist' in candidates.columns:
             before_count = len(candidates)
-            candidates = candidates[candidates['macd_hist'] > -0.2].copy()
-            print(f"   ✅ MACD 篩選：{before_count} → {len(candidates)} 檔（MACD_hist > -0.2）")
+            candidates = candidates[candidates['macd_hist'] > Config.V33_MACD_HIST_MIN].copy()
+            print(f"   ✅ MACD 篩選：{before_count} → {len(candidates)} 檔（MACD_hist > {Config.V33_MACD_HIST_MIN}）")
 
         if 'bias' in candidates.columns:
             before_count = len(candidates)
-            candidates = candidates[(candidates['bias'] > -6) & (candidates['bias'] < 12)].copy()
-            print(f"   ✅ BIAS 篩選：{before_count} → {len(candidates)} 檔（-6 < BIAS < 12）")
+            candidates = candidates[(candidates['bias'] > Config.V33_BIAS_LOW) & (candidates['bias'] < Config.V33_BIAS_HIGH)].copy()
+            print(f"   ✅ BIAS 篩選：{before_count} → {len(candidates)} 檔（{Config.V33_BIAS_LOW} < BIAS < {Config.V33_BIAS_HIGH}）")
 
         if candidates.empty:
             print(f"   ❌ 動能微調後無剩餘股票")

@@ -23,7 +23,10 @@ STRATEGY_DISPLAY_NAMES = {
     'v31_hybrid': '🔹 均衡型 (V31)',
     'v33_low_vol': '🛡️ 穩健型 (V33)',
     'v34_turbo': '🚀 飆股型 (V34)',
-    'v35_innovation': '🧪 研發型 (V35)',  # V35 研發動能策略
+    'v35_innovation': '🧪 經營效益 (V35)',
+    'v36_chip_momentum': '📊 籌碼動能 (V36)',
+    'v37_mean_reversion': '🔄 均值回歸 (V37)',
+    'v38_value_dividend': '💰 高殖利率 (V38)',
 }
 
 

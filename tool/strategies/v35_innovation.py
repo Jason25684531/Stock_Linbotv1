@@ -30,7 +30,6 @@ V35 經營效益策略 (Operating Efficiency Strategy)
 from typing import List
 import pandas as pd
 from config import Config
-from tool.db_helper import get_setting
 from .base import BaseStrategy
 
 
@@ -108,15 +107,6 @@ class V35InnovationStrategy(BaseStrategy):
     # V35 核心篩選邏輯
     # ============================================
 
-    @staticmethod
-    def _get_float_setting(key: str, default_value: float) -> float:
-        """優先讀取 DB 設定，失敗時回退到 Config 預設值。"""
-        try:
-            value = get_setting(key, str(default_value))
-            return float(value)
-        except Exception:
-            return float(default_value)
-    
     def filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         V35 篩選邏輯 - 專注於營業利益率
@@ -141,12 +131,21 @@ class V35InnovationStrategy(BaseStrategy):
         strict_op = self._get_float_setting('v35_op_margin_min', Config.V35_OP_MARGIN_MIN)
         strict_rev = self._get_float_setting('v35_revenue_yoy_min', Config.V35_REVENUE_YOY_MIN)
         strict_vol = self._get_float_setting('v35_volume_ratio_min', Config.V35_VOLUME_RATIO_MIN)
+        strict_vol_min = self._get_float_setting('v35_volume_min', Config.V35_VOLUME_MIN)
 
         relaxed_op = self._get_float_setting('v35_relaxed_op_margin_min', Config.V35_RELAXED_OP_MARGIN_MIN)
         relaxed_rev = self._get_float_setting('v35_relaxed_revenue_yoy_min', Config.V35_RELAXED_REVENUE_YOY_MIN)
         relaxed_vol = self._get_float_setting('v35_relaxed_volume_ratio_min', Config.V35_RELAXED_VOLUME_RATIO_MIN)
+        relaxed_vol_min = self._get_float_setting('v35_relaxed_volume_min', Config.V35_RELAXED_VOLUME_MIN)
 
-        def apply_v35_filters(source: pd.DataFrame, op_min: float, rev_min: float, vol_min: float, label: str) -> pd.DataFrame:
+        def apply_v35_filters(
+            source: pd.DataFrame,
+            op_min: float,
+            rev_min: float,
+            vol_min: float,
+            vol_abs_min: float,
+            label: str
+        ) -> pd.DataFrame:
             result = source.copy()
 
             result = result[result['op_profit_margin'] > op_min].copy()
@@ -169,16 +168,21 @@ class V35InnovationStrategy(BaseStrategy):
             if result.empty:
                 return result
 
-            result = result[result['volume_ratio'] > vol_min].copy()
-            print(f"  ✓ [{label}] 流動性足夠 (量比>{vol_min:.2f})：{len(result)} 檔")
+            ratio_available = 'volume_ratio' in result.columns and (result['volume_ratio'] > 0).any()
+            if ratio_available:
+                result = result[result['volume_ratio'] > vol_min].copy()
+                print(f"  ✓ [{label}] 流動性足夠 (量比>{vol_min:.2f})：{len(result)} 檔")
+            else:
+                result = result[result['volume'] >= vol_abs_min].copy()
+                print(f"  ✓ [{label}] 流動性備援 (成交量>={vol_abs_min:.0f})：{len(result)} 檔")
 
             return result
 
-        df_final = apply_v35_filters(df, strict_op, strict_rev, strict_vol, '嚴格')
+        df_final = apply_v35_filters(df, strict_op, strict_rev, strict_vol, strict_vol_min, '嚴格')
 
         if df_final.empty:
             print("  ⚠️ 嚴格條件無候選，啟用 V35 放寬參數重試")
-            df_final = apply_v35_filters(df, relaxed_op, relaxed_rev, relaxed_vol, '放寬')
+            df_final = apply_v35_filters(df, relaxed_op, relaxed_rev, relaxed_vol, relaxed_vol_min, '放寬')
 
         print(f"\n✅ V35 篩選完成：{len(df_final)} 檔高效益成長股")
 

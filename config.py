@@ -94,8 +94,13 @@ class Config:
     # ==========================================
     # 💰 V32 回測擬真化參數
     # ==========================================
+    FEE_RATE = 0.001425         # 台股手續費率 (0.1425%)
+    TAX_RATE = 0.003            # 台股證交稅率 (0.3%，賣出收取)
     SLIPPAGE_RATE = 0.002       # 滑價率 (0.2%，買高賣低)
     RISK_FREE_RATE = 0.01       # 年化無風險利率 (1%，用於 Sharpe Ratio)
+    TRAIN_RATIO = 0.8           # 訓練集比例 (80% 訓練 / 20% 測試)
+    BACKTEST_MIN_PRICE = 10     # 回測最低股價篩選
+    BACKTEST_MAX_PRICE = 500    # 回測最高股價篩選
     
     # ==========================================
     # 🎯 V30/V31 策略參數
@@ -107,14 +112,26 @@ class Config:
     V30_TAKE_PROFIT = 0.15            # 停利比例 (15%) 🔥 收緊以提早獲利
     V30_MAX_HOLD_DAYS = 10            # 最長持有天數
     
-    # V30 參數字典（用於向後兼容和便捷存取）
+    # V30 參數字典（引用 class 屬性，避免值重複定義）
+    @classmethod
+    def get_v30_params(cls):
+        return {
+            'VOLUME_THRESHOLD': cls.V30_VOLUME_THRESHOLD,
+            'RSI_LOW': cls.V30_RSI_LOW,
+            'RSI_HIGH': cls.V30_RSI_HIGH,
+            'STOP_LOSS': cls.V30_STOP_LOSS,
+            'TAKE_PROFIT': cls.V30_TAKE_PROFIT,
+            'MAX_HOLD_DAYS': cls.V30_MAX_HOLD_DAYS,
+        }
+
+    # 保留向後相容的 V30_PARAMS 常數
     V30_PARAMS = {
-        'VOLUME_THRESHOLD': 3_000_000,
-        'RSI_LOW': 40,
-        'RSI_HIGH': 70,
-        'STOP_LOSS': 0.07,              # 🔥 收緊停損至 7%
-        'TAKE_PROFIT': 0.15,            # 🔥 收緊停利至 15%
-        'MAX_HOLD_DAYS': 10
+        'VOLUME_THRESHOLD': V30_VOLUME_THRESHOLD,
+        'RSI_LOW': V30_RSI_LOW,
+        'RSI_HIGH': V30_RSI_HIGH,
+        'STOP_LOSS': V30_STOP_LOSS,
+        'TAKE_PROFIT': V30_TAKE_PROFIT,
+        'MAX_HOLD_DAYS': V30_MAX_HOLD_DAYS,
     }
     
     # 技術指標計算參數
@@ -142,9 +159,36 @@ class Config:
     # 布林通道壓縮突破參數
     BB_SQUEEZE_THRESHOLD = 0.03    # 通道寬度 < 3% 視為壓縮
     BB_BREAKOUT_POSITION = 'upper' # 突破方向: 'upper'(上軌) or 'lower'(下軌)
+
+    # ==========================================
+    # 📉 V33 低波動策略門檻（可調參）
+    # ==========================================
+    V33_VOLUME_THRESHOLD = 5_000_000   # 成交股數門檻
+    V33_VOLUME_RATIO_MIN = 1.0         # 量比最低要求
+    V33_NATR_MAX = 3.5                 # NATR 上限 (%)
+    V33_RSI_LOW = 45                   # RSI 下限
+    V33_RSI_HIGH = 65                  # RSI 上限
+    V33_MACD_HIST_MIN = -0.2           # MACD Histogram 最低值
+    V33_BIAS_LOW = -6.0                # 乖離率下限 (%)
+    V33_BIAS_HIGH = 12.0               # 乖離率上限 (%)
     
     # ==========================================
-    # 🛡️ V33 Phase 1+: ATR 動態停損
+    # � 籌碼面指標常數 (Phase 2)
+    # ==========================================
+    # 外資/投信/自營商連續買超天數計算
+    CHIP_CONSEC_DAYS_WINDOW = 60       # 用於計算連續天數的回看視窗
+
+    # chip_score 綜合分數的權重
+    CHIP_WEIGHT_FOREIGN = 0.4          # 外資買超信號權重
+    CHIP_WEIGHT_TRUST = 0.3            # 投信買超信號權重
+    CHIP_WEIGHT_DEALER = 0.15          # 自營商買超信號權重
+    CHIP_WEIGHT_MARGIN = 0.15          # 融資融券信號權重
+
+    # 融資使用率警戒線
+    CHIP_MARGIN_DANGER_RATIO = 0.8     # 融資使用率 > 80% 視為高風險
+
+    # ==========================================
+    # �🛡️ V33 Phase 1+: ATR 動態停損
     # ==========================================
     USE_ATR_STOP = True             # 🔥 啟用 ATR 動態停損（波動大則寬，波動小則窄）
     ATR_MULTIPLIER = 2.0            # 停損 = 收盤價 - ATR * 2.0
@@ -156,11 +200,13 @@ class Config:
     V34_REVENUE_YOY_MIN = float(os.getenv('V34_REVENUE_YOY_MIN', '18.0'))
     V34_BREAKOUT_RATIO = float(os.getenv('V34_BREAKOUT_RATIO', '0.93'))
     V34_VOLUME_RATIO_MIN = float(os.getenv('V34_VOLUME_RATIO_MIN', '0.9'))
+    V34_VOLUME_MIN = int(os.getenv('V34_VOLUME_MIN', '300'))
 
     # V34 空集合時啟用的放寬參數
     V34_RELAXED_REVENUE_YOY_MIN = float(os.getenv('V34_RELAXED_REVENUE_YOY_MIN', '10.0'))
     V34_RELAXED_BREAKOUT_RATIO = float(os.getenv('V34_RELAXED_BREAKOUT_RATIO', '0.90'))
     V34_RELAXED_VOLUME_RATIO_MIN = float(os.getenv('V34_RELAXED_VOLUME_RATIO_MIN', '0.7'))
+    V34_RELAXED_VOLUME_MIN = int(os.getenv('V34_RELAXED_VOLUME_MIN', '150'))
 
     # ==========================================
     # 💼 V35 策略門檻（可調參）
@@ -168,14 +214,62 @@ class Config:
     V35_OP_MARGIN_MIN = float(os.getenv('V35_OP_MARGIN_MIN', '0.06'))
     V35_REVENUE_YOY_MIN = float(os.getenv('V35_REVENUE_YOY_MIN', '0.0'))
     V35_VOLUME_RATIO_MIN = float(os.getenv('V35_VOLUME_RATIO_MIN', '0.8'))
+    V35_VOLUME_MIN = int(os.getenv('V35_VOLUME_MIN', '300'))
 
     # V35 空集合時啟用的放寬參數
     V35_RELAXED_OP_MARGIN_MIN = float(os.getenv('V35_RELAXED_OP_MARGIN_MIN', '0.04'))
     V35_RELAXED_REVENUE_YOY_MIN = float(os.getenv('V35_RELAXED_REVENUE_YOY_MIN', '-5.0'))
     V35_RELAXED_VOLUME_RATIO_MIN = float(os.getenv('V35_RELAXED_VOLUME_RATIO_MIN', '0.6'))
-    
+    V35_RELAXED_VOLUME_MIN = int(os.getenv('V35_RELAXED_VOLUME_MIN', '150'))
+
     # ==========================================
-    # � V33 Phase 2+: 市場情緒分析與熔斷機制
+    # 📊 V36 籌碼動能策略門檻（可調參）
+    # ==========================================
+    V36_CHIP_SCORE_MIN = float(os.getenv('V36_CHIP_SCORE_MIN', '55'))       # chip_score 最低門檻
+    V36_FOREIGN_CONSEC_MIN = int(os.getenv('V36_FOREIGN_CONSEC_MIN', '3'))  # 外資連買最低天數
+    V36_TRUST_CONSEC_MIN = int(os.getenv('V36_TRUST_CONSEC_MIN', '2'))      # 投信連買最低天數
+    V36_VOLUME_THRESHOLD = int(os.getenv('V36_VOLUME_THRESHOLD', '500'))     # 最低成交量（張）
+    V36_VOLUME_RATIO_MIN = float(os.getenv('V36_VOLUME_RATIO_MIN', '0.8'))  # 量比最低門檻
+    V36_RSI_LOW = float(os.getenv('V36_RSI_LOW', '40'))                     # RSI 下限
+    V36_RSI_HIGH = float(os.getenv('V36_RSI_HIGH', '80'))                   # RSI 上限
+    V36_BIAS_HIGH = float(os.getenv('V36_BIAS_HIGH', '15'))                 # 乖離率上限
+    V36_STOP_LOSS = float(os.getenv('V36_STOP_LOSS', '0.07'))               # 停損比例
+    V36_TAKE_PROFIT = float(os.getenv('V36_TAKE_PROFIT', '0.15'))           # 停利比例
+    V36_MAX_HOLD_DAYS = int(os.getenv('V36_MAX_HOLD_DAYS', '12'))           # 最大持有天數
+
+    # ==========================================
+    # � V37 均值回歸策略門檻（可調參）
+    # ==========================================
+    V37_KD_LOW = float(os.getenv('V37_KD_LOW', '35'))                        # KD 超賣門檻
+    V37_BB_WIDTH_MAX = float(os.getenv('V37_BB_WIDTH_MAX', '15'))            # BB 寬度上限（收斂判斷）
+    V37_BIAS_LOW = float(os.getenv('V37_BIAS_LOW', '-8'))                    # 乖離率下限
+    V37_BIAS_HIGH = float(os.getenv('V37_BIAS_HIGH', '3'))                   # 乖離率上限
+    V37_VOLUME_RATIO_MAX = float(os.getenv('V37_VOLUME_RATIO_MAX', '1.0'))   # 量比上限（量縮確認）
+    V37_RSI_LOW = float(os.getenv('V37_RSI_LOW', '30'))                      # RSI 下限
+    V37_RSI_HIGH = float(os.getenv('V37_RSI_HIGH', '55'))                    # RSI 上限
+    V37_VOLUME_THRESHOLD = int(os.getenv('V37_VOLUME_THRESHOLD', '500'))     # 最低成交量（張）
+    V37_STOP_LOSS = float(os.getenv('V37_STOP_LOSS', '0.05'))                # 停損比例 5%
+    V37_TAKE_PROFIT = float(os.getenv('V37_TAKE_PROFIT', '0.10'))            # 停利比例 10%
+    V37_MAX_HOLD_DAYS = int(os.getenv('V37_MAX_HOLD_DAYS', '8'))             # 最大持有天數
+
+    # ==========================================
+    # 💰 V38 高殖利率價值策略門檻（可調參）
+    # ==========================================
+    V38_OP_MARGIN_MIN = float(os.getenv('V38_OP_MARGIN_MIN', '0.08'))        # 營業利益率最低門檻 8%
+    V38_EPS_MIN = float(os.getenv('V38_EPS_MIN', '0'))                       # EPS 最低門檻 > 0
+    V38_NATR_MAX = float(os.getenv('V38_NATR_MAX', '4.0'))                   # NATR 上限（低波動）
+    V38_STD20_MAX = float(os.getenv('V38_STD20_MAX', '3.0'))                 # STD_20 上限
+    V38_RSI_LOW = float(os.getenv('V38_RSI_LOW', '40'))                      # RSI 下限
+    V38_RSI_HIGH = float(os.getenv('V38_RSI_HIGH', '65'))                    # RSI 上限
+    V38_BIAS_LOW = float(os.getenv('V38_BIAS_LOW', '-5'))                    # 乖離率下限
+    V38_BIAS_HIGH = float(os.getenv('V38_BIAS_HIGH', '8'))                   # 乖離率上限
+    V38_VOLUME_THRESHOLD = int(os.getenv('V38_VOLUME_THRESHOLD', '300'))     # 最低成交量（張）
+    V38_STOP_LOSS = float(os.getenv('V38_STOP_LOSS', '0.06'))                # 停損比例 6%
+    V38_TAKE_PROFIT = float(os.getenv('V38_TAKE_PROFIT', '0.12'))            # 停利比例 12%
+    V38_MAX_HOLD_DAYS = int(os.getenv('V38_MAX_HOLD_DAYS', '15'))            # 最大持有天數
+
+    # ==========================================
+    # �📊 V33 Phase 2+: 市場情緒分析與熔斷機制
     # ==========================================
     ENABLE_SENTIMENT_FILTER = False     # 情緒熔斷開關（預設關閉，Opt-in）
     SENTIMENT_THRESHOLD = -0.5          # 情緒分數門檻（-1.0 ~ 1.0，低於此值觸發熔斷）
@@ -191,3 +285,122 @@ class Config:
     # 🔐 Web Dashboard 驗證 (Phase 1 Security)
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
     FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+
+
+# ==========================================
+# 📊 V34/V35 模式預設組合（積極 / 平衡 / 寬鬆 / 穩健）
+# ==========================================
+
+V34_MODE_PRESETS = {
+    'aggressive': {
+        'v34_revenue_yoy_min': '14.0',
+        'v34_breakout_ratio': '0.91',
+        'v34_volume_ratio_min': '0.75',
+        'v34_volume_min': '250',
+        'v34_relaxed_revenue_yoy_min': '6.0',
+        'v34_relaxed_breakout_ratio': '0.88',
+        'v34_relaxed_volume_ratio_min': '0.55',
+        'v34_relaxed_volume_min': '120',
+    },
+    'balanced': {
+        'v34_revenue_yoy_min': '18.0',
+        'v34_breakout_ratio': '0.93',
+        'v34_volume_ratio_min': '0.90',
+        'v34_volume_min': '300',
+        'v34_relaxed_revenue_yoy_min': '10.0',
+        'v34_relaxed_breakout_ratio': '0.90',
+        'v34_relaxed_volume_ratio_min': '0.70',
+        'v34_relaxed_volume_min': '150',
+    },
+    'loose': {
+        'v34_revenue_yoy_min': '8.0',
+        'v34_breakout_ratio': '0.87',
+        'v34_volume_ratio_min': '0.50',
+        'v34_volume_min': '120',
+        'v34_relaxed_revenue_yoy_min': '0.0',
+        'v34_relaxed_breakout_ratio': '0.84',
+        'v34_relaxed_volume_ratio_min': '0.30',
+        'v34_relaxed_volume_min': '60',
+    },
+    'conservative': {
+        'v34_revenue_yoy_min': '22.0',
+        'v34_breakout_ratio': '0.96',
+        'v34_volume_ratio_min': '1.00',
+        'v34_volume_min': '500',
+        'v34_relaxed_revenue_yoy_min': '14.0',
+        'v34_relaxed_breakout_ratio': '0.92',
+        'v34_relaxed_volume_ratio_min': '0.80',
+        'v34_relaxed_volume_min': '300',
+    },
+}
+
+V35_MODE_PRESETS = {
+    'aggressive': {
+        'v35_op_margin_min': '0.05',
+        'v35_revenue_yoy_min': '-2.0',
+        'v35_volume_ratio_min': '0.70',
+        'v35_volume_min': '250',
+        'v35_relaxed_op_margin_min': '0.03',
+        'v35_relaxed_revenue_yoy_min': '-8.0',
+        'v35_relaxed_volume_ratio_min': '0.50',
+        'v35_relaxed_volume_min': '120',
+    },
+    'balanced': {
+        'v35_op_margin_min': '0.06',
+        'v35_revenue_yoy_min': '0.0',
+        'v35_volume_ratio_min': '0.80',
+        'v35_volume_min': '300',
+        'v35_relaxed_op_margin_min': '0.04',
+        'v35_relaxed_revenue_yoy_min': '-5.0',
+        'v35_relaxed_volume_ratio_min': '0.60',
+        'v35_relaxed_volume_min': '150',
+    },
+    'loose': {
+        'v35_op_margin_min': '0.03',
+        'v35_revenue_yoy_min': '-10.0',
+        'v35_volume_ratio_min': '0.50',
+        'v35_volume_min': '120',
+        'v35_relaxed_op_margin_min': '0.01',
+        'v35_relaxed_revenue_yoy_min': '-20.0',
+        'v35_relaxed_volume_ratio_min': '0.30',
+        'v35_relaxed_volume_min': '60',
+    },
+    'conservative': {
+        'v35_op_margin_min': '0.08',
+        'v35_revenue_yoy_min': '3.0',
+        'v35_volume_ratio_min': '0.90',
+        'v35_volume_min': '500',
+        'v35_relaxed_op_margin_min': '0.05',
+        'v35_relaxed_revenue_yoy_min': '0.0',
+        'v35_relaxed_volume_ratio_min': '0.70',
+        'v35_relaxed_volume_min': '300',
+    },
+}
+
+# 模式切換表：映射 compact key → (mode_label, preset_key)
+MODE_CMD_MAP = {
+    '切換積極': ('積極', 'aggressive'),
+    '積極': ('積極', 'aggressive'),
+    '切積極': ('積極', 'aggressive'),
+    '切換平衡': ('平衡', 'balanced'),
+    '平衡': ('平衡', 'balanced'),
+    '切平衡': ('平衡', 'balanced'),
+    '切換寬鬆': ('寬鬆', 'loose'),
+    '寬鬆': ('寬鬆', 'loose'),
+    '切寬鬆': ('寬鬆', 'loose'),
+    '切換穩健': ('穩健', 'conservative'),
+}
+
+MODE_EMOJI = {
+    'aggressive': '😈',
+    'balanced': '⚖️',
+    'loose': '🌊',
+    'conservative': '🛡️',
+}
+
+MODE_REPLY_TEMPLATE = {
+    'aggressive': '已切換至【積極模式】\nV34/V35 已同步放寬（嚴格與放寬門檻）',
+    'balanced': '已切換至【平衡模式】\nV34/V35 已同步套用平衡門檻',
+    'loose': '已切換至【寬鬆模式】\nV34/V35 已同步放寬，增加可選股票數',
+    'conservative': '已切換至【穩健模式】(相容模式)',
+}

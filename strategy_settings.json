@@ -1,7 +1,12 @@
 {
-  "version": "2.0",
-  "last_updated": "2026-02-13T18:18:47.210454",
+  "version": "3.0",
+  "last_updated": "2026-02-14T23:33:43.287471",
   "active_strategies": [
-    "v33_low_vol"
-  ]
+    "v38_value_dividend"
+  ],
+  "per_strategy_overrides": {},
+  "backtest_defaults": {
+    "initial_capital": 1000000,
+    "period_months": 12
+  }
 }

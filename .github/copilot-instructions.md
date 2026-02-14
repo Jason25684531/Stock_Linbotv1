@@ -239,8 +239,9 @@ def get_active_features(cls):
 - **V33**: Low volatility (NATR < 4%, low STD_20)
 - **V34**: Turbo strategy (revenue YoY > 30%, 60-day high)
 - **V35**: Innovation strategy (R&D expenditure + revenue growth)
+- **V36**: Chip Momentum strategy (chip_score + foreign/trust consec days + margin change)
 
-**Current state (V35 Phase 5)**: Multi-strategy portfolio system with Plotly visualization, Flask-Login security, and quarterly financial integration.
+**Current state (V36 Phase 3)**: Multi-strategy portfolio system with 6 strategies (V31/V33/V34/V35/V36), chip data infrastructure, Plotly visualization, Flask-Login security, and quarterly financial integration.
 
 ---
 
