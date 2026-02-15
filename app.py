@@ -19,7 +19,6 @@ if sys.platform == 'win32':
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 import pandas as pd
-import joblib
 import os
 import re
 import json
@@ -59,6 +58,9 @@ from tool.db_helper import (
     create_user_simulation_trade,
     supplement_financial_data,
     get_open_holdings,
+    get_recent_backtest_trades,
+    get_backtest_equity_curve,
+    get_backtest_summary_from_db,
     safe_float,
     safe_int,
 )
@@ -117,15 +119,17 @@ def load_user(user_id):
 configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(Config.LINE_CHANNEL_SECRET)
 
-# 載入模型
+# 載入模型（統一使用 model_utils）
 print("[AI] 正在載入 AI 模型...")
 model = None
 try:
-    if os.path.exists(Config.MODEL_PATH):
-        model = joblib.load(Config.MODEL_PATH)
-    elif os.path.exists('stock_ai_model.pkl'):
-        model = joblib.load('stock_ai_model.pkl')
-    print("[OK] 模型載入成功")
+    from tool.model_utils import load_model as _load_model
+    _result = _load_model()
+    model = _result[0] if _result else None
+    if model:
+        print("[OK] 模型載入成功")
+    else:
+        print("[WARNING] 模型檔案不存在，AI 排名功能停用")
 except Exception as e:
     print(f"[WARNING] 模型載入失敗: {e}")
 
@@ -167,14 +171,15 @@ def _get_backtest_module():
     return import_module('4_run_backtest')
 
 
-def _run_portfolio_backtest(selected_strategies, start_date=None, end_date=None):
+def _run_portfolio_backtest(selected_strategies, start_date=None, end_date=None, weights=None):
     start_date, end_date = _normalize_backtest_dates(start_date, end_date)
     backtest_module = _get_backtest_module()
 
     engine = backtest_module.PortfolioBacktestEngine(
         strategies=selected_strategies,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        weights=weights,
     )
 
     result = engine.run_portfolio_backtest()
@@ -185,6 +190,8 @@ def _load_backtest_summary_or_error(error_message):
     from tool.viz_helper import get_backtest_summary
 
     summary = get_backtest_summary()
+    if summary is None:
+        summary = get_backtest_summary_from_db()
     if summary is None:
         return None, (jsonify({'error': error_message}), 404)
 
@@ -680,6 +687,10 @@ def api_performance():
     Returns: JSON {dates: [], equity: [], roi: []}
     """
     try:
+        db_curve = get_backtest_equity_curve()
+        if db_curve.get('dates'):
+            return jsonify(db_curve)
+
         profit_file = 'ML_Data/backtest_profit_report.csv'
         if not os.path.exists(profit_file):
             return jsonify({'error': '回測數據不存在，請先執行 4_run_backtest.py'}), 404
@@ -702,6 +713,12 @@ def api_trades():
     Returns: JSON list of trades
     """
     try:
+        # 優先讀取 DB（4_run_backtest.py 已同步寫入）
+        db_trades = get_recent_backtest_trades(limit=50)
+        if db_trades:
+            return jsonify(db_trades)
+
+        # 向下相容：若 DB 尚無資料，回退 CSV
         trades_file = 'ML_Data/backtest_result.csv'
         if not os.path.exists(trades_file):
             return jsonify({'error': '交易數據不存在，請先執行 4_run_backtest.py'}), 404
@@ -1029,6 +1046,8 @@ def backtest():
         selected_strategies = request.form.getlist('strategies')  # 多選策略
         start_date = request.form.get('start_date')
         end_date = request.form.get('end_date')
+        weights_raw = (request.form.get('weights') or '').strip()
+        weights = [float(w.strip()) for w in weights_raw.split(',') if w.strip()] if weights_raw else None
         
         if not selected_strategies:
             flash('請至少選擇一個策略', 'error')
@@ -1039,6 +1058,7 @@ def backtest():
             selected_strategies,
             start_date=start_date,
             end_date=end_date,
+            weights=weights,
         )
         
         # 生成視覺化報告
@@ -1076,12 +1096,20 @@ def api_run_backtest():
         selected_strategies = data.get('strategies', ['v31_hybrid'])
         start_date = data.get('start_date')
         end_date = data.get('end_date')
+        raw_weights = data.get('weights')
+
+        weights = None
+        if isinstance(raw_weights, list):
+            weights = [float(w) for w in raw_weights]
+        elif isinstance(raw_weights, str) and raw_weights.strip():
+            weights = [float(w.strip()) for w in raw_weights.split(',') if w.strip()]
 
         # 執行回測
         result, start_date, end_date = _run_portfolio_backtest(
             selected_strategies,
             start_date=start_date,
             end_date=end_date,
+            weights=weights,
         )
         
         return jsonify({

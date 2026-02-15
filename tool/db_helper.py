@@ -19,6 +19,7 @@ _engine_instance = None
 _ALLOWED_TABLES = {
     'daily_market_data', 'user_settings', 'user_simulation_trades',
     'monthly_revenue', 'financial_statements', 'daily_recommendations',
+    'backtest_trades', 'backtest_equity_curve',
 }
 
 
@@ -571,3 +572,308 @@ def safe_int(value):
         return None if math.isnan(f) else int(f)
     except (TypeError, ValueError):
         return None
+
+
+def ensure_backtest_tables() -> bool:
+    """確保回測結果資料表存在。"""
+    try:
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS backtest_trades (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    strategy VARCHAR(64) NOT NULL,
+                    stock_id VARCHAR(20) NOT NULL,
+                    buy_date DATE NULL,
+                    sell_date DATE NULL,
+                    buy_price DECIMAL(12, 4) NULL,
+                    sell_price DECIMAL(12, 4) NULL,
+                    profit_pct DECIMAL(12, 4) NULL,
+                    reason VARCHAR(100) NULL,
+                    days INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_strategy_sell (strategy, sell_date),
+                    INDEX idx_sell_date (sell_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS backtest_equity_curve (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    date DATE NOT NULL,
+                    asset_value DECIMAL(18, 4) NOT NULL,
+                    roi DECIMAL(12, 6) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_date (date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ ensure_backtest_tables 失敗: {e}")
+        return False
+
+
+def save_backtest_results(trades_df: pd.DataFrame = None, equity_df: pd.DataFrame = None) -> bool:
+    """將最新回測結果覆寫保存至資料庫。"""
+    if trades_df is None and equity_df is None:
+        return True
+
+    if not ensure_backtest_tables():
+        return False
+
+    try:
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            if trades_df is not None:
+                conn.execute(text("DELETE FROM backtest_trades"))
+                if not trades_df.empty:
+                    insert_sql = text("""
+                        INSERT INTO backtest_trades
+                        (strategy, stock_id, buy_date, sell_date, buy_price, sell_price, profit_pct, reason, days)
+                        VALUES
+                        (:strategy, :stock_id, :buy_date, :sell_date, :buy_price, :sell_price, :profit_pct, :reason, :days)
+                    """)
+
+                    records = []
+                    for _, row in trades_df.iterrows():
+                        records.append({
+                            'strategy': str(row.get('strategy') or ''),
+                            'stock_id': str(row.get('stock_id') or ''),
+                            'buy_date': row.get('buy_date'),
+                            'sell_date': row.get('sell_date'),
+                            'buy_price': safe_float(row.get('buy_price')),
+                            'sell_price': safe_float(row.get('sell_price')),
+                            'profit_pct': safe_float(row.get('profit_pct')),
+                            'reason': str(row.get('reason') or ''),
+                            'days': safe_int(row.get('days')),
+                        })
+                    conn.execute(insert_sql, records)
+
+            if equity_df is not None:
+                conn.execute(text("DELETE FROM backtest_equity_curve"))
+                if not equity_df.empty:
+                    insert_sql = text("""
+                        INSERT INTO backtest_equity_curve (date, asset_value, roi)
+                        VALUES (:date, :asset_value, :roi)
+                    """)
+                    records = []
+                    for _, row in equity_df.iterrows():
+                        records.append({
+                            'date': row.get('date'),
+                            'asset_value': safe_float(row.get('asset_value')) or 0.0,
+                            'roi': safe_float(row.get('roi')) or 0.0,
+                        })
+                    conn.execute(insert_sql, records)
+
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ save_backtest_results 失敗: {e}")
+        return False
+
+
+def get_recent_backtest_trades(limit: int = 50):
+    """取得最近回測交易紀錄（依賣出日新到舊）。"""
+    try:
+        ensure_backtest_tables()
+        lim = max(1, min(int(limit), 500))
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT strategy, stock_id, buy_date, sell_date,
+                       buy_price, sell_price, profit_pct, reason, days
+                FROM backtest_trades
+                ORDER BY sell_date DESC, id DESC
+                LIMIT :lim
+            """), {'lim': lim})
+            rows = result.fetchall()
+
+        return [
+            {
+                'strategy': row[0],
+                'stock_id': row[1],
+                'buy_date': row[2].strftime('%Y-%m-%d') if row[2] else None,
+                'sell_date': row[3].strftime('%Y-%m-%d') if row[3] else None,
+                'buy_price': safe_float(row[4]),
+                'sell_price': safe_float(row[5]),
+                'profit_pct': safe_float(row[6]),
+                'reason': row[7],
+                'days': safe_int(row[8]),
+            }
+            for row in rows
+        ]
+    except Exception as e:
+        print(f"❌ get_recent_backtest_trades 失敗: {e}")
+        return []
+
+
+def get_backtest_equity_curve():
+    """取得回測權益曲線（依日期遞增）。"""
+    try:
+        ensure_backtest_tables()
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT date, asset_value, roi
+                FROM backtest_equity_curve
+                ORDER BY date ASC, id ASC
+            """))
+            rows = result.fetchall()
+
+        return {
+            'dates': [row[0].strftime('%Y-%m-%d') if row[0] else None for row in rows],
+            'equity': [safe_float(row[1]) for row in rows],
+            'roi': [safe_float(row[2]) for row in rows],
+        }
+    except Exception as e:
+        print(f"❌ get_backtest_equity_curve 失敗: {e}")
+        return {'dates': [], 'equity': [], 'roi': []}
+
+
+def get_backtest_summary_from_db():
+    """從資料庫計算回測摘要（供 API fallback 使用）。"""
+    try:
+        ensure_backtest_tables()
+        engine = get_db_engine()
+        with engine.connect() as conn:
+            equity_result = conn.execute(text("""
+                SELECT date, asset_value
+                FROM backtest_equity_curve
+                ORDER BY date ASC, id ASC
+            """))
+            equity_rows = equity_result.fetchall()
+
+            trade_result = conn.execute(text("""
+                SELECT profit_pct, days
+                FROM backtest_trades
+            """))
+            trade_rows = trade_result.fetchall()
+
+        if not equity_rows:
+            return None
+
+        equity_values = [safe_float(row[1]) or 0.0 for row in equity_rows]
+        first_asset = equity_values[0] if equity_values else 0.0
+        last_asset = equity_values[-1] if equity_values else 0.0
+        total_roi = ((last_asset / first_asset) - 1) * 100 if first_asset > 0 else 0.0
+
+        peak = float('-inf')
+        max_drawdown = 0.0
+        for value in equity_values:
+            if value > peak:
+                peak = value
+            if peak > 0:
+                drawdown = ((value - peak) / peak) * 100
+                if drawdown < max_drawdown:
+                    max_drawdown = drawdown
+
+        trade_count = len(trade_rows)
+        if trade_count > 0:
+            profit_values = [safe_float(row[0]) for row in trade_rows]
+            win_count = len([p for p in profit_values if p is not None and p > 0])
+            win_rate = (win_count / trade_count) * 100
+
+            day_values = [safe_float(row[1]) for row in trade_rows if safe_float(row[1]) is not None]
+            avg_hold_days = sum(day_values) / len(day_values) if day_values else 0.0
+        else:
+            win_rate = 0.0
+            avg_hold_days = 0.0
+
+        return {
+            'total_roi': round(total_roi, 2),
+            'max_drawdown': round(max_drawdown, 2),
+            'sharpe_ratio': 0.0,
+            'win_rate': round(win_rate, 2),
+            'trade_count': trade_count,
+            'avg_hold_days': round(avg_hold_days, 1),
+        }
+    except Exception as e:
+        print(f"❌ get_backtest_summary_from_db 失敗: {e}")
+        return None
+
+
+# ============================================
+# 📊 財報共用 DB 操作
+# ============================================
+
+def ensure_financial_columns(conn):
+    """自動檢查並新增 financial_statements 表的選填欄位
+
+    Args:
+        conn: SQLAlchemy 連線 (已在 transaction 內)
+    """
+    optional_columns = {
+        'operating_margin': "FLOAT NULL COMMENT '營業利益率(%)'",
+    }
+    for col_name, col_def in optional_columns.items():
+        check_query = text("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'financial_statements'
+              AND COLUMN_NAME = :col_name
+        """)
+        exists = conn.execute(check_query, {"col_name": col_name}).scalar() > 0
+        if not exists:
+            conn.execute(text(
+                f"ALTER TABLE financial_statements ADD COLUMN {col_name} {col_def}"
+            ))
+            print(f"   ✅ financial_statements.{col_name} 欄位建立完成")
+
+
+def upsert_financial_statements(conn, df, west_year: int, quarter: int):
+    """批量 UPSERT 財報資料至 financial_statements 表
+
+    Args:
+        conn: SQLAlchemy 連線 (已在 transaction 內)
+        df: 爬蟲回傳的 DataFrame
+        west_year: 西元年
+        quarter: 季度 (1-4)
+
+    Returns:
+        int: 寫入筆數
+    """
+    # 先清除該季舊資料
+    result = conn.execute(text(
+        "DELETE FROM financial_statements WHERE year = :year AND quarter = :quarter"
+    ), {"year": west_year, "quarter": quarter})
+    deleted = result.rowcount
+    if deleted > 0:
+        print(f"   🗑️ 清除舊資料: {deleted} 筆")
+
+    insert_query = text("""
+        INSERT INTO financial_statements
+        (stock_id, year, quarter, revenue, rd_expense, operating_expense,
+         operating_profit, eps, operating_margin)
+        VALUES (:stock_id, :year, :quarter, :revenue, :rd_expense,
+                :operating_expense, :operating_profit, :eps, :operating_margin)
+        ON DUPLICATE KEY UPDATE
+            revenue = VALUES(revenue),
+            rd_expense = VALUES(rd_expense),
+            operating_expense = VALUES(operating_expense),
+            operating_profit = VALUES(operating_profit),
+            eps = VALUES(eps),
+            operating_margin = VALUES(operating_margin)
+    """)
+
+    count = 0
+    for _, row in df.iterrows():
+        clean_stock_id = str(row['stock_id']).replace('.0', '')
+        revenue = int(row['revenue'])
+        operating_profit = int(row['operating_profit'])
+        op_margin = round((operating_profit / revenue) * 100, 2) if revenue > 0 else 0.0
+
+        conn.execute(insert_query, {
+            "stock_id": clean_stock_id,
+            "year": int(west_year),
+            "quarter": int(quarter),
+            "revenue": revenue,
+            "rd_expense": int(row.get('rd_expense', 0)),
+            "operating_expense": int(row['operating_expense']),
+            "operating_profit": operating_profit,
+            "eps": float(row.get('eps', 0.0)),
+            "operating_margin": op_margin,
+        })
+        count += 1
+
+    return count

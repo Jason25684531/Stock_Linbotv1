@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-02-16  
-> **當前版本**: V36 Phase 4 — Architecture Deep Cleanup (架構深度清洗)  
+> **最後更新**: 2026-02-15  
+> **當前版本**: V36 Phase 5 — Code Consolidation & SDK Upgrade (程式碼整合與 SDK 升級)  
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V36 Phase 5 — Code Consolidation](#v36-phase-5--code-consolidation--sdk-upgrade-2026-02-15) | 2026-02-15 | V30_PARAMS 單一來源 + app.py 模型統一 + 財報 UPSERT 共用 + SDK v3 升級 + 冗餘腳本清除 | ✅ 完成 |
 | [V36 Phase 4 — Architecture Deep Cleanup](#v36-phase-4--architecture-deep-cleanup-架構深度清洗-2026-02-16) | 2026-02-16 | 重複函式整併 + 冗餘檔案刪除 + 測試 Fixture 共用化 + V37/V38 策略支援 | ✅ 完成 |
 | [V35 Phase 3 — V36 Chip Momentum](#v35-phase-3--v36-chip-momentum-strategy-2026-02-15) | 2026-02-15 | V36 籌碼動能策略 + 訓練管線增強 + 每日選股籌碼指標 | ✅ 完成 |
 | [V35 Phase 2 — Chip Data Infrastructure](#v35-phase-2--chip-data-infrastructure-2026-02-14) | 2026-02-14 | 融資融券爬蟲 + 自營商擷取 + 6 項籌碼指標 + chip_score 綜合分數 | ✅ 完成 |
@@ -28,6 +29,73 @@
 | [Phase 5: Backtesting & Visualization](#phase-5-backtesting--visualization-2026-02-02) | 2026-02-02 | 多策略組合回測 + Plotly 視覺化 + Web 整合 | ✅ 完成 |
 | [V33 Phase 2+ Multi-Strategy](#v33-phase-2-multi-strategy-多策略並行--安全強化-2026-01-31) | 2026-01-31 | 多策略並行 + 環境變數隔離 + Web 登入 | ✅ 完成 |
 | [V33 Phase 2 Refactor](#v33-phase-2-refactor-深度代碼清理-2026-01-27) | 2026-01-27 | 全面清理重複代碼 + 架構優化 | ✅ 完成 |
+
+---
+
+## ✅ V36 Phase 5 — Code Consolidation & SDK Upgrade (2026-02-15)
+
+### 🎯 變更重點
+
+深度程式碼整合：消除重複定義、統一模型載入、抽取共用財報 DB 邏輯、升級 Line SDK v3、清除根目錄冗餘腳本。117 項測試全數通過。
+
+#### 1. 重複定義消除
+
+| 項目 | 變更前 | 變更後 | 效益 |
+|------|--------|--------|------|
+| `Config.V30_PARAMS` 三重定義 | 靜態 dict + `get_v30_params()` + `get_v30_params_from_db()` | `_V30ParamsProxy` 委派至 `get_v30_params()` classmethod | 單一真理來源，動態反映 Config 屬性變更 |
+| `app.py` 模型載入 | 直接 `joblib.load()` + `import joblib` | 統一使用 `tool.model_utils.load_model()` | 消除 `joblib` 重複導入，共用 LRU 快取 |
+| 財報 UPSERT SQL | `update_financials_mops.py` 和 `update_history_financials.py` 各自 80+ 行複製貼上 | `db_helper.ensure_financial_columns()` + `upsert_financial_statements()` 共用函式 | DRY 原則，修改一處即全域生效 |
+| `Config.ENABLE_SENTIMENT_FILTER` 死碼 | 3 個永久關閉的情緒常數 | 刪除 | 移除未連接功能的痕跡 |
+
+#### 2. SDK 升級
+
+| 檔案 | 變更前 | 變更後 |
+|------|--------|--------|
+| `5_push_to_line.py` | Line Bot SDK v2 (`LineBotApi` + `TextSendMessage`) | SDK v3 (`MessagingApi` + `BroadcastRequest`) |
+| `5_push_to_line.py` | 導入 `tool.strategy` 中未使用的函式 | 移除 `get_v30_candidates`, `get_v30_params_from_db`, `calculate_v30_signal` 未使用導入 |
+
+#### 3. tool/strategy.py 精簡
+
+- 移除 6 行墓碑註釋（「已移除」類型）
+- 更新 module docstring 為「向後相容層」角色定義
+- 明確列出保留的公開 API
+- 總行數不變，但意圖更明確
+
+#### 4. 冗餘檔案清除
+
+| 檔案 | 處置 | 理由 |
+|------|------|------|
+| `test_api.py` | 🗑️ 刪除 | 硬編碼路徑的 ad-hoc 腳本，非 pytest 測試 |
+| `test_frontend_fix.py` | 🗑️ 刪除 | 一次性前端驗證腳本 |
+| `check_backtest_history.py` | 🗑️ 刪除 | DB 查詢診斷腳本 |
+| `check_trades.py` | 🗑️ 刪除 | DB 查詢診斷腳本 |
+| `diagnose_strategies.py` | 📦 移至 `scripts/` | 有價值的策略診斷工具，不應在根目錄 |
+| `DASHBOARD_FIX_GUIDE.md` | 📦 移至 `doc/` | 文檔類檔案歸類 |
+
+#### 5. 新增共用函式
+
+| 函式 | 位置 | 說明 |
+|------|------|------|
+| `ensure_financial_columns(conn)` | `tool/db_helper.py` | 自動檢測/建立 financial_statements 選填欄位 |
+| `upsert_financial_statements(conn, df, year, quarter)` | `tool/db_helper.py` | 財報批量 UPSERT（含資料清洗 + 營業利益率計算） |
+
+### 📊 測試結果
+
+```
+117 passed, 0 failed, 3 warnings in 1.83s
+語法編譯: app.py, config.py, tool/strategy.py, tool/db_helper.py,
+         5_push_to_line.py, 4_run_backtest.py, 2_rundaily.py,
+         3_train_model.py, 6_optimize_params.py — 全部通過
+```
+
+### 🔮 下一步預期發展
+
+1. **策略 V39 開發**：技術面 + 基本面融合策略（結合 V33 低波動 + V35 經營效益）
+2. **tool/strategy.py 完全退役**：將剩餘格式化函式遷移至 `tool/line_message_builder.py`，更新 app.py 等消費者後刪除
+3. **回測平行化**：利用 `multiprocessing` 加速多策略回測
+4. **即時通知增強**：Line Flex Message 支援回測結果推播
+5. **CI/CD 管線**：GitHub Actions 自動測試 + 部署
+6. **news_agent.py 決策**：評估是否移除或重新接入策略管線
 
 ---
 

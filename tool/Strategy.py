@@ -1,16 +1,20 @@
-"""策略模組 - V31 混合策略實作 (精簡版)
+"""策略模組 - V30/V31 向後相容層
 
-此模組包含：
-- V30/V31 篩選邏輯 (get_v30_candidates, get_best_stocks_v31_hybrid)
-- V30 訊號計算 (calculate_v30_signal, calculate_pivot_strategy)
-- Line Bot 訊息格式化 (format_v30_recommendation, format_v31_recommendation, etc.)
+此模組為歷史相容 shim，所有核心邏輯已遷移至：
+- 篩選邏輯 → tool/strategies/v31_hybrid.py (透過策略工廠)
+- 模型載入 → tool/model_utils.load_model()
+- 市場趨勢 → tool/db_helper.get_market_trend()
 
-🔄 V35 Refactor (2026-02-14):
-- 移除重複的 _load_v31_model() → 改用 tool.model_utils.load_model()
-- 移除 check_market_trend() proxy → 直接呼叫 db_helper.get_market_trend()
-- 移除 check_sentiment_filter() 死碼 (ENABLE_SENTIMENT_FILTER=False)
-- 移除 calculate_position_size() 死碼 (PEG ratio 未使用)
-- 格式化函式保留供 app.py / 5_push_to_line.py 使用
+保留的公開 API：
+- get_v30_candidates(df)        → 委派策略工廠
+- get_best_stocks_v31_hybrid()  → V31 混合篩選 + AI 排名
+- get_v30_params_from_db()      → DB 覆寫參數讀取
+- calculate_v30_signal(row)     → V30 訊號計算
+- format_v30_recommendation()   → Line 推播格式化
+- format_v31_recommendation()   → Line 推播格式化
+- format_stock_query()          → 個股查詢格式化
+- format_strategy_message()     → 戰術報告格式化
+- calculate_pivot_strategy()    → 樞紐點計算
 """
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
@@ -18,7 +22,7 @@ import os
 from config import Config
 
 # ============================================
-# 🏭 V33 Phase 2: 策略工廠（Lazy Loading）
+# 💾 策略工廠延遲載入（避免循環依賴）
 # ============================================
 def _get_strategy():
     """動態取得當前策略（避免循環依賴）"""
@@ -30,17 +34,8 @@ def _get_strategy():
         return None
 
 # ============================================
-# 💾 快取變數 (Module-level cache)
+# � 核心函式
 # ============================================
-# 模型載入已統一由 tool.model_utils 處理，不再需要 module-level 快取
-
-
-# ============================================
-# 🔧 Helper Functions
-# ============================================
-# check_sentiment_filter() 已移除 (ENABLE_SENTIMENT_FILTER=False)
-# check_market_trend() 已移除 → 直接使用 tool.db_helper.get_market_trend()
-# _load_v31_model() 已移除 → 使用 tool.model_utils.load_model()
 
 
 def get_best_stocks_v31_hybrid(df: pd.DataFrame, top_n: int = 5) -> pd.DataFrame:

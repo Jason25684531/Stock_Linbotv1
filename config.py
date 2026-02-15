@@ -112,7 +112,7 @@ class Config:
     V30_TAKE_PROFIT = 0.15            # 停利比例 (15%) 🔥 收緊以提早獲利
     V30_MAX_HOLD_DAYS = 10            # 最長持有天數
     
-    # V30 參數字典（引用 class 屬性，避免值重複定義）
+    # V30 參數字典（唯一入口，引用 class 屬性）
     @classmethod
     def get_v30_params(cls):
         return {
@@ -124,15 +124,17 @@ class Config:
             'MAX_HOLD_DAYS': cls.V30_MAX_HOLD_DAYS,
         }
 
-    # 保留向後相容的 V30_PARAMS 常數
-    V30_PARAMS = {
-        'VOLUME_THRESHOLD': V30_VOLUME_THRESHOLD,
-        'RSI_LOW': V30_RSI_LOW,
-        'RSI_HIGH': V30_RSI_HIGH,
-        'STOP_LOSS': V30_STOP_LOSS,
-        'TAKE_PROFIT': V30_TAKE_PROFIT,
-        'MAX_HOLD_DAYS': V30_MAX_HOLD_DAYS,
-    }
+    # 向後相容屬性（委派至 get_v30_params classmethod）
+    class _V30ParamsProxy(dict):
+        """延遲讀取 V30 參數的 dict 代理，確保引用 class 屬性而非靜態硬編碼值"""
+        def __getitem__(self, key):
+            return Config.get_v30_params()[key]
+        def get(self, key, default=None):
+            return Config.get_v30_params().get(key, default)
+        def __repr__(self):
+            return repr(Config.get_v30_params())
+
+    V30_PARAMS = _V30ParamsProxy()
     
     # 技術指標計算參數
     RSI_PERIOD = 14
@@ -269,13 +271,7 @@ class Config:
     V38_MAX_HOLD_DAYS = int(os.getenv('V38_MAX_HOLD_DAYS', '15'))            # 最大持有天數
 
     # ==========================================
-    # �📊 V33 Phase 2+: 市場情緒分析與熔斷機制
-    # ==========================================
-    ENABLE_SENTIMENT_FILTER = False     # 情緒熔斷開關（預設關閉，Opt-in）
-    SENTIMENT_THRESHOLD = -0.5          # 情緒分數門檻（-1.0 ~ 1.0，低於此值觸發熔斷）
-    SENTIMENT_MOCK_MODE = True          # 開發階段使用模擬數據（避免依賴外部 API）
-    
-    # ==========================================
+
     # 🔑 API Keys (從環境變數讀取 - 無預設值)
     # ==========================================
     LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_TOKEN', '')

@@ -9,10 +9,11 @@ if sys.platform == 'win32':
 
 import pandas as pd
 from sqlalchemy import text
-from linebot import LineBotApi
-from linebot.models import TextSendMessage
+from linebot.v3.messaging import (
+    Configuration, ApiClient, MessagingApi,
+    TextMessage, BroadcastRequest
+)
 from config import Config
-from tool.strategy import get_v30_candidates, get_v30_params_from_db, calculate_v30_signal
 from tool.db_helper import get_db_engine, get_market_trend, get_stock_data
 from tool.strategy_manager import StrategyManager
 
@@ -65,7 +66,7 @@ def get_market_status(engine, date_str):
 
 def main():
     print("🚀 V33 Line 推播啟動 (Multi-Strategy Support)...")
-    line_bot_api = LineBotApi(Config.LINE_CHANNEL_ACCESS_TOKEN)
+    configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
     engine = get_db_engine()
     
     # 1. 初始化策略管理器
@@ -217,9 +218,13 @@ def main():
     print(msg)
     print("="*40)
     
-    # 7. 發送廣播
+    # 7. 發送廣播 (SDK v3)
     try:
-        line_bot_api.broadcast(TextSendMessage(text=msg))
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.broadcast(BroadcastRequest(
+                messages=[TextMessage(text=msg)]
+            ))
         print("✅ Line 推播已發送！")
     except Exception as e:
         print(f"❌ 推播失敗: {e}")

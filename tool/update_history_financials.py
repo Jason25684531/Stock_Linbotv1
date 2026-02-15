@@ -20,7 +20,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tool.crawlers.quarterly_scraper import QuarterlyScraper
-from tool.db_helper import get_db_engine
+from tool.db_helper import get_db_engine, ensure_financial_columns, upsert_financial_statements
 from sqlalchemy import text
 
 
@@ -50,26 +50,10 @@ def update_history(start_year: int, end_year: int, delay: int = 10):
     scraper = QuarterlyScraper()
     engine = get_db_engine()
     
-    # 🔧 自動檢查並新增 operating_margin 欄位（只執行一次）
+    # 🔧 自動檢查並新增選填欄位（只執行一次）
     try:
         with engine.begin() as conn:
-            check_column_query = text("""
-                SELECT COUNT(*) as count FROM information_schema.COLUMNS 
-                WHERE TABLE_SCHEMA = DATABASE() 
-                AND TABLE_NAME = 'financial_statements' 
-                AND COLUMN_NAME = 'operating_margin'
-            """)
-            result = conn.execute(check_column_query)
-            column_exists = result.fetchone()[0] > 0
-            
-            if not column_exists:
-                print("🔧 偵測到缺少 operating_margin 欄位，自動建立...")
-                alter_query = text("""
-                    ALTER TABLE financial_statements 
-                    ADD COLUMN operating_margin FLOAT NULL COMMENT '營業利益率(%)'
-                """)
-                conn.execute(alter_query)
-                print("✅ operating_margin 欄位建立完成\n")
+            ensure_financial_columns(conn)
     except Exception as e:
         print(f"⚠️ 欄位檢查錯誤（可能已存在）: {e}\n")
     
@@ -105,59 +89,9 @@ def update_history(start_year: int, end_year: int, delay: int = 10):
                         fail_count += 1
                         break  # 無資料不算失敗，直接跳出重試循環
                     
-                    # 寫入資料庫
+                    # 寫入資料庫（使用共用函式）
                     with engine.begin() as conn:
-                        # 刪除舊資料
-                        delete_query = text("""
-                            DELETE FROM financial_statements 
-                            WHERE year = :year AND quarter = :quarter
-                        """)
-                        result = conn.execute(delete_query, {"year": west_year, "quarter": quarter})
-                        deleted_count = result.rowcount
-                        if deleted_count > 0:
-                            print(f"  🗑️ 清除舊資料: {deleted_count} 筆")
-                        
-                        # 插入新資料
-                        insert_query = text("""
-                            INSERT INTO financial_statements 
-                            (stock_id, year, quarter, revenue, rd_expense, operating_expense, operating_profit, eps, operating_margin)
-                            VALUES (:stock_id, :year, :quarter, :revenue, :rd_expense, :operating_expense, :operating_profit, :eps, :operating_margin)
-                            ON DUPLICATE KEY UPDATE
-                                revenue = VALUES(revenue),
-                                rd_expense = VALUES(rd_expense),
-                                operating_expense = VALUES(operating_expense),
-                                operating_profit = VALUES(operating_profit),
-                                eps = VALUES(eps),
-                                operating_margin = VALUES(operating_margin)
-                        """)
-                        
-                        inserted_count = 0
-                        for _, row in df.iterrows():
-                            # 🧹 資料清潔：確保 stock_id 乾淨無小數點
-                            clean_stock_id = str(row['stock_id']).replace('.0', '')
-                            
-                            # 📊 計算營業利益率
-                            revenue = int(row['revenue'])
-                            operating_profit = int(row['operating_profit'])
-                            
-                            if revenue > 0:
-                                operating_margin = round((operating_profit / revenue) * 100, 2)
-                            else:
-                                operating_margin = 0.0
-                            
-                            conn.execute(insert_query, {
-                                "stock_id": clean_stock_id,
-                                "year": int(west_year),
-                                "quarter": int(quarter),
-                                "revenue": revenue,
-                                "rd_expense": int(row.get('rd_expense', 0)),
-                                "operating_expense": int(row['operating_expense']),
-                                "operating_profit": operating_profit,
-                                "eps": float(row.get('eps', 0.0)),
-                                "operating_margin": operating_margin
-                            })
-                            inserted_count += 1
-                        
+                        inserted_count = upsert_financial_statements(conn, df, west_year, quarter)
                         print(f"  ✅ 成功寫入 {inserted_count} 筆")
                         success_count += 1
                         success = True  # 標記成功，跳出重試循環

@@ -192,7 +192,7 @@
                             <option :value="8">8</option>
                             <option :value="10">10</option>
                         </select>
-                        <button @click="loadLiveSignals()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                        <button type="button" @click="loadLiveSignals()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors">
                             重新載入
                         </button>
                         <div class="text-sm text-gray-400 ml-1">
@@ -203,10 +203,11 @@
 
                 <div class="flex flex-wrap gap-2 mb-4">
                     <template x-for="opt in liveStrategyOptions" :key="opt.value">
-                        <button @click="selectedLiveStrategy = opt.value; loadLiveSignals()"
+                        <button type="button" 
+                                @click="console.log('🖱️ 點擊策略:', opt.label, opt.value); selectedLiveStrategy = opt.value; loadLiveSignals()"
                                 class="px-3 py-1.5 text-xs rounded-lg border transition-colors"
                                 :class="selectedLiveStrategy === opt.value
-                                    ? 'bg-blue-600 border-blue-500 text-white'
+                                    ? 'bg-blue-600 border-blue-500 text-white font-bold'
                                     : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-500'"
                                 x-text="opt.label"></button>
                     </template>
@@ -221,7 +222,7 @@
                 </div>
                 
                 <div x-show="liveSignals.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <template x-for="signal in liveSignals" :key="signal.stock_id">
+                    <template x-for="signal in liveSignals" :key="(signal.strategy_key || selectedLiveStrategy || 'na') + '-' + signal.stock_id">
                         <div class="metric-card border-l-4 border-blue-500">
                             <div class="flex items-start justify-between">
                                 <div>
@@ -344,7 +345,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="trade in trades.filter(t => strategyFilter === 'all' || t.strategy === strategyFilter).slice(0, 30)" :key="trade.stock_id + trade.buy_date + (trade.strategy || '')">
+                            <template x-for="trade in trades.filter(t => strategyFilter === 'all' || t.strategy === strategyFilter).slice(0, 30)" :key="trade.stock_id + trade.buy_date + (trade.strategy || 'unknown')">
                                 <tr class="table-row">
                                     <td class="px-4 py-3">
                                         <span class="px-2 py-1 rounded text-xs font-medium"
@@ -356,9 +357,17 @@
                                                   'badge-v36': trade.strategy === 'v36_chip_momentum',
                                                   'badge-v37': trade.strategy === 'v37_mean_reversion',
                                                   'badge-v38': trade.strategy === 'v38_value_dividend',
-                                                  'bg-gray-700 text-gray-300': !trade.strategy
+                                                  'bg-gray-700 text-gray-300': !trade.strategy || trade.strategy === 'unknown'
                                               }"
-                                              x-text="{'v31_hybrid':'V31','v33_low_vol':'V33','v34_turbo':'V34','v35_innovation':'V35','v36_chip_momentum':'V36','v37_mean_reversion':'V37','v38_value_dividend':'V38'}[trade.strategy] || '未知'"></span>
+                                              x-text="{
+                                                  'v31_hybrid':'V31',
+                                                  'v33_low_vol':'V33',
+                                                  'v34_turbo':'V34',
+                                                  'v35_innovation':'V35',
+                                                  'v36_chip_momentum':'V36',
+                                                  'v37_mean_reversion':'V37',
+                                                  'v38_value_dividend':'V38'
+                                              }[trade.strategy] || (trade.strategy || '未知')"></span>
                                     </td>
                                     <td class="px-4 py-3 font-bold" x-text="trade.stock_id"></td>
                                     <td class="px-4 py-3 text-gray-400" x-text="trade.buy_date"></td>
@@ -540,42 +549,93 @@ function dashboardData() {
         },
         
         async loadSummary() {
-            const response = await fetch('/api/summary');
-            if (!response.ok) throw new Error('無法載入總結數據');
-            this.summary = await response.json();
+            try {
+                const response = await fetch('/api/summary');
+                if (!response.ok) {
+                    console.warn('無法載入總結數據');
+                    return;
+                }
+                const data = await response.json();
+                if (data && !data.error) {
+                    this.summary = data;
+                }
+            } catch (error) {
+                console.error('載入總結失敗:', error);
+            }
         },
         
         async loadPerformance() {
-            const response = await fetch('/api/performance');
-            if (!response.ok) throw new Error('無法載入資產曲線數據');
-            this.performance = await response.json();
+            try {
+                const response = await fetch('/api/performance');
+                if (!response.ok) {
+                    console.warn('無法載入資產曲線數據');
+                    return;
+                }
+                const data = await response.json();
+                if (data && !data.error) {
+                    this.performance = data;
+                }
+            } catch (error) {
+                console.error('載入資產曲線失敗:', error);
+            }
         },
         
         async loadTrades() {
-            const response = await fetch('/api/trades');
-            if (!response.ok) throw new Error('無法載入交易數據');
-            this.trades = await response.json();
-            // 反轉以顯示最新的在前面
-            this.trades.reverse();
+            try {
+                const response = await fetch('/api/trades');
+                if (!response.ok) {
+                    console.warn('❌ 無法載入交易數據 - HTTP', response.status);
+                    this.trades = [];
+                    return;
+                }
+                const data = await response.json();
+                this.trades = Array.isArray(data) ? data : [];
+                console.log('✅ 交易數據載入成功:', this.trades.length, '筆');
+                
+                // 統計策略分布（用於調試）
+                const strategyCount = {};
+                this.trades.forEach(t => {
+                    const s = t.strategy || 'unknown';
+                    strategyCount[s] = (strategyCount[s] || 0) + 1;
+                });
+                console.log('📊 策略分布:', strategyCount);
+            } catch (error) {
+                console.error('❌ 載入交易數據失敗:', error);
+                this.trades = [];
+            }
         },
         
         async loadLiveSignals() {
             try {
+                const strategyKey = this.selectedLiveStrategy || '';
+                console.log('🔍 載入即時訊號 - 策略:', strategyKey, 'TopN:', this.liveTopN);
+                
                 const query = new URLSearchParams({
-                    strategy: this.selectedLiveStrategy,
-                    top_n: this.liveTopN
+                    strategy: strategyKey,
+                    top_n: this.liveTopN,
+                    _ts: Date.now()
                 });
                 const response = await fetch('/api/daily-signals?' + query.toString());
                 if (!response.ok) {
-                    console.warn('無法載入即時訊號');
+                    console.warn('❌ 無法載入即時訊號 - HTTP', response.status);
                     return;
                 }
                 const data = await response.json();
+                console.log('✅ 即時訊號載入成功:', data.strategy_display, '數量:', data.signals?.length || 0);
+                
                 this.liveSignals = data.signals || [];
                 this.liveDate = data.date;
                 this.liveStrategyDisplay = data.strategy_display || '';
+                if (data.strategy_key) {
+                    this.selectedLiveStrategy = data.strategy_key;
+                }
+                
+                // 強制 Alpine.js 更新 DOM
+                this.$nextTick(() => {
+                    console.log('📊 DOM 更新完成');
+                });
             } catch (error) {
-                console.error('載入即時訊號失敗:', error);
+                console.error('❌ 載入即時訊號失敗:', error);
                 this.liveSignals = [];
                 this.liveStrategyDisplay = '';
             }

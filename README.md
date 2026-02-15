@@ -10,8 +10,8 @@
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試  
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復  
-> 📅 **最後更新**: 2026-02-16  
-> ✅ **系統狀態**: 穩定運行（Phase 4 架構深度清洗：重複函式整併 + 冗餘刪除 + 117 測試通過）
+> 📅 **最後更新**: 2026-02-15  
+> ✅ **系統狀態**: 穩定運行（Phase 5 程式碼整合：SDK v3 升級 + 財報 UPSERT 共用 + 冗餘清除 + 117 測試通過）
 
 ---
 
@@ -214,6 +214,10 @@ python 4_run_backtest.py --v31
 # 多策略組合回測
 python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
 
+# 多策略「權重」組合回測（新支援）
+# 權重可為任意正數，系統會自動正規化；下例 = 70% / 30%
+python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation --weights 7,3
+
 # Web 回測（推薦）
 python app.py
 # 瀏覽器開啟 http://localhost:1688/backtest
@@ -246,6 +250,8 @@ python app.py
 - **Max Drawdown** (最大回撤)
 - **Win Rate** (勝率)
 - **Profit Factor** (盈虧比)
+
+```powershell
 # 執行回測
 python 4_run_backtest.py
 
@@ -304,7 +310,7 @@ Stock_Linbotv1/
 │   ├── 2_rundaily.py            # 整合腳本 (一鍵執行)
 │   ├── 3_train_model.py         # 多策略 XGBoost 批次訓練
 │   ├── 4_run_backtest.py        # 統一回測引擎
-│   ├── 5_push_to_line.py        # Line 推播
+│   ├── 5_push_to_line.py        # Line 推播 (SDK v3)
 │   └── 6_optimize_params.py     # Optuna 參數優化
 │
 ├── 🌐 使用者介面
@@ -319,7 +325,7 @@ Stock_Linbotv1/
 ├── ⚙️ 核心模組 (tool/) — 統一共用函數，禁止 raw SQL
 │   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry, 8 策略)
 │   ├── strategies/              # 策略實作目錄
-│   │   ├── base.py              # BaseStrategy 抽象基底
+│   │   ├── base.py              # BaseStrategy 抽象基底 (含 check_exit_signal)
 │   │   ├── v31_hybrid.py        # V31 混合策略 (V30+XGBoost)
 │   │   ├── v33_low_vol.py       # V33 低波動策略
 │   │   ├── v34_turbo.py         # V34 高成長策略
@@ -327,19 +333,21 @@ Stock_Linbotv1/
 │   │   ├── v36_chip_momentum.py # V36 籌碼動能策略
 │   │   ├── v37_mean_reversion.py# V37 均值回歸策略
 │   │   └── v38_value_dividend.py# V38 高殖利率價值策略
-│   ├── strategy.py              # V30/V31 選股邏輯 (遷移中，委派 model_utils)
+│   ├── strategy.py              # V30/V31 向後相容層 (格式化函式，預計退役)
 │   ├── line_message_builder.py  # Line Flex Message 卡片建構器
 │   ├── report_helper.py         # 個股 AI 診斷報告聚合
 │   ├── calc_indicators.py       # 技術指標 + 籌碼指標 (唯一來源)
 │   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
-│   ├── db_helper.py             # 資料庫操作 (唯一入口，含 safe_float/safe_int/get_open_holdings)
-│   ├── model_utils.py           # XGBoost 模型載入工具
-│   └── news_agent.py            # RSS 新聞 + Gemini 分析 + Line 推播
+│   ├── db_helper.py             # 資料庫操作 (唯一入口，含財報 UPSERT 共用函式)
+│   ├── model_utils.py           # XGBoost 模型載入工具 (LRU 快取)
+│   ├── update_financials_mops.py    # 單季財報更新 (使用 db_helper 共用函式)
+│   ├── update_history_financials.py # 歷史財報批量更新 (使用 db_helper 共用函式)
+│   └── news_agent.py            # RSS 新聞 + Gemini 分析 (未連接主管線)
 │
 ├── 🧪 測試 (test/) — pytest + conftest 共用 Fixture
 │   ├── conftest.py              # 共用 Fixture (manager, empty_df)
 │   ├── test_strategy_factory.py # 策略載入 & 篩選 (3 tests)
-│   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 (13 tests)
+│   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 + 向後相容 (13 tests)
 │   ├── test_phase2_chip_data.py # 籌碼指標 (16 tests)
 │   ├── test_v36_chip_momentum.py# V36 策略 (29 tests)
 │   └── test_v37_v38_strategies.py# V37+V38 策略 (56 tests)
@@ -348,6 +356,10 @@ Stock_Linbotv1/
 │   └── ML_Data/                 # 模型 + 回測結果
 │       ├── pkl/                 # XGBoost 模型 (每策略獨立檔案)
 │       └── *.csv                # 回測報告
+│
+├── 🔧 工具腳本
+│   └── scripts/                 # 診斷/除錯工具
+│       └── diagnose_strategies.py # 策略條件診斷
 │
 ├── 📄 設定檔
 │   ├── config.py                # 統一設定中心 (含 V34/V35 Presets + MODE_CMD_MAP)
@@ -358,6 +370,7 @@ Stock_Linbotv1/
 └── 📝 文檔
     ├── README.md                # 本文件
     ├── UpdateList.md            # 版本更新記錄
+    ├── doc/                     # 輔助文件 (含 DASHBOARD_FIX_GUIDE.md)
     └── openspec/                # 開發規範
 ```
 
@@ -378,10 +391,12 @@ Stock_Linbotv1/
 ```
 
 **設計原則**:
-- 所有資料庫操作必須通過 `tool/db_helper.py`（含 `safe_float`, `safe_int`, `get_open_holdings`）
+- 所有資料庫操作必須通過 `tool/db_helper.py`（含 `safe_float`, `safe_int`, `get_open_holdings`, `ensure_financial_columns`, `upsert_financial_statements`）
 - 所有技術指標計算必須通過 `tool/calc_indicators.py`（唯一真理來源）
 - 所有策略繼承 `BaseStrategy`，共用日期提取與大盤熔斷邏輯
 - 所有常數定義必須在 `config.py`（含 V34/V35 Presets、MODE_CMD_MAP）
+- `V30_PARAMS` 透過 `_V30ParamsProxy` 委派至 `get_v30_params()` classmethod（單一真理來源）
+- Line Bot 統一使用 SDK v3（`linebot.v3.messaging`）
 - Web API 回測指標統一由 `tool/viz_helper.get_backtest_summary()` 提供
 - 測試 Fixture 統一由 `test/conftest.py` 提供
 
@@ -451,13 +466,14 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V35 Phase 2 — Chip Data Infrastructure (2026-02-14)  
+**版本**: V36 Phase 5 — Code Consolidation & SDK Upgrade (2026-02-15)  
 **授權**: MIT License  
 **最新變更**:
-- ✅ 融資融券爬蟲：`chip_data_scraper.py`（TWSE MI_MARGN + TPEx margin_bal）
-- ✅ 自營商買賣超：T86/3itrade 擴充擷取 `dealer_buy`
-- ✅ 6 項新指標：`dealer_ratio`、`foreign_consec_days`、`trust_consec_days`、`margin_change_pct`、`chip_score`
-- ✅ `chip_score` 加權綜合分數 (0~100)：外資 40% + 投信 30% + 自營商 15% + 融資信號 15%
-- ✅ `fix_database_indicators()` 擴展至 17 指標欄位批次 UPDATE
-- ✅ 16 項 Phase 2 測試全部通過
-- ✅ 測試模式：`FORCE_BULL_MARKET` 環境變數控制市場趨勢
+- ✅ `Config.V30_PARAMS` 改為 `_V30ParamsProxy` 代理，消除三重定義
+- ✅ `5_push_to_line.py` 升級至 Line Bot SDK v3（`MessagingApi` + `BroadcastRequest`）
+- ✅ 財報 UPSERT 邏輯抽取至 `db_helper.ensure_financial_columns()` + `upsert_financial_statements()`
+- ✅ 移除 `Config.ENABLE_SENTIMENT_FILTER` 等死碼常數
+- ✅ 刪除根目錄 ad-hoc 腳本（test_api, test_frontend_fix, check_backtest_history, check_trades）
+- ✅ `diagnose_strategies.py` 移至 `scripts/`、`DASHBOARD_FIX_GUIDE.md` 移至 `doc/`
+- ✅ `tool/strategy.py` docstring 更新為「向後相容層」角色定義
+- ✅ 117 項測試全數通過

@@ -24,7 +24,7 @@ import os
 import sys
 from config import Config
 from tool.strategy import get_v30_candidates, get_v30_params_from_db
-from tool.db_helper import get_db_engine, get_market_trend as db_get_market_trend
+from tool.db_helper import get_db_engine, get_market_trend as db_get_market_trend, save_backtest_results
 from tool.strategy_manager import StrategyManager
 
 # ============================================
@@ -470,8 +470,10 @@ class BacktestEngine:
         self.capital += net
         
         # 記錄交易
+        strategy_key = 'v31_hybrid' if self.mode == 'v31' else self.mode
         self.trades.append({
             'stock_id': stock_id,
+            'strategy': strategy_key,
             'buy_date': info['buy_date'],
             'sell_date': date_str,
             'buy_price': info['cost'],
@@ -633,6 +635,8 @@ class BacktestEngine:
             output_path = 'ML_Data/backtest_result.csv'
             df_trades.to_csv(output_path, index=False, encoding='utf-8-sig')
             print(f"📄 交易明細已輸出至: {output_path}")
+        else:
+            df_trades = pd.DataFrame()
         
         # V32: 輸出每日資產曲線（用於 Dashboard 視覺化）
         if self.daily_assets:
@@ -644,6 +648,14 @@ class BacktestEngine:
             profit_path = 'ML_Data/backtest_profit_report.csv'
             df_profit.to_csv(profit_path, index=False, encoding='utf-8-sig')
             print(f"📈 資產曲線已輸出至: {profit_path}")
+        else:
+            df_profit = pd.DataFrame()
+
+        # 同步回測結果到 DB（Dashboard / API 直接讀取）
+        if save_backtest_results(trades_df=df_trades, equity_df=df_profit):
+            print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
+        else:
+            print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
         
         return roi
 
@@ -663,7 +675,7 @@ class PortfolioBacktestEngine:
         result = engine.run_portfolio_backtest()
     """
     
-    def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000):
+    def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000, weights: list = None):
         """初始化組合回測引擎
         
         Args:
@@ -676,18 +688,49 @@ class PortfolioBacktestEngine:
         self.start_date = start_date
         self.end_date = end_date
         self.initial_capital = initial_capital
+        self.weights = self._normalize_weights(strategies, weights)
         
         # 為每個策略建立獨立的回測引擎
         self.engines = {}
-        capital_per_strategy = initial_capital / len(strategies)
+        self.allocated_capital = {
+            name: initial_capital * self.weights[idx]
+            for idx, name in enumerate(strategies)
+        }
         
         for strategy_name in strategies:
             # 建立該策略的回測引擎
             engine = BacktestEngine(mode=strategy_name)
-            engine.capital = capital_per_strategy
+            engine.capital = self.allocated_capital[strategy_name]
             self.engines[strategy_name] = engine
         
-        print(f"📊 組合回測：{len(strategies)} 個策略，每策略分配 ${capital_per_strategy:,.0f}")
+        alloc_msg = ", ".join(
+            f"{name}={self.weights[idx]*100:.1f}%"
+            for idx, name in enumerate(strategies)
+        )
+        print(f"📊 組合回測：{len(strategies)} 個策略，資金權重 [{alloc_msg}]")
+
+    @staticmethod
+    def _normalize_weights(strategies: list, weights: list):
+        """將權重正規化，若未提供則平均分配。"""
+        count = len(strategies)
+        if count == 0:
+            raise ValueError("至少需要一個策略")
+
+        if not weights:
+            return [1.0 / count] * count
+
+        if len(weights) != count:
+            raise ValueError(f"權重數量({len(weights)})需等於策略數量({count})")
+
+        parsed = [float(w) for w in weights]
+        if any(w < 0 for w in parsed):
+            raise ValueError("權重不可為負數")
+
+        total = sum(parsed)
+        if total <= 0:
+            raise ValueError("權重總和必須大於 0")
+
+        return [w / total for w in parsed]
     
     def run_portfolio_backtest(self) -> dict:
         """執行投資組合回測
@@ -794,7 +837,8 @@ class PortfolioBacktestEngine:
                     price = conn.execute(query, {'sid': sid}).scalar() or info['cost']
                 final_value += info['shares'] * price
             
-            strategy_roi = (final_value - (self.initial_capital / len(self.strategy_names))) / (self.initial_capital / len(self.strategy_names)) * 100
+            initial_alloc = self.allocated_capital[strategy_name]
+            strategy_roi = (final_value - initial_alloc) / initial_alloc * 100 if initial_alloc > 0 else 0
             
             strategy_performance[strategy_name] = {
                 'final_value': final_value,
@@ -874,6 +918,13 @@ class PortfolioBacktestEngine:
         equity_df.to_csv('ML_Data/backtest_profit_report.csv', index=False, encoding='utf-8-sig')
         if all_trades:
             pd.DataFrame(all_trades).to_csv('ML_Data/backtest_result.csv', index=False, encoding='utf-8-sig')
+
+        # 同步回測結果到 DB（Dashboard / API 直接讀取）
+        trades_df = pd.DataFrame(all_trades) if all_trades else pd.DataFrame()
+        if save_backtest_results(trades_df=trades_df, equity_df=equity_df):
+            print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
+        else:
+            print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
         
         return {
             'equity_curve': equity_df,
@@ -907,14 +958,21 @@ def main():
     elif '--portfolio' in sys.argv:
         # 多策略組合模式
         strategies = ['v33_low_vol', 'v35_innovation']  # 預設組合
+        weights = None
         if '--strategies' in sys.argv:
             idx = sys.argv.index('--strategies')
             if idx + 1 < len(sys.argv):
                 strategies = sys.argv[idx + 1].split(',')
+
+        if '--weights' in sys.argv:
+            idx = sys.argv.index('--weights')
+            if idx + 1 < len(sys.argv):
+                weights = [float(w) for w in sys.argv[idx + 1].split(',')]
         
         engine = PortfolioBacktestEngine(
             strategies=strategies,
-            start_date=BACKTEST_START
+            start_date=BACKTEST_START,
+            weights=weights,
         )
         engine.run_portfolio_backtest()
         return
