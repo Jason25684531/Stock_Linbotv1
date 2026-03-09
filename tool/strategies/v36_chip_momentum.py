@@ -116,6 +116,9 @@ class V36ChipMomentumStrategy(BaseStrategy):
                 print(f"⚠️ V36 缺少必要欄位: {col}")
                 return pd.DataFrame()
 
+        # 只保留正規上市櫃個股
+        df = self._filter_real_stocks(df)
+
         # 提取日期 & 大盤過濾
         date_str = self._extract_date_str(df)
         if not self._check_market_filter(date_str, 'V36'):

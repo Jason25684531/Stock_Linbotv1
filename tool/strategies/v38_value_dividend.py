@@ -118,6 +118,9 @@ class V38ValueDividendStrategy(BaseStrategy):
         if df.empty:
             return df
 
+        # 排除非個股（ETF/權證/債券/KY）
+        df = self._filter_real_stocks(df)
+
         # 欄位檢查
         required = ['close_price', 'ma60', 'volume']
         for col in required:

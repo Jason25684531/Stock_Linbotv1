@@ -27,6 +27,9 @@ from tool.calc_indicators import (
 from tool.model_utils import load_model
 from config import Config
 
+# 新聞族群加分快取（每日只呼叫一次 Gemini）
+_news_boost_cache: dict = {"sectors": [], "sentiment": "中性"}
+
 # 模型存放目錄（與 3_train_model.py 一致）
 
 
@@ -499,7 +502,27 @@ def run_strategy(strategy, df, date_str, engine):
         candidates['ai_score'] = model.predict_proba(X)[:, 1]
         candidates = candidates.sort_values('ai_score', ascending=False)
         print(f"✅ AI 評分完成（特徵數: {len(features)}）")
-    
+
+    # 新聞族群加分
+    if Config.NEWS_BOOST_ENABLED and 'ai_score' in candidates.columns:
+        try:
+            from tool.db_helper import get_stock_sector
+            boost_sectors = _news_boost_cache.get('sectors', [])
+            if boost_sectors:
+                boosted = 0
+                factor = min(Config.NEWS_BOOST_FACTOR, Config.NEWS_BOOST_MAX)
+                candidates['ai_score'] = candidates['ai_score'].astype(float)
+                for idx, row in candidates.iterrows():
+                    sector = get_stock_sector(row['stock_id'])
+                    if sector in boost_sectors:
+                        candidates.at[idx, 'ai_score'] *= (1 + factor)
+                        boosted += 1
+                if boosted > 0:
+                    candidates = candidates.sort_values('ai_score', ascending=False)
+                    print(f"  📰 新聞加分: {boosted} 檔屬於 {boost_sectors}（+{factor:.0%}）")
+        except Exception as e:
+            print(f"  ⚠️ 新聞加分失敗（不影響選股）: {e}")
+
     # 存入資料庫
     try:
         with engine.connect() as conn:
@@ -590,7 +613,21 @@ def main():
     df = merge_revenue_data(df, engine)
     print("✅ 月營收合併完成\n")
     
-    # 7. 遍歷所有策略執行選股（每策略動態載入專屬模型）
+    # 7. 新聞族群分析（全策略共用，只呼叫一次 Gemini）
+    global _news_boost_cache
+    _news_boost_cache = {"sectors": [], "sentiment": "中性"}
+    if Config.NEWS_BOOST_ENABLED:
+        try:
+            from tool.news_agent import get_news_sector_boost
+            _news_boost_cache = get_news_sector_boost()
+            if _news_boost_cache.get('sectors'):
+                print(f"📰 今日利多族群: {_news_boost_cache['sectors']} | 情緒: {_news_boost_cache['sentiment']}")
+            else:
+                print("📰 今日無明顯利多族群")
+        except Exception as e:
+            print(f"⚠️ 新聞分析失敗（不影響選股）: {e}")
+
+    # 8. 遍歷所有策略執行選股（每策略動態載入專屬模型）
     all_results = {}
     for strategy in strategies:
         candidates = run_strategy(strategy, df, date_str, engine)

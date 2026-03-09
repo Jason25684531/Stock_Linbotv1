@@ -31,11 +31,11 @@ from tool.strategy_manager import StrategyManager
 # ⚙️ 設定區（統一使用 Config + db_helper）
 # ============================================
 
-# 交易參數
+# 交易參數（統一從 Config 讀取）
 INITIAL_CAPITAL = 1000000
-FEE_RATE = 0.001425
+FEE_RATE = Config.FEE_RATE
 MIN_FEE = 20
-TAX_RATE = 0.003
+TAX_RATE = Config.TAX_RATE
 
 # 🔥 V31 Optimization: 持倉限制（降低單檔風險）
 MAX_HOLDINGS = 3

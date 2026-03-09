@@ -239,6 +239,32 @@ class BaseStrategy(ABC):
     # 共用方法 (所有策略可用)
     # ============================================
     
+    def _filter_real_stocks(self, df: pd.DataFrame) -> pd.DataFrame:
+        """排除權證/衍生品，保留個股 + ETF + 債券ETF
+
+        台灣股市代碼規則：
+        - 4 碼 1xxx-9xxx: 上市櫃個股 (如 2330, 2317)
+        - 00 開頭: ETF/債券ETF (如 0050, 0056, 00878, 00679B)
+        - 其餘 5-6 碼: 權證/受益憑證 (如 054355, 03710B) → 排除
+
+        Args:
+            df: 含 stock_id 欄位的 DataFrame
+
+        Returns:
+            DataFrame: 排除權證後的資料（含個股 + ETF）
+        """
+        if 'stock_id' not in df.columns or df.empty:
+            return df
+
+        before = len(df)
+        sid = df['stock_id'].astype(str).str.strip()
+        # 保留: 4碼個股 (1xxx-9xxx) + ETF/債券ETF (00開頭)
+        df = df[sid.str.match(r'^([1-9]\d{3}|00)')]
+        excluded = before - len(df)
+        if excluded > 0:
+            print(f"  📊 排除權證/衍生品: {excluded} 檔，保留 {len(df)} 檔（個股+ETF）")
+        return df
+
     def _extract_date_str(self, df: pd.DataFrame) -> str:
         """從 DataFrame 提取日期字串（共用邏輯，避免各策略重複實作）
         

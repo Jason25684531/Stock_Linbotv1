@@ -150,7 +150,7 @@
             <!-- Sharpe Ratio Card -->
             <div class="metric-card">
                 <div class="metric-label">夏普比率 Sharpe</div>
-                <div class="metric-value" :class="summary.sharpe >= 1 ? 'positive' : 'text-amber-400'" x-text="summary.sharpe.toFixed(3)"></div>
+                <div class="metric-value" :class="summary.sharpe >= 1 ? 'positive' : 'text-amber-400'" x-text="summary.sharpe != null ? summary.sharpe.toFixed(3) : 'N/A'"></div>
                 <div class="text-xs text-gray-400 mt-2">
                     風險調整報酬
                 </div>
@@ -204,7 +204,7 @@
                 <div class="flex flex-wrap gap-2 mb-4">
                     <template x-for="opt in liveStrategyOptions" :key="opt.value">
                         <button type="button" 
-                                @click="console.log('🖱️ 點擊策略:', opt.label, opt.value); selectedLiveStrategy = opt.value; loadLiveSignals()"
+                                @click="console.log('🖱️ 點擊策略:', opt.label, opt.value); selectedLiveStrategy = opt.value; _liveStrategyUserSelected = true; loadLiveSignals()"
                                 class="px-3 py-1.5 text-xs rounded-lg border transition-colors"
                                 :class="selectedLiveStrategy === opt.value
                                     ? 'bg-blue-600 border-blue-500 text-white font-bold'
@@ -261,27 +261,27 @@
                                 </div>
                                 <div x-show="signal.rsi !== null">
                                     <div class="text-gray-400">RSI</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.rsi.toFixed(1)"></div>
+                                    <div class="font-bold text-gray-300" x-text="signal.rsi != null ? signal.rsi.toFixed(1) : '-'"></div>
                                 </div>
                                 <div x-show="signal.volume !== null">
                                     <div class="text-gray-400">成交量</div>
-                                    <div class="font-bold text-gray-300" x-text="(signal.volume / 1000).toFixed(0) + 'K'"></div>
+                                    <div class="font-bold text-gray-300" x-text="signal.volume != null ? (signal.volume / 1000).toFixed(0) + 'K' : '-'"></div>
                                 </div>
                                 <div x-show="signal.ma20 !== null">
                                     <div class="text-gray-400">MA20</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.ma20.toFixed(2)"></div>
+                                    <div class="font-bold text-gray-300" x-text="signal.ma20 != null ? signal.ma20.toFixed(2) : '-'"></div>
                                 </div>
                                 <div x-show="signal.ma60 !== null">
                                     <div class="text-gray-400">MA60</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.ma60.toFixed(2)"></div>
+                                    <div class="font-bold text-gray-300" x-text="signal.ma60 != null ? signal.ma60.toFixed(2) : '-'"></div>
                                 </div>
                                 <div x-show="signal.op_profit_margin !== null">
                                     <div class="text-gray-400">營業利益率</div>
-                                    <div class="font-bold text-gray-300" x-text="(signal.op_profit_margin * 100).toFixed(1) + '%'"></div>
+                                    <div class="font-bold text-gray-300" x-text="signal.op_profit_margin != null ? (signal.op_profit_margin * 100).toFixed(1) + '%' : '-'"></div>
                                 </div>
                                 <div x-show="signal.revenue_yoy !== null">
                                     <div class="text-gray-400">營收YoY</div>
-                                    <div class="font-bold" :class="signal.revenue_yoy >= 0 ? 'text-green-400' : 'text-red-400'" x-text="signal.revenue_yoy.toFixed(1) + '%'"></div>
+                                    <div class="font-bold" :class="signal.revenue_yoy != null && signal.revenue_yoy >= 0 ? 'text-green-400' : 'text-red-400'" x-text="signal.revenue_yoy != null ? signal.revenue_yoy.toFixed(1) + '%' : '-'"></div>
                                 </div>
                             </div>
 
@@ -372,8 +372,8 @@
                                     <td class="px-4 py-3 font-bold" x-text="trade.stock_id"></td>
                                     <td class="px-4 py-3 text-gray-400" x-text="trade.buy_date"></td>
                                     <td class="px-4 py-3 text-gray-400" x-text="trade.sell_date"></td>
-                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.buy_price.toFixed(2)"></td>
-                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.sell_price.toFixed(2)"></td>
+                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.buy_price != null ? trade.buy_price.toFixed(2) : '-'"></td>
+                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.sell_price != null ? trade.sell_price.toFixed(2) : '-'"></td>
                                     <td class="px-4 py-3 text-right font-bold" 
                                         :class="trade.profit_pct >= 0 ? 'positive' : 'negative'"
                                         x-text="formatPercent(trade.profit_pct)"></td>
@@ -509,6 +509,7 @@ function dashboardData() {
         liveDate: null,
         liveStrategyDisplay: '',
         liveTopN: 5,
+        _liveStrategyUserSelected: false,
         selectedLiveStrategy: '{{ current_strategy }}',
         liveStrategyOptions: [
             {% for strategy in strategy_options %}
@@ -537,10 +538,12 @@ function dashboardData() {
                     this.loadPKBattle()
                 ]);
                 
-                // 渲染圖表
-                this.renderChart();
-                
                 this.loading = false;
+
+                // 渲染圖表：必須在 loading = false 之後（確保 canvas 已顯示）
+                this.$nextTick(() => {
+                    this.renderChart();
+                });
             } catch (error) {
                 console.error('載入失敗:', error);
                 alert('載入數據失敗: ' + error.message);
@@ -626,7 +629,9 @@ function dashboardData() {
                 this.liveSignals = data.signals || [];
                 this.liveDate = data.date;
                 this.liveStrategyDisplay = data.strategy_display || '';
-                if (data.strategy_key) {
+                // 只在初始載入（非使用者主動點擊）時才用 API 回傳的 strategy_key 同步按鈕狀態
+                // 避免 API fallback 時覆蓋使用者已點選的策略按鈕高亮
+                if (data.strategy_key && !this._liveStrategyUserSelected) {
                     this.selectedLiveStrategy = data.strategy_key;
                 }
                 

@@ -117,7 +117,10 @@ class V35InnovationStrategy(BaseStrategy):
         """
         if df.empty:
             return df
-        
+
+        # 排除非個股（ETF/權證/債券/KY）
+        df = self._filter_real_stocks(df)
+
         print(f"\n🔍 [V35] 原始候選股票數：{len(df)}")
         
         # 補齊欄位並清理 None/NaN 值

@@ -88,7 +88,7 @@ class Config:
     # 📊 交易參數
     # ==========================================
     BOND_SYMBOL = '00679B'      # 避險債券 ETF
-    MARKET_SYMBOL = '0050'      # 大盤指標
+    MARKET_SYMBOL = '2330'      # 大盤指標（台積電，與加權指數高度連動）
     TARGET_THRESHOLD = 0.02     # 漲幅門檻 (2%)
     
     # ==========================================
@@ -277,6 +277,11 @@ class Config:
     LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_TOKEN', '')
     LINE_CHANNEL_SECRET = os.getenv('LINE_SECRET', '')
     GEMINI_API_KEY = os.getenv('GEMINI_KEY', '')
+
+    # 📰 新聞情緒加分
+    NEWS_BOOST_ENABLED = True       # 新聞族群加分開關
+    NEWS_BOOST_FACTOR = 0.10        # 加分幅度 10%
+    NEWS_BOOST_MAX = 0.15           # 加分上限 15%
     
     # 🔐 Web Dashboard 驗證 (Phase 1 Security)
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')

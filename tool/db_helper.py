@@ -239,23 +239,29 @@ def upsert_stock_data(df, table_name='daily_market_data'):
     try:
         engine = get_db_engine()
         with engine.connect() as conn:
+            # 查詢 DB 實際欄位，過濾 DataFrame 中不存在於表的欄位
+            result = conn.execute(text(f"SHOW COLUMNS FROM {table_name}"))
+            db_columns = {row[0] for row in result}
+            valid_cols = [col for col in df.columns if col in db_columns]
+            df = df[valid_cols]
+
             # 方案：使用 REPLACE INTO（MySQL 特有）
             # REPLACE = DELETE + INSERT，但是原子性操作
             for _, row in df.iterrows():
                 columns = ', '.join(row.index)
                 placeholders = ', '.join([f':{col}' for col in row.index])
-                
+
                 sql = text(f"""
                     REPLACE INTO {table_name} ({columns})
                     VALUES ({placeholders})
                 """)
-                
+
                 conn.execute(sql, row.to_dict())
-            
+
             conn.commit()
-        
+
         return len(df)
-        
+
     except Exception as e:
         print(f"❌ upsert_stock_data 失敗: {e}")
         return 0
@@ -290,9 +296,11 @@ def get_market_trend(date_str):
         if close is None:
             return 'BEAR'
         
-        # 若 MA60 有效（非 None / 非 0），直接比對
+        # 若 MA60 有效（非 None / 非 0），比對（含 3% 容忍區間）
+        # 放寬條件：close > MA60 * 0.97 即視為多頭，避免小幅回檔誤觸熔斷
         if ma60 is not None and float(ma60) > 0:
-            if float(close) > float(ma60):
+            tolerance = float(ma60) * 0.97
+            if float(close) > tolerance:
                 return 'BULL'
             else:
                 return 'BEAR'
@@ -321,8 +329,8 @@ def get_market_trend(date_str):
             
             computed_ma60 = sum(prices) / len(prices)
             current_close = prices[0]  # 最新收盤
-            
-            if current_close > computed_ma60:
+
+            if current_close > computed_ma60 * 0.97:
                 return 'BULL'
             else:
                 return 'BEAR'
@@ -626,7 +634,19 @@ def save_backtest_results(trades_df: pd.DataFrame = None, equity_df: pd.DataFram
         engine = get_db_engine()
         with engine.connect() as conn:
             if trades_df is not None:
-                conn.execute(text("DELETE FROM backtest_trades"))
+                if trades_df.empty:
+                    # 無資料時才清空全表
+                    conn.execute(text("DELETE FROM backtest_trades"))
+                else:
+                    # 僅清除本次回測涉及的策略舊資料，保留其他策略歷史
+                    strategies_in_batch = trades_df['strategy'].dropna().unique().tolist()
+                    if strategies_in_batch:
+                        placeholders = ', '.join(f':s{i}' for i in range(len(strategies_in_batch)))
+                        params = {f's{i}': s for i, s in enumerate(strategies_in_batch)}
+                        conn.execute(
+                            text(f"DELETE FROM backtest_trades WHERE strategy IN ({placeholders})"),
+                            params
+                        )
                 if not trades_df.empty:
                     insert_sql = text("""
                         INSERT INTO backtest_trades
@@ -877,3 +897,54 @@ def upsert_financial_statements(conn, df, west_year: int, quarter: int):
         count += 1
 
     return count
+
+
+# ==========================================
+# 📊 產業分類對照
+# ==========================================
+
+_sector_cache: dict = {}
+
+
+def _load_sector_map() -> dict:
+    """載入 stock_sector_map.json（含快取）"""
+    global _sector_cache
+    if _sector_cache:
+        return _sector_cache
+    try:
+        import json
+        import os
+        path = os.path.join(os.path.dirname(__file__), 'stock_sector_map.json')
+        with open(path, 'r', encoding='utf-8') as f:
+            _sector_cache = json.load(f)
+    except Exception:
+        _sector_cache = {}
+    return _sector_cache
+
+
+def get_stock_sector(stock_id: str) -> str:
+    """查詢個股所屬產業
+
+    Args:
+        stock_id: 股票代號（如 '2330'）
+
+    Returns:
+        產業名稱（如 '半導體'），查無則回傳 '其他'
+    """
+    m = _load_sector_map()
+    info = m.get(str(stock_id).strip(), {})
+    return info.get('sector', '其他')
+
+
+def get_stocks_by_sectors(sectors: list[str]) -> list[str]:
+    """取得屬於指定產業的所有股票代號
+
+    Args:
+        sectors: 產業名稱列表（如 ['半導體', '航運']）
+
+    Returns:
+        符合的 stock_id 列表
+    """
+    m = _load_sector_map()
+    target = set(sectors)
+    return [sid for sid, info in m.items() if info.get('sector') in target]

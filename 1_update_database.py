@@ -173,8 +173,17 @@ def fetch_tpex_data(date_str, max_retries=3):
                 if attempt < max_retries - 1: continue
                 return None
 
-            if data.get('aaData'):
-                df = pd.DataFrame(data['aaData'])
+            # 支援新舊兩種 API 回應格式
+            stock_raw = data.get('aaData')  # 舊格式
+            if not stock_raw and data.get('tables'):
+                # 新格式：tables[0]['data']
+                for tbl in data['tables']:
+                    if isinstance(tbl, dict) and tbl.get('data'):
+                        stock_raw = tbl['data']
+                        break
+
+            if stock_raw:
+                df = pd.DataFrame(stock_raw)
                 price_df_stock = df.iloc[:, [0, 4, 5, 6, 2, 8]].copy()
                 price_df_stock.columns = ['stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']
             
@@ -188,8 +197,16 @@ def fetch_tpex_data(date_str, max_retries=3):
             except ValueError:
                 data = {} # ETF 失敗不影響整體
 
-            if data.get('aaData'):
-                df = pd.DataFrame(data['aaData'])
+            # 支援新舊兩種 API 回應格式
+            etf_raw = data.get('aaData')
+            if not etf_raw and data.get('tables'):
+                for tbl in data['tables']:
+                    if isinstance(tbl, dict) and tbl.get('data'):
+                        etf_raw = tbl['data']
+                        break
+
+            if etf_raw:
+                df = pd.DataFrame(etf_raw)
                 price_df_etf = df.iloc[:, [0, 4, 5, 6, 2, 7]].copy()
                 price_df_etf.columns = ['stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']
 
@@ -213,8 +230,16 @@ def fetch_tpex_data(date_str, max_retries=3):
             
             try:
                 data = res.json()
-                if data.get('aaData'):
-                    df = pd.DataFrame(data['aaData'])
+                # 支援新舊兩種 API 回應格式
+                chips_raw = data.get('aaData')
+                if not chips_raw and data.get('tables'):
+                    for tbl in data['tables']:
+                        if isinstance(tbl, dict) and tbl.get('data'):
+                            chips_raw = tbl['data']
+                            break
+
+                if chips_raw:
+                    df = pd.DataFrame(chips_raw)
                     # TPEx 3itrade 欄位: [0]=代號, 外資相關..., 投信相關..., 自營商相關...
                     # 實測欄位位置: foreign_buy=col10, trust_buy=col13, dealer_buy=col16
                     try:
@@ -281,6 +306,15 @@ def process_and_save(df, date_str, engine):
     
     df['trade_date'] = date_str
     df = df[df['close_price'] > 0]
+
+    # 過濾權證（保留個股 + ETF + 債券ETF，只排除權證等衍生品）
+    # 個股: 4碼 1xxx-9xxx | ETF/債券: 00 開頭 (0050, 006208, 00679B, 00631L...)
+    before_filter = len(df)
+    df['stock_id'] = df['stock_id'].astype(str).str.strip()
+    df = df[df['stock_id'].str.match(r'^([1-9]\d{3}|00)')]
+    filtered_out = before_filter - len(df)
+    if filtered_out > 0:
+        print(f"  📊 過濾權證: {before_filter} → {len(df)} 筆（排除 {filtered_out} 筆權證/衍生品）")
     
     try:
         from tool.db_helper import upsert_stock_data

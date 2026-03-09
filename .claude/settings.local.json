@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source:*)",
+      "Bash(\"./myenv/Scripts/python.exe\":*)",
+      "Bash(./myenv/Scripts/python.exe:*)",
+      "Bash(ls:*)",
+      "Bash(schtasks:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(myenv/Scripts/pip.exe list:*)",
+      "Bash(myenv/Scripts/python.exe:*)",
+      "Bash(/tmp/check_tasks.ps1:*)",
+      "Bash(/tmp/get_tasks.ps1:*)",
+      "Bash(/tmp/remove_daily.ps1:*)",
+      "Bash(D:/01_Project/Stocke/Stock_Linbotv1/myenv/Scripts/python.exe:*)",
+      "Bash(D:/01_Project/Stocke/Stock_Linbotv1/myenv/Scripts/pip.exe install:*)",
+      "Bash(netstat:*)",
+      "Bash(do taskkill:*)",
+      "Bash(do:*)",
+      "Bash(PYTHONIOENCODING=utf-8 myenv/Scripts/python.exe:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

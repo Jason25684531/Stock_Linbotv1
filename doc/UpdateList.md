@@ -1,7 +1,7 @@
 # 📋 Stock Linbot V1 更新日誌
 
-> **最後更新**: 2026-02-15  
-> **當前版本**: V36 Phase 5 — Code Consolidation & SDK Upgrade (程式碼整合與 SDK 升級)  
+> **最後更新**: 2026-03-09
+> **當前版本**: V38 — 早晚雙模式推播 + Gemini 新聞摘要 + Windows 排程
 > **維護狀態**: 🟢 穩定運行
 
 ---
@@ -10,6 +10,8 @@
 
 | 版本 | 日期 | 重點功能 | 狀態 |
 |------|------|---------|------|
+| [V38 — 早晚雙模式推播](#v38--早晚雙模式推播--gemini-新聞摘要--windows-排程-2026-03-09) | 2026-03-09 | news_agent 重構 + 5_push_to_line 早晚模式 + Flex Message + Windows 排程 | ✅ 完成 |
+| [V36 Phase 6 — Integration Audit & Cleanup](#v36-phase-6--frontend-backend-integration-audit--cleanup-2026-03-06) | 2026-03-06 | 前後端嫁接驗證 + 資料來源優先序統一 + 重複程式碼大幅精簡 + null 安全加固 | ✅ 完成 |
 | [V36 Phase 5 — Code Consolidation](#v36-phase-5--code-consolidation--sdk-upgrade-2026-02-15) | 2026-02-15 | V30_PARAMS 單一來源 + app.py 模型統一 + 財報 UPSERT 共用 + SDK v3 升級 + 冗餘腳本清除 | ✅ 完成 |
 | [V36 Phase 4 — Architecture Deep Cleanup](#v36-phase-4--architecture-deep-cleanup-架構深度清洗-2026-02-16) | 2026-02-16 | 重複函式整併 + 冗餘檔案刪除 + 測試 Fixture 共用化 + V37/V38 策略支援 | ✅ 完成 |
 | [V35 Phase 3 — V36 Chip Momentum](#v35-phase-3--v36-chip-momentum-strategy-2026-02-15) | 2026-02-15 | V36 籌碼動能策略 + 訓練管線增強 + 每日選股籌碼指標 | ✅ 完成 |
@@ -29,6 +31,131 @@
 | [Phase 5: Backtesting & Visualization](#phase-5-backtesting--visualization-2026-02-02) | 2026-02-02 | 多策略組合回測 + Plotly 視覺化 + Web 整合 | ✅ 完成 |
 | [V33 Phase 2+ Multi-Strategy](#v33-phase-2-multi-strategy-多策略並行--安全強化-2026-01-31) | 2026-01-31 | 多策略並行 + 環境變數隔離 + Web 登入 | ✅ 完成 |
 | [V33 Phase 2 Refactor](#v33-phase-2-refactor-深度代碼清理-2026-01-27) | 2026-01-27 | 全面清理重複代碼 + 架構優化 | ✅ 完成 |
+
+---
+
+## ✅ V38 — 早晚雙模式推播 + Gemini 新聞摘要 + Windows 排程 (2026-03-09)
+
+### 🎯 變更重點
+
+將推播系統從單一模式升級為「早晨大局觀」與「晚間選股策劃」雙模式，整合 Gemini LLM 進行鉅亨網新聞摘要，並建立 Windows 排程自動化。
+
+### 📝 變更內容
+
+| 檔案 | 變更類型 | 說明 |
+|------|---------|------|
+| `tool/news_agent.py` | 🔄 重構 | 爬取鉅亨網美股/國際政經/台股 RSS → Gemini 濃縮為 3 個 Bullet Points；新增 `get_morning_news_summary()` |
+| `5_push_to_line.py` | 🔄 重構 | 新增 `--time morning/evening` 參數；morning=新聞摘要+隨機策略精選 Flex；evening=全策略日報+明日關注 Flex |
+| `execution/morning_run.bat` | 🆕 新增 | 早晨排程批次檔（08:30 觸發 morning 模式） |
+| `execution/evening_run.bat` | 🆕 新增 | 晚間排程批次檔（19:00 觸發 1→2→5 evening 完整流程） |
+| Windows 排程 | 🆕 新增 | `Stock_Linbot_Morning` (08:30) + `Stock_Linbot_Evening` (19:00) |
+| `openspec/project.md` | 🔄 更新 | 完整專案架構文件（含流程串接/啟動方式/測試方式） |
+| `README.md` | 🔄 更新 | 同步更新架構圖/目錄結構/版本資訊至 V38 |
+| `doc/UpdateList.md` | 🔄 更新 | 新增本次變更記錄 |
+
+### 🔧 排程設定
+
+| 排程名稱 | 觸發時間 | 執行內容 |
+|----------|---------|---------|
+| `Stock_Linbot_Morning` | 每天 08:30 | `morning_run.bat` → `5_push_to_line.py --time morning` |
+| `Stock_Linbot_Evening` | 每天 19:00 | `evening_run.bat` → `1_update_database.py` → `2_rundaily.py` → `5_push_to_line.py --time evening` |
+
+### 🧪 驗證結果
+
+- ✅ `python 5_push_to_line.py --help` 顯示 `--time {morning,evening}` 參數
+- ✅ `python -m py_compile tool/news_agent.py` 語法正確
+- ✅ `python -m py_compile 5_push_to_line.py` 語法正確
+- ✅ Windows 排程 `Stock_Linbot_Morning` / `Stock_Linbot_Evening` 已掛載 (State: Ready)
+
+### ⚠️ 環境需求
+
+- `GEMINI_KEY` 環境變數需設定於 `.env`（早晨新聞摘要所需）
+- 虛擬環境需已安裝 `feedparser`, `google-generativeai`
+
+---
+
+## ✅ V36 Phase 6 — Frontend-Backend Integration Audit & Cleanup (2026-03-06)
+
+### 🎯 變更重點
+
+全面前後端嫁接驗證 + 資料來源優先序統一 + 重複程式碼大幅精簡。確認近期交易、即時選股訊號、資產曲線三大區塊皆能正確顯示最新資料（至 2026-03-06）。117 項測試全數通過。
+
+### 🩺 問題診斷結果
+
+| 疑似問題 | 實際原因 | 處置 |
+|----------|---------|------|
+| 近期交易停在 2 月資料 | CSV fallback (`backtest_result.csv`) 僅含至 2 月的舊回測資料；DB 已有 3 月資料但 `/api/summary` 優先讀 CSV | 統一所有 API 為 **DB 優先、CSV 降級** |
+| 資產曲線顯示錯誤 | `summary.sharpe.toFixed(3)` 在值為 null 時引發 TypeError | 加入 null 安全檢查 |
+| `/api/daily-signals` 使用 `'active' in locals()` 判斷策略 | Python except 區塊不清除區域變數，可能使用到已失效的 `active` 參照 | 改用明確的 `_active_strategy` 變數 |
+
+### 📝 變更內容
+
+#### 1. 資料來源優先序統一（`app.py`）
+
+| API 端點 | 變更前 | 變更後 |
+|----------|--------|--------|
+| `/api/summary` | CSV 優先 → DB 降級 | **DB 優先 → CSV 降級**（與 `/api/trades`, `/api/performance` 一致） |
+
+#### 2. 前端 null 安全加固（`templates/dashboard.html`）
+
+- `summary.sharpe.toFixed(3)` → `summary.sharpe != null ? summary.sharpe.toFixed(3) : 'N/A'`
+
+#### 3. 重複程式碼精簡（`app.py`）— 淨減 ~100 行
+
+| 項目 | 變更前 | 變更後 | 淨減 |
+|------|--------|--------|------|
+| `import traceback` | 每個 except 區塊重複 import（7 處） | 統一在模組頂層 import 一次 | -7 行 |
+| 策略切換指令（Line Bot） | 7 段幾乎相同的 if-elif 區塊（~125 行） | 資料驅動查找表 `_STRATEGY_SWITCH_MAP` + 反向索引 + `_match_strategy_switch()` | -85 行 |
+| `/api/daily-signals` 中 `'active' in locals()` | 使用 `locals()` 內省判斷策略是否存在 | 改為明確的 `_active_strategy` 變數賦值 | 更安全、語義更清晰 |
+| 死碼/過期注釋 | `# 設定管理函數已移至...` 空區塊 + `/api/live_signals 已整併...` | 移除 | -5 行 |
+
+#### 4. 回測常數統一（`4_run_backtest.py`）
+
+| 常數 | 變更前 | 變更後 |
+|------|--------|--------|
+| `FEE_RATE` | 硬編碼 `0.001425` | `Config.FEE_RATE` |
+| `TAX_RATE` | 硬編碼 `0.003` | `Config.TAX_RATE` |
+
+#### 5. 新增輔助函式/常數（`app.py`）
+
+| 名稱 | 說明 |
+|------|------|
+| `_STRATEGY_SWITCH_MAP` | 策略切換指令查找表（key → aliases, display, features） |
+| `_STRATEGY_ALIAS_INDEX` | 預建反向索引（alias → strategy_key），O(1) 查找 |
+| `_match_strategy_switch(text)` | 匹配策略切換指令，回傳 (key, display, features) 或 None |
+
+### 🏗️ 架構健全性確認
+
+| 面向 | 狀態 | 說明 |
+|------|------|------|
+| 分層依賴流 | ✅ | App → Strategy → Indicators → DB Helper → Config 無違反 |
+| 策略工廠模式 | ✅ | 7 個策略（V31/V33/V34/V35/V36/V37/V38）皆正確繼承 BaseStrategy |
+| DB 操作封裝 | ✅ | 所有 DB 操作經由 `tool/db_helper.py`，app.py 無原始 SQL |
+| 前後端嫁接 | ✅ | 5 個 API 端點（summary/performance/trades/daily-signals/pk-battle）返回格式與前端 Alpine.js 綁定一致 |
+| 資料一致性 | ✅ | 所有 API 統一 DB 優先 → CSV 降級策略 |
+| null 安全 | ✅ | buy_price/sell_price/sharpe 前端均有 null guard |
+| 策略切換可擴展性 | ✅ | 新增策略只需在 `_STRATEGY_SWITCH_MAP` 加一筆記錄 |
+
+### 📊 已知待改善項目（記錄供後續參考）
+
+| 項目 | 嚴重度 | 說明 |
+|------|--------|------|
+| API 路由缺 `@login_required` | 中 | `/api/trades` 等 7 個 API 未限制認證 |
+| `/api/pk/battle` 使用 Mock 資料 | 低 | `user_roi` / `user_win_rate` 固定回傳硬編碼值 |
+| `tool/strategy.py` 仍為相容層 | 低 | 530 行，長期應遷移至 `line_message_builder.py` 後退役 |
+| 兩條個股查詢路徑 | 低 | `查詢2330` vs `2330` 走不同格式化函式，未來可統一 |
+| Sharpe 無風險利率不一致 | 低 | `viz_helper` 使用 2%，`Config.RISK_FREE_RATE` 為 1% |
+
+### 📊 測試結果
+
+```
+117 passed, 0 failed, 3 warnings in 1.15s
+API 端點驗證:
+  /api/trades       → 50 筆交易，最新 sell_date: 2026-03-06 ✅
+  /api/performance  → 186 天資產曲線，範圍: 2025-06-02 ~ 2026-03-06 ✅
+  /api/summary      → ROI: 6.25%, MDD: 13.74%, Sharpe: 0.33 ✅
+  /api/daily-signals → V31 返回 2 檔股票 (2026-03-06) ✅
+```
 
 ---
 

@@ -1,17 +1,17 @@
-# Stock AI Line Bot V36
+# Stock AI Line Bot V38
 
-> 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論  
-> 🔥 **8 Strategy Factory** | V31/V33/V34/V35/V36/V37/V38 策略工廠 + BaseStrategy 繼承體系  
-> 📊 **Chip Data Infrastructure** | 融資融券 + 自營商 + `chip_score` 籌碼綜合分數  
-> 💼 **V35 經營效益策略** | 專注營業利益率高效益成長股  
-> 🔄 **V37 均值回歸** | KD 黃金交叉 + 布林收斂 + 低基期反轉  
-> 💰 **V38 高殖利率** | 營業利益率 + EPS 正成長 + 低波動價值股  
-> 📲 **Line Bot Flex Message** | 輸入股票代號即取得 AI 健康診斷卡片  
-> ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較  
-> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試  
-> 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復  
-> 📅 **最後更新**: 2026-02-15  
-> ✅ **系統狀態**: 穩定運行（Phase 5 程式碼整合：SDK v3 升級 + 財報 UPSERT 共用 + 冗餘清除 + 117 測試通過）
+> 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論
+> 🔥 **7 Strategy Factory** | V31/V33/V34/V35/V36/V37/V38 策略工廠 + BaseStrategy 繼承體系
+> 📊 **Chip Data Infrastructure** | 融資融券 + 自營商 + `chip_score` 籌碼綜合分數
+> 💼 **V35 經營效益策略** | 專注營業利益率高效益成長股
+> 🔄 **V37 均值回歸** | KD 黃金交叉 + 布林收斂 + 低基期反轉
+> 💰 **V38 高殖利率** | 營業利益率 + EPS 正成長 + 低波動價值股
+> 📲 **Line Bot Flex Message** | 輸入股票代號即取得 AI 健康診斷卡片
+> ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較
+> 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試
+> 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復
+> 📅 **最後更新**: 2026-03-09
+> ✅ **系統狀態**: 穩定運行（多策略並行 + 每日自動化 + Flex Message 診斷卡片）
 
 ---
 
@@ -31,7 +31,7 @@
 | 🎫 個股 AI 診斷 (Flex) | 三維度健康診斷卡片（技術面+基本面+AI分數）| 輸入 4 碼股票代號 |
 | 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:1688` |
 
-### 🧭 當前策略門檻（2026-02）
+### 🧭 當前策略門檻（2026-03）
 
 | 策略 | 目前核心條件 | 說明 |
 |------|-------------|------|
@@ -45,64 +45,65 @@
 
 ---
 
-## 🏗️ 系統架構 (V36 Phase 4)
+## 🏗️ 系統架構 (V38)
 
 **設計原則**：DRY + 單一職責 + 統一介面 + 安全優先 + 資料驅動
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  🌐 應用層 (Application)                │
-│   🔐 Flask Login │ Line Bot │ Web Dashboard             │
-│   1-7_*.py (自動化腳本)                                   │
+│   app.py (Flask + Line Bot Webhook, port 1688)          │
+│   daily_run.bat (自動化: 更新→選股→推播)                  │
+│   1~6_*.py (資料更新/選股/訓練/回測/推播/最佳化)          │
 └────────────┬────────────────────────────────────────────┘
-             │ 統一使用共用函數，無重複代碼
+             │
 ┌────────────▼────────────────────────────────────────────┐
-│         📊 回測層 (Backtesting & Visualization)         │
-│   4_run_backtest.py (策略委派出場 → check_exit_signal)   │
-│   tool/viz_helper.py (Plotly 視覺化)                     │
+│         📊 呈現層 (Presentation)                        │
+│   templates/ (dashboard, backtest, login)                │
+│   tool/line_message_builder.py (Flex Message 卡片)       │
+│   tool/viz_helper.py (Plotly 互動式圖表)                 │
+│   tool/report_helper.py (個股 AI 診斷報告)               │
 └────────────┬────────────────────────────────────────────┘
-             │ 回測依賴策略邏輯
+             │
 ┌────────────▼────────────────────────────────────────────┐
 │                 📊 策略層 (Multi-Strategy)              │
-│   tool/strategy_manager.py (策略工廠，支援 8 策略並行)    │
+│   tool/strategy_manager.py (Singleton 工廠, 7 策略註冊)  │
 │   tool/strategies/base.py (BaseStrategy + check_exit)    │
-│   tool/strategies/ (V31, V33, V34, V35, V36, V37, V38)  │
-│   tool/strategy.py (V30/V31 共用邏輯，遷移中)            │
-│   tool/report_helper.py (個股 AI 診斷報告)               │
-│   tool/line_message_builder.py (Flex Message 卡片建構)    │
+│   tool/strategies/v31~v38 (各策略實作)                    │
+│   tool/strategy.py (V30/V31 向後相容層)                   │
 └────────────┬────────────────────────────────────────────┘
-             │ 策略依賴技術指標與資料查詢
+             │
 ┌────────────▼────────────────────────────────────────────┐
-│                   📈 分析層 (Indicators)                 │
+│                   📈 指標層 (Indicators)                 │
 │   tool/calc_indicators.py                                │
-│   (MA, RSI, MACD, KD, BB, ATR, 比例特徵)                 │
+│   (MA, RSI, MACD, KD, BB, ATR, NATR, chip_score)        │
+│   tool/model_utils.py (XGBoost 模型載入, LRU 快取)       │
 └────────────┬────────────────────────────────────────────┘
-             │ 指標計算需要資料支持
+             │
 ┌────────────▼────────────────────────────────────────────┐
 │                   🗄️ 資料層 (Data)                       │
-│   tool/db_helper.py (統一資料庫入口)                      │
-│   - get_db_engine(): 資料庫連接                          │
-│   - get_stock_data(): 股票資料查詢                       │
-│   - get_market_trend(): 市場趨勢判斷                     │
-│   - get/update_setting(): 參數管理                       │
-│   - create_user_simulation_trade(): PK 模擬交易寫入       │
+│   tool/db_helper.py (唯一 DB 存取入口, Singleton 連線池) │
+│   tool/crawlers/ (融資融券 + MOPS 季報爬蟲)              │
+│   tool/update_monthly_revenue.py (月營收爬蟲)             │
+│   tool/update_financials_mops.py (季度財報更新)           │
 └────────────┬────────────────────────────────────────────┘
              │
 ┌────────────▼────────────────────────────────────────────┐
 │                   ⚙️ 配置層 (Config)                     │
-│   config.py + .env (環境變數隔離)                         │
-│   MySQL (Docker) + XGBoost Model (.pkl)                  │
+│   config.py (常數 + V34/V35 Presets + MODE_CMD_MAP)      │
+│   .env (敏感資訊: DB_URL, LINE_TOKEN, LINE_SECRET)       │
+│   strategy_settings.json (策略啟用狀態, V3 格式)          │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 🔑 關鍵設計決策 (V36 Phase 4)
+### 🔑 關鍵設計決策
 
 | 原則 | 實施方式 | 效益 |
 |------|---------|------|
 | **策略解耦** | `BaseStrategy.check_exit_signal()` 統一出場邏輯 | 回測引擎只做調度，不含策略判斷 |
 | **組合回測** | `PortfolioBacktestEngine` 支援多策略，各策略載入專屬 AI 模型 | 驗證策略組合績效 |
 | **視覺化** | Plotly 互動式圖表 | 直觀展示權益曲線與回撤 |
-| **多策略並行** | `StrategyManager` 支援列表形式，8 策略註冊 | 同時運行 V33+V34+V36…，分散風險 |
+| **多策略並行** | `StrategyManager` 支援列表形式，7 策略註冊 | 同時運行 V33+V34+V36…，分散風險 |
 | **安全優先** | 敏感資訊隔離至 `.env`，Web 需登入，SQL 參數化 | 防止 SQL 注入與資料外洩 |
 | **統一入口** | 所有 DB 操作經 `tool.db_helper`（含 safe_float/safe_int/get_open_holdings） | 防 SQL Injection、易測試 |
 | **Flex Message** | `line_message_builder.py` 建構互動卡片 | 取代純文字，視覺化診斷 |
@@ -172,21 +173,40 @@ copy .env.example .env
 # - LINE_TOKEN=你的_Line_Channel_Access_Token
 # - LINE_SECRET=你的_Line_Channel_Secret
 # - ADMIN_PASSWORD=Web_Dashboard_密碼
+# - GEMINI_KEY=你的_Google_Gemini_API_Key（早晨新聞摘要所需）
 
 # 5. 初始化資料庫
 python init_settings.py
 ```
 
-### 每日更新流程
+### 每日自動化排程（Windows 工作排程器）
+
+系統已註冊兩個 Windows 排程，全自動運行：
+
+| 排程 | 時間 | 批次檔 | 內容 |
+|------|------|--------|------|
+| `Stock_Linbot_Morning` | 每天 08:30 | `morning_run.bat` | 早晨大局觀（新聞摘要 + 精選一股） |
+| `Stock_Linbot_Evening` | 每天 19:00 | `evening_run.bat` | 資料更新 → 選股 → 晚間推播 |
+
+### 手動執行推播
 
 ```powershell
-# 一鍵整合腳本（推薦）
-python 2_rundaily.py
+# 早晨大局觀（Gemini 新聞摘要 + 隨機策略精選 Flex）
+python 5_push_to_line.py --time morning
 
-# 或手動分步執行
-python 1_update_database.py                           # 爬取股價
-python -c "from tool.calc_indicators import fix_database_indicators; fix_database_indicators()"  # 計算指標
-python 5_push_to_line.py                              # Line 推播
+# 晚間選股策劃（全策略推薦 + 明日關注 Flex）
+python 5_push_to_line.py --time evening
+
+# 完整晚間流程（資料更新 → 選股 → 推播）
+execution\evening_run.bat
+```
+
+### 手動分步執行
+
+```powershell
+python 1_update_database.py   # 爬取股價+籌碼+月營收+季報
+python 2_rundaily.py          # 計算指標+選股+AI評分
+python 5_push_to_line.py      # Line 推播（預設 evening 模式）
 ```
 
 ### 啟動與關閉（Windows / 虛擬環境）
@@ -306,24 +326,30 @@ python app.py
 ```
 Stock_Linbotv1/
 ├── 📊 每日流程腳本 (依執行順序編號)
-│   ├── 1_update_database.py     # 爬取股價 + 籌碼
-│   ├── 2_rundaily.py            # 整合腳本 (一鍵執行)
+│   ├── 1_update_database.py     # 爬取股價+籌碼+月營收+季報
+│   ├── 2_rundaily.py            # 計算指標+多策略選股+AI評分
 │   ├── 3_train_model.py         # 多策略 XGBoost 批次訓練
-│   ├── 4_run_backtest.py        # 統一回測引擎
-│   ├── 5_push_to_line.py        # Line 推播 (SDK v3)
-│   └── 6_optimize_params.py     # Optuna 參數優化
+│   ├── 4_run_backtest.py        # 多策略回測引擎（含組合回測）
+│   ├── 5_push_to_line.py        # Line 推播 (SDK v3 Broadcast)
+│   └── 6_optimize_params.py     # Optuna 參數最佳化
+│
+├── 🚀 execution/ — 自動化腳本 + Windows 排程
+│   ├── morning_run.bat          # 早晨排程 (08:30): 新聞摘要+精選推播
+│   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
+│   ├── daily_run.bat            # 一鍵自動化 (1→2→5 三步驟，舊版相容)
+│   └── start_web.bat            # 一鍵啟動 Web 服務
 │
 ├── 🌐 使用者介面
 │   ├── app.py                   # Flask + Line Bot (port 1688)
 │   └── templates/               # Web Dashboard (Jinja2)
 │       ├── base.html            # Layout 基底
-│       ├── dashboard.html       # 儀表板
-│       ├── backtest.html        # 回測頁面
-│       ├── backtest_result.html # 回測結果
+│       ├── dashboard.html       # 主儀表板
+│       ├── backtest.html        # 回測設定頁
+│       ├── backtest_result.html # 回測結果（Plotly 圖表）
 │       └── login.html           # 登入頁
 │
 ├── ⚙️ 核心模組 (tool/) — 統一共用函數，禁止 raw SQL
-│   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry, 8 策略)
+│   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry, 7 策略)
 │   ├── strategies/              # 策略實作目錄
 │   │   ├── base.py              # BaseStrategy 抽象基底 (含 check_exit_signal)
 │   │   ├── v31_hybrid.py        # V31 混合策略 (V30+XGBoost)
@@ -333,71 +359,100 @@ Stock_Linbotv1/
 │   │   ├── v36_chip_momentum.py # V36 籌碼動能策略
 │   │   ├── v37_mean_reversion.py# V37 均值回歸策略
 │   │   └── v38_value_dividend.py# V38 高殖利率價值策略
-│   ├── strategy.py              # V30/V31 向後相容層 (格式化函式，預計退役)
+│   ├── strategy.py              # V30/V31 向後相容層 (格式化函式)
 │   ├── line_message_builder.py  # Line Flex Message 卡片建構器
 │   ├── report_helper.py         # 個股 AI 診斷報告聚合
 │   ├── calc_indicators.py       # 技術指標 + 籌碼指標 (唯一來源)
 │   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
-│   ├── db_helper.py             # 資料庫操作 (唯一入口，含財報 UPSERT 共用函式)
+│   ├── db_helper.py             # 資料庫操作 (唯一入口)
 │   ├── model_utils.py           # XGBoost 模型載入工具 (LRU 快取)
-│   ├── update_financials_mops.py    # 單季財報更新 (使用 db_helper 共用函式)
-│   ├── update_history_financials.py # 歷史財報批量更新 (使用 db_helper 共用函式)
-│   └── news_agent.py            # RSS 新聞 + Gemini 分析 (未連接主管線)
+│   ├── update_monthly_revenue.py    # 月營收爬蟲 (MOPS 靜態 HTML)
+│   ├── update_financials_mops.py    # 季度財報更新 (MOPS 備援站)
+│   ├── update_history_financials.py # 歷史財報批量更新
+│   ├── news_agent.py            # RSS 新聞 + Gemini 分析 (實驗性)
+│   └── crawlers/                # 爬蟲模組
+│       ├── chip_data_scraper.py # 融資融券爬蟲 (TWSE/TPEx)
+│       └── quarterly_scraper.py # MOPS 季報爬蟲 (mopsov 備援站)
 │
 ├── 🧪 測試 (test/) — pytest + conftest 共用 Fixture
 │   ├── conftest.py              # 共用 Fixture (manager, empty_df)
-│   ├── test_strategy_factory.py # 策略載入 & 篩選 (3 tests)
-│   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 + 向後相容 (13 tests)
-│   ├── test_phase2_chip_data.py # 籌碼指標 (16 tests)
-│   ├── test_v36_chip_momentum.py# V36 策略 (29 tests)
-│   └── test_v37_v38_strategies.py# V37+V38 策略 (56 tests)
+│   ├── test_strategy_factory.py # 策略載入 & 篩選
+│   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 + 向後相容
+│   ├── test_phase2_chip_data.py # 籌碼指標
+│   ├── test_v36_chip_momentum.py# V36 策略
+│   └── test_v37_v38_strategies.py# V37+V38 策略
 │
 ├── 📦 數據與模型
-│   └── ML_Data/                 # 模型 + 回測結果
-│       ├── pkl/                 # XGBoost 模型 (每策略獨立檔案)
-│       └── *.csv                # 回測報告
+│   └── ML_Data/pkl/             # XGBoost 模型 (每策略獨立 .pkl)
 │
 ├── 🔧 工具腳本
-│   └── scripts/                 # 診斷/除錯工具
-│       └── diagnose_strategies.py # 策略條件診斷
+│   └── scripts/diagnose_strategies.py  # 策略條件診斷
 │
 ├── 📄 設定檔
-│   ├── config.py                # 統一設定中心 (含 V34/V35 Presets + MODE_CMD_MAP)
-│   ├── strategy_settings.json   # 策略活動狀態 (V3 格式)
-│   ├── requirements.txt         # Python 依賴
-│   └── docker-compose.yaml      # Docker 部署
+│   ├── config.py                # 統一設定中心 (常數+Presets+MODE_CMD_MAP)
+│   ├── strategy_settings.json   # 策略啟用狀態 (V3 JSON 格式)
+│   ├── init_settings.py         # 資料庫初始化腳本
+│   └── .env                     # 敏感資訊 (DB_URL, LINE_TOKEN 等)
 │
 └── 📝 文檔
     ├── README.md                # 本文件
-    ├── UpdateList.md            # 版本更新記錄
-    ├── doc/                     # 輔助文件 (含 DASHBOARD_FIX_GUIDE.md)
-    └── openspec/                # 開發規範
+    ├── doc/                     # 輔助文件
+    └── openspec/                # 開發規範 (project.md, AGENTS.md)
+```
+
+### 核心流程串接
+
+**每日自動化流程 (`daily_run.bat`)**：
+```
+1_update_database.py          2_rundaily.py                    5_push_to_line.py
+  ├ TWSE API → 上市股價       ├ 載入 150 天歷史資料              ├ 讀取 daily_recommendations
+  ├ TPEx API → 上櫃股價       ├ compute_indicators_from_history  ├ 組合推播訊息
+  ├ chip_data_scraper          │  (MA/RSI/MACD/KD/BB/ATR/NATR  └ Line SDK v3 Broadcast
+  │  → 融資融券餘額             │   chip_score/consec_days)
+  ├ MOPS → 月營收 YoY         ├ merge_financial_data (季報)
+  └ MOPS → 季度財報            ├ merge_revenue_data (月營收)
+     ↓ 寫入 DB                 └ 遍歷策略:
+                                  ├ filter_candidates() 硬篩選
+                                  ├ load_model() AI 模型
+                                  ├ predict_proba() 評分
+                                  └ 存入 daily_recommendations
+```
+
+**Web + Line Bot (`app.py`, port 1688)**：
+```
+Flask App
+├ Web: /login → /dashboard → /backtest → /backtest_result (Plotly)
+├ API: /api/summary, /api/daily-signals, /api/backtest-result
+└ Line Bot: POST /callback
+   ├ 4碼數字 → report_helper → Flex 卡片
+   ├ "推薦" → strategy.get_best_stocks → Carousel
+   ├ "切換V3x" → strategy_manager.set_active_strategy
+   └ "設定停損 x" → db_helper.update_setting
 ```
 
 ### 模組依賴關係
 
 ```
-應用層 (app.py, 1-6_*.py 腳本)
+應用層 (app.py, 1-6_*.py, daily_run.bat)
     ↓
-回測/視覺化層 (4_run_backtest.py, tool/viz_helper.py)
+呈現層 (templates/, line_message_builder.py, viz_helper.py, report_helper.py)
     ↓
-策略層 (tool/strategy_manager.py → tool/strategies/base.py → V31/V33/V34/V35/V36/V37/V38)
+策略層 (strategy_manager.py → strategies/base.py → V31~V38)
     ↓
-指標層 (tool/calc_indicators.py)
+指標層 (calc_indicators.py, model_utils.py)
     ↓
-資料層 (tool/db_helper.py)
+資料層 (db_helper.py, crawlers/, update_*.py)
     ↓
-設定層 (config.py + .env + strategy_settings.json)
+配置層 (config.py + .env + strategy_settings.json)
 ```
 
 **設計原則**:
-- 所有資料庫操作必須通過 `tool/db_helper.py`（含 `safe_float`, `safe_int`, `get_open_holdings`, `ensure_financial_columns`, `upsert_financial_statements`）
+- 所有資料庫操作必須通過 `tool/db_helper.py`，禁止 raw SQL
 - 所有技術指標計算必須通過 `tool/calc_indicators.py`（唯一真理來源）
 - 所有策略繼承 `BaseStrategy`，共用日期提取與大盤熔斷邏輯
-- 所有常數定義必須在 `config.py`（含 V34/V35 Presets、MODE_CMD_MAP）
-- `V30_PARAMS` 透過 `_V30ParamsProxy` 委派至 `get_v30_params()` classmethod（單一真理來源）
+- 所有常數定義必須在 `config.py`
 - Line Bot 統一使用 SDK v3（`linebot.v3.messaging`）
-- Web API 回測指標統一由 `tool/viz_helper.get_backtest_summary()` 提供
+- 敏感資訊一律走 `.env` 環境變數
 - 測試 Fixture 統一由 `test/conftest.py` 提供
 
 ---
@@ -466,14 +521,13 @@ Stock_Linbotv1/
 
 ---
 
-**版本**: V36 Phase 5 — Code Consolidation & SDK Upgrade (2026-02-15)  
-**授權**: MIT License  
+**版本**: V38 (2026-03-09)
+**授權**: MIT License
 **最新變更**:
-- ✅ `Config.V30_PARAMS` 改為 `_V30ParamsProxy` 代理，消除三重定義
-- ✅ `5_push_to_line.py` 升級至 Line Bot SDK v3（`MessagingApi` + `BroadcastRequest`）
-- ✅ 財報 UPSERT 邏輯抽取至 `db_helper.ensure_financial_columns()` + `upsert_financial_statements()`
-- ✅ 移除 `Config.ENABLE_SENTIMENT_FILTER` 等死碼常數
-- ✅ 刪除根目錄 ad-hoc 腳本（test_api, test_frontend_fix, check_backtest_history, check_trades）
-- ✅ `diagnose_strategies.py` 移至 `scripts/`、`DASHBOARD_FIX_GUIDE.md` 移至 `doc/`
-- ✅ `tool/strategy.py` docstring 更新為「向後相容層」角色定義
-- ✅ 117 項測試全數通過
+- ✅ **早晚雙模式推播**：`--time morning` 早晨大局觀 / `--time evening` 晚間選股策劃
+- ✅ **Gemini 新聞摘要**：鉅亨網 RSS → Gemini 濃縮為 3 個台股影響 Bullet Points
+- ✅ **Windows 排程**：`Stock_Linbot_Morning` (08:30) + `Stock_Linbot_Evening` (19:00)
+- ✅ **Flex Message 推播**：早晨精選一股卡片 + 晚間明日關注卡片
+- ✅ 多策略並行：V31~V38 共 7 種策略
+- ✅ 組合回測 + Plotly 互動式視覺化
+- ✅ Line Bot SDK v3 + 安全強化

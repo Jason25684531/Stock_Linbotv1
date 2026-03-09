@@ -107,7 +107,10 @@ class V31HybridStrategy(BaseStrategy):
         """
         if df.empty:
             return pd.DataFrame()
-        
+
+        # 排除非個股（ETF/權證/債券/KY）
+        df = self._filter_real_stocks(df)
+
         date_str = self._extract_date_str(df)
         
         # ============================================

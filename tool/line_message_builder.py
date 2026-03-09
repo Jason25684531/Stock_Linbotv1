@@ -325,6 +325,7 @@ def create_recommendation_carousel(
 
     for i, pick in enumerate(picks[:10]):
         stock_id = str(pick.get('stock_id', '????'))
+        sector = pick.get('sector', '')
         close = pick.get('close_price', 0)
         ai_score = pick.get('ai_score')
         rsi = pick.get('rsi')
@@ -336,16 +337,25 @@ def create_recommendation_carousel(
         ai_pct = int(ai_score * 100) if ai_score else 0
         ai_bar = '🟩' * (ai_pct // 20) + '⬜' * (5 - ai_pct // 20)
 
-        # Header
+        # Header — 股號+族群放同一個 vertical box，策略標籤靠右
+        title_text = f'{medal} {stock_id}'
         header = FlexBox(
-            layout='horizontal',
+            layout='vertical',
             contents=[
-                FlexText(text=f'{medal} {stock_id}', weight='bold',
-                         size='xl', color='#FFFFFF'),
-                FlexText(text=style['label'], size='xxs',
-                         color=style['accent'], align='end',
-                         gravity='center'),
-            ],
+                FlexBox(
+                    layout='horizontal',
+                    contents=[
+                        FlexText(text=title_text, weight='bold',
+                                 size='xl', color='#FFFFFF', flex=3),
+                        FlexText(text=style['label'], size='xxs',
+                                 color=style['accent'], align='end',
+                                 gravity='center', flex=0),
+                    ],
+                ),
+            ] + ([
+                FlexText(text=sector, size='xs',
+                         color='#AAAAAA', margin='xs'),
+            ] if sector else []),
             padding_all='14px',
             background_color=style['bg'],
         )
