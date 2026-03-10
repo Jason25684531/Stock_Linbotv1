@@ -29,6 +29,8 @@ RSS_SOURCES = {
     "國際政經": "https://news.google.com/rss/search?q=site:cnyes.com+國際政經&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
     "台股": "https://news.google.com/rss/search?q=site:cnyes.com+台股&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
     "盤前盤後": "https://news.google.com/rss/search?q=site:cnyes.com+(%E7%9B%A4%E5%89%8D+OR+%E7%9B%A4%E5%BE%8C)&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+    "全球財經": "https://news.google.com/rss/search?q=site:cnyes.com+(%E5%85%A8%E7%90%83+OR+%E5%A4%AE%E8%A1%8C+OR+%E8%81%AF%E6%BA%96%E6%9C%83+OR+Fed)&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+    "美股焦點": "https://news.google.com/rss/search?q=site:cnyes.com+(S%26P500+OR+%E9%81%93%E7%93%8A+OR+%E7%B4%8D%E6%8C%87+OR+%E8%B2%BB%E5%8D%8A+OR+NVIDIA+OR+%E8%BC%9D%E9%81%94)&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
 }
 
 GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
@@ -111,7 +113,7 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
             combined += f"- {a['title']}\n  {a['summary']}\n"
             priority_titles.append(a['title'])
 
-    for label in ["美股", "國際政經", "台股"]:
+    for label in ["美股", "美股焦點", "國際政經", "全球財經", "台股"]:
         label_articles = [a for a in other_articles if a['source'] == label]
         if label_articles:
             combined += f"\n【{label}】\n"
@@ -140,7 +142,7 @@ def _summarize_with_gemini(news_text: str) -> str:
     today = datetime.datetime.now().strftime('%Y-%m-%d')
 
     prompt = f"""你是資深台股分析師。今天是 {today}。
-以下是今日鉅亨網的新聞（含盤前盤後分析、美股、國際政經、台股）：
+以下是今日鉅亨網的新聞（含盤前盤後分析、美股、美股焦點、國際政經、全球財經、台股）：
 
 {news_text}
 

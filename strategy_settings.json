@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-03-09T17:41:28.525712",
+  "last_updated": "2026-03-09T21:29:00.999210",
   "active_strategies": [
-    "v36_chip_momentum"
+    "v38_value_dividend"
   ],
   "per_strategy_overrides": {},
   "backtest_defaults": {

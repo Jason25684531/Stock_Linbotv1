@@ -8,7 +8,8 @@ Line Bot Flex Message 建構器
 2. create_recommendation_carousel(): 建構推薦清單 Flex Carousel（多張卡片）
 3. create_backtest_summary_flex(): 建構回測績效摘要 Flex 卡片
 4. create_holdings_flex(): 建構 AI 持股狀態 Flex 卡片
-5. 內部 helper: _color_by_value(), _format_pct() 等
+5. create_news_flex(): 建構新聞摘要 Flex 卡片
+6. 內部 helper: _color_by_value(), _format_pct() 等
 
 🔄 V36 Upgrade:
 - 新增 Flex Carousel 推薦清單（最多 10 張卡片）
@@ -669,5 +670,105 @@ def create_holdings_flex(
     bubble = FlexBubble(header=header, body=body)
     return FlexMessage(
         alt_text=f'💼 持有 {len(holdings)} 檔 | 平均 {avg_sign}{avg_pct:.1f}%',
+        contents=bubble,
+    )
+
+
+# ============================================
+# 📰 Flex Bubble: 新聞摘要
+# ============================================
+
+def create_news_flex(
+    news_summary: str,
+    date_str: str = '',
+) -> FlexMessage:
+    """建構新聞摘要 Flex Bubble
+
+    Args:
+        news_summary: Gemini 產生的新聞摘要文字
+        date_str: 日期字串
+
+    Returns:
+        FlexMessage: 新聞摘要 Bubble
+    """
+    # Header
+    header = FlexBox(
+        layout='horizontal',
+        contents=[
+            FlexText(text='📰 AI 財經早報', weight='bold',
+                     size='lg', color='#FFFFFF', flex=3),
+            FlexText(text=date_str, size='xs',
+                     color='#AAAAAA', align='end',
+                     gravity='center', flex=0),
+        ],
+        padding_all='14px',
+        background_color='#1A1A2E',
+    )
+
+    # Body — 將 Gemini 摘要拆行顯示
+    rows: List[FlexText | FlexSeparator] = []
+    lines = news_summary.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # 標題行（📌 開頭或 📊 開頭）用粗體 + 強調色
+        if line.startswith('📌'):
+            rows.append(FlexSeparator(margin='md'))
+            rows.append(FlexText(
+                text=line, size='sm', color='#FFD700',
+                weight='bold', wrap=True, margin='sm',
+            ))
+        elif line.startswith('📊'):
+            rows.append(FlexSeparator(margin='lg'))
+            rows.append(FlexText(
+                text=line, size='sm', color='#4FC3F7',
+                weight='bold', wrap=True, margin='sm',
+            ))
+        elif line.startswith('→'):
+            rows.append(FlexText(
+                text=line, size='xs', color='#CCCCCC',
+                wrap=True, margin='xs',
+            ))
+        else:
+            rows.append(FlexText(
+                text=line, size='xs', color='#BBBBBB',
+                wrap=True, margin='xs',
+            ))
+
+    if not rows:
+        rows.append(FlexText(
+            text=news_summary[:500], size='xs',
+            color='#CCCCCC', wrap=True,
+        ))
+
+    body = FlexBox(
+        layout='vertical',
+        contents=rows,
+        padding_all='14px',
+        background_color='#0F3460',
+    )
+
+    # Footer
+    footer = FlexBox(
+        layout='vertical',
+        contents=[
+            FlexText(
+                text='來源: 鉅亨網 | AI 分析: Gemini',
+                size='xxs', color='#888888', align='center',
+            ),
+        ],
+        padding_all='8px',
+        background_color='#1A1A2E',
+    )
+
+    bubble = FlexBubble(
+        size='mega',
+        header=header,
+        body=body,
+        footer=footer,
+    )
+    return FlexMessage(
+        alt_text=f'📰 AI 財經早報 {date_str}',
         contents=bubble,
     )

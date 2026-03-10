@@ -18,7 +18,8 @@
       "Bash(do taskkill:*)",
       "Bash(do:*)",
       "Bash(PYTHONIOENCODING=utf-8 myenv/Scripts/python.exe:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pip install:*)"
     ]
   }
 }

@@ -75,6 +75,7 @@ from tool.line_message_builder import (
     create_recommendation_carousel,
     create_backtest_summary_flex,
     create_holdings_flex,
+    create_news_flex,
 )
 
 app = Flask(__name__)
@@ -1608,17 +1609,44 @@ def handle_message(event):
     # ========== 新聞 + 選股 ==========
     elif msg_text in ["新聞", "News", "news", "早報"]:
         try:
+            import datetime as _dt
             from tool.news_agent import get_morning_news_summary
+            from tool.line_message_builder import create_news_flex
             news_summary = get_morning_news_summary()
-            # 附上今日選股推薦（純文字）
-            picks_text = get_strategy_recommendation(as_flex=False)
-            reply = f"📰 【今日新聞摘要】\n\n{news_summary}\n\n{'='*28}\n\n{picks_text}"
-            # Line 訊息長度限制 5000 字
-            if len(reply) > 4900:
-                reply = reply[:4900] + "\n..."
+            today_str = _dt.datetime.now().strftime('%Y-%m-%d')
+
+            # 新聞 Flex Bubble
+            news_flex = create_news_flex(news_summary, today_str)
+
+            # 選股 Flex Carousel
+            picks_flex = get_strategy_recommendation(as_flex=True)
+
+            messages = [news_flex]
+            if not isinstance(picks_flex, str):
+                # Flex Carousel 成功
+                messages.append(picks_flex)
+
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=messages,
+                    )
+                )
+            return
         except Exception as e:
-            print(f"⚠️ 新聞摘要失敗: {e}")
-            reply = f"❌ 新聞取得失敗: {str(e)[:100]}"
+            print(f"⚠️ 新聞 Flex 失敗，降級為純文字: {e}")
+            traceback.print_exc()
+            try:
+                from tool.news_agent import get_morning_news_summary
+                news_summary = get_morning_news_summary()
+                picks_text = get_strategy_recommendation(as_flex=False)
+                reply = f"📰 【今日新聞摘要】\n\n{news_summary}\n\n{'='*28}\n\n{picks_text}"
+                if len(reply) > 4900:
+                    reply = reply[:4900] + "\n..."
+            except Exception as e2:
+                reply = f"❌ 新聞取得失敗: {str(e2)[:100]}"
 
     # ========== 說明選單 ==========
     else:
