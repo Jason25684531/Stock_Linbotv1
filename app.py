@@ -136,6 +136,38 @@ print(f"[OK] 當前策略: {strategy_manager.get_active_strategy_name()}")
 # ============================================
 
 
+def get_ngrok_url() -> str:
+    """自動偵測 ngrok 公開 URL（查詢本機 ngrok Agent API）
+
+    ngrok 啟動後會在 http://localhost:4040/api/tunnels 提供 REST API。
+    本函式優先回傳 https tunnel；若無 ngrok 或查詢失敗，
+    則退回 Config.PUBLIC_DASHBOARD_URL（環境變數 PUBLIC_DASHBOARD_URL
+    或預設 http://localhost:1688）。
+
+    Returns:
+        str: 可供外部連線的 Dashboard 基底 URL（無尾斜線）
+    """
+    import urllib.request
+    import json as _json
+
+    ngrok_api = 'http://localhost:4040/api/tunnels'
+    try:
+        with urllib.request.urlopen(ngrok_api, timeout=2) as resp:
+            data = _json.loads(resp.read().decode('utf-8'))
+        tunnels = data.get('tunnels', [])
+        # 優先回傳 https tunnel
+        for t in tunnels:
+            if t.get('proto') == 'https':
+                return t['public_url'].rstrip('/')
+        # 若只有 http tunnel，回傳第一個
+        if tunnels:
+            return tunnels[0]['public_url'].rstrip('/')
+    except Exception:
+        pass  # ngrok 未啟動或逾時，靜默退回預設值
+
+    return Config.PUBLIC_DASHBOARD_URL.rstrip('/')
+
+
 def _normalize_backtest_dates(start_date, end_date):
     from datetime import datetime, timedelta
 
@@ -1596,9 +1628,13 @@ def handle_message(event):
 
     # ========== V32: Dashboard 連結 ==========
     elif msg_text in ["dashboard", "儀表板", "Dashboard", "看板"]:
+        dashboard_base = get_ngrok_url()
+        dashboard_url = f"{dashboard_base}/dashboard"
+        is_ngrok = 'ngrok' in dashboard_base
+        url_hint = "（ngrok 公開連結，可直接點擊）" if is_ngrok else "（本機連結，需在同一網路）"
         reply = "📊 【V32 量化交易儀表板】\n\n"
-        reply += "🔗 Dashboard URL:\n"
-        reply += "http://localhost:1688/dashboard\n\n"
+        reply += f"🔗 Dashboard URL {url_hint}:\n"
+        reply += f"{dashboard_url}\n\n"
         reply += "📈 功能:\n"
         reply += "• 資產曲線圖 (Equity Curve)\n"
         reply += "• 回測績效指標 (ROI, MDD, Sharpe)\n"

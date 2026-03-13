@@ -287,6 +287,11 @@ class Config:
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
     FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 
+    # 🌐 Dashboard 公開 URL（Line Bot 回覆用）
+    # 若有設 PUBLIC_DASHBOARD_URL 環境變數（如 ngrok 固定 URL）則優先使用
+    # 未設定時預設 localhost；若 ngrok 在運行則由 get_ngrok_url() 動態偵測
+    PUBLIC_DASHBOARD_URL = os.getenv('PUBLIC_DASHBOARD_URL', 'http://localhost:1688')
+
 
 # ==========================================
 # 📊 V34/V35 模式預設組合（積極 / 平衡 / 寬鬆 / 穩健）

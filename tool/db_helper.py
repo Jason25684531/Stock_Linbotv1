@@ -299,7 +299,7 @@ def get_market_trend(date_str):
         # 若 MA60 有效（非 None / 非 0），比對（含 3% 容忍區間）
         # 放寬條件：close > MA60 * 0.97 即視為多頭，避免小幅回檔誤觸熔斷
         if ma60 is not None and float(ma60) > 0:
-            tolerance = float(ma60) * 0.97
+            tolerance = float(ma60) * 0.95
             if float(close) > tolerance:
                 return 'BULL'
             else:
@@ -330,7 +330,7 @@ def get_market_trend(date_str):
             computed_ma60 = sum(prices) / len(prices)
             current_close = prices[0]  # 最新收盤
 
-            if current_close > computed_ma60 * 0.97:
+            if current_close > computed_ma60 * 0.95:
                 return 'BULL'
             else:
                 return 'BEAR'
