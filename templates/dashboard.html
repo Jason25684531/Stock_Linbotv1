@@ -171,6 +171,63 @@
             </div>
         </div>
         
+        <!-- News Sentiment Panel -->
+        <div class="mt-8"
+             x-data="{
+               newsLoaded: false,
+               newsSentiment: '載入中...',
+               newsBull: [],
+               newsBear: [],
+               newsDate: '',
+               sentimentColor() {
+                 if (this.newsSentiment === '偏多') return 'text-green-400 border-green-500';
+                 if (this.newsSentiment === '偏空') return 'text-red-400 border-red-500';
+                 return 'text-yellow-300 border-yellow-500';
+               },
+               async loadNews() {
+                 try {
+                   const res = await fetch('/api/news_sentiment');
+                   const d = await res.json();
+                   this.newsSentiment = d.sentiment || '中性';
+                   this.newsBull = d.bull_sectors || [];
+                   this.newsBear = d.bear_sectors || [];
+                   this.newsDate = d.trade_date || '';
+                 } catch(e) { this.newsSentiment = '無資料'; }
+                 this.newsLoaded = true;
+               }
+             }"
+             x-init="loadNews()">
+            <div class="chart-container">
+                <h2 class="text-xl font-bold flex items-center mb-4">
+                    <span class="text-2xl mr-2">📰</span>
+                    消息面情緒
+                    <span class="text-xs font-normal text-gray-400 ml-3" x-text="newsDate ? '日期: ' + newsDate : ''"></span>
+                </h2>
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="px-4 py-1 rounded-full border text-sm font-bold" :class="sentimentColor()" x-text="newsSentiment"></span>
+                    <template x-if="newsBull.length > 0">
+                        <div class="flex items-center gap-1 flex-wrap">
+                            <span class="text-xs text-gray-400">利多族群:</span>
+                            <template x-for="s in newsBull" :key="s">
+                                <span class="px-2 py-0.5 text-xs rounded bg-green-900 text-green-300 border border-green-700" x-text="s"></span>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="newsBear.length > 0">
+                        <div class="flex items-center gap-1 flex-wrap">
+                            <span class="text-xs text-gray-400">利空族群:</span>
+                            <template x-for="s in newsBear" :key="s">
+                                <span class="px-2 py-0.5 text-xs rounded bg-red-900 text-red-300 border border-red-700" x-text="s"></span>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="!newsLoaded">
+                        <span class="text-xs text-gray-500 animate-pulse">載入中...</span>
+                    </template>
+                </div>
+            </div>
+        </div>
+
         <!-- Live Signals Section -->
         <div class="mt-8">
             <div class="chart-container">
@@ -251,6 +308,13 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <template x-if="signal.news_boost_reason">
+                                <div class="mt-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
+                                    <span class="font-bold mr-1">📰 消息面</span>
+                                    <span x-text="signal.news_boost_reason"></span>
+                                </div>
+                            </template>
                             
                             <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
                                 <div x-show="signal.ai_score !== null">

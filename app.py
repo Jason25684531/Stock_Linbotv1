@@ -55,6 +55,7 @@ from tool.db_helper import (
     get_setting,
     update_setting,
     validate_setting,
+    get_daily_recommendations,
     get_stock_data,
     create_user_simulation_trade,
     supplement_financial_data,
@@ -386,6 +387,7 @@ def get_strategy_recommendation(as_flex: bool = False):
             return "❌ 策略載入失敗，請先輸入「切換V30」設定策略"
         
         strategy_name = active.display_name
+        strategy_key = active.name
         
         # 2. 撈取最新資料
         df, date_str = get_stock_data()
@@ -395,8 +397,27 @@ def get_strategy_recommendation(as_flex: bool = False):
         # 2.5 補充財務資料（V34/V35 需要 revenue_yoy / op_profit_margin）
         df = supplement_financial_data(df)
         
-        # 3. 策略篩選
-        candidates = active.filter_candidates(df)
+        # 3. 優先讀取已落庫推薦結果，確保與 2_rundaily.py 的消息面加減分一致
+        persisted = get_daily_recommendations(date_str=date_str, strategy=strategy_key, limit=5)
+        has_persisted = not persisted.empty
+        if has_persisted:
+            persisted = persisted.copy()
+            persisted['stock_id'] = persisted['stock_id'].astype(str)
+            df = df.copy()
+            df['stock_id'] = df['stock_id'].astype(str)
+            candidates = persisted.merge(
+                df,
+                on='stock_id',
+                how='left',
+                suffixes=('', '_market')
+            )
+            for field in ['close_price', 'rsi', 'volume']:
+                market_field = f'{field}_market'
+                if market_field in candidates.columns:
+                    candidates[field] = candidates[market_field].fillna(candidates[field])
+        else:
+            candidates = active.filter_candidates(df)
+
         if candidates.empty:
             return (
                 f"🔍 【{strategy_name}】選股結果\n"
@@ -408,26 +429,28 @@ def get_strategy_recommendation(as_flex: bool = False):
                 f"• 輸入「查看策略」檢視篩選條件"
             )
         
-        # 4. AI 排名（載入策略專屬模型）
+        # 4. 若沒有已落庫結果，才即時計算 AI 排名
         has_ai = False
-        try:
-            from tool.model_utils import load_model as _load_model
-            strategy_key = mgr.get_active_strategy_names()[0] if mgr.get_active_strategy_names() else None
-            strat_model, strat_features, _, _ = _load_model(strategy_key)
-            if strat_model is not None:
-                features = strat_features or active.features
-                df_score = candidates.copy()
-                for f in features:
-                    if f not in df_score.columns:
-                        df_score[f] = 0
+        if has_persisted:
+            has_ai = 'ai_score' in candidates.columns and candidates['ai_score'].notna().any()
+        else:
+            try:
+                from tool.model_utils import load_model as _load_model
+                strat_model, strat_features, _, _ = _load_model(strategy_key)
+                if strat_model is not None:
+                    features = strat_features or active.features
+                    df_score = candidates.copy()
+                    for f in features:
+                        if f not in df_score.columns:
+                            df_score[f] = 0
 
-                probs = strat_model.predict_proba(df_score[features].fillna(0))[:, 1]
-                candidates = candidates.copy()
-                candidates['ai_score'] = probs
-                candidates = candidates.sort_values('ai_score', ascending=False)
-                has_ai = True
-        except Exception as e:
-            print(f"⚠️ AI 排名失敗（使用原始排序）: {e}")
+                    probs = strat_model.predict_proba(df_score[features].fillna(0))[:, 1]
+                    candidates = candidates.copy()
+                    candidates['ai_score'] = probs
+                    candidates = candidates.sort_values('ai_score', ascending=False)
+                    has_ai = True
+            except Exception as e:
+                print(f"⚠️ AI 排名失敗（使用原始排序）: {e}")
         
         # 5. 格式化輸出
         top_n = candidates.head(5)
@@ -447,6 +470,7 @@ def get_strategy_recommendation(as_flex: bool = False):
                     'ai_score': row.get('ai_score', 0) if has_ai else 0,
                     'rsi': row.get('rsi', 0),
                     'volume': row.get('volume', 0),
+                    'news_boost_reason': row.get('news_boost_reason', ''),
                     'stop_loss_price': close * (1 - active.stop_loss),
                     'take_profit_price': close * (1 + active.take_profit) if active.take_profit > 0 else 0,
                 })
@@ -472,6 +496,7 @@ def get_strategy_recommendation(as_flex: bool = False):
             ma20 = row.get('ma20', 0)
             ma60 = row.get('ma60', 0)
             sector = get_stock_sector(str(stock_id))
+            news_reason = row.get('news_boost_reason', '')
 
             # 計算停損停利價位
             sl_price = close * (1 - active.stop_loss)
@@ -487,6 +512,8 @@ def get_strategy_recommendation(as_flex: bool = False):
             if volume > 0:
                 reply += f"  📈 量: {volume/10000:.0f}萬"
             reply += "\n"
+            if news_reason:
+                reply += f"   📰 消息面: {news_reason}\n"
             reply += f"   🛡️ 停損: {sl_price:.2f}"
             if tp_price > 0:
                 reply += f"  🎯 停利: {tp_price:.2f}"
@@ -1014,9 +1041,26 @@ def api_daily_signals():
                 strategy_key = mgr.get_active_strategy_names()[0] if mgr.get_active_strategy_names() else 'v31_hybrid'
 
             strategy_name = active.display_name
-            candidates = active.filter_candidates(df.copy())
+            persisted = get_daily_recommendations(date_str=date_str, strategy=strategy_key, limit=top_n)
+            if not persisted.empty:
+                persisted = persisted.copy()
+                persisted['stock_id'] = persisted['stock_id'].astype(str)
+                df = df.copy()
+                df['stock_id'] = df['stock_id'].astype(str)
+                candidates = persisted.merge(
+                    df,
+                    on='stock_id',
+                    how='left',
+                    suffixes=('', '_market')
+                )
+                for field in ['close_price', 'rsi', 'volume']:
+                    market_field = f'{field}_market'
+                    if market_field in candidates.columns:
+                        candidates[field] = candidates[market_field].fillna(candidates[field])
+            else:
+                candidates = active.filter_candidates(df.copy())
 
-            if not candidates.empty:
+            if persisted.empty and not candidates.empty:
                 try:
                     from tool.model_utils import load_model as _load_model
                     strat_model, strat_features, _, _ = _load_model(strategy_key)
@@ -1088,6 +1132,7 @@ def api_daily_signals():
                 'revenue_yoy': safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
                 'chip_score': safe_float(row.get('chip_score')) if 'chip_score' in row else None,
                 'foreign_buy': safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
+                'news_boost_reason': row.get('news_boost_reason') or '',
                 'suggested_buy_price': round(suggested_buy, 2),
                 'suggested_sell_price': round(suggested_sell, 2),
                 'suggested_stop_loss_price': round(suggested_stop, 2),
@@ -1107,6 +1152,20 @@ def api_daily_signals():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+# ==========================================
+# News Sentiment API
+# ==========================================
+
+@app.route("/api/news_sentiment")
+@login_required
+def api_news_sentiment():
+    """回傳指定日期（或最新）消息面情緒摘要"""
+    from tool.db_helper import get_news_sentiment
+    date_str = request.args.get('date')
+    data = get_news_sentiment(date_str)
+    return jsonify(data)
 
 
 # ==========================================

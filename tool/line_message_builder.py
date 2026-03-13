@@ -400,7 +400,19 @@ def create_recommendation_carousel(
         rows.append(_make_data_row('🛡️ 停損', sl_str, '#E57373'))
         rows.append(FlexSeparator(margin='sm'))
         rows.append(_make_data_row('🎯 停利', tp_str, '#81C784'))
-
+        # 消息面標籤（若有 news_boost_reason）
+        news_reason = pick.get('news_boost_reason') or ''
+        if news_reason:
+            rows.append(FlexSeparator(margin='sm'))
+            rows.append(FlexBox(
+                layout='horizontal',
+                contents=[
+                    FlexText(text='📰', size='xs', flex=0),
+                    FlexText(text=news_reason[:50], size='xxs',
+                             color='#FFD54F', wrap=True, flex=1, margin='sm'),
+                ],
+                margin='sm',
+            ))
         body = FlexBox(
             layout='vertical',
             contents=rows,

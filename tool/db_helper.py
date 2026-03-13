@@ -19,7 +19,7 @@ _engine_instance = None
 _ALLOWED_TABLES = {
     'daily_market_data', 'user_settings', 'user_simulation_trades',
     'monthly_revenue', 'financial_statements', 'daily_recommendations',
-    'backtest_trades', 'backtest_equity_curve',
+    'backtest_trades', 'backtest_equity_curve', 'daily_news_sentiment',
 }
 
 
@@ -370,38 +370,6 @@ def create_user_simulation_trade(user_id, stock_id, buy_price, buy_date, status=
         return True
     except Exception as e:
         print(f"❌ 新增模擬交易失敗: {e}")
-        return False
-
-def init_pk_tables():
-    """
-    建立 PK System 所需資料表
-    - user_simulation_trades: 使用者模擬交易記錄
-    """
-    try:
-        engine = get_db_engine()
-        with engine.connect() as conn:
-            # 建立使用者模擬交易表
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS user_simulation_trades (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id VARCHAR(100) NOT NULL COMMENT '使用者 ID (Line User ID)',
-                    stock_id VARCHAR(20) NOT NULL COMMENT '股票代碼',
-                    buy_price DECIMAL(10, 2) NOT NULL COMMENT '買入價格',
-                    buy_date DATE NOT NULL COMMENT '買入日期',
-                    sell_price DECIMAL(10, 2) DEFAULT NULL COMMENT '賣出價格',
-                    sell_date DATE DEFAULT NULL COMMENT '賣出日期',
-                    status VARCHAR(20) DEFAULT 'HOLDING' COMMENT '狀態: HOLDING, CLOSED',
-                    roi DECIMAL(10, 4) DEFAULT NULL COMMENT '報酬率 (百分比)',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_user_status (user_id, status),
-                    INDEX idx_buy_date (buy_date)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='使用者模擬交易記錄'
-            """))
-            conn.commit()
-        print("✅ PK System 資料表初始化完成")
-        return True
-    except Exception as e:
-        print(f"❌ init_pk_tables 失敗: {e}")
         return False
 
 
@@ -936,15 +904,177 @@ def get_stock_sector(stock_id: str) -> str:
     return info.get('sector', '其他')
 
 
-def get_stocks_by_sectors(sectors: list[str]) -> list[str]:
-    """取得屬於指定產業的所有股票代號
+# ==========================================
+# 📰 消息面情緒持久化
+# ==========================================
+
+def ensure_news_schema(engine=None):
+    """確保消息面相關 DB schema 存在（懶初始化）
+
+    1. 建立 daily_news_sentiment 資料表（若不存在）
+    2. 為 daily_recommendations 新增 news_boost_reason 欄位（若不存在）
+    """
+    if engine is None:
+        engine = get_db_engine()
+    try:
+        with engine.connect() as conn:
+            # 建立 daily_news_sentiment 資料表
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS daily_news_sentiment (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    trade_date  DATE NOT NULL,
+                    sentiment   VARCHAR(10) NOT NULL DEFAULT '中性',
+                    bull_sectors TEXT,
+                    bear_sectors TEXT,
+                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_date (trade_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            # 為 daily_recommendations 新增 news_boost_reason 欄位（若尚不存在）
+            result = conn.execute(text("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'daily_recommendations'
+                  AND COLUMN_NAME = 'news_boost_reason'
+            """))
+            if result.scalar() == 0:
+                conn.execute(text("""
+                    ALTER TABLE daily_recommendations
+                    ADD COLUMN news_boost_reason VARCHAR(100) NULL
+                """))
+                print("  ✅ DB 遷移：daily_recommendations.news_boost_reason 欄位已新增")
+            conn.commit()
+    except Exception as e:
+        print(f"  ⚠️ DB schema 確認失敗（不影響執行）: {e}")
+
+
+def save_news_sentiment(date_str: str, sentiment: str,
+                        bull_sectors: list, bear_sectors: list) -> None:
+    """儲存每日消息面情緒結果到 daily_news_sentiment 資料表
+
+    使用 INSERT … ON DUPLICATE KEY UPDATE 以支援同日重複執行。
 
     Args:
-        sectors: 產業名稱列表（如 ['半導體', '航運']）
+        date_str: 日期字串（'YYYY-MM-DD'）
+        sentiment: '偏多' | '偏空' | '中性'
+        bull_sectors: 利多產業列表
+        bear_sectors: 利空產業列表
+    """
+    import json
+    engine = get_db_engine()
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO daily_news_sentiment
+                    (trade_date, sentiment, bull_sectors, bear_sectors)
+                VALUES
+                    (:date, :sentiment, :bull, :bear)
+                ON DUPLICATE KEY UPDATE
+                    sentiment    = VALUES(sentiment),
+                    bull_sectors = VALUES(bull_sectors),
+                    bear_sectors = VALUES(bear_sectors),
+                    created_at   = CURRENT_TIMESTAMP
+            """), {
+                "date": date_str,
+                "sentiment": sentiment,
+                "bull": json.dumps(bull_sectors, ensure_ascii=False),
+                "bear": json.dumps(bear_sectors, ensure_ascii=False),
+            })
+            conn.commit()
+    except Exception as e:
+        print(f"  ⚠️ 消息面情緒儲存失敗: {e}")
+
+
+def get_news_sentiment(date_str: str = None) -> dict:
+    """取得指定日期的消息面情緒資料
+
+    Args:
+        date_str: 日期字串，None 表示取最新一筆
 
     Returns:
-        符合的 stock_id 列表
+        dict: {"trade_date": "...", "sentiment": "偏多",
+               "bull_sectors": [...], "bear_sectors": [...]}
+              查無資料時回傳預設中性值
     """
-    m = _load_sector_map()
-    target = set(sectors)
-    return [sid for sid, info in m.items() if info.get('sector') in target]
+    import json
+    default = {
+        "trade_date": date_str or '',
+        "sentiment": "中性",
+        "bull_sectors": [],
+        "bear_sectors": [],
+    }
+    engine = get_db_engine()
+    try:
+        with engine.connect() as conn:
+            if date_str:
+                row = conn.execute(text("""
+                    SELECT trade_date, sentiment, bull_sectors, bear_sectors
+                    FROM daily_news_sentiment
+                    WHERE trade_date = :date
+                    LIMIT 1
+                """), {"date": date_str}).fetchone()
+            else:
+                row = conn.execute(text("""
+                    SELECT trade_date, sentiment, bull_sectors, bear_sectors
+                    FROM daily_news_sentiment
+                    ORDER BY trade_date DESC
+                    LIMIT 1
+                """)).fetchone()
+
+        if not row:
+            return default
+
+        td = row[0]
+        return {
+            "trade_date": td.strftime('%Y-%m-%d') if hasattr(td, 'strftime') else str(td),
+            "sentiment": row[1] or '中性',
+            "bull_sectors": json.loads(row[2]) if row[2] else [],
+            "bear_sectors": json.loads(row[3]) if row[3] else [],
+        }
+    except Exception as e:
+        print(f"  ⚠️ 消息面情緒讀取失敗: {e}")
+        return default
+
+
+def get_daily_recommendations(date_str: str = None, strategy: str = None,
+                              limit: int | None = None) -> pd.DataFrame:
+    """讀取每日推薦結果（供 Dashboard / Line Bot 共用）
+
+    Args:
+        date_str: 交易日期，None 代表最新交易日
+        strategy: 策略代號（如 'v36_chip_momentum'），None 代表不限制
+        limit: 限制筆數，None 代表不限制
+
+    Returns:
+        DataFrame: 包含 daily_recommendations 主要欄位
+    """
+    engine = get_db_engine()
+    try:
+        if not date_str:
+            latest = get_latest_trade_date()
+            if not latest:
+                return pd.DataFrame()
+            date_str = latest.strftime('%Y-%m-%d') if hasattr(latest, 'strftime') else str(latest)
+
+        sql = """
+            SELECT stock_id, trade_date, strategy, close_price, ai_score, rsi, volume,
+                   news_boost_reason
+            FROM daily_recommendations
+            WHERE trade_date = :date
+        """
+        params = {"date": date_str}
+
+        if strategy:
+            sql += " AND strategy = :strategy"
+            params["strategy"] = strategy
+
+        sql += " ORDER BY ai_score DESC"
+
+        if limit is not None:
+            sql += " LIMIT :limit"
+            params["limit"] = int(limit)
+
+        return pd.read_sql(text(sql), engine, params=params)
+    except Exception as e:
+        print(f"  ⚠️ 讀取 daily_recommendations 失敗: {e}")
+        return pd.DataFrame()

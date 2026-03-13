@@ -28,7 +28,11 @@ from tool.model_utils import load_model
 from config import Config
 
 # 新聞族群加分快取（每日只呼叫一次 Gemini）
-_news_boost_cache: dict = {"sectors": [], "sentiment": "中性"}
+_news_boost_cache: dict = {
+    "bull_sectors": [], "bear_sectors": [], "sentiment": "中性"
+}
+# 個股層級新聞快取（key: stock_id, value: {"score": int, "reason": str}）
+_stock_news_cache: dict = {}
 
 # 模型存放目錄（與 3_train_model.py 一致）
 
@@ -503,25 +507,60 @@ def run_strategy(strategy, df, date_str, engine):
         candidates = candidates.sort_values('ai_score', ascending=False)
         print(f"✅ AI 評分完成（特徵數: {len(features)}）")
 
-    # 新聞族群加分
+    # 新聞情緒雙向加減分
     if Config.NEWS_BOOST_ENABLED and 'ai_score' in candidates.columns:
         try:
             from tool.db_helper import get_stock_sector
-            boost_sectors = _news_boost_cache.get('sectors', [])
-            if boost_sectors:
-                boosted = 0
-                factor = min(Config.NEWS_BOOST_FACTOR, Config.NEWS_BOOST_MAX)
-                candidates['ai_score'] = candidates['ai_score'].astype(float)
+            bull_sectors = _news_boost_cache.get('bull_sectors', [])
+            bear_sectors = _news_boost_cache.get('bear_sectors', [])
+            sentiment    = _news_boost_cache.get('sentiment', '中性')
+
+            if bull_sectors or bear_sectors:
+                bull_factor   = min(Config.NEWS_BOOST_FACTOR, Config.NEWS_BOOST_MAX)
+                bear_factor   = Config.NEWS_PENALTY_FACTOR
+                boosted = penalized = 0
+                candidates['ai_score']         = candidates['ai_score'].astype(float)
+                candidates['news_boost_reason'] = ''
+
                 for idx, row in candidates.iterrows():
                     sector = get_stock_sector(row['stock_id'])
-                    if sector in boost_sectors:
-                        candidates.at[idx, 'ai_score'] *= (1 + factor)
+                    reason_parts = []
+
+                    if sector in bull_sectors:
+                        candidates.at[idx, 'ai_score'] *= (1 + bull_factor)
+                        reason_parts.append(f"{sector}族群新聞利多")
                         boosted += 1
+
+                    # 個股層級新聞加分（Phase 2）
+                    stock_news = _stock_news_cache.get(str(row['stock_id']))
+                    if stock_news and stock_news.get('score', 0) > 0:
+                        extra = min(bull_factor, Config.NEWS_BOOST_MAX - bull_factor)
+                        candidates.at[idx, 'ai_score'] *= (1 + extra)
+                        reason_parts.append(f"個股: {stock_news['reason']}")
+                    elif stock_news and stock_news.get('score', 0) < 0:
+                        candidates.at[idx, 'ai_score'] *= (1 - bear_factor)
+                        reason_parts.append(f"個股利空: {stock_news['reason']}")
+
+                    if sector in bear_sectors:
+                        candidates.at[idx, 'ai_score'] *= (1 - bear_factor)
+                        reason_parts.append(f"{sector}族群新聞利空")
+                        penalized += 1
+
+                    if reason_parts:
+                        candidates.at[idx, 'news_boost_reason'] = '\uff5c'.join(reason_parts)[:100]
+
+                candidates = candidates.sort_values('ai_score', ascending=False)
                 if boosted > 0:
-                    candidates = candidates.sort_values('ai_score', ascending=False)
-                    print(f"  📰 新聞加分: {boosted} 檔屬於 {boost_sectors}（+{factor:.0%}）")
+                    print(f"  📈 新聞加分: {boosted} 檔屬於 {bull_sectors}（+{bull_factor:.0%}）")
+                if penalized > 0:
+                    print(f"  📉 新聞折減: {penalized} 檔屬於 {bear_sectors}（-{bear_factor:.0%}）")
         except Exception as e:
-            print(f"  ⚠️ 新聞加分失敗（不影響選股）: {e}")
+            print(f"  ⚠️ 新聞加減分失敗（不影響選股）: {e}")
+        finally:
+            if 'news_boost_reason' not in candidates.columns:
+                candidates['news_boost_reason'] = ''
+    else:
+        candidates['news_boost_reason'] = ''
 
     # 存入資料庫
     try:
@@ -533,21 +572,23 @@ def run_strategy(strategy, df, date_str, engine):
             """), {"date": date_str, "strategy": strategy.name})
             conn.commit()
             
-            # 插入新資料
+            # 插入新資料（含 news_boost_reason）
             for _, row in candidates.head(10).iterrows():
                 ai_score = row.get('ai_score', None)
+                reason   = row.get('news_boost_reason', '') or None
                 conn.execute(text("""
                     INSERT INTO daily_recommendations 
-                    (stock_id, trade_date, strategy, close_price, ai_score, rsi, volume)
-                    VALUES (:stock_id, :date, :strategy, :price, :score, :rsi, :volume)
+                    (stock_id, trade_date, strategy, close_price, ai_score, rsi, volume, news_boost_reason)
+                    VALUES (:stock_id, :date, :strategy, :price, :score, :rsi, :volume, :reason)
                 """), {
                     "stock_id": row['stock_id'],
-                    "date": date_str,
+                    "date":     date_str,
                     "strategy": strategy.name,
-                    "price": row['close_price'],
-                    "score": float(ai_score) if ai_score is not None else None,
-                    "rsi": row.get('rsi', None),
-                    "volume": row.get('volume', None)
+                    "price":    row['close_price'],
+                    "score":    float(ai_score) if ai_score is not None else None,
+                    "rsi":      row.get('rsi', None),
+                    "volume":   row.get('volume', None),
+                    "reason":   reason,
                 })
             conn.commit()
             print(f"✅ {strategy.name}: 資料已儲存")
@@ -614,18 +655,46 @@ def main():
     print("✅ 月營收合併完成\n")
     
     # 7. 新聞族群分析（全策略共用，只呼叫一次 Gemini）
-    global _news_boost_cache
-    _news_boost_cache = {"sectors": [], "sentiment": "中性"}
+    global _news_boost_cache, _stock_news_cache
+    _news_boost_cache = {"bull_sectors": [], "bear_sectors": [], "sentiment": "中性"}
+    _stock_news_cache = {}
     if Config.NEWS_BOOST_ENABLED:
         try:
             from tool.news_agent import get_news_sector_boost
+            from tool.db_helper import ensure_news_schema, save_news_sentiment
+            # 確保 DB schema 就緒
+            ensure_news_schema(engine)
             _news_boost_cache = get_news_sector_boost()
-            if _news_boost_cache.get('sectors'):
-                print(f"📰 今日利多族群: {_news_boost_cache['sectors']} | 情緒: {_news_boost_cache['sentiment']}")
+            bull = _news_boost_cache.get('bull_sectors', [])
+            bear = _news_boost_cache.get('bear_sectors', [])
+            sent = _news_boost_cache.get('sentiment', '中性')
+            if bull:
+                print(f"📈 利多族群: {bull} | 📉 利空族群: {bear} | 情緒: {sent}")
             else:
                 print("📰 今日無明顯利多族群")
+            # 儲存情緒到 DB
+            save_news_sentiment(date_str, sent, bull, bear)
         except Exception as e:
             print(f"⚠️ 新聞分析失敗（不影響選股）: {e}")
+
+    # 7.5 個股層級新聞偵測（Phase 2：Yahoo 奇摩個股新聞）
+    if Config.NEWS_BOOST_ENABLED:
+        try:
+            from tool.news_agent import get_stock_news_mentions
+            # 取得所有策略候選股的合集（最多 20 支，控制 API 成本）
+            pre_ids = []
+            for strat in strategies:
+                try:
+                    cands = strat.filter_candidates(df.copy())
+                    if not cands.empty:
+                        pre_ids.extend(cands['stock_id'].head(5).tolist())
+                except Exception:
+                    pass
+            unique_ids = list(dict.fromkeys(pre_ids))[:20]
+            if unique_ids:
+                _stock_news_cache = get_stock_news_mentions(unique_ids)
+        except Exception as e:
+            print(f"⚠️ 個股新聞偵測失敗（不影響選股）: {e}")
 
     # 8. 遍歷所有策略執行選股（每策略動態載入專屬模型）
     all_results = {}

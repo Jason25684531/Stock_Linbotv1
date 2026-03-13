@@ -278,10 +278,12 @@ class Config:
     LINE_CHANNEL_SECRET = os.getenv('LINE_SECRET', '')
     GEMINI_API_KEY = os.getenv('GEMINI_KEY', '')
 
-    # 📰 新聞情緒加分
+    # 📰 新聞情緒加分／減分（雙向情緒影響）
     NEWS_BOOST_ENABLED = True       # 新聞族群加分開關
-    NEWS_BOOST_FACTOR = 0.10        # 加分幅度 10%
-    NEWS_BOOST_MAX = 0.15           # 加分上限 15%
+    NEWS_BOOST_FACTOR = 0.10        # 利多族群加分幅度 10%
+    NEWS_BOOST_MAX = 0.15           # 加分上限 15%（族群 + 個股合計）
+    NEWS_PENALTY_FACTOR = 0.10      # 利空族群折減幅度 10%
+    NEWS_BEAR_MAX_HOLDINGS = 2      # 偏空市場時最大持股上限（原本為 3）
     
     # 🔐 Web Dashboard 驗證 (Phase 1 Security)
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')

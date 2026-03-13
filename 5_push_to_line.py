@@ -371,6 +371,24 @@ def run_evening():
     msg += f"--------------------------\n"
     msg += f"🚦 市場狀態: {status}\n"
     msg += f"📊 大盤乖離: {bias:.2f}%\n"
+
+    # 消息面情緒摘要（利多 + 利空條列）
+    try:
+        from tool.db_helper import get_news_sentiment
+        ns = get_news_sentiment(date_str)
+        sent_emoji = {'偏多': '🟢', '偏空': '🔴', '中性': '🟡'}.get(ns['sentiment'], '🟡')
+        msg += f"--------------------------\n"
+        msg += f"{sent_emoji} 消息面情緒: {ns['sentiment']}\n"
+        if ns['bull_sectors']:
+            msg += f"  📈 利多族群: {'、'.join(ns['bull_sectors'])}\n"
+        else:
+            msg += f"  📈 利多族群: 無明顯利多\n"
+        if ns['bear_sectors']:
+            msg += f"  📉 利空族群: {'、'.join(ns['bear_sectors'])}\n"
+        else:
+            msg += f"  📉 利空族群: 無明顯利空\n"
+    except Exception:
+        pass
     msg += f"--------------------------\n"
 
     # 5. 遍歷所有策略，撈取推薦結果

@@ -197,43 +197,6 @@ def get_morning_news_summary() -> str:
     return summary
 
 
-def get_market_briefing() -> str:
-    """完整市場快報（供 app.py Line Bot 調用，向後相容）
-
-    Returns:
-        str: 帶標題的完整分析報告
-    """
-    try:
-        news_text, _ = fetch_anue_news(max_per_source=8)
-        if not news_text.strip():
-            return "⚠️ 目前抓不到新聞資料，請稍後再試。"
-
-        today = datetime.datetime.now().strftime('%Y-%m-%d')
-
-        prompt = f"""你是華爾街頂尖的投資策略師。今天是 {today}。
-以下是鉅亨網最新新聞：
-
-{news_text}
-
-請用繁體中文撰寫一份專業的台股早報：
-- 🌤️ **今日氣象**：一句話定調台股氛圍
-- 🌍 **國際脈動**：昨晚美股重點與對台股影響
-- 🎯 **台股焦點**：2-3 個熱門族群/個股
-- ⚖️ **多空判讀**：操作建議
-總字數 400-500 字，適度使用 emoji。"""
-
-        client = genai.Client(api_key=Config.GEMINI_API_KEY)
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.3),
-        )
-        return f"📰 【AI 財經早報】\n(來源: 鉅亨網)\n\n{response.text}"
-
-    except Exception as e:
-        return f"❌ 報告生成失敗: {e}"
-
-
 # ==========================================
 # 新聞族群加分萃取
 # ==========================================
@@ -248,15 +211,20 @@ _VALID_SECTORS = [
 
 
 def get_news_sector_boost() -> dict:
-    """從今日新聞萃取利多產業族群（供選股加分用）
+    """從今日新聞萃取利多/利空產業族群（供選股雙向加/減分用）
 
-    流程：爬取新聞 → Gemini 分析 → 萃取 2~4 個利多產業標籤
+    流程：爬取新聞 → Gemini 分析 → 同時萃取 2~4 個利多與 0~2 個利空產業標籤
 
     Returns:
-        dict: {"sectors": ["半導體", "航運"], "sentiment": "偏多"}
-              失敗時回傳 {"sectors": [], "sentiment": "中性"}
+        dict: {
+            "bull_sectors": ["半導體", "航運"],   # 利多族群（用於加分）
+            "bear_sectors": ["塑膠"],              # 利空族群（用於減分）
+            "sectors": ["半導體", "航運"],         # 向後相容：等同 bull_sectors
+            "sentiment": "偏多"                   # 整體市場情緒
+        }
+        失敗時回傳 {"bull_sectors": [], "bear_sectors": [], "sectors": [], "sentiment": "中性"}
     """
-    default = {"sectors": [], "sentiment": "中性"}
+    default = {"bull_sectors": [], "bear_sectors": [], "sectors": [], "sentiment": "中性"}
 
     if not Config.GEMINI_API_KEY:
         print("⚠️ 未設定 GEMINI_KEY，跳過新聞族群分析")
@@ -275,15 +243,19 @@ def get_news_sector_boost() -> dict:
 
 {news_text}
 
-請分析這些新聞，從以下產業標籤中選出 2~4 個「今日最受利多影響」的產業：
+請分析這些新聞，從以下產業標籤中：
 {sectors_str}
 
+選出：
+1. bull_sectors：2~4 個「今日最受利多影響」的產業（有正面消息、法說超預期、題材發酵）
+2. bear_sectors：0~2 個「今日受利空影響」的產業（有負面消息、衰退、跌法人調降等），無則留空陣列
+
 回傳格式必須是純 JSON（不要 markdown 包裹）：
-{{"sectors": ["產業1", "產業2"], "sentiment": "偏多"}}
+{{"bull_sectors": ["產業1", "產業2"], "bear_sectors": ["產業3"], "sentiment": "偏多"}}
 
 規則：
-- sectors 只能使用上面列出的標籤名稱，不要自創
-- sectors 選 2~4 個，代表今日新聞最利多的產業
+- 所有產業只能使用上面列出的標籤名稱，不要自創
+- bull_sectors 選 2~4 個，bear_sectors 選 0~2 個
 - sentiment 填「偏多」「偏空」或「中性」
 - 只回傳 JSON，不要其他文字"""
 
@@ -293,7 +265,7 @@ def get_news_sector_boost() -> dict:
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=200,
+                max_output_tokens=300,
             ),
         )
 
@@ -305,18 +277,110 @@ def get_news_sector_boost() -> dict:
 
         result = json.loads(raw)
 
-        # 驗證 sectors 只包含合法標籤
-        valid = [s for s in result.get('sectors', []) if s in _VALID_SECTORS]
+        # 驗證標籤只包含合法產業
+        bull = [s for s in result.get('bull_sectors', []) if s in _VALID_SECTORS]
+        bear = [s for s in result.get('bear_sectors', []) if s in _VALID_SECTORS]
         sentiment = result.get('sentiment', '中性')
         if sentiment not in ('偏多', '偏空', '中性'):
             sentiment = '中性'
 
-        print(f"  📰 新聞族群分析: {valid} | 情緒: {sentiment}")
-        return {"sectors": valid, "sentiment": sentiment}
+        print(f"  📈 利多族群: {bull} | 📉 利空族群: {bear} | 情緒: {sentiment}")
+        return {
+            "bull_sectors": bull,
+            "bear_sectors": bear,
+            "sectors": bull,       # 向後相容別名
+            "sentiment": sentiment,
+        }
 
     except Exception as e:
         print(f"  ⚠️ 新聞族群萃取失敗: {e}")
         return default
+
+
+def get_stock_news_mentions(stock_ids: list) -> dict:
+    """個股層級新聞偵測（Yahoo 奇摩股市 RSS + Gemini 情緒判斷）
+
+    只對「已通過策略篩選的候選股」呼叫，控制 API 成本。
+    每支股票撈最新 5 則 RSS，送 Gemini 判斷整體情緒。
+
+    Args:
+        stock_ids: 候選股票代號列表（如 ['2330', '2317']）
+
+    Returns:
+        dict: {
+            "2330": {"score": 1, "reason": "法說會超預期"},
+            "2317": {"score": -1, "reason": "接單下滑警訊"},
+        }
+        score: 1=正面, 0=中性/無資料, -1=負面
+        信心度 < 0.7 的結果不回傳（避免誤判）
+    """
+    import json
+    import urllib.request
+
+    if not Config.GEMINI_API_KEY or not stock_ids:
+        return {}
+
+    results = {}
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+
+    for sid in stock_ids[:15]:  # 最多處理 15 支，避免 API 超量
+        try:
+            # Yahoo 奇摩股市 RSS（個股新聞）
+            rss_url = f"https://tw.stock.yahoo.com/rss?s={sid}"
+            headlines = []
+            try:
+                feed = feedparser.parse(rss_url)
+                for entry in feed.entries[:5]:
+                    title = _clean_html(entry.get('title', ''))
+                    if title and len(title) > 5:
+                        headlines.append(title)
+            except Exception:
+                pass
+
+            if not headlines:
+                continue  # 無新聞，略過
+
+            headline_text = '\n'.join(f'- {h}' for h in headlines)
+            prompt = f"""你是台股分析師。今天是 {today}，針對股票代號 {sid} 的以下最新新聞標題：
+
+{headline_text}
+
+請判斷這些新聞對 {sid} 股價的短期影響（1-5天內），並回傳 JSON：
+{{"score": 1, "reason": "法說會營收強勁", "confidence": 0.85}}
+
+規則：
+- score: 1=正面利多, 0=中性/影響不明, -1=負面利空
+- reason: 10字以內，說明主要原因
+- confidence: 0-1，研判信心程度
+- 只回傳 JSON，不要其他文字"""
+
+            client = genai.Client(api_key=Config.GEMINI_API_KEY)
+            resp = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=120),
+            )
+            raw = resp.text.strip()
+            if raw.startswith('```'):
+                raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+            item = json.loads(raw)
+            score = item.get('score', 0)
+            confidence = float(item.get('confidence', 0))
+            reason = item.get('reason', '')
+
+            if confidence >= 0.7 and score != 0:
+                results[str(sid)] = {"score": score, "reason": reason}
+
+        except Exception as e:
+            print(f"    ⚠️ {sid} 個股新聞偵測失敗: {e}")
+
+    if results:
+        pos = [k for k, v in results.items() if v['score'] > 0]
+        neg = [k for k, v in results.items() if v['score'] < 0]
+        print(f"  📰 個股新聞: 利多 {pos} | 利空 {neg}")
+
+    return results
 
 
 # ==========================================
