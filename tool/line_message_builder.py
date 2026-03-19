@@ -400,7 +400,31 @@ def create_recommendation_carousel(
         rows.append(_make_data_row('🛡️ 停損', sl_str, '#E57373'))
         rows.append(FlexSeparator(margin='sm'))
         rows.append(_make_data_row('🎯 停利', tp_str, '#81C784'))
-
+        # 消息面標籤（若有 news_boost_reason）
+        news_reason = pick.get('news_boost_reason') or ''
+        if news_reason:
+            reason_lines = [part.strip() for part in str(news_reason).split('｜') if part.strip()]
+            is_bearish = any(('利空' in part or '承壓' in part or '下修' in part) for part in reason_lines)
+            rows.append(FlexSeparator(margin='sm'))
+            rows.append(FlexBox(
+                layout='vertical',
+                contents=[
+                    FlexText(
+                        text='🔴 利空警示' if is_bearish else '🟢 利多原因',
+                        size='xxs',
+                        weight='bold',
+                        color='#FF8A80' if is_bearish else '#FFD54F',
+                    ),
+                    FlexText(
+                        text='\n'.join(f'• {part}' for part in reason_lines[:3])[:100],
+                        size='xxs',
+                        color='#FFCDD2' if is_bearish else '#FFF3B0',
+                        wrap=True,
+                        margin='xs',
+                    ),
+                ],
+                margin='sm',
+            ))
         body = FlexBox(
             layout='vertical',
             contents=rows,

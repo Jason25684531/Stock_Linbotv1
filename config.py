@@ -150,6 +150,7 @@ class Config:
     # ==========================================
     USE_MARKET_FILTER = True       # 🔥 市場熔斷機制：大盤 < MA60 禁止買入
     USE_TREND_FILTER = True        # 🔥 個股趨勢濾網：收盤 > MA60
+    RECOMMENDATION_FALLBACK_MAX_AGE_DAYS = int(os.getenv('RECOMMENDATION_FALLBACK_MAX_AGE_DAYS', '7'))
     USE_KD_FILTER = True           # 🔥 KD 超賣反彈濾網：K<30 且 K>D
     USE_BB_FILTER = False          # 布林通道壓縮突破濾網（保持關閉）
     
@@ -278,10 +279,12 @@ class Config:
     LINE_CHANNEL_SECRET = os.getenv('LINE_SECRET', '')
     GEMINI_API_KEY = os.getenv('GEMINI_KEY', '')
 
-    # 📰 新聞情緒加分
+    # 📰 新聞情緒加分／減分（雙向情緒影響）
     NEWS_BOOST_ENABLED = True       # 新聞族群加分開關
-    NEWS_BOOST_FACTOR = 0.10        # 加分幅度 10%
-    NEWS_BOOST_MAX = 0.15           # 加分上限 15%
+    NEWS_BOOST_FACTOR = 0.10        # 利多族群加分幅度 10%
+    NEWS_BOOST_MAX = 0.15           # 加分上限 15%（族群 + 個股合計）
+    NEWS_PENALTY_FACTOR = 0.10      # 利空族群折減幅度 10%
+    NEWS_BEAR_MAX_HOLDINGS = 2      # 偏空市場時最大持股上限（原本為 3）
     
     # 🔐 Web Dashboard 驗證 (Phase 1 Security)
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')

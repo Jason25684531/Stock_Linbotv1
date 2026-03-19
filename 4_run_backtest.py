@@ -411,9 +411,26 @@ class BacktestEngine:
         
         return candidates.head(3)['stock_id'].tolist()
     
+    def _get_max_holdings(self, date_str: str) -> int:
+        """根據當日消息面情緒動態調整持股上限
+
+        偏空情境下從 DB 讀取情緒標記，縮減持股上限以控制風險。
+
+        Returns:
+            int: 最大持股數量
+        """
+        try:
+            from tool.db_helper import get_news_sentiment
+            info = get_news_sentiment(date_str)
+            if info.get('sentiment') == '偏空':
+                return Config.NEWS_BEAR_MAX_HOLDINGS
+        except Exception:
+            pass
+        return MAX_HOLDINGS
+
     def buy(self, stock_id, price, date_str):
         """買入"""
-        if len(self.positions) >= MAX_HOLDINGS:
+        if len(self.positions) >= self._get_max_holdings(date_str):
             return
         if stock_id in self.positions:
             return

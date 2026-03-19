@@ -19,7 +19,7 @@ _engine_instance = None
 _ALLOWED_TABLES = {
     'daily_market_data', 'user_settings', 'user_simulation_trades',
     'monthly_revenue', 'financial_statements', 'daily_recommendations',
-    'backtest_trades', 'backtest_equity_curve',
+    'backtest_trades', 'backtest_equity_curve', 'daily_news_sentiment',
 }
 
 
@@ -135,6 +135,18 @@ def get_latest_trade_date():
     return None
 
 
+def normalize_date_str(date_value) -> str | None:
+    """統一將日期值轉為 YYYY-MM-DD 字串。"""
+    if date_value is None:
+        return None
+    if hasattr(date_value, 'strftime'):
+        return date_value.strftime('%Y-%m-%d')
+    text_value = str(date_value).strip()
+    if not text_value:
+        return None
+    return text_value[:10]
+
+
 def get_stock_data(stock_id=None, date_str=None):
     """
     從資料庫撈取股票資料（安全版 - 參數化查詢）
@@ -154,7 +166,7 @@ def get_stock_data(stock_id=None, date_str=None):
             latest = get_latest_trade_date()
             if not latest:
                 return pd.DataFrame(), None
-            date_str = latest.strftime('%Y-%m-%d') if hasattr(latest, 'strftime') else str(latest)
+            date_str = normalize_date_str(latest)
 
         # 參數化查詢（防 SQL Injection）
         if stock_id:
@@ -370,38 +382,6 @@ def create_user_simulation_trade(user_id, stock_id, buy_price, buy_date, status=
         return True
     except Exception as e:
         print(f"❌ 新增模擬交易失敗: {e}")
-        return False
-
-def init_pk_tables():
-    """
-    建立 PK System 所需資料表
-    - user_simulation_trades: 使用者模擬交易記錄
-    """
-    try:
-        engine = get_db_engine()
-        with engine.connect() as conn:
-            # 建立使用者模擬交易表
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS user_simulation_trades (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id VARCHAR(100) NOT NULL COMMENT '使用者 ID (Line User ID)',
-                    stock_id VARCHAR(20) NOT NULL COMMENT '股票代碼',
-                    buy_price DECIMAL(10, 2) NOT NULL COMMENT '買入價格',
-                    buy_date DATE NOT NULL COMMENT '買入日期',
-                    sell_price DECIMAL(10, 2) DEFAULT NULL COMMENT '賣出價格',
-                    sell_date DATE DEFAULT NULL COMMENT '賣出日期',
-                    status VARCHAR(20) DEFAULT 'HOLDING' COMMENT '狀態: HOLDING, CLOSED',
-                    roi DECIMAL(10, 4) DEFAULT NULL COMMENT '報酬率 (百分比)',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_user_status (user_id, status),
-                    INDEX idx_buy_date (buy_date)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='使用者模擬交易記錄'
-            """))
-            conn.commit()
-        print("✅ PK System 資料表初始化完成")
-        return True
-    except Exception as e:
-        print(f"❌ init_pk_tables 失敗: {e}")
         return False
 
 
@@ -936,15 +916,404 @@ def get_stock_sector(stock_id: str) -> str:
     return info.get('sector', '其他')
 
 
-def get_stocks_by_sectors(sectors: list[str]) -> list[str]:
-    """取得屬於指定產業的所有股票代號
+# ==========================================
+# 📰 消息面情緒持久化
+# ==========================================
+
+def ensure_news_schema(engine=None):
+    """確保消息面相關 DB schema 存在（懶初始化）
+
+    1. 建立 daily_news_sentiment 資料表（若不存在）
+    2. 為 daily_recommendations 新增 news_boost_reason 欄位（若不存在）
+    """
+    if engine is None:
+        engine = get_db_engine()
+    try:
+        with engine.connect() as conn:
+            # 建立 daily_news_sentiment 資料表
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS daily_news_sentiment (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    trade_date  DATE NOT NULL,
+                    sentiment   VARCHAR(10) NOT NULL DEFAULT '中性',
+                    bull_sectors TEXT,
+                    bear_sectors TEXT,
+                    bull_reasons TEXT,
+                    bear_reasons TEXT,
+                    bull_theme_map TEXT,
+                    bear_theme_map TEXT,
+                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_date (trade_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            for column_name in ['bull_reasons', 'bear_reasons', 'bull_theme_map', 'bear_theme_map']:
+                result = conn.execute(text("""
+                    SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'daily_news_sentiment'
+                      AND COLUMN_NAME = :column_name
+                """), {"column_name": column_name})
+                if result.scalar() == 0:
+                    conn.execute(text(f"""
+                        ALTER TABLE daily_news_sentiment
+                        ADD COLUMN {column_name} TEXT NULL
+                    """))
+            # 為 daily_recommendations 新增 news_boost_reason 欄位（若尚不存在）
+            result = conn.execute(text("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'daily_recommendations'
+                  AND COLUMN_NAME = 'news_boost_reason'
+            """))
+            if result.scalar() == 0:
+                conn.execute(text("""
+                    ALTER TABLE daily_recommendations
+                    ADD COLUMN news_boost_reason VARCHAR(100) NULL
+                """))
+                print("  ✅ DB 遷移：daily_recommendations.news_boost_reason 欄位已新增")
+            conn.commit()
+    except Exception as e:
+        print(f"  ⚠️ DB schema 確認失敗（不影響執行）: {e}")
+
+
+def save_news_sentiment(date_str: str, sentiment: str,
+                        bull_sectors: list, bear_sectors: list,
+                        bull_reasons: list | None = None,
+                        bear_reasons: list | None = None,
+                        bull_theme_map: dict | None = None,
+                        bear_theme_map: dict | None = None) -> None:
+    """儲存每日消息面情緒結果到 daily_news_sentiment 資料表
+
+    使用 INSERT … ON DUPLICATE KEY UPDATE 以支援同日重複執行。
 
     Args:
-        sectors: 產業名稱列表（如 ['半導體', '航運']）
+        date_str: 日期字串（'YYYY-MM-DD'）
+        sentiment: '偏多' | '偏空' | '中性'
+        bull_sectors: 利多產業列表
+        bear_sectors: 利空產業列表
+        bull_reasons: 利多重點條列
+        bear_reasons: 利空重點條列
+        bull_theme_map: 利多族群對應主題
+        bear_theme_map: 利空族群對應主題
+    """
+    import json
+    engine = get_db_engine()
+    ensure_news_schema(engine)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO daily_news_sentiment
+                    (trade_date, sentiment, bull_sectors, bear_sectors,
+                     bull_reasons, bear_reasons, bull_theme_map, bear_theme_map)
+                VALUES
+                    (:date, :sentiment, :bull, :bear, :bull_reasons, :bear_reasons,
+                     :bull_theme_map, :bear_theme_map)
+                ON DUPLICATE KEY UPDATE
+                    sentiment    = VALUES(sentiment),
+                    bull_sectors = VALUES(bull_sectors),
+                    bear_sectors = VALUES(bear_sectors),
+                    bull_reasons = VALUES(bull_reasons),
+                    bear_reasons = VALUES(bear_reasons),
+                    bull_theme_map = VALUES(bull_theme_map),
+                    bear_theme_map = VALUES(bear_theme_map),
+                    created_at   = CURRENT_TIMESTAMP
+            """), {
+                "date": date_str,
+                "sentiment": sentiment,
+                "bull": json.dumps(bull_sectors, ensure_ascii=False),
+                "bear": json.dumps(bear_sectors, ensure_ascii=False),
+                "bull_reasons": json.dumps(bull_reasons or [], ensure_ascii=False),
+                "bear_reasons": json.dumps(bear_reasons or [], ensure_ascii=False),
+                "bull_theme_map": json.dumps(bull_theme_map or {}, ensure_ascii=False),
+                "bear_theme_map": json.dumps(bear_theme_map or {}, ensure_ascii=False),
+            })
+            conn.commit()
+    except Exception as e:
+        print(f"  ⚠️ 消息面情緒儲存失敗: {e}")
+
+
+def get_news_sentiment(date_str: str = None) -> dict:
+    """取得指定日期的消息面情緒資料
+
+    Args:
+        date_str: 日期字串，None 表示取最新一筆
 
     Returns:
-        符合的 stock_id 列表
+        dict: {"trade_date": "...", "sentiment": "偏多",
+               "bull_sectors": [...], "bear_sectors": [...]}
+              查無資料時回傳預設中性值
     """
-    m = _load_sector_map()
-    target = set(sectors)
-    return [sid for sid, info in m.items() if info.get('sector') in target]
+    import json
+    default = {
+        "trade_date": date_str or '',
+        "sentiment": "中性",
+        "bull_sectors": [],
+        "bear_sectors": [],
+        "bull_reasons": [],
+        "bear_reasons": [],
+        "bull_theme_map": {},
+        "bear_theme_map": {},
+    }
+    engine = get_db_engine()
+    ensure_news_schema(engine)
+    try:
+        with engine.connect() as conn:
+            if date_str:
+                row = conn.execute(text("""
+                    SELECT trade_date, sentiment, bull_sectors, bear_sectors,
+                           bull_reasons, bear_reasons, bull_theme_map, bear_theme_map
+                    FROM daily_news_sentiment
+                    WHERE trade_date = :date
+                    LIMIT 1
+                """), {"date": date_str}).fetchone()
+            else:
+                row = conn.execute(text("""
+                    SELECT trade_date, sentiment, bull_sectors, bear_sectors,
+                           bull_reasons, bear_reasons, bull_theme_map, bear_theme_map
+                    FROM daily_news_sentiment
+                    ORDER BY trade_date DESC
+                    LIMIT 1
+                """)).fetchone()
+
+        if not row:
+            return default
+
+        td = row[0]
+        return {
+            "trade_date": td.strftime('%Y-%m-%d') if hasattr(td, 'strftime') else str(td),
+            "sentiment": row[1] or '中性',
+            "bull_sectors": json.loads(row[2]) if row[2] else [],
+            "bear_sectors": json.loads(row[3]) if row[3] else [],
+            "bull_reasons": json.loads(row[4]) if row[4] else [],
+            "bear_reasons": json.loads(row[5]) if row[5] else [],
+            "bull_theme_map": json.loads(row[6]) if row[6] else {},
+            "bear_theme_map": json.loads(row[7]) if row[7] else {},
+        }
+    except Exception as e:
+        print(f"  ⚠️ 消息面情緒讀取失敗: {e}")
+        return default
+
+
+def get_daily_recommendations(date_str: str = None, strategy: str = None,
+                              limit: int | None = None) -> pd.DataFrame:
+    """讀取每日推薦結果（供 Dashboard / Line Bot 共用）
+
+    Args:
+        date_str: 交易日期，None 代表最新交易日
+        strategy: 策略代號（如 'v36_chip_momentum'），None 代表不限制
+        limit: 限制筆數，None 代表不限制
+
+    Returns:
+        DataFrame: 包含 daily_recommendations 主要欄位
+    """
+    engine = get_db_engine()
+    try:
+        if not date_str:
+            latest = get_latest_trade_date()
+            if not latest:
+                return pd.DataFrame()
+            date_str = normalize_date_str(latest)
+
+        sql = """
+            SELECT stock_id, trade_date, strategy, close_price, ai_score, rsi, volume,
+                   news_boost_reason
+            FROM daily_recommendations
+            WHERE trade_date = :date
+        """
+        params = {"date": date_str}
+
+        if strategy:
+            sql += " AND strategy = :strategy"
+            params["strategy"] = strategy
+
+        sql += " ORDER BY ai_score DESC"
+
+        if limit is not None:
+            sql += " LIMIT :limit"
+            params["limit"] = int(limit)
+
+        return pd.read_sql(text(sql), engine, params=params)
+    except Exception as e:
+        print(f"  ⚠️ 讀取 daily_recommendations 失敗: {e}")
+        return pd.DataFrame()
+
+
+def merge_recommendations_with_market_data(
+    recommendations: pd.DataFrame,
+    market_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """將落庫推薦結果與當日市場欄位合併，避免多處重複 merge 邏輯。"""
+    if recommendations is None or recommendations.empty:
+        return pd.DataFrame()
+
+    merged = recommendations.copy()
+    merged['stock_id'] = merged['stock_id'].astype(str)
+
+    if market_df is None or market_df.empty:
+        return merged
+
+    market_copy = market_df.copy()
+    market_copy['stock_id'] = market_copy['stock_id'].astype(str)
+
+    merged = merged.merge(
+        market_copy,
+        on='stock_id',
+        how='left',
+        suffixes=('', '_market')
+    )
+
+    for field in ['close_price', 'rsi', 'volume']:
+        market_field = f'{field}_market'
+        if market_field in merged.columns:
+            merged[field] = merged[market_field].fillna(merged[field])
+
+    return merged
+
+
+def _get_prior_recommendation_dates(date_str: str, strategy: str = None) -> list[str]:
+    """取得指定日期前、由近到遠的推薦日期清單。"""
+    engine = get_db_engine()
+    sql = """
+        SELECT DISTINCT trade_date
+        FROM daily_recommendations
+        WHERE trade_date < :date
+    """
+    params = {'date': date_str}
+
+    if strategy:
+        sql += " AND strategy = :strategy"
+        params['strategy'] = strategy
+
+    sql += " ORDER BY trade_date DESC"
+
+    dates_df = pd.read_sql(text(sql), engine, params=params)
+    if dates_df.empty:
+        return []
+
+    return [normalize_date_str(value) for value in dates_df['trade_date'].tolist() if normalize_date_str(value)]
+
+
+def _calc_date_diff_days(older_date: str, newer_date: str) -> int | None:
+    """計算兩個日期字串相差天數。"""
+    if not older_date or not newer_date:
+        return None
+    try:
+        return int((pd.to_datetime(newer_date) - pd.to_datetime(older_date)).days)
+    except Exception:
+        return None
+
+
+def get_recommendations_with_market_fallback(
+    date_str: str = None,
+    strategy: str = None,
+    limit: int | None = None,
+    max_fallback_age_days: int | None = None,
+) -> tuple[pd.DataFrame, dict]:
+    """取得推薦資料，熔斷日必要時回推最近安全日。"""
+    requested_date = normalize_date_str(date_str or get_latest_trade_date())
+    if not requested_date:
+        return pd.DataFrame(), {
+            'requested_date': None,
+            'recommendation_date': None,
+            'fallback_used': False,
+            'market_circuit_breaker_active': False,
+            'current_day_recommendations_used': False,
+            'fallback_too_old': False,
+            'fallback_age_days': None,
+            'last_available_recommendation_date': None,
+        }
+
+    if max_fallback_age_days is None:
+        max_fallback_age_days = Config.RECOMMENDATION_FALLBACK_MAX_AGE_DAYS
+
+    circuit_breaker_active = get_market_trend(requested_date) != 'BULL'
+    current_rows = get_daily_recommendations(
+        date_str=requested_date,
+        strategy=strategy,
+        limit=limit,
+    )
+    meta = {
+        'requested_date': requested_date,
+        'recommendation_date': requested_date,
+        'fallback_used': False,
+        'market_circuit_breaker_active': circuit_breaker_active,
+        'current_day_recommendations_used': False,
+        'fallback_too_old': False,
+        'fallback_age_days': None,
+        'last_available_recommendation_date': None,
+    }
+
+    if not circuit_breaker_active:
+        return current_rows, meta
+
+    if not current_rows.empty:
+        meta['current_day_recommendations_used'] = True
+        return current_rows, meta
+
+    for candidate_date in _get_prior_recommendation_dates(requested_date, strategy=strategy):
+        meta['last_available_recommendation_date'] = candidate_date
+        if get_market_trend(candidate_date) != 'BULL':
+            continue
+
+        fallback_age_days = _calc_date_diff_days(candidate_date, requested_date)
+        if (
+            max_fallback_age_days is not None
+            and fallback_age_days is not None
+            and fallback_age_days > max_fallback_age_days
+        ):
+            meta['fallback_too_old'] = True
+            meta['fallback_age_days'] = fallback_age_days
+            return pd.DataFrame(), meta
+
+        fallback_rows = get_daily_recommendations(
+            date_str=candidate_date,
+            strategy=strategy,
+            limit=limit,
+        )
+        if fallback_rows.empty:
+            continue
+
+        meta['fallback_used'] = True
+        meta['recommendation_date'] = candidate_date
+        meta['fallback_age_days'] = fallback_age_days
+        return fallback_rows, meta
+
+    return pd.DataFrame(), meta
+
+
+def format_market_fallback_notice(meta: dict, strategy_display: str) -> str:
+    """統一格式化熔斷 / fallback 提示文字。"""
+    if not meta or not meta.get('market_circuit_breaker_active'):
+        return ''
+
+    requested_date = meta.get('requested_date') or ''
+    recommendation_date = meta.get('recommendation_date') or requested_date
+
+    if meta.get('fallback_used'):
+        return (
+            f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
+            f"以下改顯示 {recommendation_date} 最近安全日的{strategy_display}推薦，"
+            f"非今日新訊號，請降低部位並嚴設停損。"
+        )
+
+    if meta.get('current_day_recommendations_used'):
+        return (
+            f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
+            f"以下顯示當日既有的{strategy_display}推薦紀錄，"
+            f"不建議追價新開倉，請降低部位並嚴設停損。"
+        )
+
+    if meta.get('fallback_too_old'):
+        last_date = meta.get('last_available_recommendation_date') or '未知日期'
+        age_days = meta.get('fallback_age_days')
+        age_text = f"距今 {age_days} 天" if age_days is not None else '時間過久'
+        return (
+            f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
+            f"最近可用推薦日為 {last_date}，{age_text}，已超過可接受範圍，"
+            f"因此不回推舊名單，建議暫時觀望。"
+        )
+
+    return (
+        f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
+        f"今日沒有可回推的安全{strategy_display}推薦，建議暫時觀望。"
+    )

@@ -324,42 +324,6 @@ class PerformanceVisualizer:
         }
 
 
-def create_simple_equity_chart(dates: List[str], values: List[float], title: str = "權益曲線") -> str:
-    """快速建立簡單的權益曲線圖
-    
-    Args:
-        dates: 日期列表
-        values: 資產價值列表
-        title: 圖表標題
-    
-    Returns:
-        Plotly 圖表的 JSON 字串
-    """
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=dates,
-        y=values,
-        mode='lines',
-        name='資產價值',
-        line=dict(color='#00D9FF', width=2.5),
-        fill='tozeroy',
-        fillcolor='rgba(0, 217, 255, 0.1)'
-    ))
-    
-    fig.update_layout(
-        title=title,
-        xaxis_title='日期',
-        yaxis_title='資產價值 (TWD)',
-        template='plotly_dark',
-        height=400
-    )
-    
-    fig.update_yaxes(tickformat='$,.0f')
-    
-    return fig.to_json()
-
-
 # ============================================
 # 便捷函數：從 CSV 檔案直接生成報告
 # ============================================

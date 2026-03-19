@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-03-13T10:17:46.907692",
+  "last_updated": "2026-03-13T15:20:42.865101",
   "active_strategies": [
-    "v34_turbo"
+    "v35_innovation"
   ],
   "per_strategy_overrides": {},
   "backtest_defaults": {

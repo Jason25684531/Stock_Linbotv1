@@ -55,6 +55,9 @@ from tool.db_helper import (
     get_setting,
     update_setting,
     validate_setting,
+    get_recommendations_with_market_fallback,
+    format_market_fallback_notice,
+    merge_recommendations_with_market_data,
     get_stock_data,
     create_user_simulation_trade,
     supplement_financial_data,
@@ -62,6 +65,8 @@ from tool.db_helper import (
     get_recent_backtest_trades,
     get_backtest_equity_curve,
     get_backtest_summary_from_db,
+    get_news_sentiment,
+    get_stock_sector,
     safe_float,
     safe_int,
 )
@@ -317,6 +322,135 @@ def _match_strategy_switch(text_lower: str):
     return key, info['display'], info['features']
 
 
+def _parse_news_reason(news_reason: str) -> dict:
+    """解析消息面理由字串，供 Web / Line 顯示使用。"""
+    raw = str(news_reason or '').strip()
+    items = [part.strip() for part in raw.split('｜') if part.strip()]
+    is_bearish = any(('利空' in item or '承壓' in item or '下修' in item) for item in items)
+    return {
+        'raw': raw,
+        'items': items,
+        'is_bearish': is_bearish,
+        'title': '🔴 利空警示' if is_bearish else '🟢 利多原因',
+    }
+
+
+def _get_stock_mentions_map(stock_ids: list[str]) -> dict:
+    """讀取個股層級新聞摘要。"""
+    if not stock_ids:
+        return {}
+    try:
+        from tool.news_agent import get_stock_news_mentions
+        return get_stock_news_mentions(stock_ids)
+    except Exception as exc:
+        print(f"⚠️ 個股新聞讀取失敗: {exc}")
+        return {}
+
+
+def _get_sector_news_summary(sector: str, date_str: str = None) -> dict:
+    """依產業回傳可直接顯示的消息面摘要。"""
+    payload = {
+        'raw': '',
+        'items': [],
+        'is_bearish': False,
+        'title': '',
+    }
+    if not sector:
+        return payload
+
+    sentiment = get_news_sentiment(date_str)
+    bull_sectors = sentiment.get('bull_sectors', [])
+    bear_sectors = sentiment.get('bear_sectors', [])
+
+    if sector in bull_sectors:
+        items = []
+        theme = (sentiment.get('bull_theme_map') or {}).get(sector)
+        if theme:
+            items.append(f"主題: {theme}")
+        items.extend([str(item) for item in sentiment.get('bull_reasons', []) if str(item).strip()])
+        items = items[:3]
+        return {
+            'raw': '｜'.join(items),
+            'items': items,
+            'is_bearish': False,
+            'title': f'🟢 {sector} 消息面',
+        }
+
+    if sector in bear_sectors:
+        items = []
+        theme = (sentiment.get('bear_theme_map') or {}).get(sector)
+        if theme:
+            items.append(f"主題: {theme}")
+        items.extend([str(item) for item in sentiment.get('bear_reasons', []) if str(item).strip()])
+        items = items[:3]
+        return {
+            'raw': '｜'.join(items),
+            'items': items,
+            'is_bearish': True,
+            'title': f'🔴 {sector} 消息面',
+        }
+
+    return payload
+
+
+def _get_stock_specific_news_summary(stock_id: str, stock_mentions_map: dict) -> dict:
+    """依個股新聞偵測結果組合顯示摘要。"""
+    payload = {
+        'raw': '',
+        'items': [],
+        'is_bearish': False,
+        'title': '',
+    }
+    stock_info = (stock_mentions_map or {}).get(str(stock_id))
+    if not stock_info:
+        return payload
+
+    score = safe_int(stock_info.get('score')) or 0
+    reason = str(stock_info.get('reason') or '').strip()
+    if score == 0 or not reason:
+        return payload
+
+    is_bearish = score < 0
+    item = f"利空: {reason}" if is_bearish else f"利多: {reason}"
+    return {
+        'raw': item,
+        'items': [item],
+        'is_bearish': is_bearish,
+        'title': '🔴 個股新聞' if is_bearish else '🟢 個股新聞',
+    }
+
+
+def _resolve_signal_news_info(row, date_str: str, stock_mentions_map: dict) -> dict:
+    """統一決定單一標的要顯示的新聞摘要來源。"""
+    stock_id = str(row.get('stock_id', '')).strip()
+    sector = get_stock_sector(stock_id)
+
+    sector_info = _get_sector_news_summary(sector, date_str)
+    if sector_info['items']:
+        return sector_info
+
+    stock_info = _get_stock_specific_news_summary(stock_id, stock_mentions_map)
+    if stock_info['items']:
+        return stock_info
+
+    return _parse_news_reason(row.get('news_boost_reason') or '')
+
+
+def _load_strategy_candidates(active, strategy_key: str, market_df: pd.DataFrame,
+                              requested_date: str, limit: int) -> tuple[pd.DataFrame, dict, bool]:
+    """統一載入策略候選股，優先使用落庫推薦並套用 fallback。"""
+    persisted, meta = get_recommendations_with_market_fallback(
+        date_str=requested_date,
+        strategy=strategy_key,
+        limit=limit,
+        max_fallback_age_days=Config.RECOMMENDATION_FALLBACK_MAX_AGE_DAYS,
+    )
+    if not persisted.empty:
+        return merge_recommendations_with_market_data(persisted, market_df), meta, True
+
+    return active.filter_candidates(market_df.copy()), meta, False
+
+
 def get_v30_recommendation():
     """
     V30 策略選股（均線突破 + 量能確認）
@@ -386,6 +520,7 @@ def get_strategy_recommendation(as_flex: bool = False):
             return "❌ 策略載入失敗，請先輸入「切換V30」設定策略"
         
         strategy_name = active.display_name
+        strategy_key = active.name
         
         # 2. 撈取最新資料
         df, date_str = get_stock_data()
@@ -395,12 +530,23 @@ def get_strategy_recommendation(as_flex: bool = False):
         # 2.5 補充財務資料（V34/V35 需要 revenue_yoy / op_profit_margin）
         df = supplement_financial_data(df)
         
-        # 3. 策略篩選
-        candidates = active.filter_candidates(df)
+        # 3. 優先讀取已落庫推薦結果，熔斷日必要時回推最近安全日
+        candidates, fallback_meta, has_persisted = _load_strategy_candidates(
+            active=active,
+            strategy_key=strategy_key,
+            market_df=df,
+            requested_date=date_str,
+            limit=5,
+        )
+        display_date = fallback_meta.get('recommendation_date') or date_str
+        market_notice = format_market_fallback_notice(fallback_meta, strategy_name)
+
         if candidates.empty:
+            warning_block = f"{market_notice}\n\n" if market_notice else ''
             return (
                 f"🔍 【{strategy_name}】選股結果\n"
-                f"日期：{date_str}\n\n"
+                f"日期：{display_date}\n\n"
+                f"{warning_block}"
                 f"❌ 今日無符合條件的股票\n\n"
                 f"💡 建議：\n"
                 f"• 觀望等待進場訊號\n"
@@ -408,26 +554,28 @@ def get_strategy_recommendation(as_flex: bool = False):
                 f"• 輸入「查看策略」檢視篩選條件"
             )
         
-        # 4. AI 排名（載入策略專屬模型）
+        # 4. 若沒有已落庫結果，才即時計算 AI 排名
         has_ai = False
-        try:
-            from tool.model_utils import load_model as _load_model
-            strategy_key = mgr.get_active_strategy_names()[0] if mgr.get_active_strategy_names() else None
-            strat_model, strat_features, _, _ = _load_model(strategy_key)
-            if strat_model is not None:
-                features = strat_features or active.features
-                df_score = candidates.copy()
-                for f in features:
-                    if f not in df_score.columns:
-                        df_score[f] = 0
+        if has_persisted:
+            has_ai = 'ai_score' in candidates.columns and candidates['ai_score'].notna().any()
+        else:
+            try:
+                from tool.model_utils import load_model as _load_model
+                strat_model, strat_features, _, _ = _load_model(strategy_key)
+                if strat_model is not None:
+                    features = strat_features or active.features
+                    df_score = candidates.copy()
+                    for f in features:
+                        if f not in df_score.columns:
+                            df_score[f] = 0
 
-                probs = strat_model.predict_proba(df_score[features].fillna(0))[:, 1]
-                candidates = candidates.copy()
-                candidates['ai_score'] = probs
-                candidates = candidates.sort_values('ai_score', ascending=False)
-                has_ai = True
-        except Exception as e:
-            print(f"⚠️ AI 排名失敗（使用原始排序）: {e}")
+                    probs = strat_model.predict_proba(df_score[features].fillna(0))[:, 1]
+                    candidates = candidates.copy()
+                    candidates['ai_score'] = probs
+                    candidates = candidates.sort_values('ai_score', ascending=False)
+                    has_ai = True
+            except Exception as e:
+                print(f"⚠️ AI 排名失敗（使用原始排序）: {e}")
         
         # 5. 格式化輸出
         top_n = candidates.head(5)
@@ -435,7 +583,6 @@ def get_strategy_recommendation(as_flex: bool = False):
 
         # ── Flex Carousel 模式 ──
         if as_flex:
-            from tool.db_helper import get_stock_sector
             picks_list = []
             for _, row in top_n.iterrows():
                 close = row.get('close_price', 0)
@@ -447,23 +594,25 @@ def get_strategy_recommendation(as_flex: bool = False):
                     'ai_score': row.get('ai_score', 0) if has_ai else 0,
                     'rsi': row.get('rsi', 0),
                     'volume': row.get('volume', 0),
+                    'news_boost_reason': row.get('news_boost_reason', ''),
                     'stop_loss_price': close * (1 - active.stop_loss),
                     'take_profit_price': close * (1 + active.take_profit) if active.take_profit > 0 else 0,
                 })
             return create_recommendation_carousel(
                 picks=picks_list,
                 strategy_name=strategy_name,
-                date_str=date_str,
+                date_str=display_date,
             )
 
         # ── 純文字模式（相容舊版）──
         reply = f"🎯 【{strategy_name}】推薦\n"
-        reply += f"📅 日期：{date_str}\n"
+        reply += f"📅 日期：{display_date}\n"
         if has_ai:
             reply += f"🤖 AI 排名：已啟用\n"
+        if market_notice:
+            reply += f"{market_notice}\n"
         reply += "-" * 28 + "\n\n"
         
-        from tool.db_helper import get_stock_sector
         for i, (_, row) in enumerate(top_n.iterrows(), 1):
             stock_id = row.get('stock_id', 'N/A')
             close = row.get('close_price', 0)
@@ -472,6 +621,8 @@ def get_strategy_recommendation(as_flex: bool = False):
             ma20 = row.get('ma20', 0)
             ma60 = row.get('ma60', 0)
             sector = get_stock_sector(str(stock_id))
+            news_reason = row.get('news_boost_reason', '')
+            news_info = _parse_news_reason(news_reason)
 
             # 計算停損停利價位
             sl_price = close * (1 - active.stop_loss)
@@ -487,6 +638,10 @@ def get_strategy_recommendation(as_flex: bool = False):
             if volume > 0:
                 reply += f"  📈 量: {volume/10000:.0f}萬"
             reply += "\n"
+            if news_reason:
+                reply += f"   {news_info['title']}\n"
+                for item in news_info['items'][:3]:
+                    reply += f"   • {item}\n"
             reply += f"   🛡️ 停損: {sl_price:.2f}"
             if tp_price > 0:
                 reply += f"  🎯 停利: {tp_price:.2f}"
@@ -1014,9 +1169,15 @@ def api_daily_signals():
                 strategy_key = mgr.get_active_strategy_names()[0] if mgr.get_active_strategy_names() else 'v31_hybrid'
 
             strategy_name = active.display_name
-            candidates = active.filter_candidates(df.copy())
+            candidates, fallback_meta, has_persisted = _load_strategy_candidates(
+                active=active,
+                strategy_key=strategy_key,
+                market_df=df,
+                requested_date=date_str,
+                limit=top_n,
+            )
 
-            if not candidates.empty:
+            if not has_persisted and not candidates.empty:
                 try:
                     from tool.model_utils import load_model as _load_model
                     strat_model, strat_features, _, _ = _load_model(strategy_key)
@@ -1035,10 +1196,13 @@ def api_daily_signals():
             
             if candidates.empty:
                 return jsonify({
-                    'date': date_str,
+                    'date': fallback_meta.get('recommendation_date') or date_str,
+                    'requested_date': fallback_meta.get('requested_date') or date_str,
                     'strategy_key': strategy_key,
                     'strategy_display': strategy_name,
                     'top_n': top_n,
+                    'fallback_used': fallback_meta.get('fallback_used', False),
+                    'market_warning': format_market_fallback_notice(fallback_meta, strategy_name),
                     'signals': [],
                     'message': f'今日 {strategy_name} 無符合條件的股票'
                 })
@@ -1064,10 +1228,13 @@ def api_daily_signals():
 
         # 格式化輸出
         signals = []
+        signal_date = fallback_meta.get('recommendation_date') or date_str if 'fallback_meta' in locals() else date_str
+        stock_mentions_map = _get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
         for _, row in picks.iterrows():
             close_price = float(row['close_price'])
             stop_loss_rate = float(getattr(_active_strategy, 'stop_loss', Config.V30_STOP_LOSS)) if _active_strategy else Config.V30_STOP_LOSS
             take_profit_rate = float(getattr(_active_strategy, 'take_profit', Config.V30_TAKE_PROFIT)) if _active_strategy else Config.V30_TAKE_PROFIT
+            news_info = _resolve_signal_news_info(row, signal_date, stock_mentions_map)
 
             suggested_buy = close_price
             suggested_sell = close_price * (1 + take_profit_rate)
@@ -1088,6 +1255,10 @@ def api_daily_signals():
                 'revenue_yoy': safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
                 'chip_score': safe_float(row.get('chip_score')) if 'chip_score' in row else None,
                 'foreign_buy': safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
+                'news_boost_reason': news_info['raw'],
+                'news_reason_items': news_info['items'],
+                'news_signal_title': news_info['title'],
+                'news_is_bearish': news_info['is_bearish'],
                 'suggested_buy_price': round(suggested_buy, 2),
                 'suggested_sell_price': round(suggested_sell, 2),
                 'suggested_stop_loss_price': round(suggested_stop, 2),
@@ -1096,10 +1267,13 @@ def api_daily_signals():
             signals.append(signal)
         
         return jsonify({
-            'date': date_str,
+            'date': signal_date,
+            'requested_date': fallback_meta.get('requested_date') if 'fallback_meta' in locals() else date_str,
             'strategy_key': strategy_key,
             'strategy_display': strategy_name,
             'top_n': top_n,
+            'fallback_used': fallback_meta.get('fallback_used', False) if 'fallback_meta' in locals() else False,
+            'market_warning': format_market_fallback_notice(fallback_meta, strategy_name) if 'fallback_meta' in locals() else '',
             'signals': signals,
             'count': len(signals)
         })
@@ -1107,6 +1281,19 @@ def api_daily_signals():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+# ==========================================
+# News Sentiment API
+# ==========================================
+
+@app.route("/api/news_sentiment")
+@login_required
+def api_news_sentiment():
+    """回傳指定日期（或最新）消息面情緒摘要"""
+    date_str = request.args.get('date')
+    data = get_news_sentiment(date_str)
+    return jsonify(data)
 
 
 # ==========================================
