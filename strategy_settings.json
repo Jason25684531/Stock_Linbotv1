@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-03-13T15:20:42.865101",
+  "last_updated": "2026-03-24T17:34:10.908587",
   "active_strategies": [
-    "v35_innovation"
+    "v38_value_dividend"
   ],
   "per_strategy_overrides": {},
   "backtest_defaults": {
