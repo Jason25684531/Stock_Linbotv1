@@ -30,6 +30,18 @@
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 大盤熔斷 | 輸入「V30」 |
 | 🎫 個股 AI 診斷 (Flex) | 三維度健康診斷卡片（技術面+基本面+AI分數）| 輸入 4 碼股票代號 |
 | 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:1688` |
+| 🎛️ Rich Menu 2×2 | 個股診斷 / 總經與大盤 / 籌碼動向 / 策略盲盒 | LINE Rich Menu |
+
+### 📲 Rich Menu 目前架構
+
+| 區塊 | 觸發方式 | 實作位置 | 說明 |
+|------|---------|---------|------|
+| 個股診斷 | `MessageAction(text="診斷 ")` | `tool/richmenu.py` + `app.py` | 延續既有股票診斷流程 |
+| 總經與大盤 | `action=market_summary` | `app.py::_build_market_summary_messages()` | 透過 `tool/mcp_client.py` 讀取市場快照 |
+| 籌碼動向 | `action=chip_trend` | `app.py::_build_chip_trend_messages()` | 透過 MCP 彙總三大法人資料 |
+| 策略盲盒 | `action=random_strategy` | `app.py::_build_random_strategy_messages()` | 從 `strategy_settings.json` 的策略池隨機抽取 |
+
+Rich Menu 的版型與圖片上傳唯一入口為 `tool/richmenu.py`，部署腳本為 `scripts/setup_rich_menu.py`。`app.py` 只負責 postback 路由與訊息組裝，避免相同定義散落在多個檔案。
 
 ### 🧭 當前策略門檻（2026-03）
 
@@ -48,6 +60,20 @@
 ## 🏗️ 系統架構 (V38)
 
 **設計原則**：DRY + 單一職責 + 統一介面 + 安全優先 + 資料驅動
+
+### 開發最高原則（2026-04-01）
+
+- 架構解耦：核心業務邏輯不得直接發送 HTTP 請求；後續新增或重構之外部傳輸必須集中到 `tool/mcp_client.py`。
+- 型別安全：所有新建立的函式必須提供完整 PEP 484 型別提示。
+- 錯誤處理：禁止 bare `except:`；API 失敗必須寫入系統日誌並具備有限次數的重試。
+- 依賴管理：新增套件必須同步更新 `requirements.txt`，新 HTTP 或非同步 I/O 優先採用 `httpx`。
+- 文件同步：程式碼變更必須同步更新對應 Markdown 或 docstrings。
+
+### MCP 資料傳輸邊界
+
+- `stock_bot` 內的 CLI 腳本與 `tool/news_agent.py` 不再直接呼叫 TWSE、TPEx、MOPS covered endpoint。
+- 所有 covered dataset 先經 `tool/mcp_client.py`，再由 `scripts/twse_mcp_server.py` 統一對外抓取並提供 `/health` 與三個 dataset POST endpoint。
+- `1_update_database.py` 目前以 MCP 取得市場快照、外資買賣超與季度財報；`chip_data_scraper.py` 只保留為融資融券 enrich。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -81,11 +107,18 @@
 └────────────┬────────────────────────────────────────────┘
              │
 ┌────────────▼────────────────────────────────────────────┐
+│             🌉 傳輸層 (MCP Transport)                   │
+│   tool/mcp_client.py (sync/async client + retries)      │
+│   scripts/twse_mcp_server.py (Flask MCP, port 8080)     │
+│   health: /health                                        │
+└────────────┬────────────────────────────────────────────┘
+             │
+┌────────────▼────────────────────────────────────────────┐
 │                   🗄️ 資料層 (Data)                       │
 │   tool/db_helper.py (唯一 DB 存取入口, Singleton 連線池) │
-│   tool/crawlers/ (融資融券 + MOPS 季報爬蟲)              │
+│   tool/crawlers/ (融資融券 + MCP server 端財報備援)      │
 │   tool/update_monthly_revenue.py (月營收爬蟲)             │
-│   tool/update_financials_mops.py (季度財報更新)           │
+│   tool/update_financials_mops.py (MCP-backed 季度財報)    │
 └────────────┬────────────────────────────────────────────┘
              │
 ┌────────────▼────────────────────────────────────────────┐
@@ -109,6 +142,7 @@
 | **Flex Message** | `line_message_builder.py` 建構互動卡片 | 取代純文字，視覺化診斷 |
 | **資料驅動** | 模式切換 / Preset 參數集中於 `config.py`（MODE_CMD_MAP 等） | 新增模式只改 config，不改 app.py |
 | **Fixture 共用** | `test/conftest.py` 統一 manager + empty_df | 測試 DRY，新策略零 boilerplate |
+| **Transport Boundary** | `tool/mcp_client.py` + `scripts/twse_mcp_server.py` 統一 covered dataset 存取與 health check | 降低 scraper 分散與 downstream 漂移 |
 
 ---
 
@@ -170,6 +204,8 @@ copy .env.example .env
 
 # 必要設定：
 # - DB_URL=mysql+pymysql://user:password@localhost:3306/stock_ai_db
+# - MCP_BASE_URL=http://localhost:8080
+# - MCP_DEFAULT_MARKET=ALL
 # - LINE_TOKEN=你的_Line_Channel_Access_Token
 # - LINE_SECRET=你的_Line_Channel_Secret
 # - ADMIN_PASSWORD=Web_Dashboard_密碼
@@ -177,7 +213,22 @@ copy .env.example .env
 
 # 5. 初始化資料庫
 python init_settings.py
+
+# 6. 啟動本機 MCP 服務（host mode）
+python scripts/twse_mcp_server.py
+
+# 7. 健康檢查
+python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/health', timeout=3).read().decode())"
 ```
+
+### Docker Compose 冒煙驗證
+
+```powershell
+docker compose up --build -d db twse_mcp_server stock_bot
+docker compose ps
+```
+
+預期：`db`、`twse_mcp_server`、`stock_bot` 皆進入 `healthy`，且 `stock_bot` 可透過 `http://twse-mcp-server:8080` 使用 MCP transport。
 
 ### 每日自動化排程（Windows 工作排程器）
 
@@ -204,9 +255,10 @@ execution\evening_run.bat
 ### 手動分步執行
 
 ```powershell
-python 1_update_database.py   # 爬取股價+籌碼+月營收+季報
+python 1_update_database.py   # 透過 MCP 抓市場/財報，合併籌碼與月營收後寫入 DB
 python 2_rundaily.py          # 計算指標+選股+AI評分
 python 5_push_to_line.py      # Line 推播（預設 evening 模式）
+python scripts\setup_rich_menu.py  # 手動部署最新 Rich Menu 版面
 ```
 
 ### 啟動與關閉（Windows / 虛擬環境）
@@ -215,11 +267,21 @@ python 5_push_to_line.py      # Line 推播（預設 evening 模式）
 # 啟動虛擬環境
 .\myenv\Scripts\Activate.ps1
 
-# 啟動 Web + Line Bot（port 1688）
+# 終端 1：啟動 MCP 服務（Rich Menu / 新聞 / 資料同步依賴）
+python scripts\twse_mcp_server.py
+
+# 終端 2：啟動 Web + Line Bot（port 1688）
 python app.py
 
+# 選擇性：啟動時自動同步 Rich Menu
+$env:LINE_RICH_MENU_AUTO_SYNC="1"
+python app.py
+
+# 或獨立部署 Rich Menu
+python scripts\setup_rich_menu.py
+
 # 關閉服務
-# 在執行中的終端按 Ctrl + C
+# 在各自執行中的終端按 Ctrl + C
 
 # 退出虛擬環境
 deactivate
@@ -294,30 +356,37 @@ python -m py_compile app.py
 python -m py_compile 2_rundaily.py
 python -m py_compile 4_run_backtest.py
 
-# 2) 全量單元 / 整合測試（一鍵執行）
-python -m pytest test/ -v --tb=short
-# 預期結果: 117 passed
+# 2) Rich Menu / Line Bot 回歸測試
+python -m pytest test/test_richmenu_mcp_integration.py -v
 
-# 3) 依模組分別測試（選擇性執行）
+# 3) 全量單元 / 整合測試（一鍵執行）
+python -m pytest test/ -v --tb=short
+
+# 4) 依模組分別測試（選擇性執行）
 python -m pytest test/test_strategy_factory.py -v      # 策略載入 & 篩選 (3 tests)
 python -m pytest test/test_v35_refactor_flex.py -v     # Flex Message + 出場邏輯 (13 tests)
 python -m pytest test/test_phase2_chip_data.py -v      # 籌碼指標計算 (16 tests)
 python -m pytest test/test_v36_chip_momentum.py -v     # V36 籌碼動能策略 (29 tests)
 python -m pytest test/test_v37_v38_strategies.py -v    # V37 均值回歸 + V38 高殖利率 (56 tests)
 
-# 4) 回測冒煙測試
+# 5) 回測冒煙測試
 python 4_run_backtest.py --v31
 
-# 5) 日常流程冒煙測試
+# 6) 日常流程冒煙測試
 python 2_rundaily.py
 
-# 6) 啟動 Web 並手動驗證 API
+# 7) 啟動 Web 並手動驗證 API
 python app.py
 # 瀏覽器: http://localhost:1688/dashboard
-# API 端點: /api/summary, /api/daily-signals, /api/backtest-result
+# API 端點: /health, /api/summary, /api/daily-signals, /api/backtest-result
+
+# 8) 啟動 MCP 後手動驗證 Rich Menu / LINE Bot
+python scripts\twse_mcp_server.py
+python scripts\setup_rich_menu.py
+# LINE 端依序點擊：個股診斷 / 總經與大盤 / 籌碼動向 / 策略盲盒
 ```
 
-> 若僅需快速回歸，至少執行步驟 1 + 2 + 4。
+> 若僅需快速回歸，至少執行步驟 1 + 2 + 5。
 
 ---
 
@@ -338,6 +407,10 @@ Stock_Linbotv1/
 │   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
 │   ├── daily_run.bat            # 一鍵自動化 (1→2→5 三步驟，舊版相容)
 │   └── start_web.bat            # 一鍵啟動 Web 服務
+│
+├── 📡 MCP / Rich Menu 腳本
+│   ├── scripts/setup_rich_menu.py    # 部署 Rich Menu 到 LINE
+│   └── scripts/twse_mcp_server.py    # MCP HTTP 服務（port 8080）
 │
 ├── 🌐 使用者介面
 │   ├── app.py                   # Flask + Line Bot (port 1688)
@@ -365,7 +438,9 @@ Stock_Linbotv1/
 │   ├── calc_indicators.py       # 技術指標 + 籌碼指標 (唯一來源)
 │   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
 │   ├── db_helper.py             # 資料庫操作 (唯一入口)
+│   ├── mcp_client.py            # 唯一外部市場資料 HTTP 邊界
 │   ├── model_utils.py           # XGBoost 模型載入工具 (LRU 快取)
+│   ├── richmenu.py              # Rich Menu 版面 / 圖片上傳 / 綁定
 │   ├── update_monthly_revenue.py    # 月營收爬蟲 (MOPS 靜態 HTML)
 │   ├── update_financials_mops.py    # 季度財報更新 (MOPS 備援站)
 │   ├── update_history_financials.py # 歷史財報批量更新
@@ -377,6 +452,7 @@ Stock_Linbotv1/
 ├── 🧪 測試 (test/) — pytest + conftest 共用 Fixture
 │   ├── conftest.py              # 共用 Fixture (manager, empty_df)
 │   ├── test_strategy_factory.py # 策略載入 & 篩選
+│   ├── test_richmenu_mcp_integration.py # Rich Menu / Postback / MCP 回歸
 │   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 + 向後相容
 │   ├── test_phase2_chip_data.py # 籌碼指標
 │   ├── test_v36_chip_momentum.py# V36 策略
@@ -384,9 +460,6 @@ Stock_Linbotv1/
 │
 ├── 📦 數據與模型
 │   └── ML_Data/pkl/             # XGBoost 模型 (每策略獨立 .pkl)
-│
-├── 🔧 工具腳本
-│   └── scripts/diagnose_strategies.py  # 策略條件診斷
 │
 ├── 📄 設定檔
 │   ├── config.py                # 統一設定中心 (常數+Presets+MODE_CMD_MAP)
@@ -405,13 +478,13 @@ Stock_Linbotv1/
 **每日自動化流程 (`daily_run.bat`)**：
 ```
 1_update_database.py          2_rundaily.py                    5_push_to_line.py
-  ├ TWSE API → 上市股價       ├ 載入 150 天歷史資料              ├ 讀取 daily_recommendations
-  ├ TPEx API → 上櫃股價       ├ compute_indicators_from_history  ├ 組合推播訊息
-  ├ chip_data_scraper          │  (MA/RSI/MACD/KD/BB/ATR/NATR  └ Line SDK v3 Broadcast
-  │  → 融資融券餘額             │   chip_score/consec_days)
-  ├ MOPS → 月營收 YoY         ├ merge_financial_data (季報)
-  └ MOPS → 季度財報            ├ merge_revenue_data (月營收)
-     ↓ 寫入 DB                 └ 遍歷策略:
+    ├ MCPClient → twse_mcp_server ├ 載入 150 天歷史資料             ├ 讀取 daily_recommendations
+    │  → 市場快照 + 外資流向      ├ compute_indicators_from_history  ├ 組合推播訊息
+    ├ chip_data_scraper          │  (MA/RSI/MACD/KD/BB/ATR/NATR  └ Line SDK v3 Broadcast
+    │  → 融資融券餘額             │   chip_score/consec_days)
+    ├ update_monthly_revenue     ├ merge_financial_data (季報)
+    └ update_financials_mops     ├ merge_revenue_data (月營收)
+         → MCP 財報 contract        └ 遍歷策略:
                                   ├ filter_candidates() 硬篩選
                                   ├ load_model() AI 模型
                                   ├ predict_proba() 評分
@@ -421,11 +494,12 @@ Stock_Linbotv1/
 **Web + Line Bot (`app.py`, port 1688)**：
 ```
 Flask App
-├ Web: /login → /dashboard → /backtest → /backtest_result (Plotly)
+├ Web: /health → /login → /dashboard → /backtest → /backtest_result (Plotly)
 ├ API: /api/summary, /api/daily-signals, /api/backtest-result
 └ Line Bot: POST /callback
    ├ 4碼數字 → report_helper → Flex 卡片
    ├ "推薦" → strategy.get_best_stocks → Carousel
+    ├ Rich Menu postback → market_summary / chip_trend / random_strategy
    ├ "切換V3x" → strategy_manager.set_active_strategy
    └ "設定停損 x" → db_helper.update_setting
 ```

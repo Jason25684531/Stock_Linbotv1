@@ -295,6 +295,62 @@ def _get_strategy_style(strategy_key: str) -> Dict[str, str]:
     return {'bg': '#1A1A2E', 'accent': '#90A4AE', 'label': f'📋 {strategy_key}'}
 
 
+def _build_news_tag_box(pick: Dict[str, Any]) -> Optional[FlexBox]:
+    """Build a compact Linbot news tag for each recommendation card."""
+    reason_items = pick.get('news_reason_items') or []
+    if not reason_items:
+        raw_reason = str(pick.get('news_boost_reason') or '').strip()
+        if raw_reason:
+            reason_items = [part.strip() for part in raw_reason.replace('|', '｜').split('｜') if part.strip()]
+
+    if not reason_items:
+        return None
+
+    is_bearish = pick.get('news_is_bearish')
+    if is_bearish is None:
+        joined = ' '.join(str(item) for item in reason_items)
+        is_bearish = any(keyword in joined for keyword in ('利空', '偏空', '風險'))
+
+    pill_text = 'Linbot 利空' if is_bearish else 'Linbot 利多'
+    pill_bg = '#5C1F1F' if is_bearish else '#304D1D'
+    pill_fg = '#FFD5D5' if is_bearish else '#E8FFD8'
+    reason_fg = '#FFCDD2' if is_bearish else '#FFF3B0'
+    summary = ' / '.join(str(item) for item in reason_items[:2])[:72]
+
+    return FlexBox(
+        layout='vertical',
+        contents=[
+            FlexBox(
+                layout='vertical',
+                contents=[
+                    FlexText(
+                        text=pill_text,
+                        size='xxs',
+                        weight='bold',
+                        color=pill_fg,
+                        align='center',
+                    ),
+                ],
+                padding_start='8px',
+                padding_end='8px',
+                padding_top='4px',
+                padding_bottom='4px',
+                corner_radius='12px',
+                background_color=pill_bg,
+                max_width='92px',
+            ),
+            FlexText(
+                text=summary,
+                size='xxs',
+                color=reason_fg,
+                wrap=True,
+                margin='xs',
+            ),
+        ],
+        margin='sm',
+    )
+
+
 # ============================================
 # 🎰 Flex Carousel: 推薦清單
 # ============================================
@@ -337,6 +393,7 @@ def create_recommendation_carousel(
 
         ai_pct = int(ai_score * 100) if ai_score else 0
         ai_bar = '🟩' * (ai_pct // 20) + '⬜' * (5 - ai_pct // 20)
+        news_tag_box = _build_news_tag_box(pick)
 
         # Header — 股號+族群放同一個 vertical box，策略標籤靠右
         title_text = f'{medal} {stock_id}'
@@ -378,6 +435,10 @@ def create_recommendation_carousel(
 
         # Body rows
         rows = []
+        if news_tag_box is not None:
+            rows.append(news_tag_box)
+            rows.append(FlexSeparator(margin='sm'))
+
         rows.append(_make_data_row(
             '🤖 AI 信心',
             f'{ai_pct}分 {ai_bar}',
@@ -400,31 +461,6 @@ def create_recommendation_carousel(
         rows.append(_make_data_row('🛡️ 停損', sl_str, '#E57373'))
         rows.append(FlexSeparator(margin='sm'))
         rows.append(_make_data_row('🎯 停利', tp_str, '#81C784'))
-        # 消息面標籤（若有 news_boost_reason）
-        news_reason = pick.get('news_boost_reason') or ''
-        if news_reason:
-            reason_lines = [part.strip() for part in str(news_reason).split('｜') if part.strip()]
-            is_bearish = any(('利空' in part or '承壓' in part or '下修' in part) for part in reason_lines)
-            rows.append(FlexSeparator(margin='sm'))
-            rows.append(FlexBox(
-                layout='vertical',
-                contents=[
-                    FlexText(
-                        text='🔴 利空警示' if is_bearish else '🟢 利多原因',
-                        size='xxs',
-                        weight='bold',
-                        color='#FF8A80' if is_bearish else '#FFD54F',
-                    ),
-                    FlexText(
-                        text='\n'.join(f'• {part}' for part in reason_lines[:3])[:100],
-                        size='xxs',
-                        color='#FFCDD2' if is_bearish else '#FFF3B0',
-                        wrap=True,
-                        margin='xs',
-                    ),
-                ],
-                margin='sm',
-            ))
         body = FlexBox(
             layout='vertical',
             contents=rows,

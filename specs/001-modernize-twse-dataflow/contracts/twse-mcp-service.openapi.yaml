@@ -1,0 +1,311 @@
+openapi: 3.1.0
+info:
+  title: TWSE MCP Service Contract
+  version: 0.1.0
+  summary: Internal MCP-facing HTTP contract consumed by stock_bot for TWSE dataflow modernization.
+servers:
+  - url: http://twse-mcp-server:8080
+paths:
+  /health:
+    get:
+      summary: Readiness endpoint for compose health checks.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is ready to accept MCP requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/stock-basic-snapshot:
+    post:
+      summary: Fetch one trade date of normalized market snapshot data.
+      operationId: postStockBasicSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockBasicSnapshotRequest'
+      responses:
+        '200':
+          description: Normalized market snapshot payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockBasicSnapshotResponse'
+        '400':
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/foreign-investor-flow:
+    post:
+      summary: Fetch one trade date of institutional net-buy data.
+      operationId: postForeignInvestorFlow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForeignInvestorFlowRequest'
+      responses:
+        '200':
+          description: Normalized institutional flow payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForeignInvestorFlowResponse'
+        '400':
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/historical-financial-statements:
+    post:
+      summary: Fetch one quarter of normalized financial statement data.
+      operationId: postHistoricalFinancialStatements
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HistoricalFinancialStatementsRequest'
+      responses:
+        '200':
+          description: Normalized financial statement payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoricalFinancialStatementsResponse'
+        '400':
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ErrorResponse:
+      type: object
+      required: [error_code, message, retryable, correlation_id]
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        correlation_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    MarketRequestBase:
+      type: object
+      required: [market, correlation_id]
+      properties:
+        market:
+          type: string
+          enum: [TWSE, TPEx, ALL]
+        correlation_id:
+          type: string
+        include_etfs:
+          type: boolean
+          default: true
+    StockBasicSnapshotRequest:
+      allOf:
+        - $ref: '#/components/schemas/MarketRequestBase'
+        - type: object
+          required: [trade_date]
+          properties:
+            trade_date:
+              type: string
+              format: date
+    ForeignInvestorFlowRequest:
+      allOf:
+        - $ref: '#/components/schemas/MarketRequestBase'
+        - type: object
+          required: [trade_date]
+          properties:
+            trade_date:
+              type: string
+              format: date
+    HistoricalFinancialStatementsRequest:
+      type: object
+      required: [year, quarter, market, correlation_id]
+      properties:
+        year:
+          type: integer
+          minimum: 2000
+        quarter:
+          type: integer
+          minimum: 1
+          maximum: 4
+        market:
+          type: string
+          enum: [TWSE, TPEx, ALL]
+        correlation_id:
+          type: string
+    StockBasicSnapshotRecord:
+      type: object
+      required:
+        - stock_id
+        - trade_date
+        - open_price
+        - high_price
+        - low_price
+        - close_price
+        - volume
+      properties:
+        stock_id:
+          type: string
+        trade_date:
+          type: string
+          format: date
+        open_price:
+          type: number
+        high_price:
+          type: number
+        low_price:
+          type: number
+        close_price:
+          type: number
+        volume:
+          type: number
+        pe_ratio:
+          type: number
+        stock_name:
+          type: string
+        security_type:
+          type: string
+    ForeignInvestorFlowRecord:
+      type: object
+      required: [stock_id, trade_date, foreign_buy]
+      properties:
+        stock_id:
+          type: string
+        trade_date:
+          type: string
+          format: date
+        foreign_buy:
+          type: number
+        trust_buy:
+          type: number
+        dealer_buy:
+          type: number
+    HistoricalFinancialStatementRecord:
+      type: object
+      required: [stock_id, revenue, operating_expense, operating_profit]
+      properties:
+        stock_id:
+          type: string
+        revenue:
+          type: integer
+        rd_expense:
+          type: integer
+        operating_expense:
+          type: integer
+        operating_profit:
+          type: integer
+        eps:
+          type: number
+    StockBasicSnapshotResponse:
+      type: object
+      required: [dataset, as_of_date, market, records]
+      properties:
+        dataset:
+          type: string
+          const: stock_basic_snapshot
+        as_of_date:
+          type: string
+          format: date
+        market:
+          type: string
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockBasicSnapshotRecord'
+        meta:
+          type: object
+          additionalProperties: true
+    ForeignInvestorFlowResponse:
+      type: object
+      required: [dataset, as_of_date, market, records]
+      properties:
+        dataset:
+          type: string
+          const: foreign_investor_flow
+        as_of_date:
+          type: string
+          format: date
+        market:
+          type: string
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForeignInvestorFlowRecord'
+        meta:
+          type: object
+          additionalProperties: true
+    HistoricalFinancialStatementsResponse:
+      type: object
+      required: [dataset, period, unit, records]
+      properties:
+        dataset:
+          type: string
+          const: historical_financial_statements
+        period:
+          type: object
+          required: [year, quarter]
+          properties:
+            year:
+              type: integer
+            quarter:
+              type: integer
+        unit:
+          type: string
+          enum: [thousand_TWD, TWD]
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoricalFinancialStatementRecord'
+        meta:
+          type: object
+          additionalProperties: true

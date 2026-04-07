@@ -1,36 +1,56 @@
-"""
-新聞摘要代理 (News Agent)
-============================================
+"""新聞摘要代理 (News Agent).
+
 功能：
 1. 爬取鉅亨網新聞（透過 Google News RSS）
 2. 優先篩選「盤前/盤後」標題文章
 3. 使用 Google Gemini 篩選重大新聞 + 濃縮為台股影響摘要
-4. 至少提供 5 則相關資訊
+4. 透過 LangChain `BaseTool` 包裝 MCP-backed 市場/財報摘要
+5. 保留既有公開介面：`get_morning_news_summary()`、
+    `get_news_sector_boost()`、`get_stock_news_mentions()`
 
 資料來源：Google News RSS (site:cnyes.com)
 LLM：Google Gemini (google-genai SDK)
 """
 
+import asyncio
+import json
 import feedparser
 import datetime
 import re
+from typing import ClassVar
+from urllib.parse import quote_plus
 
 from google import genai
 from google.genai import types
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+
 from config import Config
+from tool.mcp_client import MCPClient
 
 
 # ==========================================
 # RSS 來源設定
 # ==========================================
 
+
+def _google_news_rss(query: str) -> str:
+    encoded_query = quote_plus(f"site:cnyes.com {query}")
+    return (
+        'https://news.google.com/rss/search'
+        f'?q={encoded_query}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant'
+    )
+
+
 RSS_SOURCES = {
-    "美股": "https://news.google.com/rss/search?q=site:cnyes.com+美股&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-    "國際政經": "https://news.google.com/rss/search?q=site:cnyes.com+國際政經&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-    "台股": "https://news.google.com/rss/search?q=site:cnyes.com+台股&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-    "盤前盤後": "https://news.google.com/rss/search?q=site:cnyes.com+(%E7%9B%A4%E5%89%8D+OR+%E7%9B%A4%E5%BE%8C)&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-    "全球財經": "https://news.google.com/rss/search?q=site:cnyes.com+(%E5%85%A8%E7%90%83+OR+%E5%A4%AE%E8%A1%8C+OR+%E8%81%AF%E6%BA%96%E6%9C%83+OR+Fed)&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
-    "美股焦點": "https://news.google.com/rss/search?q=site:cnyes.com+(S%26P500+OR+%E9%81%93%E7%93%8A+OR+%E7%B4%8D%E6%8C%87+OR+%E8%B2%BB%E5%8D%8A+OR+NVIDIA+OR+%E8%BC%9D%E9%81%94)&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+    '美股': _google_news_rss('美股'),
+    '國際政經': _google_news_rss('國際政經'),
+    '台股': _google_news_rss('台股'),
+    '盤前盤後': _google_news_rss('(盤前 OR 盤後)'),
+    '全球財經': _google_news_rss('(全球 OR 央行 OR 聯準會 OR Fed)'),
+    '美股焦點': _google_news_rss(
+        '(S&P500 OR 道瓊 OR 納指 OR 費半 OR NVIDIA OR 輝達)'
+    ),
 }
 
 GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
@@ -40,6 +60,299 @@ _PRIORITY_PATTERNS = [
     r'盤前', r'盤後', r'盤勢', r'開盤',
     r'〈.*盤.*〉', r'＜.*盤.*＞', r'<.*盤.*>',
 ]
+
+
+def _default_trade_date() -> str:
+    return datetime.datetime.now().strftime('%Y-%m-%d')
+
+
+def _latest_financial_period() -> tuple[int, int]:
+    now = datetime.datetime.now()
+    if now.month >= 11:
+        return now.year, 3
+    if now.month >= 8:
+        return now.year, 2
+    if now.month >= 5:
+        return now.year, 1
+    if now.month >= 3:
+        return now.year - 1, 4
+    return now.year - 1, 3
+
+
+def _clamp_limit(limit: int) -> int:
+    return max(1, min(int(limit), 10))
+
+
+def _records_to_json(records: list[dict]) -> str:
+    return json.dumps(records, ensure_ascii=False)
+
+
+class MarketSnapshotToolInput(BaseModel):
+    market: str = Field(default=Config.MCP_DEFAULT_MARKET)
+    trade_date: str = Field(default_factory=_default_trade_date)
+    include_etfs: bool = Field(default=False)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class ForeignInvestorFlowToolInput(BaseModel):
+    market: str = Field(default=Config.MCP_DEFAULT_MARKET)
+    trade_date: str = Field(default_factory=_default_trade_date)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class FinancialStatementsToolInput(BaseModel):
+    market: str = Field(default=Config.MCP_DEFAULT_MARKET)
+    year: int = Field(default_factory=lambda: _latest_financial_period()[0])
+    quarter: int = Field(default_factory=lambda: _latest_financial_period()[1])
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class MCPMarketSnapshotTool(BaseTool):
+    tool_name: ClassVar[str] = 'mcp_market_snapshot'
+    name: str = tool_name
+    description: str = (
+        'Get MCP-backed market snapshot summary for news context.'
+    )
+    args_schema: type[BaseModel] = MarketSnapshotToolInput
+
+    def _run(
+        self,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        trade_date: str | None = None,
+        include_etfs: bool = False,
+        limit: int = 5,
+    ) -> str:
+        payload = MCPClient().fetch_stock_basic_snapshot_sync(
+            trade_date or _default_trade_date(),
+            market=market,
+            include_etfs=include_etfs,
+        )
+        frame = MCPClient.stock_basic_snapshot_to_frame(payload)
+        top_volume = []
+        if not frame.empty and 'volume' in frame.columns:
+            top_volume = json.loads(
+                frame.sort_values('volume', ascending=False)
+                .head(_clamp_limit(limit))
+                [['stock_id', 'close_price', 'volume', 'security_type']]
+                .to_json(orient='records')
+            )
+        return json.dumps({
+            'tool_name': self.tool_name,
+            'trade_date': trade_date or _default_trade_date(),
+            'record_count': int(
+                payload.get('meta', {}).get('record_count', len(frame))
+            ),
+            'top_volume': top_volume,
+        }, ensure_ascii=False)
+
+    async def _arun(
+        self,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        trade_date: str | None = None,
+        include_etfs: bool = False,
+        limit: int = 5,
+    ) -> str:
+        return await asyncio.to_thread(
+            self._run,
+            market=market,
+            trade_date=trade_date,
+            include_etfs=include_etfs,
+            limit=limit,
+        )
+
+
+class MCPForeignInvestorFlowTool(BaseTool):
+    tool_name: ClassVar[str] = 'mcp_foreign_investor_flow'
+    name: str = tool_name
+    description: str = (
+        'Get MCP-backed foreign flow summary for news context.'
+    )
+    args_schema: type[BaseModel] = ForeignInvestorFlowToolInput
+
+    def _run(
+        self,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        trade_date: str | None = None,
+        limit: int = 5,
+    ) -> str:
+        payload = MCPClient().fetch_foreign_investor_flow_sync(
+            trade_date or _default_trade_date(),
+            market=market,
+        )
+        frame = MCPClient.foreign_investor_flow_to_frame(payload)
+        top_buy = []
+        top_sell = []
+        if not frame.empty and 'foreign_buy' in frame.columns:
+            limit_value = _clamp_limit(limit)
+            top_buy = json.loads(
+                frame.sort_values('foreign_buy', ascending=False)
+                .head(limit_value)
+                [['stock_id', 'foreign_buy', 'trust_buy', 'dealer_buy']]
+                .to_json(orient='records')
+            )
+            top_sell = json.loads(
+                frame.sort_values('foreign_buy', ascending=True)
+                .head(limit_value)
+                [['stock_id', 'foreign_buy', 'trust_buy', 'dealer_buy']]
+                .to_json(orient='records')
+            )
+        return json.dumps({
+            'tool_name': self.tool_name,
+            'trade_date': trade_date or _default_trade_date(),
+            'record_count': int(
+                payload.get('meta', {}).get('record_count', len(frame))
+            ),
+            'top_buy': top_buy,
+            'top_sell': top_sell,
+        }, ensure_ascii=False)
+
+    async def _arun(
+        self,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        trade_date: str | None = None,
+        limit: int = 5,
+    ) -> str:
+        return await asyncio.to_thread(
+            self._run,
+            market=market,
+            trade_date=trade_date,
+            limit=limit,
+        )
+
+
+class MCPFinancialStatementsTool(BaseTool):
+    tool_name: ClassVar[str] = 'mcp_financial_statements'
+    name: str = tool_name
+    description: str = (
+        'Get MCP-backed financial statement summary for news context.'
+    )
+    args_schema: type[BaseModel] = FinancialStatementsToolInput
+
+    def _run(
+        self,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        year: int | None = None,
+        quarter: int | None = None,
+        limit: int = 5,
+    ) -> str:
+        target_year, target_quarter = _latest_financial_period()
+        payload = MCPClient().fetch_historical_financial_statements_sync(
+            year or target_year,
+            quarter or target_quarter,
+            market=market,
+        )
+        frame = MCPClient.historical_financial_statements_to_frame(payload)
+        top_operating_profit = []
+        if not frame.empty and 'operating_profit' in frame.columns:
+            top_operating_profit = json.loads(
+                frame.sort_values('operating_profit', ascending=False)
+                .head(_clamp_limit(limit))
+                [['stock_id', 'revenue', 'operating_profit', 'eps']]
+                .to_json(orient='records')
+            )
+        return json.dumps({
+            'tool_name': self.tool_name,
+            'year': year or target_year,
+            'quarter': quarter or target_quarter,
+            'record_count': int(
+                payload.get('meta', {}).get('record_count', len(frame))
+            ),
+            'top_operating_profit': top_operating_profit,
+        }, ensure_ascii=False)
+
+    async def _arun(
+        self,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        year: int | None = None,
+        quarter: int | None = None,
+        limit: int = 5,
+    ) -> str:
+        return await asyncio.to_thread(
+            self._run,
+            market=market,
+            year=year,
+            quarter=quarter,
+            limit=limit,
+        )
+
+
+def get_mcp_context_tools() -> list[BaseTool]:
+    """提供新聞代理使用的 MCP-backed LangChain tools。"""
+    return [
+        MCPMarketSnapshotTool(),
+        MCPForeignInvestorFlowTool(),
+        MCPFinancialStatementsTool(),
+    ]
+
+
+def build_mcp_prompt_context() -> str:
+    """使用 MCP-backed tools 建立 Gemini prompt 的市場/財務上下文。"""
+    trade_date = _default_trade_date()
+    year, quarter = _latest_financial_period()
+    tools = {tool.tool_name: tool for tool in get_mcp_context_tools()}
+    context_lines: list[str] = []
+
+    try:
+        snapshot_result = json.loads(
+            tools['mcp_market_snapshot'].invoke({
+                'trade_date': trade_date,
+                'market': Config.MCP_DEFAULT_MARKET,
+                'include_etfs': False,
+                'limit': 5,
+            })
+        )
+        top_volume = '、'.join(
+            item['stock_id']
+            for item in snapshot_result.get('top_volume', [])
+        ) or '無'
+        context_lines.append(
+            f"- MCP 市場快照筆數: {snapshot_result.get('record_count', 0)}"
+        )
+        context_lines.append(f"- MCP 成交量前列: {top_volume}")
+    except Exception as e:
+        context_lines.append(f"- MCP 市場快照暫不可用: {e}")
+
+    try:
+        flow_result = json.loads(
+            tools['mcp_foreign_investor_flow'].invoke({
+                'trade_date': trade_date,
+                'market': Config.MCP_DEFAULT_MARKET,
+                'limit': 5,
+            })
+        )
+        top_buy = '、'.join(
+            item['stock_id']
+            for item in flow_result.get('top_buy', [])
+        ) or '無'
+        top_sell = '、'.join(
+            item['stock_id']
+            for item in flow_result.get('top_sell', [])
+        ) or '無'
+        context_lines.append(f"- MCP 外資買超前列: {top_buy}")
+        context_lines.append(f"- MCP 外資賣超前列: {top_sell}")
+    except Exception as e:
+        context_lines.append(f"- MCP 外資籌碼暫不可用: {e}")
+
+    try:
+        financial_result = json.loads(
+            tools['mcp_financial_statements'].invoke({
+                'year': year,
+                'quarter': quarter,
+                'market': Config.MCP_DEFAULT_MARKET,
+                'limit': 5,
+            })
+        )
+        top_profit = '、'.join(
+            item['stock_id']
+            for item in financial_result.get('top_operating_profit', [])
+        ) or '無'
+        context_lines.append(f"- 最新可用財報季度: {year}Q{quarter}")
+        context_lines.append(f"- MCP 營業利益前列: {top_profit}")
+    except Exception as e:
+        context_lines.append(f"- MCP 財報上下文暫不可用: {e}")
+
+    return '\n'.join(context_lines) if context_lines else '- MCP 上下文暫不可用'
+
 
 # ==========================================
 # 新聞爬蟲
@@ -87,7 +400,8 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
                 seen_titles.add(title)
 
                 summary = _clean_html(
-                    getattr(entry, 'summary', '') or getattr(entry, 'description', '')
+                    getattr(entry, 'summary', '')
+                    or getattr(entry, 'description', '')
                 )
                 if len(summary) > 120:
                     summary = summary[:120] + "..."
@@ -140,8 +454,13 @@ def _summarize_with_gemini(news_text: str) -> str:
         return "⚠️ 未設定 GEMINI_KEY，無法生成 AI 摘要"
 
     today = datetime.datetime.now().strftime('%Y-%m-%d')
+    mcp_context = build_mcp_prompt_context()
 
     prompt = f"""你是資深台股分析師。今天是 {today}。
+以下是由 MCP-backed tools 取得的市場與財務上下文，請優先納入判讀：
+
+{mcp_context}
+
 以下是今日鉅亨網的新聞（含盤前盤後分析、美股、美股焦點、國際政經、全球財經、台股）：
 
 {news_text}
@@ -226,9 +545,13 @@ def get_news_sector_boost() -> dict:
             "sectors": ["半導體", "航運"],         # 向後相容：等同 bull_sectors
             "sentiment": "偏多"                   # 整體市場情緒
         }
-        失敗時回傳 {"bull_sectors": [], "bear_sectors": [], "bull_reasons": [],
-                 "bear_reasons": [], "bull_theme_map": {}, "bear_theme_map": {},
-                 "sectors": [], "sentiment": "中性"}
+        失敗時回傳：
+        {
+            "bull_sectors": [], "bear_sectors": [],
+            "bull_reasons": [], "bear_reasons": [],
+            "bull_theme_map": {}, "bear_theme_map": {},
+            "sectors": [], "sentiment": "中性"
+        }
     """
     default = {
         "bull_sectors": [],
@@ -252,8 +575,13 @@ def get_news_sector_boost() -> dict:
 
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         sectors_str = '、'.join(_VALID_SECTORS)
+        mcp_context = build_mcp_prompt_context()
 
         prompt = f"""你是資深台股分析師。今天是 {today}。
+以下是由 MCP-backed tools 取得的市場與財務上下文，請先參考：
+
+{mcp_context}
+
 以下是今日鉅亨網新聞：
 
 {news_text}
@@ -307,8 +635,14 @@ def get_news_sector_boost() -> dict:
         result = json.loads(raw)
 
         # 驗證標籤只包含合法產業
-        bull = [s for s in result.get('bull_sectors', []) if s in _VALID_SECTORS]
-        bear = [s for s in result.get('bear_sectors', []) if s in _VALID_SECTORS]
+        bull = [
+            sector for sector in result.get('bull_sectors', [])
+            if sector in _VALID_SECTORS
+        ]
+        bear = [
+            sector for sector in result.get('bear_sectors', [])
+            if sector in _VALID_SECTORS
+        ]
         bull_reasons = [
             str(item).strip()[:20]
             for item in result.get('bull_reasons', [])
@@ -374,13 +708,13 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
         信心度 < 0.7 的結果不回傳（避免誤判）
     """
     import json
-    import urllib.request
 
     if not Config.GEMINI_API_KEY or not stock_ids:
         return {}
 
     results = {}
     today = datetime.datetime.now().strftime('%Y-%m-%d')
+    mcp_context = build_mcp_prompt_context()
 
     for sid in stock_ids[:15]:  # 最多處理 15 支，避免 API 超量
         try:
@@ -402,6 +736,10 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
             headline_text = '\n'.join(f'- {h}' for h in headlines)
             prompt = f"""你是台股分析師。今天是 {today}，針對股票代號 {sid} 的以下最新新聞標題：
 
+以下是由 MCP-backed tools 取得的市場與財務上下文，請先納入判讀：
+
+{mcp_context}
+
 {headline_text}
 
 請判斷這些新聞對 {sid} 股價的短期影響（1-5天內），並回傳 JSON：
@@ -417,7 +755,10 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=120),
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=120,
+                ),
             )
             raw = resp.text.strip()
             if raw.startswith('```'):

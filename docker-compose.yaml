@@ -1,19 +1,99 @@
-version: '3.8'
-
 services:
   db:
     image: mysql:8.0
     container_name: stock_ai_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: my_secret_password  # 設定您的密碼
-      MYSQL_DATABASE: stock_ai_db            # 自動建立資料庫
-      TZ: Asia/Taipei                        # 設定時區
+      MYSQL_ROOT_PASSWORD: my_secret_password
+      MYSQL_DATABASE: stock_ai_db
+      TZ: Asia/Taipei
     ports:
-      - "3306:3306"  # 左邊是本機 Port，右邊是容器 Port
+      - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql  # 讓資料持久化，重啟不會不見
+      - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+    networks:
+      - stock-network
+
+  twse_mcp_server:
+    image: python:3.11-slim
+    container_name: twse_mcp_server
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      MCP_PORT: "8080"
+      PYTHONUNBUFFERED: "1"
+    command:
+      - /bin/sh
+      - -c
+      - pip install --no-cache-dir -r requirements.mcp.txt && python scripts/twse_mcp_server.py
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+    networks:
+      stock-network:
+        aliases:
+          - twse-mcp-server
+
+  stock_bot:
+    image: python:3.11-slim
+    container_name: stock_ai_stock_bot
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      DB_URL: mysql+pymysql://root:my_secret_password@db:3306/stock_ai_db
+      MCP_BASE_URL: http://twse-mcp-server:8080
+      PYTHONUNBUFFERED: "1"
+      TZ: Asia/Taipei
+      LINE_TOKEN: ${LINE_TOKEN:-}
+      LINE_SECRET: ${LINE_SECRET:-}
+      GEMINI_KEY: ${GEMINI_KEY:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-dev-secret-key}
+    command:
+      - /bin/sh
+      - -c
+      - pip install --no-cache-dir -r requirements.runtime.txt && python app.py
+    depends_on:
+      db:
+        condition: service_healthy
+      twse_mcp_server:
+        condition: service_healthy
+    ports:
+      - "1688:1688"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:1688/health', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+    networks:
+      - stock-network
+
+networks:
+  stock-network:
+    driver: bridge
 
 volumes:
   mysql_data:

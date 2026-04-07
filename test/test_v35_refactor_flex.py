@@ -77,6 +77,35 @@ class TestFlexMessageBuilder:
         assert j['contents']['type'] == 'bubble'
         assert '9999' in msg.alt_text
 
+    def test_recommendation_carousel_includes_linbot_news_tag(self):
+        from tool.line_message_builder import create_recommendation_carousel
+
+        picks = [{
+            'stock_id': '2330',
+            'sector': '半導體',
+            'close_price': 950.0,
+            'ai_score': 0.81,
+            'rsi': 58.5,
+            'volume': 180000,
+            'stop_loss_price': 874.0,
+            'take_profit_price': 1092.5,
+            'news_boost_reason': '半導體題材: 先進封裝需求增溫',
+            'news_reason_items': ['半導體題材: 先進封裝需求增溫'],
+            'news_is_bearish': False,
+        }]
+
+        msg = create_recommendation_carousel(
+            picks=picks,
+            strategy_name='V36 籌碼動能策略',
+            date_str='2026-04-02',
+        )
+        payload = json.loads(msg.to_json())
+        rendered = json.dumps(payload, ensure_ascii=False)
+
+        assert payload['contents']['type'] == 'carousel'
+        assert 'Linbot 利多' in rendered
+        assert '先進封裝需求增溫' in rendered
+
     def test_flex_color_helpers(self):
         """顏色 helper 正確回傳"""
         from tool.line_message_builder import _color_by_value, _ai_score_label

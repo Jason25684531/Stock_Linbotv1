@@ -1,7 +1,12 @@
 {
   "version": "3.0",
-  "last_updated": "2026-03-24T17:34:10.908587",
+  "last_updated": "2026-04-07T17:08:47.364193",
   "active_strategies": [
+    "v38_value_dividend"
+  ],
+  "random_strategy_pool": [
+    "v35_innovation",
+    "v36_chip_momentum",
     "v38_value_dividend"
   ],
   "per_strategy_overrides": {},

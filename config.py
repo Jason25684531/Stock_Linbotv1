@@ -24,6 +24,30 @@ class Config:
         'mysql+pymysql://root:my_secret_password@localhost:3306/stock_ai_db'
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # ==========================================
+    # 🌐 MCP 傳輸設定
+    # ==========================================
+    MCP_BASE_URL = os.getenv(
+        'MCP_BASE_URL',
+        'http://localhost:8080'
+    ).rstrip('/')
+    MCP_DEFAULT_MARKET = os.getenv('MCP_DEFAULT_MARKET', 'ALL')
+    MCP_HTTP_TIMEOUT_SECONDS = float(
+        os.getenv('MCP_HTTP_TIMEOUT_SECONDS', '20')
+    )
+    MCP_CONNECT_TIMEOUT_SECONDS = float(
+        os.getenv('MCP_CONNECT_TIMEOUT_SECONDS', '5')
+    )
+    MCP_MAX_RETRIES = int(os.getenv('MCP_MAX_RETRIES', '3'))
+    MCP_BACKOFF_BASE_SECONDS = float(
+        os.getenv('MCP_BACKOFF_BASE_SECONDS', '1.0')
+    )
+    MCP_MAX_BACKOFF_SECONDS = float(
+        os.getenv('MCP_MAX_BACKOFF_SECONDS', '8.0')
+    )
+    MCP_HEALTH_PATH = os.getenv('MCP_HEALTH_PATH', '/health')
+    APP_HEALTH_PATH = os.getenv('APP_HEALTH_PATH', '/health')
     
     # ==========================================
     # 🤖 AI 模型設定
