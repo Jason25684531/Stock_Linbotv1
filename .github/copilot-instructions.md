@@ -1,4 +1,4 @@
-# AI Coding Instructions: Stock Linbot V35
+﻿# AI Coding Instructions: Stock Linbot V35
 
 ## Project Overview
 Taiwan stock trading system combining ML (XGBoost) with technical analysis. Delivers real-time stock recommendations via Line Bot and Web Dashboard, with multi-strategy backtesting engine supporting 4+ parallel strategies (V31/V33/V34/V35).
