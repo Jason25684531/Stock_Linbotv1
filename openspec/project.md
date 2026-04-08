@@ -17,7 +17,7 @@
 |------|------|
 | 語言 | Python 3.10+ |
 | 資料庫 | MySQL 8.0+（SQLAlchemy ORM，連線池 + 重試） |
-| 資料來源 | TWSE/TPEX 每日行情、MOPS 月營收/季報爬蟲、融資融券爬蟲 |
+| 資料來源 | `tool/mcp_client.py` → `scripts/twse_mcp_server.py` → TWSE/TPEX covered dataset、MOPS 財報備援；月營收與融資融券維持既有 crawler |
 | Web 儀表板 | Flask + Jinja2 + Tailwind CSS (CDN) + Plotly |
 | 通知 | Line Bot SDK v3（Flex Message 卡片 + 廣播推播） |
 | 機器學習 | XGBoost（每策略獨立模型，LRU 快取載入） |
@@ -60,12 +60,19 @@
 └────────────┬────────────────────────────────────────────┘
              │
 ┌────────────▼────────────────────────────────────────────┐
+│                傳輸層 (MCP Transport)                    │
+│   tool/mcp_client.py (sync/async, retries, DTOs)        │
+│   scripts/twse_mcp_server.py (Flask MCP, port 8080)     │
+│   /health + dataset POST endpoints                       │
+└────────────┬────────────────────────────────────────────┘
+             │
+┌────────────▼────────────────────────────────────────────┐
 │                   資料層 (Data)                           │
 │   tool/db_helper.py (唯一 DB 存取入口)                    │
 │   tool/crawlers/chip_data_scraper.py (融資融券爬蟲)       │
-│   tool/crawlers/quarterly_scraper.py (MOPS 季報爬蟲)      │
+│   tool/crawlers/quarterly_scraper.py (MCP server 財報備援)│
 │   tool/update_monthly_revenue.py (月營收爬蟲)             │
-│   tool/update_financials_mops.py (季度財報更新)            │
+│   tool/update_financials_mops.py (MCP-backed 季度財報)     │
 └────────────┬────────────────────────────────────────────┘
              │
 ┌────────────▼────────────────────────────────────────────┐
@@ -100,6 +107,7 @@ Stock_Linbotv1/
 │
 ├── tool/                        # 核心工具模組
 │   ├── db_helper.py             # 資料庫操作（唯一合法 DB 存取點）
+│   ├── mcp_client.py            # MCP transport boundary（sync/async）
 │   ├── calc_indicators.py       # 技術指標 + 籌碼指標計算
 │   ├── model_utils.py           # XGBoost 模型載入（LRU 快取）
 │   ├── strategy_manager.py      # 策略工廠（Singleton + Registry）
@@ -143,7 +151,9 @@ Stock_Linbotv1/
 │   └── test_v37_v38_strategies.py
 │
 ├── ML_Data/pkl/                 # XGBoost 模型檔（每策略獨立 .pkl）
-├── scripts/diagnose_strategies.py  # 策略條件診斷工具
+├── scripts/
+│   ├── diagnose_strategies.py   # 策略條件診斷工具
+│   └── twse_mcp_server.py       # MCP 服務（/health + dataset endpoints）
 ├── doc/                         # 輔助文件
 └── openspec/                    # 開發規範與變更管理
     ├── project.md               # 本文件（專案規格）
@@ -172,12 +182,12 @@ news_agent.get_morning_news_summary()
 **晚間模式** (`execution/evening_run.bat` = 1→2→5 三步驟)：
 ```
 Step 1: 1_update_database.py
-  ├── fetch_twse_data()    → 上市股價 + 三大法人籌碼 (TWSE API)
-  ├── fetch_tpex_data()    → 上櫃股價 + 三大法人籌碼 (TPEx API)
+  ├── MCPClient.fetch_many_sync()
+  │   → twse_mcp_server 市場快照 + 外資買賣超
   ├── fetch_margin_balance() → 融資融券餘額 (chip_data_scraper.py)
   ├── process_and_save()   → 清洗數值 → upsert_stock_data() 寫入 DB
   ├── run_monthly_revenue_update() → MOPS 月營收爬蟲
-  └── run_financial_update()       → MOPS 季度財報爬蟲
+  └── run_financial_update()       → MCP financial contract
 
 Step 2: 2_rundaily.py
   ├── compute_indicators_from_history()  → 載入 150 天歷史 → 計算全部指標
@@ -194,6 +204,7 @@ Step 3: 5_push_to_line.py --time evening
 ```
 Flask App (port 1688)
 ├── Web Dashboard:
+│   ├── GET  /health    → 容器健康檢查
 │   ├── GET  /login     → 登入頁（Flask-Login）
 │   ├── GET  /dashboard → 儀表板（需登入）
 │   ├── GET  /backtest  → 回測設定頁
@@ -253,9 +264,9 @@ Flask App (port 1688)
 
 | 資料表 | 用途 | 寫入來源 |
 |--------|------|---------|
-| `daily_market_data` | 每日 OHLCV + 技術指標 + 籌碼 | 1_update_database.py, 2_rundaily.py |
+| `daily_market_data` | 每日 OHLCV + 技術指標 + 籌碼 | 1_update_database.py（MCP 市場資料 + 籌碼 enrich）, 2_rundaily.py |
 | `monthly_revenue` | 月營收 + YoY | 1_update_database.py (MOPS 爬蟲) |
-| `financial_statements` | 季度財報（營收/營業利益/EPS） | 1_update_database.py (MOPS 爬蟲) |
+| `financial_statements` | 季度財報（營收/營業利益/EPS） | 1_update_database.py / tool/update_financials_mops.py（MCP financial contract） |
 | `daily_recommendations` | AI 選股結果（每策略 Top 10） | 2_rundaily.py |
 | `user_settings` | 使用者參數（停損/停利/門檻） | app.py (Line Bot 指令) |
 | `user_simulation_trades` | PK 模擬交易紀錄 | app.py |
@@ -283,12 +294,16 @@ pip install -r requirements.txt
 
 # 設定環境變數（複製 .env.example 為 .env）
 # DB_URL=mysql+pymysql://user:password@localhost:3306/stock_ai_db
+# MCP_BASE_URL=http://localhost:8080
 # LINE_TOKEN=你的_Channel_Access_Token
 # LINE_SECRET=你的_Channel_Secret
 # ADMIN_PASSWORD=Web登入密碼
 
 # 初始化資料庫
 python init_settings.py
+
+# 啟動本機 MCP 服務（另一個終端）
+python scripts/twse_mcp_server.py
 ```
 
 ### 8.2 日常啟動
@@ -298,7 +313,7 @@ python init_settings.py
 execution\daily_run.bat
 
 # 方式 B: 手動分步
-python 1_update_database.py   # Step 1: 爬蟲更新資料
+python 1_update_database.py   # Step 1: MCP-backed 市場/財報更新
 python 2_rundaily.py          # Step 2: 選股
 python 5_push_to_line.py      # Step 3: Line 推播
 
@@ -316,9 +331,10 @@ execution\start_web.bat       # 背景啟動
 # 語法檢查
 python -m py_compile 1_update_database.py
 
-# 冒煙測試（會實際連線 TWSE/TPEx/MOPS，需確保網路通暢）
+# 冒煙測試（需先啟動 MCP server，並確保網路可達 upstream）
+python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/health', timeout=3).status)"
 python 1_update_database.py
-# 觀察: 步驟 1/3 股價 → 步驟 2/3 月營收 → 步驟 3/3 季報
+# 觀察: 步驟 1/3 市場快照與外資 → 步驟 2/3 月營收 → 步驟 3/3 季報
 # 正常: "成功寫入 xxxx 筆資料"
 # 假日: "假日或無資料"
 ```

@@ -6,22 +6,35 @@ __pycache__/
 
 # 2. 忽略環境變數 (這是機密，絕對不能上傳!)
 .env
-# config.py 現已安全（敏感資料已移至 .env），可以納入版本控制
 
 # 3. 忽略虛擬環境
 venv/
 .venv/
 myenv/
 
-# 4. 忽略資料與模型 (因為它們太大，且每台電腦可以自己算)
+# 4. 忽略建置產物
+dist/
+build/
+*.egg-info/
+
+# 5. 忽略資料與模型 (因為它們太大，且每台電腦可以自己算)
 ML_Data/
 *.csv
 *.pkl
 
-# 5. 忽略資料庫暫存檔
+# 6. 忽略資料庫與本機暫存
 mysql_data/
 *.sql
 
-*.png
-
-openspec/*
+# 7. 忽略工具與編輯器產物
+.vscode/
+.idea/
+.specify/
+.pytest_cache/
+.agents/
+.agent
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp

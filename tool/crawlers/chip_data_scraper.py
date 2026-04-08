@@ -3,7 +3,8 @@
 ============================================
 資料來源：
   - TWSE (上市): https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN
-  - TPEx (上櫃): https://www.tpex.org.tw/web/stock/margin_trading/margin_balance/margin_bal_result.php
+    - TPEx (上櫃):
+        https://www.tpex.org.tw/web/stock/margin_trading/margin_balance/margin_bal_result.php
 
 產出欄位：
   - margin_balance (融資今日餘額, 張)
@@ -18,6 +19,7 @@ import requests
 import pandas as pd
 import time
 import random
+import re
 from datetime import datetime
 
 # ============================================
@@ -44,11 +46,69 @@ def _clean_number(x) -> float:
         return 0
 
 
+def _normalize_margin_field(field_name: str) -> str:
+    """標準化官方欄名，方便處理單位與空白差異。"""
+    return re.sub(r'[\s　()（）:：/.-]', '', str(field_name))
+
+
+def _resolve_twse_balance_indices(
+    columns: list[str],
+) -> tuple[int | None, int | None, int | None]:
+    """解析 TWSE MI_MARGN 的代號、融資今日餘額、融券今日餘額欄位位置。"""
+    normalized_columns = [
+        _normalize_margin_field(column) for column in columns
+    ]
+    stock_id_index = next(
+        (
+            index
+            for index, column in enumerate(normalized_columns)
+            if '代號' in column
+        ),
+        None,
+    )
+    margin_balance_index = next(
+        (
+            index
+            for index, column in enumerate(normalized_columns)
+            if '融資' in column and '今日餘額' in column
+        ),
+        None,
+    )
+    short_balance_index = next(
+        (
+            index
+            for index, column in enumerate(normalized_columns)
+            if '融券' in column and '今日餘額' in column
+        ),
+        None,
+    )
+
+    if margin_balance_index is not None and short_balance_index is not None:
+        return stock_id_index, margin_balance_index, short_balance_index
+
+    today_balance_indices = [
+        index
+        for index, column in enumerate(normalized_columns)
+        if '今日餘額' in column
+    ]
+    if len(today_balance_indices) >= 2:
+        return (
+            stock_id_index,
+            today_balance_indices[0],
+            today_balance_indices[1],
+        )
+
+    return stock_id_index, None, None
+
+
 # ============================================
 # TWSE 融資融券
 # ============================================
 
-def fetch_margin_balance_twse(date_str: str, max_retries: int = 3) -> pd.DataFrame:
+def fetch_margin_balance_twse(
+    date_str: str,
+    max_retries: int = 3,
+) -> pd.DataFrame:
     """
     抓取上市 (TWSE) 融資融券餘額
 
@@ -105,24 +165,29 @@ def fetch_margin_balance_twse(date_str: str, max_retries: int = 3) -> pd.DataFra
 
             df = pd.DataFrame(rows, columns=fields)
 
-            # 動態欄位匹配（名稱可能略有差異）
-            id_col = next((c for c in df.columns if '代號' in c), None)
-            margin_bal_col = next(
-                (c for c in df.columns if '融資' in c and '今日餘額' in c), None
+            stock_id_index, margin_balance_index, short_balance_index = (
+                _resolve_twse_balance_indices(list(df.columns))
             )
-            short_bal_col = next(
-                (c for c in df.columns if '融券' in c and '今日餘額' in c), None
-            )
-
-            if not id_col or not margin_bal_col or not short_bal_col:
-                print(f"  ⚠️ TWSE MI_MARGN 欄位匹配失敗: {list(df.columns)}")
+            if None in (
+                stock_id_index,
+                margin_balance_index,
+                short_balance_index,
+            ):
+                print('  ⚠️ TWSE MI_MARGN 欄位結構無法辨識，略過融資融券補充')
                 return pd.DataFrame()
 
-            result = df[[id_col, margin_bal_col, short_bal_col]].copy()
+            result = df.iloc[
+                :,
+                [stock_id_index, margin_balance_index, short_balance_index],
+            ].copy()
             result.columns = ['stock_id', 'margin_balance', 'short_balance']
             result['stock_id'] = result['stock_id'].astype(str).str.strip()
-            result['margin_balance'] = result['margin_balance'].apply(_clean_number)
-            result['short_balance'] = result['short_balance'].apply(_clean_number)
+            result['margin_balance'] = result['margin_balance'].apply(
+                _clean_number
+            )
+            result['short_balance'] = result['short_balance'].apply(
+                _clean_number
+            )
 
             # 過濾無效代號
             result = result[result['stock_id'].str.match(r'^\d{4,6}$')]
@@ -143,7 +208,10 @@ def fetch_margin_balance_twse(date_str: str, max_retries: int = 3) -> pd.DataFra
 # TPEx 融資融券
 # ============================================
 
-def fetch_margin_balance_tpex(date_str: str, max_retries: int = 3) -> pd.DataFrame:
+def fetch_margin_balance_tpex(
+    date_str: str,
+    max_retries: int = 3,
+) -> pd.DataFrame:
     """
     抓取上櫃 (TPEx) 融資融券餘額
 
@@ -208,8 +276,12 @@ def fetch_margin_balance_tpex(date_str: str, max_retries: int = 3) -> pd.DataFra
             result = df.iloc[:, [0, 6, 13]].copy()
             result.columns = ['stock_id', 'margin_balance', 'short_balance']
             result['stock_id'] = result['stock_id'].astype(str).str.strip()
-            result['margin_balance'] = result['margin_balance'].apply(_clean_number)
-            result['short_balance'] = result['short_balance'].apply(_clean_number)
+            result['margin_balance'] = result['margin_balance'].apply(
+                _clean_number
+            )
+            result['short_balance'] = result['short_balance'].apply(
+                _clean_number
+            )
 
             # 過濾無效代號
             result = result[result['stock_id'].str.match(r'^\d{4,6}$')]
@@ -244,7 +316,7 @@ def fetch_margin_balance(date_str: str) -> pd.DataFrame:
         DataFrame[stock_id, margin_balance, short_balance]
         若全部失敗則回傳空 DataFrame
     """
-    print(f"  🔸 正在抓取融資融券資料...", end="")
+    print("  🔸 正在抓取融資融券資料...", end="")
 
     twse_df = fetch_margin_balance_twse(date_str)
     tpex_df = fetch_margin_balance_tpex(date_str)

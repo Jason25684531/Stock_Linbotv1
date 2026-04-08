@@ -1,13 +1,8 @@
 """
-歷史財報批量更新工具
+歷史財報批量更新工具 (MCP-backed)
 ============================================
-功能：批量爬取多年度/多季度的財報數據
-注意：會在每次請求之間加入延遲避免被封鎖
+功能：批量透過 MCP 回補多年度/多季度的財報數據
 使用方式：python tool/update_history_financials.py --start-year 110 --end-year 113
-
-⚠️ 反爬蟲機制提醒:
-- 請確認 QuarterlyScraper 類別有設定真實的 User-Agent (例如 Chrome/120.0)
-- 建議在 crawlers/quarterly_scraper.py 中檢查 headers 設定
 """
 import sys
 import os
@@ -19,12 +14,26 @@ from datetime import datetime
 # 將專案根目錄加入路徑
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tool.crawlers.quarterly_scraper import QuarterlyScraper
-from tool.db_helper import get_db_engine, ensure_financial_columns, upsert_financial_statements
-from sqlalchemy import text
+from tool.db_helper import (  # noqa: E402
+    ensure_financial_columns,
+    get_db_engine,
+    upsert_financial_statements,
+)
+from tool.mcp_client import (  # noqa: E402
+    MCPClientError,
+    TWSEMCPClient as MCPClient,
+)
+from tool.update_financials_mops import (  # noqa: E402
+    load_quarter_financial_dataframe,
+)
 
 
-def update_history(start_year: int, end_year: int, delay: int = 10):
+def update_history(
+    start_year: int,
+    end_year: int,
+    delay: int = 10,
+    mcp_client: MCPClient | None = None,
+) -> bool:
     """
     批量更新歷史財報數據
     
@@ -32,13 +41,21 @@ def update_history(start_year: int, end_year: int, delay: int = 10):
         start_year: 起始民國年（如 110）
         end_year: 結束民國年（如 113）
         delay: 每次請求之間的延遲秒數（預設 10 秒）
+        mcp_client: 可選的共用 MCP client 實例
     """
     print(f"\n{'='*70}")
-    print(f"📊 歷史財報批量更新工具 - V35 版本")
+    print('📊 歷史財報批量更新工具 - V35 版本')
     print(f"{'='*70}")
-    print(f"📅 更新範圍: 民國 {start_year}-{end_year} 年（共 {end_year - start_year + 1} 年）")
+    print(
+        '📅 更新範圍: '
+        f'民國 {start_year}-{end_year} 年 '
+        f'（共 {end_year - start_year + 1} 年）'
+    )
     print(f"⏱️ 請求延遲: {delay} 秒")
-    print(f"⏰ 預計耗時: 約 {(end_year - start_year + 1) * 4 * (delay + 10) // 60} 分鐘")
+    print(
+        '⏰ 預計耗時: 約 '
+        f'{(end_year - start_year + 1) * 4 * (delay + 10) // 60} 分鐘'
+    )
     print(f"{'='*70}\n")
     
     # 1. 驗證參數
@@ -47,7 +64,7 @@ def update_history(start_year: int, end_year: int, delay: int = 10):
         return False
     
     # 2. 初始化
-    scraper = QuarterlyScraper()
+    shared_client = mcp_client or MCPClient()
     engine = get_db_engine()
     
     # 🔧 自動檢查並新增選填欄位（只執行一次）
@@ -80,39 +97,82 @@ def update_history(start_year: int, end_year: int, delay: int = 10):
             success = False
             
             while retry_count <= max_retries and not success:
+                correlation_id = 'n/a'
                 try:
-                    # 爬取資料
-                    df = scraper.fetch_all_markets(year, quarter)
-                    
-                    if df is None or df.empty:
-                        print("⚠️ 無資料，跳過此季度")
-                        fail_count += 1
-                        break  # 無資料不算失敗，直接跳出重試循環
-                    
-                    # 寫入資料庫（使用共用函式）
+                    df, correlation_id = load_quarter_financial_dataframe(
+                        year,
+                        quarter,
+                        mcp_client=shared_client,
+                    )
+
                     with engine.begin() as conn:
-                        inserted_count = upsert_financial_statements(conn, df, west_year, quarter)
-                        print(f"  ✅ 成功寫入 {inserted_count} 筆")
+                        inserted_count = upsert_financial_statements(
+                            conn,
+                            df,
+                            west_year,
+                            quarter,
+                        )
+                        print(
+                            '  ✅ 成功寫入 '
+                            f'{inserted_count} 筆 '
+                            f'| correlation_id={correlation_id}'
+                        )
                         success_count += 1
                         success = True  # 標記成功，跳出重試循環
-                    
-                except (ConnectionResetError, ConnectionAbortedError) as ce:
+
+                except MCPClientError as exc:
+                    retry_count += 1
+                    if retry_count <= max_retries and exc.retryable:
+                        cooldown = max(delay, 10) + random.uniform(5, 15)
+                        print(
+                            '  ⚠️ MCP 財報抓取失敗: '
+                            f'year={year} quarter={quarter} '
+                            f'retry={retry_count}/{max_retries} '
+                            f'correlation_id={exc.correlation_id} | {exc}'
+                        )
+                        print(f"  🧊 冷卻 {cooldown:.1f} 秒後重試...")
+                        time.sleep(cooldown)
+                        print(f"  🔄 重新嘗試 民國 {year} Q{quarter}...")
+                    else:
+                        print(
+                            '  ❌ MCP 財報抓取最終失敗: '
+                            f'year={year} quarter={quarter} '
+                            f'retry={retry_count}/{max_retries} '
+                            f'correlation_id={exc.correlation_id} | {exc}'
+                        )
+                        fail_count += 1
+                        break
+
+                except ValueError as exc:
+                    print(
+                        '  ❌ 財報資料驗證失敗: '
+                        f'year={year} quarter={quarter} '
+                        f'retry={retry_count}/{max_retries} | {exc}'
+                    )
+                    fail_count += 1
+                    break
+
+                except Exception as exc:
                     retry_count += 1
                     if retry_count <= max_retries:
-                        # 🛡️ 偵測到連線封鎖，進入冷卻期
-                        cooldown = 60 + random.uniform(10, 30)  # 60-90 秒冷卻
-                        print(f"  ⚠️ 偵測到 IP 封鎖或連線重置 (嘗試 {retry_count}/{max_retries})")
-                        print(f"  🧊 進入冷卻期 {cooldown:.1f} 秒...")
+                        cooldown = max(delay, 10) + random.uniform(5, 15)
+                        print(
+                            '  ⚠️ 歷史回補錯誤: '
+                            f'year={year} quarter={quarter} '
+                            f'retry={retry_count}/{max_retries} '
+                            f'correlation_id={correlation_id} | {exc}'
+                        )
+                        print(f"  🧊 冷卻 {cooldown:.1f} 秒後重試...")
                         time.sleep(cooldown)
-                        print(f"  🔄 重試第 {retry_count} 次...")
                     else:
-                        print(f"  ❌ 已達最大重試次數，跳過此季度")
+                        print(
+                            '  ❌ 歷史回補最終失敗: '
+                            f'year={year} quarter={quarter} '
+                            f'retry={retry_count}/{max_retries} '
+                            f'correlation_id={correlation_id} | {exc}'
+                        )
                         fail_count += 1
-                
-                except Exception as e:
-                    print(f"  ❌ 錯誤: {e}")
-                    fail_count += 1
-                    break  # 其他錯誤不重試，直接跳出
+                        break
             
             # 🎲 隨機延遲避免被封鎖（除非是最後一次請求）
             if current_task < total_tasks and success:
@@ -151,7 +211,7 @@ def main():
   python tool/update_history_financials.py --start-year 110 --end-year 113 --delay 15
   
 注意事項:
-  - 每個季度之間會自動延遲，避免被 MOPS 封鎖 IP
+    - 每個季度之間會自動延遲，避免對 MCP 與上游造成突發壓力
   - 建議在非交易時段執行，避免影響即時資料更新
   - 如果中途被封鎖，可以調整 --delay 參數後繼續執行
         """
@@ -165,7 +225,11 @@ def main():
     
     # 確認提示
     print("\n⚠️ 注意: 此操作將會:")
-    print(f"  1. 爬取 {args.start_year}-{args.end_year} 年共 {(args.end_year - args.start_year + 1) * 4} 個季度")
+    print(
+        '  1. 爬取 '
+        f'{args.start_year}-{args.end_year} 年共 '
+        f'{(args.end_year - args.start_year + 1) * 4} 個季度'
+    )
     print(f"  2. 每次請求間隔 {args.delay} 秒")
     print(f"  3. 覆蓋資料庫中的現有資料")
     

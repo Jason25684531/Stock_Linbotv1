@@ -24,6 +24,12 @@ import re
 import json
 import traceback
 import unicodedata
+import random
+import threading
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from urllib.parse import parse_qs
 from flask import Flask, request, abort, render_template, jsonify, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
@@ -37,7 +43,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage as V3TextMessage
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhooks import MessageEvent, PostbackEvent, TextMessageContent
 
 from config import Config
 from config import (
@@ -72,6 +78,8 @@ from tool.db_helper import (
 )
 # 引入策略工廠
 from tool.strategy_manager import StrategyManager
+# 引入 MCP 客戶端（Rich Menu postback 上游資料來源）
+from tool.mcp_client import MCPClientError, TWSEMCPClient as MCPClient
 # 引入診斷報告工具
 from tool.report_helper import get_stock_report, format_stock_diagnosis
 # 引入 Flex Message 建構器
@@ -135,10 +143,85 @@ strategy_manager = StrategyManager()
 print(f"[OK] 當前策略: {strategy_manager.get_active_strategy_name()}")
 
 
+@app.route(Config.APP_HEALTH_PATH)
+def health_check():
+    """提供 compose readiness 使用的輕量健康檢查。"""
+    checks = [
+        {"component": "flask", "status": "ok"},
+        {
+            "component": "mcp_config",
+            "status": "ok" if Config.MCP_BASE_URL else "missing",
+        },
+    ]
+    return jsonify({
+        'status': 'ok',
+        'service': 'stock_bot',
+        'version': '0.1.0',
+        'checks': checks,
+    }), 200
+
+
 
 # ============================================
 # 📊 核心業務邏輯
 # ============================================
+
+# ------------------------------------------------------------------
+# T001: Postback 記憶體 TTL 快取（market_summary / chip_trend 共用）
+# ------------------------------------------------------------------
+
+class _PostbackCache:
+    """執行緒安全的記憶體 TTL 快取，用於 LINE Postback 上游市場資料。
+
+    快取鍵格式：``"{action}:{YYYY-MM-DD}"``（Asia/Taipei 日期），確保
+    跨日自動失效。空的上游回應（records 為空 list）不會寫入快取，以便
+    稍後重試時仍可取得正確資料。
+
+    TTL 預設為 3600 秒（1 小時）。
+    """
+
+    _TTL_SECONDS: float = 3600.0
+
+    def __init__(self) -> None:
+        self._store: dict[str, tuple[object, float]] = {}
+        self._lock = threading.Lock()
+
+    def _today_taipei(self) -> str:
+        """回傳台灣時區今日日期字串（YYYY-MM-DD）。"""
+        return datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+
+    def _make_key(self, action: str) -> str:
+        return f"{action}:{self._today_taipei()}"
+
+    def get(self, action: str) -> object | None:
+        """取得快取值；若不存在或已過期則回傳 None。"""
+        key = self._make_key(action)
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            payload, expires_at = entry
+            if time.monotonic() > expires_at:
+                del self._store[key]
+                return None
+            return payload
+
+    def set(self, action: str, payload: object) -> None:
+        """寫入快取；payload 為 None 或 records 為空時拒絕寫入。"""
+        if payload is None:
+            return
+        if isinstance(payload, dict):
+            records = payload.get('records')
+            if isinstance(records, list) and len(records) == 0:
+                return  # 空 records 不快取，保留重試機會
+        key = self._make_key(action)
+        expires_at = time.monotonic() + self._TTL_SECONDS
+        with self._lock:
+            self._store[key] = (payload, expires_at)
+
+
+# 模組層級 singleton
+_postback_cache = _PostbackCache()
 
 
 def get_ngrok_url() -> str:
@@ -325,8 +408,9 @@ def _match_strategy_switch(text_lower: str):
 def _parse_news_reason(news_reason: str) -> dict:
     """解析消息面理由字串，供 Web / Line 顯示使用。"""
     raw = str(news_reason or '').strip()
-    items = [part.strip() for part in raw.split('｜') if part.strip()]
-    is_bearish = any(('利空' in item or '承壓' in item or '下修' in item) for item in items)
+    normalized = raw.replace('|', '｜')
+    items = [part.strip() for part in normalized.split('｜') if part.strip()]
+    is_bearish = any(('利空' in item or '承壓' in item or '下修' in item or '風險' in item) for item in items)
     return {
         'raw': raw,
         'items': items,
@@ -434,6 +518,327 @@ def _resolve_signal_news_info(row, date_str: str, stock_mentions_map: dict) -> d
         return stock_info
 
     return _parse_news_reason(row.get('news_boost_reason') or '')
+
+
+def _apply_news_sentiment_overlay(candidates: pd.DataFrame, date_str: str) -> pd.DataFrame:
+    """Apply sector and stock-news overlay to live recommendations."""
+    if candidates is None or candidates.empty:
+        return pd.DataFrame() if candidates is None else candidates
+
+    boosted = candidates.copy()
+    if 'news_boost_reason' not in boosted.columns:
+        boosted['news_boost_reason'] = ''
+
+    if 'ai_score' not in boosted.columns:
+        return boosted
+
+    try:
+        sentiment = get_news_sentiment(date_str)
+        bull_sectors = set(sentiment.get('bull_sectors') or [])
+        bear_sectors = set(sentiment.get('bear_sectors') or [])
+        bull_theme_map = sentiment.get('bull_theme_map') or {}
+        bear_theme_map = sentiment.get('bear_theme_map') or {}
+        stock_mentions_map = _get_stock_mentions_map([str(sid) for sid in boosted['stock_id'].tolist()])
+
+        bull_factor = min(Config.NEWS_BOOST_FACTOR, Config.NEWS_BOOST_MAX)
+        bear_factor = Config.NEWS_PENALTY_FACTOR
+
+        for idx, row in boosted.iterrows():
+            stock_id = str(row.get('stock_id', '')).strip()
+            sector = get_stock_sector(stock_id)
+            score = safe_float(row.get('ai_score')) or 0.0
+            reason_parts: list[str] = []
+
+            if sector in bull_sectors:
+                score *= (1 + bull_factor)
+                topic = bull_theme_map.get(sector)
+                reason_parts.append(f'{sector}題材: {topic or "消息面偏多"}')
+
+            stock_news = stock_mentions_map.get(stock_id) or {}
+            stock_news_score = safe_int(stock_news.get('score')) or 0
+            stock_news_reason = str(stock_news.get('reason') or '').strip()
+            if stock_news_score > 0 and stock_news_reason:
+                extra = min(bull_factor, max(Config.NEWS_BOOST_MAX - bull_factor, 0))
+                if extra > 0:
+                    score *= (1 + extra)
+                reason_parts.append(f'個股: {stock_news_reason}')
+            elif stock_news_score < 0 and stock_news_reason:
+                score *= (1 - bear_factor)
+                reason_parts.append(f'個股利空: {stock_news_reason}')
+
+            if sector in bear_sectors:
+                score *= (1 - bear_factor)
+                topic = bear_theme_map.get(sector)
+                reason_parts.append(f'{sector}承壓: {topic or "消息面偏空"}')
+
+            boosted.at[idx, 'ai_score'] = score
+            boosted.at[idx, 'news_boost_reason'] = '｜'.join(reason_parts)[:100] if reason_parts else ''
+
+        return boosted.sort_values('ai_score', ascending=False)
+    except Exception as exc:
+        print(f"⚠️ 即時選股消息面加權失敗: {exc}")
+        return boosted
+
+
+def _build_macro_news_messages() -> list:
+    """Build reply messages for the Rich Menu macro-news action."""
+    try:
+        from tool.news_agent import get_morning_news_summary
+
+        news_summary = get_morning_news_summary()
+        today_str = pd.Timestamp.now().strftime('%Y-%m-%d')
+        return [create_news_flex(news_summary, today_str)]
+    except Exception as exc:
+        print(f"⚠️ 總經摘要產生失敗: {exc}")
+        return [V3TextMessage(text="📰 總經摘要\n\n目前暫時無法取得最新摘要，請稍後再試。")]
+
+
+# ------------------------------------------------------------------
+# T005: 總經與大盤摘要訊息（market_summary postback）
+# ------------------------------------------------------------------
+
+def _build_market_summary_messages() -> list:
+    """從 TWSE MCP 取得大盤快照並回傳 LINE 訊息清單。
+
+    呼叫 ``TWSEMCPClient.get_market_statistics_sync()``，統計
+    上漲/下跌/平盤家數與總成交量，結果快取於 ``_postback_cache``。
+    若 MCP 呼叫失敗或回傳空 records 則回傳友善提示訊息。
+    """
+    cached = _postback_cache.get('market_summary')
+    if cached is not None:
+        return [V3TextMessage(text=cached)]
+
+    try:
+        trade_date = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        result = MCPClient().get_market_statistics_sync(trade_date)
+        if result is None:
+            return [V3TextMessage(text="📊 大盤快照\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。")]
+        records: list[dict] = result.get('records') or []
+        if not records:
+            return [V3TextMessage(text="📊 大盤快照\n\n目前尚無今日交易資料，請於盤後再試。")]
+
+        rising = sum(
+            1 for r in records
+            if (safe_float(r.get('close_price')) or 0) > (safe_float(r.get('open_price')) or 0)
+        )
+        falling = sum(
+            1 for r in records
+            if (safe_float(r.get('close_price')) or 0) < (safe_float(r.get('open_price')) or 0)
+        )
+        flat = len(records) - rising - falling
+        total_vol = sum(int(safe_float(r.get('volume')) or 0) for r in records)
+        total_vol_b = total_vol / 1_000_000_000  # 轉換為億股
+        result_date = result.get('as_of_date') or trade_date
+
+        body = (
+            f"📊 台股大盤快照 {result_date}\n"
+            f"{'─' * 26}\n"
+            f"▲ 上漲  {rising:4d} 檔\n"
+            f"▼ 下跌  {falling:4d} 檔\n"
+            f"─ 平盤  {flat:4d} 檔\n"
+            f"{'─' * 26}\n"
+            f"💹 總成交量 {total_vol_b:.1f} 億股\n"
+            f"\n💡 資料來源：TWSE MCP Server"
+        )
+        _postback_cache.set('market_summary', body)
+        return [V3TextMessage(text=body)]
+
+    except MCPClientError as exc:
+        print(f"⚠️ MCP 大盤快照失敗: {exc}")
+        return [V3TextMessage(text="📊 大盤快照\n\n目前暫時無法連線至 TWSE 資料源，請稍後再試。")]
+    except Exception as exc:
+        print(f"⚠️ _build_market_summary_messages 未預期錯誤: {exc}")
+        return [V3TextMessage(text="📊 大盤快照\n\n資料處理異常，請稍後再試。")]
+
+
+# ------------------------------------------------------------------
+# T007: 籌碼動向訊息（chip_trend postback）
+# ------------------------------------------------------------------
+
+def _build_chip_trend_messages() -> list:
+    """從 TWSE MCP 取得三大法人買賣超並回傳 LINE 訊息清單。
+
+    呼叫 ``TWSEMCPClient.get_foreign_investment_sync()``，加總
+    外資、投信、自營商三大法人買賣超，結果快取於 ``_postback_cache``。
+    若 MCP 呼叫失敗或回傳空 records 則回傳友善提示訊息。
+    """
+    cached = _postback_cache.get('chip_trend')
+    if cached is not None:
+        return [V3TextMessage(text=cached)]
+
+    try:
+        trade_date = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        result = MCPClient().get_foreign_investment_sync(trade_date)
+        if result is None:
+            return [V3TextMessage(text="🏦 籌碼動向\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。")]
+        records: list[dict] = result.get('records') or []
+        if not records:
+            return [V3TextMessage(text="🏦 籌碼動向\n\n目前尚無今日法人資料，請於盤後再試。")]
+
+        def _sum_net(key: str) -> int:
+            return sum(int(safe_float(r.get(key)) or 0) for r in records)
+
+        foreign_net = _sum_net('foreign_buy')
+        trust_net = _sum_net('trust_buy')
+        dealer_net = _sum_net('dealer_buy')
+        total_net = foreign_net + trust_net + dealer_net
+        result_date = result.get('as_of_date') or trade_date
+
+        def _fmt(val: int) -> str:
+            sign = '▲' if val > 0 else ('▼' if val < 0 else '─')
+            return f"{sign} {abs(val):>10,}"
+
+        body = (
+            f"🏦 三大法人買賣超 {result_date}\n"
+            f"{'─' * 30}\n"
+            f"外資   {_fmt(foreign_net)} 張\n"
+            f"投信   {_fmt(trust_net)} 張\n"
+            f"自營商 {_fmt(dealer_net)} 張\n"
+            f"{'─' * 30}\n"
+            f"合計   {_fmt(total_net)} 張\n"
+            f"\n💡 資料來源：TWSE MCP Server"
+        )
+        _postback_cache.set('chip_trend', body)
+        return [V3TextMessage(text=body)]
+
+    except MCPClientError as exc:
+        print(f"⚠️ MCP 籌碼動向失敗: {exc}")
+        return [V3TextMessage(text="🏦 籌碼動向\n\n目前暫時無法連線至 TWSE 資料源，請稍後再試。")]
+    except Exception as exc:
+        print(f"⚠️ _build_chip_trend_messages 未預期錯誤: {exc}")
+        return [V3TextMessage(text="🏦 籌碼動向\n\n資料處理異常，請稍後再試。")]
+
+
+# ------------------------------------------------------------------
+# T009: 策略盲盒訊息（random_strategy postback）
+# ------------------------------------------------------------------
+
+def _build_random_strategy_messages() -> list:
+    """從隨機策略池挑選一個策略並回傳今日推薦股票訊息。
+
+    從 ``StrategyManager.get_random_strategy_pool()`` 取得候選策略鍵，
+    以 ``random.sample`` 洗牌後依序嘗試 ``filter_candidates()``，
+    取第一個非空結果格式化後回傳。若所有策略均無推薦則回傳提示訊息。
+    """
+    try:
+        sm = strategy_manager  # 使用模組層級 singleton
+        pool = sm.get_random_strategy_pool()
+        if not pool:
+            return [V3TextMessage(text="🎲 策略盲盒\n\n目前策略池為空，請至設定頁面配置可用策略。")]
+
+        shuffled = random.sample(pool, len(pool))
+
+        # 全市場資料只需讀一次
+        df, date_str = get_stock_data()
+        if df is None or df.empty:
+            return [V3TextMessage(text="🎲 策略盲盒\n\n目前無法取得市場資料，請稍後再試。")]
+        if not date_str:
+            date_str = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+
+        for strategy_key in shuffled:
+            try:
+                strategy = sm.get_strategy(strategy_key)
+                if strategy is None:
+                    continue
+                candidates = strategy.filter_candidates(df.copy())
+                if candidates is None or candidates.empty:
+                    continue
+                body = format_v31_recommendation(candidates.head(5), date_str)
+                display = getattr(strategy, 'display_name', strategy_key)
+                header = f"🎲 策略盲盒｜{display}\n{'─' * 26}\n"
+                return [V3TextMessage(text=header + body)]
+            except Exception as exc:
+                print(f"⚠️ 策略盲盒 [{strategy_key}] 失敗，嘗試下一個: {exc}")
+                continue
+
+        return [V3TextMessage(
+            text=(
+                f"🎲 策略盲盒\n\n今日所有策略均無符合條件的股票，"
+                f"可能是市場整體條件偏弱。\n📅 {date_str}"
+            )
+        )]
+
+    except Exception as exc:
+        print(f"⚠️ _build_random_strategy_messages 未預期錯誤: {exc}")
+        return [V3TextMessage(text="🎲 策略盲盒\n\n資料處理異常，請稍後再試。")]
+
+
+def _build_journal_reflection_text() -> str:
+    """Summarize recent trades into a compact journal reflection."""
+    try:
+        recent_trades = get_recent_backtest_trades(limit=5) or []
+    except Exception as exc:
+        print(f"⚠️ 讀取最近交易失敗: {exc}")
+        recent_trades = []
+
+    try:
+        open_holdings = get_open_holdings(limit=5) or []
+    except Exception as exc:
+        print(f"⚠️ 讀取持股日誌失敗: {exc}")
+        open_holdings = []
+
+    if not recent_trades:
+        return "📝 日誌反思\n\n目前還沒有足夠的交易紀錄可供反思。\n可以先用「推薦」找標的，或先執行一次回測累積樣本。"
+
+    profit_values = [safe_float(trade.get('profit_pct')) or 0.0 for trade in recent_trades]
+    avg_profit = sum(profit_values) / len(profit_values)
+    win_rate = sum(1 for value in profit_values if value > 0) / len(profit_values) * 100
+    avg_hold_days = sum((safe_int(trade.get('days')) or 0) for trade in recent_trades) / len(recent_trades)
+    last_trade = recent_trades[0]
+    last_stock = last_trade.get('stock_id') or 'N/A'
+    last_reason = last_trade.get('reason') or '未記錄'
+    last_profit = safe_float(last_trade.get('profit_pct')) or 0.0
+    holdings_count = len(open_holdings)
+
+    return (
+        "📝 日誌反思\n\n"
+        f"最近 {len(recent_trades)} 筆回測交易勝率 {win_rate:.0f}%，平均報酬 {avg_profit:+.1f}%，平均持有 {avg_hold_days:.1f} 天。\n"
+        f"最近一筆：{last_stock} {last_profit:+.1f}% ，出場原因：{last_reason}。\n"
+        f"目前仍有 {holdings_count} 檔開倉，建議確認進場理由是否仍成立、停損停利是否有跟上。"
+    )
+
+
+def _extract_postback_action(data: str) -> str:
+    """Extract rich-menu action from a LINE postback payload."""
+    raw = str(data or '').strip()
+    if not raw:
+        return ''
+    parsed = parse_qs(raw, keep_blank_values=True)
+    return (parsed.get('action') or [raw])[0].strip()
+
+
+# ------------------------------------------------------------------
+# T011: Postback 路由　Dict-dispatch 模式
+# ------------------------------------------------------------------
+
+def _register_postback_handlers() -> dict:
+    """建立 action → handler 映射表。
+
+    明確列舉已支援的 Postback action，並在每次呼叫時重新解析 handler。
+    這樣可避免模組層級 dict 與 router 內 dict 重複定義，也能讓測試 patch
+    到最新的函式參考。
+    """
+    return {
+        # 原有指令（保持向下相容）
+        'get_macro_news': _build_macro_news_messages,
+        'get_journal': lambda: [V3TextMessage(text=_build_journal_reflection_text())],
+        # T005/T007/T009 新增指令
+        'market_summary': _build_market_summary_messages,
+        'chip_trend': _build_chip_trend_messages,
+        'random_strategy': _build_random_strategy_messages,
+    }
+
+
+def _build_postback_reply_messages(action: str) -> list:
+    """Resolve LINE rich-menu postback action into reply messages.
+
+    Handler 表在每次呼叫時動態建立，以確保測試 patch 可正確攔截，
+    並維持單一來源的 dispatch 定義。
+    """
+    handler = _register_postback_handlers().get(action)
+    if handler is not None:
+        return handler()  # type: ignore[operator]
+    return [V3TextMessage(text='⚠️ 尚未支援的 Rich Menu 指令')]
 
 
 def _load_strategy_candidates(active, strategy_key: str, market_df: pd.DataFrame,
@@ -576,10 +981,14 @@ def get_strategy_recommendation(as_flex: bool = False):
                     has_ai = True
             except Exception as e:
                 print(f"⚠️ AI 排名失敗（使用原始排序）: {e}")
+
+        if not has_persisted and has_ai:
+            candidates = _apply_news_sentiment_overlay(candidates, display_date)
         
         # 5. 格式化輸出
         top_n = candidates.head(5)
         total_count = len(candidates)
+        stock_mentions_map = _get_stock_mentions_map([str(sid) for sid in top_n['stock_id'].tolist()])
 
         # ── Flex Carousel 模式 ──
         if as_flex:
@@ -587,6 +996,7 @@ def get_strategy_recommendation(as_flex: bool = False):
             for _, row in top_n.iterrows():
                 close = row.get('close_price', 0)
                 sid = str(row.get('stock_id', '????'))
+                news_info = _resolve_signal_news_info(row, display_date, stock_mentions_map)
                 picks_list.append({
                     'stock_id': sid,
                     'sector': get_stock_sector(sid),
@@ -594,7 +1004,10 @@ def get_strategy_recommendation(as_flex: bool = False):
                     'ai_score': row.get('ai_score', 0) if has_ai else 0,
                     'rsi': row.get('rsi', 0),
                     'volume': row.get('volume', 0),
-                    'news_boost_reason': row.get('news_boost_reason', ''),
+                    'news_boost_reason': news_info['raw'],
+                    'news_reason_items': news_info['items'],
+                    'news_signal_title': news_info['title'],
+                    'news_is_bearish': news_info['is_bearish'],
                     'stop_loss_price': close * (1 - active.stop_loss),
                     'take_profit_price': close * (1 + active.take_profit) if active.take_profit > 0 else 0,
                 })
@@ -621,8 +1034,8 @@ def get_strategy_recommendation(as_flex: bool = False):
             ma20 = row.get('ma20', 0)
             ma60 = row.get('ma60', 0)
             sector = get_stock_sector(str(stock_id))
-            news_reason = row.get('news_boost_reason', '')
-            news_info = _parse_news_reason(news_reason)
+            news_info = _resolve_signal_news_info(row, display_date, stock_mentions_map)
+            news_reason = news_info['raw']
 
             # 計算停損停利價位
             sl_price = close * (1 - active.stop_loss)
@@ -1193,6 +1606,12 @@ def api_daily_signals():
                         candidates = candidates.sort_values('ai_score', ascending=False)
                 except Exception as score_error:
                     print(f"⚠️ /api/daily-signals AI 排名失敗: {score_error}")
+
+            if not has_persisted and not candidates.empty and 'ai_score' in candidates.columns:
+                candidates = _apply_news_sentiment_overlay(
+                    candidates,
+                    fallback_meta.get('recommendation_date') or date_str,
+                )
             
             if candidates.empty:
                 return jsonify({
@@ -1435,6 +1854,22 @@ def callback():
         except Exception as fallback_error:
             print(f"⚠️ callback fallback 回覆失敗: {fallback_error}")
     return 'OK'
+
+
+@handler.add(PostbackEvent)
+def postback_handler(event):
+    """Handle Rich Menu postback actions."""
+    action = _extract_postback_action(getattr(getattr(event, 'postback', None), 'data', ''))
+    messages = _build_postback_reply_messages(action)
+
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=messages,
+            )
+        )
 
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -1780,6 +2215,9 @@ def handle_message(event):
             print(f"⚠️ 持股查詢失敗: {e}")
             reply = "📭 目前無持股紀錄\n輸入「推薦」取得今日選股建議"
 
+    elif msg_text in ["日誌", "反思", "journal"]:
+        reply = _build_journal_reflection_text()
+
     # ========== 回測摘要 ==========
     elif msg_text in ["回測", "績效", "回測結果", "backtest"]:
         try:
@@ -1938,4 +2376,14 @@ if __name__ == "__main__":
     print(f"[INFO] 主要策略: V30 純技術分析 (40%報酬實績)")
     print(f"[PORT] 伺服器端口: 1688")
     print("=" * 60)
+
+    if os.getenv('LINE_RICH_MENU_AUTO_SYNC', '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+        try:
+            from tool.richmenu import sync_default_rich_menu_from_token
+
+            rich_menu_id = sync_default_rich_menu_from_token()
+            print(f"[OK] Rich Menu 綁定完成: {rich_menu_id}")
+        except Exception as exc:
+            print(f"[WARN] Rich Menu 自動綁定失敗: {exc}")
+
     app.run(host='0.0.0.0', port=1688, debug=False)

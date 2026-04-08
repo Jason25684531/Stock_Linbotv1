@@ -9,6 +9,7 @@
 import pandas as pd
 import time
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection
 from config import Config
 
 
@@ -821,12 +822,24 @@ def ensure_financial_columns(conn):
             print(f"   ✅ financial_statements.{col_name} 欄位建立完成")
 
 
-def upsert_financial_statements(conn, df, west_year: int, quarter: int):
-    """批量 UPSERT 財報資料至 financial_statements 表
+def upsert_financial_statements(
+    conn: Connection,
+    df: pd.DataFrame,
+    west_year: int,
+    quarter: int,
+) -> int:
+    """批量 UPSERT 財報資料至 financial_statements 表。
+
+    This helper is the persistence boundary for MCP-backed quarterly financial
+    payloads. Callers must provide rows already normalized to the current DB
+    storage unit and include the required columns `stock_id`, `revenue`,
+    `operating_expense`, and `operating_profit`. The function rewrites the
+    target quarter atomically and preserves the effective idempotent contract
+    on `(stock_id, year, quarter)` when the same quarter is replayed.
 
     Args:
         conn: SQLAlchemy 連線 (已在 transaction 內)
-        df: 爬蟲回傳的 DataFrame
+        df: 財報 DataFrame，欄位需符合 MCP financial mapping 後的儲存契約
         west_year: 西元年
         quarter: 季度 (1-4)
 

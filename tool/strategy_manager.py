@@ -373,7 +373,41 @@ class StrategyManager:
             List[str]: 策略名稱列表
         """
         return list(self.STRATEGY_REGISTRY.keys())
-    
+
+    # ============================================
+    # Rich Menu 盲盒池 (V4 新增)
+    # ============================================
+
+    _DEFAULT_RANDOM_POOL: List[str] = [
+        'v35_innovation',
+        'v36_chip_momentum',
+        'v38_value_dividend',
+    ]
+
+    def get_random_strategy_pool(self) -> List[str]:
+        """取得策略盲盒可用的策略池清單。
+
+        從 strategy_settings.json["random_strategy_pool"] 讀取，若鍵不存在則
+        使用預設池。結果會與 STRATEGY_REGISTRY 取交集，過濾掉無效的策略鍵。
+
+        Returns:
+            List[str]: 驗證後的策略鍵清單（保持原始排列順序）。
+                       若過濾後為空，回傳空清單（由呼叫端處理「目前無策略」訊息）。
+        """
+        settings = self.get_settings()
+        pool = settings.get('random_strategy_pool', self._DEFAULT_RANDOM_POOL)
+        if not isinstance(pool, list):
+            print(f"⚠️ random_strategy_pool 設定格式錯誤，使用預設值")
+            pool = self._DEFAULT_RANDOM_POOL
+
+        validated: List[str] = []
+        for key in pool:
+            if key in self.STRATEGY_REGISTRY:
+                validated.append(key)
+            else:
+                print(f"⚠️ random_strategy_pool 中有無效策略鍵，已略過: {key}")
+        return validated
+
     def __repr__(self) -> str:
         strategy_names = self.get_active_strategy_names()
         return f"<StrategyManager: active={strategy_names}>"

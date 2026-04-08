@@ -18,11 +18,14 @@
 
 ## 編碼慣例
 
-- **語言**：Python 3.10+，遵循 PEP 8，盡量使用型別提示（Type Hints）。
+- **語言**：Python 3.10+，遵循 PEP 8；所有新建立的函式必須提供完整 PEP 484 型別提示（參數與回傳值）。
 - **資料庫**：所有 DB 操作一律透過 `tool/db_helper.py`，禁止在 `app.py` 撰寫原始 SQL。
+- **HTTP 整合**：核心業務邏輯不得直接發送 HTTP 請求；後續新增或重構之外部傳輸必須收斂到 `tool/mcp_client.py`。
+- **錯誤處理**：禁止 bare `except:`；API 相關例外需明確捕捉、寫入系統日誌，並實作有限次數的重試。
+- **依賴管理**：新增套件需同步更新 `requirements.txt`；新增 HTTP 或非同步 I/O 優先使用 `httpx`，除非有明確相容性理由。
 - **常數**：手續費、稅率、滑價等常數集中於 `config.py`，不得散落在邏輯程式碼中。
 - **策略**：新策略須繼承 `tool/strategies/base.py` 的 `BaseStrategy` 抽象類別。
-- **說明文件**：所有文件、註解、commit message 優先使用**中文**，保持專案語境一致。
+- **說明文件**：所有文件、註解、commit message 優先使用**中文**，保持專案語境一致；任何行為或流程變更必須同步更新對應 Markdown 文件或 docstrings。
 
 ## 前端開發規範（重要）
 
@@ -43,6 +46,22 @@
 | 更新市場資料 | `python 1_update_database.py` |
 | 執行每日選股 | `python 2_rundaily.py` |
 | 執行測試套件 | `pytest` |
+| 部署 Rich Menu | `python scripts/setup_rich_menu.py` |
+
+## 已規劃功能分支
+
+| 分支 | 規格路徑 | 狀態 |
+|------|---------|------|
+| `001-modernize-twse-dataflow` | `specs/001-modernize-twse-dataflow/` | In Progress |
+| `002-richmenu-mcp-integration` | `specs/002-richmenu-mcp-integration/` | Plan Ready |
+
+## Rich Menu Postback 架構 (002)
+
+`app.py` 的 PostbackEvent 路由採用 dict-dispatch 模式（`_POSTBACK_HANDLERS`）。擴充新 action 時，只需：
+1. 定義新的 `_build_<action>_messages() -> list` 函式
+2. 在 `_register_postback_handlers()` 中加入鍵值對
+
+上游市場資料呼叫（`market_summary`、`chip_trend`）透過 `_PostbackCache`（TTL 1h）保護，`MCPClient` 為唯一外部 HTTP 邊界。策略盲盒隨機池由 `strategy_settings.json["random_strategy_pool"]` 控制。
 
 ## 核心設計原則
 
