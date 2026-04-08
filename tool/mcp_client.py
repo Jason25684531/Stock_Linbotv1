@@ -46,7 +46,12 @@ JSONDict: TypeAlias = dict[str, Any]
 _T = TypeVar("_T")
 _LOGGER = logging.getLogger(__name__)
 _RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
-_COMPAT_FALLBACK_STATUS_CODES = {404, 405}
+
+_TOOL_ROUTE_ENDPOINTS: dict[str, str] = {
+    "company_basic_info": "/v1/tools/get_company_basic_info",
+    "market_statistics": "/v1/tools/get_market_statistics",
+    "foreign_investment": "/v1/tools/get_foreign_investment",
+}
 
 _COMPANY_BASIC_INFO_ALIASES: dict[str, str] = {
     "stock_id": "stock_id",
@@ -1281,13 +1286,11 @@ class MCPClient:
 
 
 class TWSEMCPClient(MCPClient):
-    """Compatibility MCP client aligned with the `/v1/tools/*` feature contract.
+    """Canonical MCP client aligned with the `/v1/tools/*` feature contract.
 
     This subclass keeps the existing strict `MCPClient` APIs intact while adding
     caller-safe sync/async methods that:
-    - prefer the requested `/v1/tools/*` endpoints;
-    - fall back to the repo's existing `/v1/*` endpoints when the tool route is
-      not available;
+    - call the canonical `/v1/tools/*` endpoints directly;
     - normalize field names to the canonical payloads already consumed by DB and
       LINE/agent call sites;
     - return `None` on HTTP/service failures so interactive callers can degrade
@@ -1314,11 +1317,8 @@ class TWSEMCPClient(MCPClient):
             correlation_id=correlation_id or _generate_correlation_id("company"),
         )
         try:
-            return await self._request_compat_payload(
-                endpoints=(
-                    "/v1/tools/get_company_basic_info",
-                    "/v1/stock-basic-snapshot",
-                ),
+            return await self._request_tool_payload(
+                endpoint=_TOOL_ROUTE_ENDPOINTS["company_basic_info"],
                 payload={
                     "stock_id": normalized_stock_id,
                     "trade_date": normalized_trade_date,
@@ -1360,11 +1360,8 @@ class TWSEMCPClient(MCPClient):
             correlation_id=correlation_id or _generate_correlation_id("market"),
         )
         try:
-            return await self._request_compat_payload(
-                endpoints=(
-                    "/v1/tools/get_market_statistics",
-                    "/v1/stock-basic-snapshot",
-                ),
+            return await self._request_tool_payload(
+                endpoint=_TOOL_ROUTE_ENDPOINTS["market_statistics"],
                 payload={
                     "trade_date": normalized_trade_date,
                     "market": context.market,
@@ -1412,11 +1409,8 @@ class TWSEMCPClient(MCPClient):
             correlation_id=correlation_id or _generate_correlation_id("foreign"),
         )
         try:
-            return await self._request_compat_payload(
-                endpoints=(
-                    "/v1/tools/get_foreign_investment",
-                    "/v1/foreign-investor-flow",
-                ),
+            return await self._request_tool_payload(
+                endpoint=_TOOL_ROUTE_ENDPOINTS["foreign_investment"],
                 payload={
                     "trade_date": normalized_trade_date,
                     "market": context.market,
@@ -1567,10 +1561,10 @@ class TWSEMCPClient(MCPClient):
                 return dict(first_record)
         return {}
 
-    async def _request_compat_payload(
+    async def _request_tool_payload(
         self,
         *,
-        endpoints: Sequence[str],
+        endpoint: str,
         payload: Mapping[str, Any],
         correlation_id: str,
         dataset: DatasetName,
@@ -1578,36 +1572,19 @@ class TWSEMCPClient(MCPClient):
         required_record_fields: Sequence[str],
         normalize: Callable[[Mapping[str, Any]], JSONDict],
     ) -> JSONDict:
-        last_error: MCPClientError | None = None
-        for endpoint in endpoints:
-            try:
-                raw_payload = await self._post_json(
-                    endpoint=endpoint,
-                    payload=payload,
-                    correlation_id=correlation_id,
-                )
-            except MCPServiceError as exc:
-                last_error = exc
-                if exc.status_code in _COMPAT_FALLBACK_STATUS_CODES:
-                    continue
-                raise
-
-            normalized_payload = normalize(raw_payload)
-            return self._validate_payload(
-                payload=normalized_payload,
-                endpoint=endpoints[0],
-                correlation_id=correlation_id,
-                dataset=dataset,
-                required_fields=required_fields,
-                required_record_fields=required_record_fields,
-            )
-
-        if last_error is not None:
-            raise last_error
-        raise MCPResponseError(
-            "No compatible MCP endpoint returned a usable payload",
-            endpoint=endpoints[0],
+        raw_payload = await self._post_json(
+            endpoint=endpoint,
+            payload=payload,
             correlation_id=correlation_id,
+        )
+        normalized_payload = normalize(raw_payload)
+        return self._validate_payload(
+            payload=normalized_payload,
+            endpoint=endpoint,
+            correlation_id=correlation_id,
+            dataset=dataset,
+            required_fields=required_fields,
+            required_record_fields=required_record_fields,
         )
 
     def _log_soft_failure(

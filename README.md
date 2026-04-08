@@ -72,8 +72,8 @@ Rich Menu 的版型與圖片上傳唯一入口為 `tool/richmenu.py`，部署腳
 ### MCP 資料傳輸邊界
 
 - `stock_bot` 內的 CLI 腳本與 `tool/news_agent.py` 不再直接呼叫 TWSE、TPEx、MOPS covered endpoint。
-- 所有 covered dataset 先經 `tool/mcp_client.py`，再由 `scripts/twse_mcp_server.py` 統一對外抓取並提供 `/health` 與三個 dataset POST endpoint。
-- `tool/mcp_client.py` 另提供 `TWSEMCPClient` 相容層：優先使用 `/v1/tools/*` 路由，必要時回退到既有 `/v1/*` 路由，並在互動式查詢遭遇 HTTP 500 時安全回傳 `None`。
+- 所有 covered dataset 先經 `tool/mcp_client.py`，再由 `scripts/twse_mcp_server.py` 統一對外抓取並提供 `/health`、legacy dataset endpoint，以及 canonical `/v1/tools/*` POST route。
+- `tool/mcp_client.py` 另提供 `TWSEMCPClient` 安全 facade：直接命中 `/v1/tools/get_company_basic_info`、`/v1/tools/get_market_statistics`、`/v1/tools/get_foreign_investment`，並在互動式查詢遭遇 HTTP 500 或服務錯誤時安全回傳 `None`。
 - `1_update_database.py` 目前以 MCP 取得市場快照、外資買賣超與季度財報；`chip_data_scraper.py` 只保留為融資融券 enrich。
 
 ```
@@ -262,7 +262,7 @@ python 5_push_to_line.py      # Line 推播（預設 evening 模式）
 python scripts\setup_rich_menu.py  # 手動部署最新 Rich Menu 版面
 
 # Focused MCP / Rich Menu 驗證
-python -m pytest test/test_mcp_integration.py test/test_richmenu_mcp_integration.py -q
+python -m pytest test/test_mcp_integration.py test/test_richmenu_mcp_server_routes.py test/test_richmenu_mcp_integration.py -q
 ```
 
 ### 啟動與關閉（Windows / 虛擬環境）

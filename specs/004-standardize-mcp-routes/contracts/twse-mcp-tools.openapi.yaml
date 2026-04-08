@@ -1,0 +1,261 @@
+openapi: 3.1.0
+info:
+  title: TWSE MCP Tool Routes Contract
+  version: 0.1.0
+  summary: Canonical `/v1/tools/*` contract consumed directly by `tool/mcp_client.py` after server route standardization.
+servers:
+  - url: http://twse-mcp-server:8080
+paths:
+  /v1/tools/get_company_basic_info:
+    post:
+      summary: Fetch one issuer-scoped normalized company/basic snapshot record.
+      operationId: postToolCompanyBasicInfo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyBasicInfoRequest'
+      responses:
+        '200':
+          description: Normalized single-issuer company/basic-info payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyBasicInfoResponse'
+        '400':
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/tools/get_market_statistics:
+    post:
+      summary: Fetch one trade date of normalized market-statistics payload.
+      operationId: postToolMarketStatistics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketStatisticsRequest'
+      responses:
+        '200':
+          description: Normalized market-statistics payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketStatisticsResponse'
+        '400':
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/tools/get_foreign_investment:
+    post:
+      summary: Fetch one trade date of normalized foreign-investment payload.
+      operationId: postToolForeignInvestment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForeignInvestmentRequest'
+      responses:
+        '200':
+          description: Normalized foreign-investment payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForeignInvestmentResponse'
+        '400':
+          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error_code, message, retryable, correlation_id]
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        correlation_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    MarketRequestBase:
+      type: object
+      required: [market, correlation_id]
+      properties:
+        market:
+          type: string
+          enum: [TWSE, TPEx, ALL]
+        correlation_id:
+          type: string
+        include_etfs:
+          type: boolean
+          default: true
+    CompanyBasicInfoRequest:
+      allOf:
+        - $ref: '#/components/schemas/MarketRequestBase'
+        - type: object
+          required: [stock_id, trade_date]
+          properties:
+            stock_id:
+              type: string
+            trade_date:
+              type: string
+              format: date
+    MarketStatisticsRequest:
+      allOf:
+        - $ref: '#/components/schemas/MarketRequestBase'
+        - type: object
+          required: [trade_date]
+          properties:
+            trade_date:
+              type: string
+              format: date
+    ForeignInvestmentRequest:
+      allOf:
+        - $ref: '#/components/schemas/MarketRequestBase'
+        - type: object
+          required: [trade_date]
+          properties:
+            trade_date:
+              type: string
+              format: date
+    StockBasicSnapshotRecord:
+      type: object
+      required:
+        - stock_id
+        - trade_date
+        - open_price
+        - high_price
+        - low_price
+        - close_price
+        - volume
+      properties:
+        stock_id:
+          type: string
+        trade_date:
+          type: string
+          format: date
+        open_price:
+          type: number
+        high_price:
+          type: number
+        low_price:
+          type: number
+        close_price:
+          type: number
+        volume:
+          type: number
+        pe_ratio:
+          type: number
+        stock_name:
+          type: string
+        security_type:
+          type: string
+    ForeignInvestmentRecord:
+      type: object
+      required: [stock_id, trade_date, foreign_buy]
+      properties:
+        stock_id:
+          type: string
+        trade_date:
+          type: string
+          format: date
+        foreign_buy:
+          type: number
+        trust_buy:
+          type: number
+        dealer_buy:
+          type: number
+    CompanyBasicInfoResponse:
+      type: object
+      required: [dataset, as_of_date, market, records]
+      properties:
+        dataset:
+          type: string
+          const: company_basic_info
+        as_of_date:
+          type: string
+          format: date
+        market:
+          type: string
+        record:
+          $ref: '#/components/schemas/StockBasicSnapshotRecord'
+        records:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/StockBasicSnapshotRecord'
+        meta:
+          type: object
+          additionalProperties: true
+    MarketStatisticsResponse:
+      type: object
+      required: [dataset, as_of_date, market, records]
+      properties:
+        dataset:
+          type: string
+          const: stock_basic_snapshot
+        as_of_date:
+          type: string
+          format: date
+        market:
+          type: string
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockBasicSnapshotRecord'
+        meta:
+          type: object
+          additionalProperties: true
+    ForeignInvestmentResponse:
+      type: object
+      required: [dataset, as_of_date, market, records]
+      properties:
+        dataset:
+          type: string
+          const: foreign_investor_flow
+        as_of_date:
+          type: string
+          format: date
+        market:
+          type: string
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForeignInvestmentRecord'
+        meta:
+          type: object
+          additionalProperties: true

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import pandas as pd
 import requests
@@ -20,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 from tool.crawlers.quarterly_scraper import QuarterlyScraper  # noqa: E402
 
 MarketCode = Literal['TWSE', 'TPEx', 'ALL']
+ToolRouteHandler = Callable[[dict[str, Any]], tuple[Any, int]]
 
 app = Flask(__name__)
 app.config['TRUSTED_HOSTS'] = [
@@ -42,9 +44,15 @@ HEADERS = {
     'X-Requested-With': 'XMLHttpRequest',
 }
 
+LOGGER = logging.getLogger(__name__)
+
 
 class ValidationError(ValueError):
     """Raised when an incoming MCP request payload is invalid."""
+
+
+class NotFoundError(ValueError):
+    """Raised when a requested MCP resource cannot be found."""
 
 
 def _normalize_market(market: Any) -> MarketCode:
@@ -68,7 +76,10 @@ def _normalize_trade_date(trade_date: Any) -> str:
     normalized = str(trade_date).strip()
     if not normalized:
         raise ValidationError('trade_date is required')
-    return date.fromisoformat(normalized[:10]).isoformat()
+    try:
+        return date.fromisoformat(normalized[:10]).isoformat()
+    except ValueError as exc:
+        raise ValidationError('trade_date must be a valid ISO date') from exc
 
 
 def _require_correlation_id(payload: dict[str, Any]) -> str:
@@ -76,6 +87,13 @@ def _require_correlation_id(payload: dict[str, Any]) -> str:
     if not correlation_id:
         raise ValidationError('correlation_id is required')
     return correlation_id
+
+
+def _require_stock_id(payload: dict[str, Any]) -> str:
+    stock_id = str(payload.get('stock_id', '')).strip()
+    if not stock_id:
+        raise ValidationError('stock_id is required')
+    return stock_id
 
 
 def _error_response(
@@ -94,6 +112,38 @@ def _error_response(
         'correlation_id': correlation_id,
         'details': details or {},
     }), status_code
+
+
+def _success_response(body: dict[str, Any]) -> tuple[Any, int]:
+    return jsonify(body), 200
+
+
+def _extract_payload() -> dict[str, Any]:
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        raise ValidationError('request payload must be a JSON object')
+    return payload
+
+
+def _log_tool_dispatch(
+    *,
+    tool_name: str,
+    correlation_id: str,
+    event: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    message_parts = [
+        'MCP tool dispatch',
+        f'tool={tool_name}',
+        f'correlation_id={correlation_id}',
+        f'event={event}',
+    ]
+    if extra:
+        message_parts.extend(
+            f'{key}={value}'
+            for key, value in extra.items()
+        )
+    LOGGER.info(' | '.join(message_parts))
 
 
 def _records_from_frame(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -189,6 +239,197 @@ def _prepare_flow_frame(frame: pd.DataFrame, trade_date: str) -> pd.DataFrame:
     return prepared[
         ['stock_id', 'trade_date', 'foreign_buy', 'trust_buy', 'dealer_buy']
     ]
+
+
+def _build_snapshot_success_payload(
+    *,
+    frame: pd.DataFrame,
+    trade_date: str,
+    market: MarketCode,
+    include_etfs: bool,
+    dataset: str = 'stock_basic_snapshot',
+    extra_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    meta = {
+        'record_count': len(frame),
+        'include_etfs': include_etfs,
+    }
+    if extra_meta:
+        meta.update(extra_meta)
+    return {
+        'dataset': dataset,
+        'as_of_date': trade_date,
+        'market': market,
+        'records': _records_from_frame(frame),
+        'meta': meta,
+    }
+
+
+def _build_flow_success_payload(
+    *,
+    frame: pd.DataFrame,
+    trade_date: str,
+    market: MarketCode,
+) -> dict[str, Any]:
+    return {
+        'dataset': 'foreign_investor_flow',
+        'as_of_date': trade_date,
+        'market': market,
+        'records': _records_from_frame(frame),
+        'meta': {'record_count': len(frame)},
+    }
+
+
+def _parse_snapshot_request(
+    payload: dict[str, Any],
+) -> tuple[str, MarketCode, str, bool]:
+    correlation_id = _require_correlation_id(payload)
+    market = _normalize_market(payload.get('market'))
+    trade_date = _normalize_trade_date(payload.get('trade_date'))
+    include_etfs = bool(payload.get('include_etfs', True))
+    return correlation_id, market, trade_date, include_etfs
+
+
+def _parse_flow_request(payload: dict[str, Any]) -> tuple[str, MarketCode, str]:
+    correlation_id = _require_correlation_id(payload)
+    market = _normalize_market(payload.get('market'))
+    trade_date = _normalize_trade_date(payload.get('trade_date'))
+    return correlation_id, market, trade_date
+
+
+def _handle_market_statistics_payload(payload: dict[str, Any]) -> tuple[Any, int]:
+    correlation_id, market, trade_date, include_etfs = _parse_snapshot_request(payload)
+    frame = fetch_stock_basic_snapshot(market, trade_date, include_etfs)
+    _log_tool_dispatch(
+        tool_name='get_market_statistics',
+        correlation_id=correlation_id,
+        event='success',
+        extra={
+            'dataset': 'stock_basic_snapshot',
+            'record_count': len(frame),
+            'market': market,
+        },
+    )
+    return _success_response(
+        _build_snapshot_success_payload(
+            frame=frame,
+            trade_date=trade_date,
+            market=market,
+            include_etfs=include_etfs,
+        )
+    )
+
+
+def _handle_company_basic_info_payload(payload: dict[str, Any]) -> tuple[Any, int]:
+    correlation_id, market, trade_date, include_etfs = _parse_snapshot_request(payload)
+    stock_id = _require_stock_id(payload)
+    frame = fetch_stock_basic_snapshot(market, trade_date, include_etfs)
+    filtered = frame[frame['stock_id'].astype(str).str.strip() == stock_id].copy()
+    if filtered.empty:
+        raise NotFoundError(f'No market snapshot found for stock_id={stock_id}')
+
+    filtered = filtered.head(1).reset_index(drop=True)
+    records = _records_from_frame(filtered)
+    record = records[0]
+    success_payload = _build_snapshot_success_payload(
+        frame=filtered,
+        trade_date=trade_date,
+        market=market,
+        include_etfs=include_etfs,
+        dataset='company_basic_info',
+        extra_meta={'stock_id': stock_id},
+    )
+    success_payload['record'] = record
+    _log_tool_dispatch(
+        tool_name='get_company_basic_info',
+        correlation_id=correlation_id,
+        event='success',
+        extra={
+            'dataset': 'company_basic_info',
+            'stock_id': stock_id,
+            'record_count': 1,
+        },
+    )
+    return _success_response(success_payload)
+
+
+def _handle_foreign_investment_payload(payload: dict[str, Any]) -> tuple[Any, int]:
+    correlation_id, market, trade_date = _parse_flow_request(payload)
+    frame = fetch_foreign_investor_flow(market, trade_date)
+    _log_tool_dispatch(
+        tool_name='get_foreign_investment',
+        correlation_id=correlation_id,
+        event='success',
+        extra={
+            'dataset': 'foreign_investor_flow',
+            'record_count': len(frame),
+            'market': market,
+        },
+    )
+    return _success_response(
+        _build_flow_success_payload(
+            frame=frame,
+            trade_date=trade_date,
+            market=market,
+        )
+    )
+
+
+TOOL_ROUTE_HANDLERS: dict[str, ToolRouteHandler] = {
+    'get_company_basic_info': _handle_company_basic_info_payload,
+    'get_market_statistics': _handle_market_statistics_payload,
+    'get_foreign_investment': _handle_foreign_investment_payload,
+}
+
+
+def _dispatch_tool_request(tool_name: str) -> tuple[Any, int]:
+    payload = _extract_payload()
+    correlation_id = str(payload.get('correlation_id', '')).strip() or 'unknown'
+    _log_tool_dispatch(
+        tool_name=tool_name,
+        correlation_id=correlation_id,
+        event='received',
+    )
+    handler = TOOL_ROUTE_HANDLERS.get(tool_name)
+    if handler is None:
+        return _error_response(
+            status_code=404,
+            error_code='UNKNOWN_TOOL',
+            message=f'Unsupported tool route: {tool_name}',
+            retryable=False,
+            correlation_id=correlation_id,
+            details={'tool_name': tool_name},
+        )
+
+    try:
+        return handler(payload)
+    except ValidationError as exc:
+        return _error_response(
+            status_code=400,
+            error_code='INVALID_REQUEST',
+            message=str(exc),
+            retryable=False,
+            correlation_id=correlation_id,
+            details={'tool_name': tool_name},
+        )
+    except NotFoundError as exc:
+        return _error_response(
+            status_code=404,
+            error_code='NOT_FOUND',
+            message=str(exc),
+            retryable=False,
+            correlation_id=correlation_id,
+            details={'tool_name': tool_name},
+        )
+    except Exception as exc:
+        return _error_response(
+            status_code=502,
+            error_code='UPSTREAM_FAILURE',
+            message=str(exc),
+            retryable=True,
+            correlation_id=correlation_id,
+            details={'tool_name': tool_name},
+        )
 
 
 def _fetch_twse_snapshot(trade_date: str) -> pd.DataFrame:
@@ -530,76 +771,59 @@ def health() -> tuple[Any, int]:
     }), 200
 
 
+@app.post('/v1/tools/<tool_name>')
+def post_tool_route(tool_name: str) -> tuple[Any, int]:
+    return _dispatch_tool_request(tool_name)
+
+
 @app.post('/v1/stock-basic-snapshot')
 def post_stock_basic_snapshot() -> tuple[Any, int]:
-    correlation_id = 'unknown'
     try:
-        payload = request.get_json(silent=True) or {}
-        correlation_id = _require_correlation_id(payload)
-        market = _normalize_market(payload.get('market'))
-        trade_date = _normalize_trade_date(payload.get('trade_date'))
-        include_etfs = bool(payload.get('include_etfs', True))
-        frame = fetch_stock_basic_snapshot(market, trade_date, include_etfs)
-        return jsonify({
-            'dataset': 'stock_basic_snapshot',
-            'as_of_date': trade_date,
-            'market': market,
-            'records': _records_from_frame(frame),
-            'meta': {
-                'record_count': len(frame),
-                'include_etfs': include_etfs,
-            },
-        }), 200
+        return _handle_market_statistics_payload(_extract_payload())
     except ValidationError as exc:
+        payload = request.get_json(silent=True) or {}
         return _error_response(
             status_code=400,
             error_code='INVALID_REQUEST',
             message=str(exc),
             retryable=False,
-            correlation_id=correlation_id,
+            correlation_id=str(payload.get('correlation_id', '')).strip() or 'unknown',
+            details={'tool_name': 'stock_basic_snapshot'},
         )
     except Exception as exc:
+        payload = request.get_json(silent=True) or {}
         return _error_response(
             status_code=502,
             error_code='UPSTREAM_FAILURE',
             message=str(exc),
             retryable=True,
-            correlation_id=correlation_id,
+            correlation_id=str(payload.get('correlation_id', '')).strip() or 'unknown',
             details={'dataset': 'stock_basic_snapshot'},
         )
 
 
 @app.post('/v1/foreign-investor-flow')
 def post_foreign_investor_flow() -> tuple[Any, int]:
-    correlation_id = 'unknown'
     try:
-        payload = request.get_json(silent=True) or {}
-        correlation_id = _require_correlation_id(payload)
-        market = _normalize_market(payload.get('market'))
-        trade_date = _normalize_trade_date(payload.get('trade_date'))
-        frame = fetch_foreign_investor_flow(market, trade_date)
-        return jsonify({
-            'dataset': 'foreign_investor_flow',
-            'as_of_date': trade_date,
-            'market': market,
-            'records': _records_from_frame(frame),
-            'meta': {'record_count': len(frame)},
-        }), 200
+        return _handle_foreign_investment_payload(_extract_payload())
     except ValidationError as exc:
+        payload = request.get_json(silent=True) or {}
         return _error_response(
             status_code=400,
             error_code='INVALID_REQUEST',
             message=str(exc),
             retryable=False,
-            correlation_id=correlation_id,
+            correlation_id=str(payload.get('correlation_id', '')).strip() or 'unknown',
+            details={'tool_name': 'foreign_investor_flow'},
         )
     except Exception as exc:
+        payload = request.get_json(silent=True) or {}
         return _error_response(
             status_code=502,
             error_code='UPSTREAM_FAILURE',
             message=str(exc),
             retryable=True,
-            correlation_id=correlation_id,
+            correlation_id=str(payload.get('correlation_id', '')).strip() or 'unknown',
             details={'dataset': 'foreign_investor_flow'},
         )
 
