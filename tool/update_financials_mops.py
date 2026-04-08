@@ -21,7 +21,10 @@ from tool.db_helper import (  # noqa: E402
     get_db_engine,
     upsert_financial_statements,
 )
-from tool.mcp_client import MCPClient, MCPClientError  # noqa: E402
+from tool.mcp_client import (  # noqa: E402
+    MCPClientError,
+    TWSEMCPClient as MCPClient,
+)
 
 
 ALLOWED_FINANCIAL_UNITS: dict[str, int] = {

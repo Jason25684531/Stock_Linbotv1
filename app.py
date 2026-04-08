@@ -79,7 +79,7 @@ from tool.db_helper import (
 # 引入策略工廠
 from tool.strategy_manager import StrategyManager
 # 引入 MCP 客戶端（Rich Menu postback 上游資料來源）
-from tool.mcp_client import MCPClient, MCPClientError
+from tool.mcp_client import MCPClientError, TWSEMCPClient as MCPClient
 # 引入診斷報告工具
 from tool.report_helper import get_stock_report, format_stock_diagnosis
 # 引入 Flex Message 建構器
@@ -600,7 +600,7 @@ def _build_macro_news_messages() -> list:
 def _build_market_summary_messages() -> list:
     """從 TWSE MCP 取得大盤快照並回傳 LINE 訊息清單。
 
-    呼叫 ``MCPClient.fetch_stock_basic_snapshot_sync()``，統計
+    呼叫 ``TWSEMCPClient.get_market_statistics_sync()``，統計
     上漲/下跌/平盤家數與總成交量，結果快取於 ``_postback_cache``。
     若 MCP 呼叫失敗或回傳空 records 則回傳友善提示訊息。
     """
@@ -610,7 +610,9 @@ def _build_market_summary_messages() -> list:
 
     try:
         trade_date = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
-        result = MCPClient().fetch_stock_basic_snapshot_sync(trade_date)
+        result = MCPClient().get_market_statistics_sync(trade_date)
+        if result is None:
+            return [V3TextMessage(text="📊 大盤快照\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。")]
         records: list[dict] = result.get('records') or []
         if not records:
             return [V3TextMessage(text="📊 大盤快照\n\n目前尚無今日交易資料，請於盤後再試。")]
@@ -636,7 +638,7 @@ def _build_market_summary_messages() -> list:
             f"─ 平盤  {flat:4d} 檔\n"
             f"{'─' * 26}\n"
             f"💹 總成交量 {total_vol_b:.1f} 億股\n"
-            f"\n💡 資料來源：TWSE OpenAPI"
+            f"\n💡 資料來源：TWSE MCP Server"
         )
         _postback_cache.set('market_summary', body)
         return [V3TextMessage(text=body)]
@@ -656,7 +658,7 @@ def _build_market_summary_messages() -> list:
 def _build_chip_trend_messages() -> list:
     """從 TWSE MCP 取得三大法人買賣超並回傳 LINE 訊息清單。
 
-    呼叫 ``MCPClient.fetch_foreign_investor_flow_sync()``，加總
+    呼叫 ``TWSEMCPClient.get_foreign_investment_sync()``，加總
     外資、投信、自營商三大法人買賣超，結果快取於 ``_postback_cache``。
     若 MCP 呼叫失敗或回傳空 records 則回傳友善提示訊息。
     """
@@ -666,7 +668,9 @@ def _build_chip_trend_messages() -> list:
 
     try:
         trade_date = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
-        result = MCPClient().fetch_foreign_investor_flow_sync(trade_date)
+        result = MCPClient().get_foreign_investment_sync(trade_date)
+        if result is None:
+            return [V3TextMessage(text="🏦 籌碼動向\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。")]
         records: list[dict] = result.get('records') or []
         if not records:
             return [V3TextMessage(text="🏦 籌碼動向\n\n目前尚無今日法人資料，請於盤後再試。")]
@@ -692,7 +696,7 @@ def _build_chip_trend_messages() -> list:
             f"自營商 {_fmt(dealer_net)} 張\n"
             f"{'─' * 30}\n"
             f"合計   {_fmt(total_net)} 張\n"
-            f"\n💡 資料來源：TWSE OpenAPI"
+            f"\n💡 資料來源：TWSE MCP Server"
         )
         _postback_cache.set('chip_trend', body)
         return [V3TextMessage(text=body)]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Deploy the default Rich Menu to LINE by calling the canonical builder.
+"""Deploy the default Rich Menu to LINE with MCP-backed postback actions.
 
 Usage::
 

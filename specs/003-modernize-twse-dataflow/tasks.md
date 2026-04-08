@@ -18,23 +18,23 @@
 
 ## Phase 2: Tests
 
-- [ ] T003 [US1] 新增 `test/test_mcp_integration.py`；預期：mock HTTP 500 時 `TWSEMCPClient` 安全回傳 `None`；驗證：pytest focused run；依賴：T001。
+- [X] T003 [US1] 新增 `test/test_mcp_integration.py`；預期：mock HTTP 500 時 `TWSEMCPClient` 安全回傳 `None`；驗證：pytest focused run；依賴：T001。
 
 ## Phase 3: Core
 
-- [ ] T004 [US1] 修改 `1_update_database.py`；預期：沿用既有 DB 寫入函式與參數，只抽換資料來源到 `TWSEMCPClient` 相容 API；驗證：syntax/type check + focused pytest；依賴：T001。
-- [ ] T005 [US1] 修改 `tool/update_financials_mops.py` 與 `tool/update_history_financials.py`；預期：財報更新統一走 `TWSEMCPClient`，資料 mapping 留在 client；驗證：syntax/type check；依賴：T001。
+- [X] T004 [US1] 修改 `1_update_database.py`；預期：沿用既有 DB 寫入函式與參數，只抽換資料來源到 `TWSEMCPClient` 相容 API；驗證：syntax/type check + focused pytest；依賴：T001。
+- [X] T005 [US1] 修改 `tool/update_financials_mops.py` 與 `tool/update_history_financials.py`；預期：財報更新統一走 `TWSEMCPClient`，資料 mapping 留在 client；驗證：syntax/type check；依賴：T001。
 
 ## Phase 4: Integration
 
-- [ ] T006 [US2] 修改 `app.py` 與 `scripts/setup_rich_menu.py`；預期：Rich Menu postback 與互動回覆明確使用 `TWSEMCPClient` 相容 API，保留 `action=market_summary|chip_trend|random_strategy`；驗證：syntax/type check + existing rich menu tests；依賴：T001。
-- [ ] T007 [US3] 修改 `tool/news_agent.py`；預期：LangChain tools 由 `TWSEMCPClient` 提供資料，查詢失敗時明確揭露限制；驗證：syntax/type check；依賴：T001。
+- [X] T006 [US2] 修改 `app.py` 與 `scripts/setup_rich_menu.py`；預期：Rich Menu postback 與互動回覆明確使用 `TWSEMCPClient` 相容 API，保留 `action=market_summary|chip_trend|random_strategy`；驗證：syntax/type check + existing rich menu tests；依賴：T001。
+- [X] T007 [US3] 修改 `tool/news_agent.py`；預期：LangChain tools 由 `TWSEMCPClient` 提供資料，查詢失敗時明確揭露限制；驗證：syntax/type check；依賴：T001。
 
 ## Phase 5: Polish
 
-- [ ] T008 [US1] 修改 `README.md`；預期：補充 MCP 相容 client 與測試方式；驗證：人工檢查；依賴：T004-T007。
-- [ ] T009 [US1] 執行 focused validation；預期：`test/test_mcp_integration.py` 與 `test/test_richmenu_mcp_integration.py` 通過，Problems panel 無新語法錯誤；驗證：pytest + get_errors；依賴：T003-T008。
-- [ ] T010 [US1] 重要節點提交 Git commit；預期：至少在 client 完成、整合完成、測試完成三個節點留下 commit；驗證：git log；依賴：對應階段完成。
+- [X] T008 [US1] 修改 `README.md`；預期：補充 MCP 相容 client 與測試方式；驗證：人工檢查；依賴：T004-T007。
+- [X] T009 [US1] 執行 focused validation；預期：`test/test_mcp_integration.py` 與 `test/test_richmenu_mcp_integration.py` 通過，Problems panel 無新語法錯誤；驗證：pytest + get_errors；依賴：T003-T008。
+- [X] T010 [US1] 重要節點提交 Git commit；預期：至少在 client 完成、整合完成、測試完成三個節點留下 commit；驗證：git log；依賴：對應階段完成。
 
 ## Dependencies & Execution Order
 

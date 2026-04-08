@@ -1,7 +1,7 @@
 """每日資料庫統一更新入口。
 
 目前 covered dataset 全數經由 MCP transport boundary 取得：
-- 市場快照 / 外資買賣超：`tool.mcp_client.MCPClient`
+- 市場快照 / 外資買賣超：`tool.mcp_client.TWSEMCPClient`
 - 季度財報：`tool.update_financials_mops.update_quarter`
 
 保留在本程序中的本地 enrichers：
@@ -20,10 +20,10 @@ from config import Config
 from tool.db_helper import get_db_engine
 from tool.mcp_client import (
     ForeignInvestorFlowRequest,
-    MCPClient,
     MCPFetchJob,
     MCPRequestContext,
     StockBasicSnapshotRequest,
+    TWSEMCPClient as MCPClient,
 )
 
 # ============================================

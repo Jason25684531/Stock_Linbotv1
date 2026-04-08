@@ -121,7 +121,7 @@ class TestMarketSummaryHandler:
             {'open_price': 10, 'close_price': 9, 'volume': 5000},
             {'open_price': 10, 'close_price': 10, 'volume': 3000},
         ]
-        client.fetch_stock_basic_snapshot_sync.return_value = {
+        client.get_market_statistics_sync.return_value = {
             'as_of_date': '2026-04-07',
             'records': records,
         }
@@ -140,7 +140,7 @@ class TestMarketSummaryHandler:
         mock_cache.get.return_value = None
         client = MagicMock()
         mock_mcp_cls.return_value = client
-        client.fetch_stock_basic_snapshot_sync.return_value = {'records': []}
+        client.get_market_statistics_sync.return_value = {'records': []}
 
         result = self._run()
         assert '尚無今日交易資料' in result[0].text
@@ -162,7 +162,7 @@ class TestMarketSummaryHandler:
             correlation_id='test-correlation-id',
         )
         mock_instance = MagicMock()
-        mock_instance.fetch_stock_basic_snapshot_sync.side_effect = err
+        mock_instance.get_market_statistics_sync.side_effect = err
         mock_mcp_cls.return_value = mock_instance
 
         result = self._run()
@@ -193,7 +193,7 @@ class TestChipTrendHandler:
                 'dealer_buy': -200,
             }
         ]
-        client.fetch_foreign_investor_flow_sync.return_value = {
+        client.get_foreign_investment_sync.return_value = {
             'as_of_date': '2026-04-07',
             'records': records,
         }
@@ -209,7 +209,7 @@ class TestChipTrendHandler:
         mock_cache.get.return_value = None
         client = MagicMock()
         mock_mcp_cls.return_value = client
-        client.fetch_foreign_investor_flow_sync.return_value = {'records': []}
+        client.get_foreign_investment_sync.return_value = {'records': []}
 
         result = self._run()
         assert '尚無今日法人資料' in result[0].text

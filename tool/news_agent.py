@@ -26,7 +26,7 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from config import Config
-from tool.mcp_client import MCPClient
+from tool.mcp_client import TWSEMCPClient as MCPClient
 
 
 # ==========================================
@@ -87,6 +87,24 @@ def _records_to_json(records: list[dict]) -> str:
     return json.dumps(records, ensure_ascii=False)
 
 
+def _tool_unavailable_response(
+    tool_name: str,
+    **extra: object,
+) -> str:
+    payload = {
+        'tool_name': tool_name,
+        'available': False,
+    }
+    payload.update(extra)
+    return json.dumps(payload, ensure_ascii=False)
+
+
+class CompanyBasicInfoToolInput(BaseModel):
+    stock_id: str = Field(..., min_length=1)
+    market: str = Field(default=Config.MCP_DEFAULT_MARKET)
+    trade_date: str = Field(default_factory=_default_trade_date)
+
+
 class MarketSnapshotToolInput(BaseModel):
     market: str = Field(default=Config.MCP_DEFAULT_MARKET)
     trade_date: str = Field(default_factory=_default_trade_date)
@@ -107,6 +125,55 @@ class FinancialStatementsToolInput(BaseModel):
     limit: int = Field(default=5, ge=1, le=10)
 
 
+class MCPCompanyBasicInfoTool(BaseTool):
+    tool_name: ClassVar[str] = 'mcp_company_basic_info'
+    name: str = tool_name
+    description: str = (
+        'Get MCP-backed company basic info for a specific stock.'
+    )
+    args_schema: type[BaseModel] = CompanyBasicInfoToolInput
+
+    def _run(
+        self,
+        stock_id: str,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        trade_date: str | None = None,
+    ) -> str:
+        payload = MCPClient().get_company_basic_info_sync(
+            stock_id=stock_id,
+            trade_date=trade_date or _default_trade_date(),
+            market=market,
+        )
+        if payload is None:
+            return _tool_unavailable_response(
+                self.tool_name,
+                stock_id=stock_id,
+                trade_date=trade_date or _default_trade_date(),
+            )
+
+        record = MCPClient.company_basic_info_to_record(payload)
+        return json.dumps({
+            'tool_name': self.tool_name,
+            'available': True,
+            'stock_id': stock_id,
+            'trade_date': payload.get('as_of_date', trade_date or _default_trade_date()),
+            'company': record,
+        }, ensure_ascii=False)
+
+    async def _arun(
+        self,
+        stock_id: str,
+        market: str = Config.MCP_DEFAULT_MARKET,
+        trade_date: str | None = None,
+    ) -> str:
+        return await asyncio.to_thread(
+            self._run,
+            stock_id=stock_id,
+            market=market,
+            trade_date=trade_date,
+        )
+
+
 class MCPMarketSnapshotTool(BaseTool):
     tool_name: ClassVar[str] = 'mcp_market_snapshot'
     name: str = tool_name
@@ -122,11 +189,16 @@ class MCPMarketSnapshotTool(BaseTool):
         include_etfs: bool = False,
         limit: int = 5,
     ) -> str:
-        payload = MCPClient().fetch_stock_basic_snapshot_sync(
+        payload = MCPClient().get_market_statistics_sync(
             trade_date or _default_trade_date(),
             market=market,
             include_etfs=include_etfs,
         )
+        if payload is None:
+            return _tool_unavailable_response(
+                self.tool_name,
+                trade_date=trade_date or _default_trade_date(),
+            )
         frame = MCPClient.stock_basic_snapshot_to_frame(payload)
         top_volume = []
         if not frame.empty and 'volume' in frame.columns:
@@ -175,10 +247,15 @@ class MCPForeignInvestorFlowTool(BaseTool):
         trade_date: str | None = None,
         limit: int = 5,
     ) -> str:
-        payload = MCPClient().fetch_foreign_investor_flow_sync(
+        payload = MCPClient().get_foreign_investment_sync(
             trade_date or _default_trade_date(),
             market=market,
         )
+        if payload is None:
+            return _tool_unavailable_response(
+                self.tool_name,
+                trade_date=trade_date or _default_trade_date(),
+            )
         frame = MCPClient.foreign_investor_flow_to_frame(payload)
         top_buy = []
         top_sell = []
@@ -236,11 +313,17 @@ class MCPFinancialStatementsTool(BaseTool):
         limit: int = 5,
     ) -> str:
         target_year, target_quarter = _latest_financial_period()
-        payload = MCPClient().fetch_historical_financial_statements_sync(
+        payload = MCPClient().get_historical_financial_statements_sync(
             year or target_year,
             quarter or target_quarter,
             market=market,
         )
+        if payload is None:
+            return _tool_unavailable_response(
+                self.tool_name,
+                year=year or target_year,
+                quarter=quarter or target_quarter,
+            )
         frame = MCPClient.historical_financial_statements_to_frame(payload)
         top_operating_profit = []
         if not frame.empty and 'operating_profit' in frame.columns:
@@ -279,6 +362,7 @@ class MCPFinancialStatementsTool(BaseTool):
 def get_mcp_context_tools() -> list[BaseTool]:
     """提供新聞代理使用的 MCP-backed LangChain tools。"""
     return [
+        MCPCompanyBasicInfoTool(),
         MCPMarketSnapshotTool(),
         MCPForeignInvestorFlowTool(),
         MCPFinancialStatementsTool(),
