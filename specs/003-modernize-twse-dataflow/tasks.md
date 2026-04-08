@@ -13,8 +13,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 [US1] 建立 `tool/mcp_client.py` 的相容層；預期：新增 `TWSEMCPClient`、`/v1/tools/*` 端點封裝、HTTP 500 安全回傳 `None`、欄位正規化入口；驗證：Pylance syntax/type check + focused unit test；依賴：無。
-- [ ] T002 [P] [US1] 補齊 `specs/003-modernize-twse-dataflow/plan.md` 與本任務檔；預期：implementation artifact 完整；驗證：check-prerequisites 可通過；依賴：無。
+- [X] T001 [US1] 建立 `tool/mcp_client.py` 的相容層；預期：新增 `TWSEMCPClient`、`/v1/tools/*` 端點封裝、HTTP 500 安全回傳 `None`、欄位正規化入口；驗證：Pylance syntax/type check + focused unit test；依賴：無。
+- [X] T002 [P] [US1] 補齊 `specs/003-modernize-twse-dataflow/plan.md` 與本任務檔；預期：implementation artifact 完整；驗證：check-prerequisites 可通過；依賴：無。
 
 ## Phase 2: Tests
 
