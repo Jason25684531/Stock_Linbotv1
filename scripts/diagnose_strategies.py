@@ -5,7 +5,7 @@
 import sys
 import io
 from datetime import datetime
-from tool.db_helper import get_db_engine
+from core.db_helper import get_db_engine
 from sqlalchemy import text
 
 # Fix Windows UTF-8

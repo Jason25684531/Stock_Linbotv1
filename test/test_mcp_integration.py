@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from tool.mcp_client import TWSEMCPClient
+from core.mcp_client import TWSEMCPClient
 
 
 def _http_500_error(url: str) -> httpx.HTTPStatusError:

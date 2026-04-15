@@ -21,28 +21,28 @@ class TestChipIndicators:
 
     def test_calculate_consec_days_basic(self):
         """連續正值天數：正常序列"""
-        from tool.calc_indicators import calculate_consec_days
+        from core.calc_indicators import calculate_consec_days
         s = pd.Series([100, 200, -50, 300, 400, 500, -100, 200])
         result = calculate_consec_days(s)
         assert list(result) == [1, 2, 0, 1, 2, 3, 0, 1]
 
     def test_calculate_consec_days_all_positive(self):
         """連續正值天數：全部正值"""
-        from tool.calc_indicators import calculate_consec_days
+        from core.calc_indicators import calculate_consec_days
         s = pd.Series([10, 20, 30, 40, 50])
         result = calculate_consec_days(s)
         assert list(result) == [1, 2, 3, 4, 5]
 
     def test_calculate_consec_days_all_negative(self):
         """連續正值天數：全部非正值"""
-        from tool.calc_indicators import calculate_consec_days
+        from core.calc_indicators import calculate_consec_days
         s = pd.Series([-10, 0, -30, 0])
         result = calculate_consec_days(s)
         assert all(x == 0 for x in result)
 
     def test_margin_change_pct(self):
         """融資餘額日變動率"""
-        from tool.calc_indicators import calculate_margin_change_pct
+        from core.calc_indicators import calculate_margin_change_pct
         s = pd.Series([1000, 1100, 1050, 1050])
         result = calculate_margin_change_pct(s)
         assert result.iloc[0] == 0  # 第一天無前值
@@ -52,14 +52,14 @@ class TestChipIndicators:
 
     def test_margin_change_pct_zero_base(self):
         """融資餘額日變動率：前值為零"""
-        from tool.calc_indicators import calculate_margin_change_pct
+        from core.calc_indicators import calculate_margin_change_pct
         s = pd.Series([0, 100, 200])
         result = calculate_margin_change_pct(s)
         assert result.iloc[1] == 0  # 0->100, 前值是 0 → NaN → 填 0
 
     def test_dealer_ratio(self):
         """自營商比例計算"""
-        from tool.calc_indicators import calculate_dealer_ratio
+        from core.calc_indicators import calculate_dealer_ratio
         df = pd.DataFrame({
             'dealer_buy': [500, -300, 0],
             'volume': [10000, 10000, 0]
@@ -71,14 +71,14 @@ class TestChipIndicators:
 
     def test_dealer_ratio_no_column(self):
         """自營商比例：缺少 dealer_buy 欄位"""
-        from tool.calc_indicators import calculate_dealer_ratio
+        from core.calc_indicators import calculate_dealer_ratio
         df = pd.DataFrame({'volume': [10000]})
         result = calculate_dealer_ratio(df)
         assert result.iloc[0] == 0
 
     def test_chip_score_range(self):
         """籌碼綜合分數：結果在 0~100 之間"""
-        from tool.calc_indicators import calculate_chip_score
+        from core.calc_indicators import calculate_chip_score
         df = pd.DataFrame({
             'foreign_ratio': [0.3, -0.4, 0.0],
             'trust_ratio': [0.2, -0.1, 0.0],
@@ -90,7 +90,7 @@ class TestChipIndicators:
 
     def test_chip_score_strong_buy(self):
         """籌碼分數：三大法人齊買 + 融資減少 → 高分"""
-        from tool.calc_indicators import calculate_chip_score
+        from core.calc_indicators import calculate_chip_score
         df = pd.DataFrame({
             'foreign_ratio': [0.4],
             'trust_ratio': [0.3],
@@ -102,7 +102,7 @@ class TestChipIndicators:
 
     def test_chip_score_weak(self):
         """籌碼分數：三大法人齊賣 + 融資暴增 → 低分"""
-        from tool.calc_indicators import calculate_chip_score
+        from core.calc_indicators import calculate_chip_score
         df = pd.DataFrame({
             'foreign_ratio': [-0.4],
             'trust_ratio': [-0.3],
@@ -122,7 +122,7 @@ class TestChipDataScraper:
 
     def test_module_importable(self):
         """模組可正常匯入"""
-        from tool.crawlers.chip_data_scraper import (
+        from core.crawlers.chip_data_scraper import (
             fetch_margin_balance,
             fetch_margin_balance_twse,
             fetch_margin_balance_tpex,
@@ -133,7 +133,7 @@ class TestChipDataScraper:
 
     def test_clean_number(self):
         """數字清洗函數"""
-        from tool.crawlers.chip_data_scraper import _clean_number
+        from core.crawlers.chip_data_scraper import _clean_number
         assert _clean_number('1,234') == 1234.0
         assert _clean_number('--') == 0
         assert _clean_number('---') == 0
@@ -204,7 +204,7 @@ class TestPipelineCompatibility:
 
     def test_calc_indicators_new_functions_available(self):
         """calc_indicators 模組包含所有新函數"""
-        from tool.calc_indicators import (
+        from core.calc_indicators import (
             calculate_dealer_ratio,
             calculate_consec_days,
             calculate_margin_change_pct,

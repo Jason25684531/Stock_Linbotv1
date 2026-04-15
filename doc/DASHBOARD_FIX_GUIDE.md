@@ -54,8 +54,10 @@ cd D:\01_Project\Stocke\Stock_Linbotv1
 python app.py
 ```
 
+說明：根目錄 `app.py` 目前是 compatibility facade，正式 Web route 由 `app/web_server.py` 註冊，LINE webhook 由 `app/line_bot.py` 註冊。
+
 ### 3. 打開瀏覽器開發者工具
-1. 訪問: http://localhost:5000/dashboard
+1. 訪問: http://localhost:1688/dashboard
 2. 登入 (如果需要)
 3. 按 F12 打開開發者工具
 4. 切換到 Console 標籤
@@ -145,15 +147,15 @@ python 4_run_backtest.py --portfolio --strategies v35_innovation,v36_chip_moment
 
 ### 交易歷史 API
 ```
-http://localhost:5000/api/trades
+http://localhost:1688/api/trades
 ```
 應該返回包含多種策略的 JSON 數據
 
 ### 即時選股 API  
 ```
-http://localhost:5000/api/daily-signals?strategy=v35&top_n=5
-http://localhost:5000/api/daily-signals?strategy=v36&top_n=5
-http://localhost:5000/api/daily-signals?strategy=v37&top_n=5
+http://localhost:1688/api/daily-signals?strategy=v35&top_n=5
+http://localhost:1688/api/daily-signals?strategy=v36&top_n=5
+http://localhost:1688/api/daily-signals?strategy=v37&top_n=5
 ```
 每個端點應該返回不同策略的選股結果
 

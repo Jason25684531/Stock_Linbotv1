@@ -20,11 +20,11 @@ import pytest
 # ============================================
 
 class TestFlexMessageBuilder:
-    """測試 tool/line_message_builder.py"""
+    """測試 core/line_message_builder.py"""
 
     def test_create_stock_flex_message_full_data(self):
         """完整資料 → 產生正確的 Flex Bubble"""
-        from tool.line_message_builder import create_stock_flex_message
+        from core.line_message_builder import create_stock_flex_message
 
         data = {
             'stock_id': '2330',
@@ -57,7 +57,7 @@ class TestFlexMessageBuilder:
 
     def test_create_stock_flex_message_sparse_data(self):
         """缺失資料 → 不報錯, N/A 顯示"""
-        from tool.line_message_builder import create_stock_flex_message
+        from core.line_message_builder import create_stock_flex_message
 
         sparse = {
             'stock_id': '9999',
@@ -78,7 +78,7 @@ class TestFlexMessageBuilder:
         assert '9999' in msg.alt_text
 
     def test_recommendation_carousel_includes_linbot_news_tag(self):
-        from tool.line_message_builder import create_recommendation_carousel
+        from core.line_message_builder import create_recommendation_carousel
 
         picks = [{
             'stock_id': '2330',
@@ -108,7 +108,7 @@ class TestFlexMessageBuilder:
 
     def test_flex_color_helpers(self):
         """顏色 helper 正確回傳"""
-        from tool.line_message_builder import _color_by_value, _ai_score_label
+        from core.line_message_builder import _color_by_value, _ai_score_label
 
         assert _color_by_value(10) == '#1DB446'  # positive → green
         assert _color_by_value(-5) == '#DD2222'  # negative → red
@@ -128,7 +128,7 @@ class TestCheckExitSignal:
     """測試 BaseStrategy.check_exit_signal() 邏輯"""
 
     def _get_strategy(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         mgr = StrategyManager()
         return mgr._get_or_load_strategy('v31_hybrid')
 
@@ -228,19 +228,19 @@ class TestStrategyBackwardCompat:
     """確認清理 strategy.py 後舊 import 路徑仍可用"""
 
     def test_get_v30_candidates_importable(self):
-        from tool.strategy import get_v30_candidates
+        from core.strategy import get_v30_candidates
         assert callable(get_v30_candidates)
 
     def test_get_v30_params_from_db_importable(self):
-        from tool.strategy import get_v30_params_from_db
+        from core.strategy import get_v30_params_from_db
         assert callable(get_v30_params_from_db)
 
     def test_calculate_v30_signal_importable(self):
-        from tool.strategy import calculate_v30_signal
+        from core.strategy import calculate_v30_signal
         assert callable(calculate_v30_signal)
 
     def test_format_functions_importable(self):
-        from tool.strategy import (
+        from core.strategy import (
             format_v30_recommendation,
             format_v31_recommendation,
             format_stock_query,
@@ -254,7 +254,7 @@ class TestStrategyBackwardCompat:
 
     def test_removed_functions_absent(self):
         """已移除的函式不應存在"""
-        import tool.strategy as mod
+        import core.strategy as mod
         assert not hasattr(mod, 'check_sentiment_filter')
         assert not hasattr(mod, 'check_market_trend')
         assert not hasattr(mod, '_load_v31_model')
@@ -266,15 +266,15 @@ class TestStrategyBackwardCompat:
 # ============================================
 
 class TestReportHelper:
-    """測試 tool/report_helper.py (不需 DB)"""
+    """測試 core/report_helper.py (不需 DB)"""
 
     def test_format_stock_diagnosis_none(self):
-        from tool.report_helper import format_stock_diagnosis
+        from core.report_helper import format_stock_diagnosis
         result = format_stock_diagnosis(None)
         assert '查無' in result
 
     def test_format_stock_diagnosis_full(self):
-        from tool.report_helper import format_stock_diagnosis
+        from core.report_helper import format_stock_diagnosis
         report = {
             'stock_id': '2330',
             'close_price': 850.0,

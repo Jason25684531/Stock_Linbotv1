@@ -1,7 +1,8 @@
 @echo off
-chcp 437 >nul
+chcp 65001 >nul
 cd /d D:\01_Project\Stocke\Stock_Linbotv1
 set PYTHON=D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe
+set SCHEDULER=jobs\scheduler.py
 
 :MENU
 cls
@@ -34,7 +35,7 @@ goto MENU
 :MORNING
 echo.
 echo [%time%] === Morning Push ===
-%PYTHON% -X utf8 5_push_to_line.py --time morning
+%PYTHON% -X utf8 %SCHEDULER% morning
 if %errorlevel% neq 0 (
     echo [%time%] FAILED, errorlevel: %errorlevel%
 ) else (
@@ -45,27 +46,9 @@ goto DONE
 :EVENING_FULL
 echo.
 echo [%time%] === Evening Full Pipeline ===
-echo.
-echo [%time%] Step 1: Update database...
-%PYTHON% -X utf8 1_update_database.py
+%PYTHON% -X utf8 %SCHEDULER% evening --stop-on-error
 if %errorlevel% neq 0 (
-    echo [%time%] Step 1 FAILED, errorlevel: %errorlevel%
-    goto DONE
-)
-echo [%time%] Step 1 OK
-echo.
-echo [%time%] Step 2: Run strategy...
-%PYTHON% -X utf8 2_rundaily.py
-if %errorlevel% neq 0 (
-    echo [%time%] Step 2 FAILED, errorlevel: %errorlevel%
-    goto DONE
-)
-echo [%time%] Step 2 OK
-echo.
-echo [%time%] Step 3: Evening push...
-%PYTHON% -X utf8 5_push_to_line.py --time evening
-if %errorlevel% neq 0 (
-    echo [%time%] Step 3 FAILED, errorlevel: %errorlevel%
+    echo [%time%] FAILED, errorlevel: %errorlevel%
 ) else (
     echo [%time%] All steps DONE
 )
@@ -74,7 +57,7 @@ goto DONE
 :EVENING_PUSH_ONLY
 echo.
 echo [%time%] === Evening Push Only ===
-%PYTHON% -X utf8 5_push_to_line.py --time evening
+%PYTHON% -X utf8 %SCHEDULER% push_evening
 if %errorlevel% neq 0 (
     echo [%time%] FAILED, errorlevel: %errorlevel%
 ) else (
@@ -85,7 +68,7 @@ goto DONE
 :UPDATE_DB
 echo.
 echo [%time%] === Update Database ===
-%PYTHON% -X utf8 1_update_database.py
+%PYTHON% -X utf8 %SCHEDULER% update_database
 if %errorlevel% neq 0 (
     echo [%time%] FAILED, errorlevel: %errorlevel%
 ) else (
@@ -96,7 +79,7 @@ goto DONE
 :RUN_DAILY
 echo.
 echo [%time%] === Run Strategy ===
-%PYTHON% -X utf8 2_rundaily.py
+%PYTHON% -X utf8 %SCHEDULER% run_daily
 if %errorlevel% neq 0 (
     echo [%time%] FAILED, errorlevel: %errorlevel%
 ) else (
@@ -107,8 +90,7 @@ goto DONE
 :START_WEB
 echo.
 echo [%time%] === Start Web Server (background) ===
-start "" D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\pythonw.exe app.py
-echo [%time%] Web server started in background.
+call execution\start_web.bat
 goto DONE
 
 :DONE

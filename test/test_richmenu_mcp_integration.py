@@ -154,7 +154,7 @@ class TestMarketSummaryHandler:
     @patch('app._postback_cache')
     @patch('app.MCPClient')
     def test_mcp_error_returns_error_message(self, mock_mcp_cls, mock_cache):
-        from tool.mcp_client import MCPClientError
+        from core.mcp_client import MCPClientError
         mock_cache.get.return_value = None
         err = MCPClientError(
             'connection refused',
@@ -336,11 +336,11 @@ class TestStrategyManagerPool:
 
     @pytest.fixture(autouse=True)
     def _reset_singleton(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         StrategyManager._instance = None
 
     def test_returns_list_of_valid_keys(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         sm = StrategyManager()
         pool = sm.get_random_strategy_pool()
         assert isinstance(pool, list)
@@ -348,7 +348,7 @@ class TestStrategyManagerPool:
             assert key in sm.STRATEGY_REGISTRY
 
     def test_invalid_keys_are_filtered(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         sm = StrategyManager()
         fake_settings = {'random_strategy_pool': ['v35_innovation', 'nonexistent_strategy_xyz']}
         with patch.object(sm, 'get_settings', return_value=fake_settings):
@@ -357,7 +357,7 @@ class TestStrategyManagerPool:
         assert 'v35_innovation' in pool
 
     def test_non_list_value_falls_back_to_default(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         sm = StrategyManager()
         fake_settings = {'random_strategy_pool': 'not_a_list'}
         with patch.object(sm, 'get_settings', return_value=fake_settings):
@@ -365,7 +365,7 @@ class TestStrategyManagerPool:
         assert isinstance(pool, list)
 
     def test_missing_key_uses_default(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         sm = StrategyManager()
         with patch.object(sm, 'get_settings', return_value={}):
             pool = sm.get_random_strategy_pool()
@@ -381,12 +381,12 @@ class TestRichMenuLayout:
     """驗證 build_default_rich_menu_request() 產生正確的 4 按鈕版面。"""
 
     def test_has_four_areas(self):
-        from tool.richmenu import build_default_rich_menu_request
+        from core.richmenu import build_default_rich_menu_request
         req = build_default_rich_menu_request()
         assert len(req.areas) == 4, f"預期 4 個區域，實際有 {len(req.areas)} 個"
 
     def test_market_summary_area_exists(self):
-        from tool.richmenu import build_default_rich_menu_request
+        from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
         postback_data = [
@@ -398,7 +398,7 @@ class TestRichMenuLayout:
             f"找不到 market_summary postback action，現有: {postback_data}"
 
     def test_chip_trend_area_exists(self):
-        from tool.richmenu import build_default_rich_menu_request
+        from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
         postback_data = [
@@ -410,7 +410,7 @@ class TestRichMenuLayout:
             f"找不到 chip_trend postback action，現有: {postback_data}"
 
     def test_random_strategy_area_exists(self):
-        from tool.richmenu import build_default_rich_menu_request
+        from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
         postback_data = [
@@ -423,7 +423,7 @@ class TestRichMenuLayout:
 
     def test_stock_diagnosis_message_action_exists(self):
         """左上角「個股診斷」應使用 MessageAction。"""
-        from tool.richmenu import build_default_rich_menu_request
+        from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import MessageAction
         req = build_default_rich_menu_request()
         message_labels = [
@@ -439,7 +439,7 @@ class TestRichMenuSync:
     """驗證 Rich Menu 同步流程仍由唯一工具模組負責。"""
 
     def test_sync_default_rich_menu_uploads_image_and_sets_default(self, tmp_path):
-        from tool.richmenu import sync_default_rich_menu
+        from core.richmenu import sync_default_rich_menu
 
         image_path = tmp_path / 'richmenu.png'
         image_path.write_bytes(b'png')
@@ -459,7 +459,7 @@ class TestRichMenuSync:
             calls['image_body'] = image_path
             calls['timeout'] = timeout
 
-        import tool.richmenu as richmenu_module
+        import core.richmenu as richmenu_module
 
         original_uploader = richmenu_module.upload_rich_menu_image
         richmenu_module.upload_rich_menu_image = fake_upload_rich_menu_image

@@ -8,7 +8,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from config import Config
-from tool.strategy_manager import StrategyManager
+from core.strategy_manager import StrategyManager
 
 
 # ============================================

@@ -1,13 +1,17 @@
-"""
-資料庫設定表初始化腳本 (V2.0 安全增強版)
-============================================
-執行方式: python init_settings.py
-功能: 建立 user_settings 表格並插入預設值
-"""
-from sqlalchemy import text
-from config import Config
-from tool.db_helper import get_db_engine
+"""資料庫設定表初始化腳本。"""
+
 import sys
+
+from sqlalchemy import text
+
+from config.settings import (
+    DEFAULT_USER_SETTINGS,
+    USER_SETTINGS_CATEGORIES,
+    USER_SETTINGS_CREATE_TABLE_SQL,
+    USER_SETTINGS_UPSERT_SQL,
+    get_user_settings_dict,
+)
+from core.db_helper import get_db_engine
 
 
 def init_settings_table():
@@ -26,69 +30,16 @@ def init_settings_table():
         print(f"❌ 資料庫連線失敗: {e}")
         sys.exit(1)
     
-    # 建表 SQL (加入時間戳記與說明欄位)
-    create_table_sql = """
-    CREATE TABLE IF NOT EXISTS user_settings (
-        setting_key VARCHAR(50) PRIMARY KEY,
-        setting_value VARCHAR(100) NOT NULL,
-        description VARCHAR(200),
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_updated_at (updated_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    """
-    
-    # 預設參數設定（完整版）
-    default_settings = [
-        # 策略模式
-        ('mode', 'conservative', '策略模式 (conservative穩健/aggressive積極)'),
-        
-        # AI 參數
-        ('ai_threshold', '0.50', 'AI 信心門檻（50%）'),
-        ('ai_top_n', '5', 'AI 推薦數量（前N名）'),
-        
-        # 風控參數
-        ('stop_loss', '0.08', '停損點（8%）'),
-        ('take_profit', '0.20', '停利點（20%）'),
-        ('max_hold_days', '20', '最長持有天數'),
-        
-        # 倉位管理
-        ('max_holdings', '3', '最大持倉數'),
-        ('position_size', '0.33', '單筆倉位比例（33%）'),
-        
-        # 選股篩選器
-        ('volume_filter_conservative', '2000000', '成交量門檻-穩健模式（200萬股）'),
-        ('volume_filter_aggressive', '1000000', '成交量門檻-積極模式（100萬股）'),
-        ('use_ma20_filter', 'true', '是否使用月線過濾（站上MA20）'),
-        
-        # 功能開關2
-        ('enable_news', 'true', '是否啟用新聞推播'),
-        ('enable_chips_display', 'true', '是否顯示籌碼資訊'),
-        ('enable_strategy_report', 'true', '是否啟用策略報告'),
-        
-        # 通知設定
-        ('notify_threshold', '0.60', '高信心提醒門檻（60%）'),
-        ('daily_report_time', '08:00', '每日報告推播時間'),
-    ]
-    
     try:
         with engine.connect() as conn:
             # 1. 建立表格
             print("\n📋 建立 user_settings 表格...")
-            conn.execute(text(create_table_sql))
-            
-            # 2. 插入預設值（使用參數化查詢避免 SQL Injection）
-            insert_sql = """
-            INSERT INTO user_settings (setting_key, setting_value, description) 
-            VALUES (:key, :value, :desc)
-            ON DUPLICATE KEY UPDATE 
-                description = :desc,
-                updated_at = CURRENT_TIMESTAMP
-            """
+            conn.execute(text(USER_SETTINGS_CREATE_TABLE_SQL))
             
             print("📝 插入預設參數...")
-            for key, value, desc in default_settings:
+            for key, value, desc in DEFAULT_USER_SETTINGS:
                 conn.execute(
-                    text(insert_sql), 
+                    text(USER_SETTINGS_UPSERT_SQL), 
                     {'key': key, 'value': value, 'desc': desc}
                 )
             
@@ -99,20 +50,9 @@ def init_settings_table():
         print("📋 預設參數清單")
         print("=" * 60)
         
-        # 分類顯示
-        categories = {
-            '🎯 策略模式': ['mode'],
-            '🤖 AI 參數': ['ai_threshold', 'ai_top_n', 'notify_threshold'],
-            '🛡️ 風控參數': ['stop_loss', 'take_profit', 'max_hold_days'],
-            '💰 倉位管理': ['max_holdings', 'position_size'],
-            '📊 選股篩選': ['volume_filter_conservative', 'volume_filter_aggressive', 'use_ma20_filter'],
-            '⚙️ 功能開關': ['enable_news', 'enable_chips_display', 'enable_strategy_report'],
-            '🔔 通知設定': ['daily_report_time'],
-        }
+        settings_dict = get_user_settings_dict(DEFAULT_USER_SETTINGS)
         
-        settings_dict = {s[0]: (s[1], s[2]) for s in default_settings}
-        
-        for category, keys in categories.items():
+        for category, keys in USER_SETTINGS_CATEGORIES.items():
             print(f"\n{category}")
             print("-" * 60)
             for key in keys:

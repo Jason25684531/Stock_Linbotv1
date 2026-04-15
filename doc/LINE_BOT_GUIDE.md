@@ -3,6 +3,12 @@
 > **更新日期**: 2026-02-13  
 > **版本**: V35 策略解耦 + 多策略切換
 
+## 啟動架構
+
+- 正式 Web / LINE 入口已拆到 `app/web_server.py` 與 `app/line_bot.py`。
+- 根目錄 `app.py` 保留為 compatibility facade，因此既有 `python app.py` 指令仍可直接使用。
+- `/callback` 仍由同一個 Flask app 對外提供，預設 port 為 `1688`。
+
 ---
 
 ## 🎯 核心功能
@@ -135,7 +141,7 @@ Bot: 🔄 已切換至 V33 低波動策略
 ### 步驟 1：啟動服務
 
 ```powershell
-# 啟動 Flask 服務（預設 port 8866）
+# 啟動 Flask 服務（legacy facade -> app/web_server.py + app/line_bot.py，預設 port 1688）
 python app.py
 ```
 
@@ -143,7 +149,7 @@ python app.py
 
 ```powershell
 # 另開終端執行
-ngrok http 8866
+ngrok http 1688
 ```
 
 ### 步驟 3：設定 Line Bot Webhook
@@ -160,7 +166,7 @@ ngrok http 8866
 ### 方法 1：使用 Postman 模擬
 
 ```json
-POST http://localhost:8866/callback
+POST http://localhost:1688/callback
 Content-Type: application/json
 
 {
@@ -201,7 +207,7 @@ Content-Type: application/json
 python 1_update_database.py    # 更新股價
 python 7_update_financials.py  # 更新財報（每季執行即可）
 python 2_rundaily.py           # 計算技術指標
-python app.py                  # 啟動 Line Bot 服務
+python app.py                  # 啟動 facade，轉發到 app package
 ```
 
 ### 策略選擇建議
@@ -289,4 +295,4 @@ Bot: 顯示台積電的 AI 健康診斷書
 3. ngrok 是否正常運行
 4. Webhook URL 是否設定正確
 
-**提示**：執行 `python app.py` 時，終端會顯示啟動資訊和模型載入狀態。
+**提示**：執行 `python app.py` 時，終端會顯示 façade 啟動資訊，並轉發到 `app/__init__.py`、`app/web_server.py`、`app/line_bot.py` 完成載入。

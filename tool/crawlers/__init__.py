@@ -1,6 +1,4 @@
-"""
-Crawlers 套件初始化
-"""
-from .quarterly_scraper import QuarterlyScraper
+"""Compatibility wrapper package for core.crawlers."""
+from .._proxy import apply_module_proxy
 
-__all__ = ['QuarterlyScraper']
+apply_module_proxy(globals(), "core.crawlers")
