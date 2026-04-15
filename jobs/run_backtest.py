@@ -68,17 +68,28 @@ class BacktestEngine:
     支援 V30（純技術）、V31（技術 + AI）及多策略模式（v33/v34/v35 各自載入專屬模型）
     """
     
-    def __init__(self, mode='v31'):
+    def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
+                 persist_results=True, use_db_params=USE_DB_PARAMS):
         """
         初始化回測引擎
         
         Args:
             mode: 'v30' = 純技術面, 'v31' = 技術 + AI,
                   'v33_low_vol' / 'v34_turbo' / 'v35_innovation' = 策略專屬模型
+            start_date: 回測起始日（None 則使用全域預設）
+            end_date: 回測結束日（None 則回測到最新交易日）
+            initial_capital: 初始資金
+            persist_results: 是否輸出 CSV 並同步 DB
+            use_db_params: V30 模式是否優先讀取 DB 參數
         """
         self.mode = mode.lower()
+        self.start_date = start_date or BACKTEST_START
+        self.end_date = end_date
+        self.initial_capital = initial_capital
+        self.persist_results = persist_results
+        self.use_db_params = use_db_params
         self.engine = get_db_engine()
-        self.capital = INITIAL_CAPITAL
+        self.capital = initial_capital
         self.positions = {}
         self.trade_count = 0
         self.win_count = 0
@@ -138,7 +149,7 @@ class BacktestEngine:
         """
         # V30 模式：使用資料庫或 Config 參數
         if self.mode == 'v30':
-            if USE_DB_PARAMS:
+            if self.use_db_params:
                 params = get_v30_params_from_db()
                 self.stop_loss_pct = params['STOP_LOSS']
                 self.take_profit_pct = params['TAKE_PROFIT']
@@ -152,7 +163,7 @@ class BacktestEngine:
             self.stop_loss_pct = self.strategy_obj.stop_loss
             self.take_profit_pct = self.strategy_obj.take_profit
             self.max_hold_days = self.strategy_obj.max_hold_days
-        elif USE_DB_PARAMS:
+        elif self.use_db_params:
             params = get_v30_params_from_db()
             self.stop_loss_pct = params['STOP_LOSS']
             self.take_profit_pct = params['TAKE_PROFIT']
@@ -241,7 +252,7 @@ class BacktestEngine:
             self.positions[sid]['highest'] = curr_price
         
         # 委派策略物件判斷出場
-        if self.strategy_obj is not None:
+        if self.strategy_obj is not None and self.mode != 'v30':
             action, reason, new_stop = self.strategy_obj.check_exit_signal(
                 stock_id=sid,
                 current_price=curr_price,
@@ -441,7 +452,7 @@ class BacktestEngine:
         if stock_id in self.positions:
             return
         
-        budget = INITIAL_CAPITAL * POSITION_SIZE
+        budget = self.initial_capital * POSITION_SIZE
         if budget > self.capital:
             budget = self.capital * 0.9
         
@@ -515,7 +526,7 @@ class BacktestEngine:
         emoji = "🔴" if profit_pct < 0 else "🟢"
         print(f"{emoji} {date_str} {reason} {stock_id} | {profit_pct:+.2f}% ({info['days']}天)")
     
-    def run(self):
+    def run(self, return_metrics=False):
         """執行回測"""
         # 🔥 根據模式顯示正確名稱
         if self.mode == 'v30':
@@ -533,13 +544,36 @@ class BacktestEngine:
         
         # 取得交易日期
         with self.engine.connect() as conn:
-            dates = conn.execute(text("""
+            params = {'start_date': self.start_date}
+            query_str = """
                 SELECT DISTINCT trade_date 
                 FROM daily_market_data 
                 WHERE trade_date >= :start_date 
-                ORDER BY trade_date
-            """), {'start_date': BACKTEST_START}).fetchall()
+            """
+            if self.end_date:
+                query_str += " AND trade_date <= :end_date"
+                params['end_date'] = self.end_date
+            query_str += " ORDER BY trade_date"
+            dates = conn.execute(text(query_str), params).fetchall()
         
+        if not dates:
+            print("⚠️ 指定回測期間無可用交易資料")
+            empty_metrics = {
+                'roi': 0.0,
+                'win_rate': 0.0,
+                'profit_ratio': 0.0,
+                'avg_hold_days': 0.0,
+                'max_drawdown': 0.0,
+                'sharpe_ratio': 0.0,
+                'trade_count': 0,
+                'final_value': self.initial_capital,
+                'initial_capital': self.initial_capital,
+                'start_date': self.start_date,
+                'end_date': self.end_date or self.start_date,
+                'date_count': 0,
+            }
+            return empty_metrics if return_metrics else 0.0
+
         date_list = [d[0].strftime("%Y-%m-%d") for d in dates]
         print(f"📅 回測期間: {date_list[0]} ~ {date_list[-1]} ({len(date_list)} 天)")
         print("-" * 60)
@@ -575,18 +609,20 @@ class BacktestEngine:
         
         # === 結算未平倉 ===
         final = self.capital
+        final_trade_date = date_list[-1]
         for sid, info in self.positions.items():
             with self.engine.connect() as conn:
                 query = text("""
                     SELECT close_price FROM daily_market_data 
                     WHERE stock_id = :sid 
+                      AND trade_date <= :end_date
                     ORDER BY trade_date DESC LIMIT 1
                 """)
-                price = conn.execute(query, {'sid': sid}).scalar() or info['cost']
+                price = conn.execute(query, {'sid': sid, 'end_date': final_trade_date}).scalar() or info['cost']
             final += info['shares'] * price
         
         # === 統計結果 ===
-        roi = (final - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100
+        roi = (final - self.initial_capital) / self.initial_capital * 100
         win_rate = (self.win_count / self.trade_count * 100) if self.trade_count > 0 else 0
         
         # 計算平均持有天數和盈虧比
@@ -638,7 +674,7 @@ class BacktestEngine:
         print("\n" + "=" * 60)
         print(f"💰 {mode_name} 回測結果")
         print("=" * 60)
-        print(f"📊 初始資金: ${INITIAL_CAPITAL:,}")
+        print(f"📊 初始資金: ${self.initial_capital:,.0f}")
         print(f"📊 最終資產: ${int(final):,}")
         print(f"📈 報酬率: {roi:+.2f}%")
         print("-" * 60)
@@ -666,21 +702,44 @@ class BacktestEngine:
             df_profit = pd.DataFrame({
                 'date': self.daily_dates,
                 'asset_value': self.daily_assets,
-                'roi': [(a - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100 for a in self.daily_assets]
+                'roi': [(a - self.initial_capital) / self.initial_capital * 100 for a in self.daily_assets]
             })
-            profit_path = 'ML_Data/backtest_profit_report.csv'
-            df_profit.to_csv(profit_path, index=False, encoding='utf-8-sig')
-            print(f"📈 資產曲線已輸出至: {profit_path}")
         else:
             df_profit = pd.DataFrame()
 
-        # 同步回測結果到 DB（Dashboard / API 直接讀取）
-        if save_backtest_results(trades_df=df_trades, equity_df=df_profit):
-            print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
-        else:
-            print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
-        
-        return roi
+        if self.persist_results:
+            if not df_trades.empty:
+                output_path = 'ML_Data/backtest_result.csv'
+                df_trades.to_csv(output_path, index=False, encoding='utf-8-sig')
+                print(f"📄 交易明細已輸出至: {output_path}")
+
+            if not df_profit.empty:
+                profit_path = 'ML_Data/backtest_profit_report.csv'
+                df_profit.to_csv(profit_path, index=False, encoding='utf-8-sig')
+                print(f"📈 資產曲線已輸出至: {profit_path}")
+
+            # 同步回測結果到 DB（Dashboard / API 直接讀取）
+            if save_backtest_results(trades_df=df_trades, equity_df=df_profit):
+                print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
+            else:
+                print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
+
+        metrics = {
+            'roi': roi,
+            'win_rate': win_rate,
+            'profit_ratio': profit_ratio,
+            'avg_hold_days': avg_days,
+            'max_drawdown': max_drawdown * 100,
+            'sharpe_ratio': sharpe_ratio,
+            'trade_count': self.trade_count,
+            'final_value': final,
+            'initial_capital': self.initial_capital,
+            'start_date': date_list[0],
+            'end_date': final_trade_date,
+            'date_count': len(date_list),
+        }
+
+        return metrics if return_metrics else roi
 
 
 class PortfolioBacktestEngine:

@@ -354,6 +354,8 @@ python jobs/train_model.py
 
 # 參數最佳化 (可選)
 python jobs/optimize_params.py --objective roi --n-trials 100
+python jobs/optimize_params.py --objective roi --lookback-days 30
+python jobs/optimize_params.py --objective sharpe --date 2026-03-26 --end-date 2026-04-15
 ```
 
 ## ✅ 全功能測試方式（建議順序）
