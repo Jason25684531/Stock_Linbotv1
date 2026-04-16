@@ -1,4 +1,5 @@
 """每日選股執行腳本 (V33 Strategy Factory - Multi-Strategy Support)"""
+import argparse
 import sys
 import os
 from pathlib import Path
@@ -19,7 +20,13 @@ import numpy as np
 from sqlalchemy import text
 from datetime import datetime
 
-from core.db_helper import get_db_engine, get_stock_data
+from core.db_helper import (
+    RECOMMENDATION_HEARTBEAT_STOCK_ID,
+    get_db_engine,
+    get_latest_trade_date,
+    get_stock_data,
+    normalize_date_str,
+)
 from core.strategy_manager import StrategyManager
 from core.calc_indicators import (
     calculate_ratio_features,
@@ -67,6 +74,7 @@ def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
     sql = text("""
         SELECT * FROM daily_market_data
         WHERE trade_date >= DATE_SUB(:date, INTERVAL 150 DAY)
+          AND trade_date <= :date
         ORDER BY stock_id, trade_date
     """)
     df = pd.read_sql(sql, engine, params={'date': date_str})
@@ -163,6 +171,10 @@ def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
     # ---- 取最新交易日橫截面 ----
     latest_date = df['trade_date'].max()
     latest_df = df[df['trade_date'] == latest_date].copy()
+    if latest_df['stock_id'].duplicated().any():
+        duplicate_count = int(latest_df['stock_id'].duplicated().sum())
+        latest_df = latest_df.sort_values(['stock_id']).drop_duplicates(subset=['stock_id'], keep='last')
+        print(f"  ⚠️ 最新日存在重複 stock_id，已去重 {duplicate_count} 筆")
 
     has_ma60 = (latest_df['ma60'] > 0).sum()
     has_rsi = (latest_df['rsi'] > 0).sum()
@@ -480,6 +492,63 @@ def load_strategy_model(strategy_name: str):
     print(f"[AI] model not found for {strategy_name}")
     return None, None
 
+
+def _persist_strategy_recommendations(
+    candidates: pd.DataFrame,
+    strategy_name: str,
+    date_str: str,
+    engine,
+) -> tuple[int, bool]:
+    """將策略結果寫入 daily_recommendations，零候選時改寫心跳。"""
+    rows_to_insert: list[dict] = []
+
+    if candidates is None or candidates.empty:
+        rows_to_insert.append(
+            {
+                'stock_id': RECOMMENDATION_HEARTBEAT_STOCK_ID,
+                'date': date_str,
+                'strategy': strategy_name,
+                'price': 0.0,
+                'score': None,
+                'rsi': None,
+                'volume': None,
+                'reason': 'NO_CANDIDATES_HEARTBEAT',
+            }
+        )
+    else:
+        for _, row in candidates.head(10).iterrows():
+            ai_score = row.get('ai_score', None)
+            rows_to_insert.append(
+                {
+                    'stock_id': row['stock_id'],
+                    'date': date_str,
+                    'strategy': strategy_name,
+                    'price': row['close_price'],
+                    'score': float(ai_score) if ai_score is not None else None,
+                    'rsi': row.get('rsi', None),
+                    'volume': row.get('volume', None),
+                    'reason': row.get('news_boost_reason', '') or None,
+                }
+            )
+
+    with engine.connect() as conn:
+        conn.execute(text("""
+            DELETE FROM daily_recommendations
+            WHERE trade_date = :date AND strategy = :strategy
+        """), {'date': date_str, 'strategy': strategy_name})
+        conn.commit()
+
+        for record in rows_to_insert:
+            conn.execute(text("""
+                INSERT INTO daily_recommendations
+                (stock_id, trade_date, strategy, close_price, ai_score, rsi, volume, news_boost_reason)
+                VALUES (:stock_id, :date, :strategy, :price, :score, :rsi, :volume, :reason)
+            """), record)
+        conn.commit()
+
+    wrote_heartbeat = rows_to_insert[0]['stock_id'] == RECOMMENDATION_HEARTBEAT_STOCK_ID
+    return len(rows_to_insert), wrote_heartbeat
+
 def run_strategy(strategy, df, date_str, engine):
     """執行單一策略的選股流程（自動載入策略專屬模型）"""
     print(f"\n{'='*40}")
@@ -494,6 +563,17 @@ def run_strategy(strategy, df, date_str, engine):
     
     if candidates.empty:
         print(f"💤 {strategy.name}: 今日無符合條件的股票")
+        try:
+            _, wrote_heartbeat = _persist_strategy_recommendations(
+                candidates,
+                strategy.name,
+                date_str,
+                engine,
+            )
+            if wrote_heartbeat:
+                print(f"✅ {strategy.name}: 已寫入零候選心跳")
+        except Exception as e:
+            print(f"⚠️ {strategy.name}: 心跳寫入失敗: {e}")
         return candidates
     
     # 載入此策略專屬的 AI 模型
@@ -571,36 +651,14 @@ def run_strategy(strategy, df, date_str, engine):
     else:
         candidates['news_boost_reason'] = ''
 
-    # 存入資料庫
     try:
-        with engine.connect() as conn:
-            # 清除此策略的舊資料
-            conn.execute(text("""
-                DELETE FROM daily_recommendations 
-                WHERE trade_date = :date AND strategy = :strategy
-            """), {"date": date_str, "strategy": strategy.name})
-            conn.commit()
-            
-            # 插入新資料（含 news_boost_reason）
-            for _, row in candidates.head(10).iterrows():
-                ai_score = row.get('ai_score', None)
-                reason   = row.get('news_boost_reason', '') or None
-                conn.execute(text("""
-                    INSERT INTO daily_recommendations 
-                    (stock_id, trade_date, strategy, close_price, ai_score, rsi, volume, news_boost_reason)
-                    VALUES (:stock_id, :date, :strategy, :price, :score, :rsi, :volume, :reason)
-                """), {
-                    "stock_id": row['stock_id'],
-                    "date":     date_str,
-                    "strategy": strategy.name,
-                    "price":    row['close_price'],
-                    "score":    float(ai_score) if ai_score is not None else None,
-                    "rsi":      row.get('rsi', None),
-                    "volume":   row.get('volume', None),
-                    "reason":   reason,
-                })
-            conn.commit()
-            print(f"✅ {strategy.name}: 資料已儲存")
+        written_count, _ = _persist_strategy_recommendations(
+            candidates,
+            strategy.name,
+            date_str,
+            engine,
+        )
+        print(f"✅ {strategy.name}: 已儲存 {written_count} 筆推薦")
     except Exception as e:
         print(f"⚠️ {strategy.name}: 資料庫寫入失敗: {e}")
     
@@ -615,7 +673,7 @@ def run_strategy(strategy, df, date_str, engine):
     return candidates
 
 
-def main():
+def run_daily_for_date(target_date: str | None = None):
     print("\n" + "="*50)
     print("🤖 Stock AI 每日選股執行中...")
     print("="*50 + "\n")
@@ -632,13 +690,11 @@ def main():
     print("📂 載入股市資料...")
     engine = get_db_engine()
 
-    # 取得最新交易日期
-    from core.db_helper import get_latest_trade_date
-    latest_date = get_latest_trade_date()
-    if not latest_date:
+    resolved_date = normalize_date_str(target_date or get_latest_trade_date())
+    if not resolved_date:
         print("❌ 無資料可用")
-        return
-    date_str = latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date)
+        return None
+    date_str = resolved_date
     print(f"✅ 資料日期: {date_str}")
 
     # 3. 從歷史資料計算完整技術指標（核心步驟）
@@ -739,6 +795,28 @@ def main():
     print("\n" + "="*50)
     print("✅ 今日選股作業完成！")
     print("="*50 + "\n")
+
+    return {
+        'date': date_str,
+        'strategy_names': strategy_names,
+        'strategy_counts': {
+            name: (len(candidates) if candidates is not None and not candidates.empty else 0)
+            for name, candidates in all_results.items()
+        },
+    }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='執行每日選股流程，可指定單日回補日期。')
+    parser.add_argument('--date', help='指定要執行的交易日期 (YYYY-MM-DD)。')
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    run_daily_for_date(args.date)
+    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())

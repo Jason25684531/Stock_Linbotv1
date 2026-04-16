@@ -326,7 +326,8 @@ def api_daily_signals():
             'v38': 'v38_value_dividend',
         }
 
-        df, date_str = app_pkg.get_stock_data()
+        baseline_date = app_pkg._resolve_ui_baseline_date()
+        df, date_str = app_pkg.get_stock_data(date_str=baseline_date) if baseline_date else app_pkg.get_stock_data()
         if df.empty:
             return jsonify(
                 {

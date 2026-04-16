@@ -24,7 +24,7 @@ import time
 import random
 from datetime import datetime, timedelta
 from config import Config
-from core.db_helper import get_db_engine
+from core.db_helper import MIN_VALID_MARKET_ROWS, get_db_engine, get_latest_trade_date
 from core.mcp_client import (
     ForeignInvestorFlowRequest,
     MCPFetchJob,
@@ -57,13 +57,10 @@ HEADERS = {
 def get_latest_date_from_db(engine):
     """查詢資料庫目前最新的日期"""
     try:
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT MAX(trade_date) FROM daily_market_data"))
-            latest = result.scalar()
-            if isinstance(latest, datetime):
-                return latest.date()
-            return latest
+        latest = get_latest_trade_date()
+        if not latest:
+            return None
+        return pd.Timestamp(latest).date()
     except Exception:
         return None
 
@@ -677,20 +674,7 @@ def run_price_update(engine):
     current_dt = start_dt
     while current_dt <= end_dt:
         date_str = current_dt.strftime("%Y-%m-%d")
-        print(f"\n📅 正在處理: {date_str}")
-        final_df, warnings = fetch_market_data_with_mcp(mcp_client, date_str)
-        if warnings:
-            print(f"  ⚠️ MCP 部分成功: {'；'.join(warnings)}")
-
-        if final_df.empty:
-            print("  ⚠️ 缺少市場快照，略過當日寫入")
-        else:
-            final_df, margin_warning = enrich_with_margin_balance(
-                final_df, date_str)
-            if margin_warning:
-                print(f"  ⚠️ {margin_warning}")
-
-        count = process_and_save(final_df, date_str, engine)
+        count = update_market_date(engine, date_str, mcp_client=mcp_client)
         if count > 0:
             print(f"💾 成功寫入 {count} 筆資料！")
             total_count += count
@@ -701,6 +685,38 @@ def run_price_update(engine):
         time.sleep(random.randint(3, 5))
 
     return total_count
+
+
+def update_market_date(
+    engine,
+    date_str: str,
+    mcp_client: MCPClient | None = None,
+    min_row_count: int = MIN_VALID_MARKET_ROWS,
+) -> int:
+    """更新單一交易日市場資料，供每日更新與 backfill 共用。"""
+    print(f"\n📅 正在處理: {date_str}")
+    client = mcp_client or MCPClient()
+
+    final_df, warnings = fetch_market_data_with_mcp(client, date_str)
+    if warnings:
+        print(f"  ⚠️ MCP 部分成功: {'；'.join(warnings)}")
+
+    if final_df.empty:
+        print("  ⚠️ 缺少市場快照，略過當日寫入")
+        return 0
+
+    if len(final_df) < int(min_row_count):
+        print(
+            f"  ⚠️ MCP 回傳筆數過少 ({len(final_df)} < {int(min_row_count)})，"
+            "略過當日市場資料更新"
+        )
+        return 0
+
+    final_df, margin_warning = enrich_with_margin_balance(final_df, date_str)
+    if margin_warning:
+        print(f"  ⚠️ {margin_warning}")
+
+    return process_and_save(final_df, date_str, engine)
 
 
 def run_monthly_revenue_update():

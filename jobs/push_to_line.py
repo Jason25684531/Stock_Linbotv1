@@ -31,6 +31,7 @@ from linebot.v3.messaging import (
 )
 from config import Config
 from core.db_helper import (
+    get_actual_latest_date,
     get_db_engine,
     get_daily_recommendations,
     get_market_trend,
@@ -52,6 +53,11 @@ STRATEGY_DISPLAY_NAMES = {
     'v37_mean_reversion': '🔄 均值回歸 (V37)',
     'v38_value_dividend': '💰 高殖利率 (V38)',
 }
+
+
+def get_pipeline_baseline_date() -> str | None:
+    """取得推播共用的資料基準日。"""
+    return normalize_date_str(get_actual_latest_date() or get_latest_trade_date())
 
 
 def get_market_status(engine, date_str):
@@ -411,7 +417,7 @@ def run_morning():
     print("🌅 早晨大局觀模式啟動...")
 
     engine = get_db_engine()
-    date_str = normalize_date_str(get_latest_trade_date())
+    date_str = get_pipeline_baseline_date()
     if not date_str:
         print("❌ 資料庫無資料")
         return
@@ -474,7 +480,7 @@ def run_evening():
     print(f"📋 策略列表: {', '.join(strategy_names)}")
 
     # 2. 取得最新日期
-    date_str = normalize_date_str(get_latest_trade_date())
+    date_str = get_pipeline_baseline_date()
     if not date_str:
         print("❌ 資料庫無資料")
         return

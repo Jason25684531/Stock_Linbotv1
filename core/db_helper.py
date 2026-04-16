@@ -23,6 +23,9 @@ _ALLOWED_TABLES = {
     'backtest_trades', 'backtest_equity_curve', 'daily_news_sentiment',
 }
 
+MIN_VALID_MARKET_ROWS = 100
+RECOMMENDATION_HEARTBEAT_STOCK_ID = 'NONE'
+
 
 def get_db_engine(max_retries: int = 3):
     """獲取資料庫引擎（Singleton + 連線池 + 重試）
@@ -124,13 +127,9 @@ def get_latest_trade_date():
         datetime.date or None
     """
     try:
-        engine = get_db_engine()
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT MAX(trade_date) FROM daily_market_data")
-            ).scalar()
-            if result:
-                return result if hasattr(result, 'strftime') else result
+        valid_dates = get_valid_market_dates()
+        if valid_dates:
+            return valid_dates[-1]
     except Exception as e:
         print(f"⚠️ 獲取最新日期失敗: {e}")
     return None
@@ -146,6 +145,127 @@ def normalize_date_str(date_value) -> str | None:
     if not text_value:
         return None
     return text_value[:10]
+
+
+def _is_business_weekday(date_value) -> bool:
+    """判斷日期是否為週一到週五。"""
+    normalized = normalize_date_str(date_value)
+    if not normalized:
+        return False
+    try:
+        return pd.Timestamp(normalized).weekday() < 5
+    except Exception:
+        return False
+
+
+def is_recommendation_heartbeat(stock_id) -> bool:
+    """判斷推薦資料列是否為零候選心跳。"""
+    return str(stock_id or '').strip().upper() == RECOMMENDATION_HEARTBEAT_STOCK_ID
+
+
+def get_valid_market_dates(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_row_count: int = MIN_VALID_MARKET_ROWS,
+) -> list[str]:
+    """取得有效市場交易日清單。"""
+    engine = get_db_engine()
+    filters = []
+    params = {
+        'min_rows': int(min_row_count),
+        'market_symbol': Config.MARKET_SYMBOL,
+    }
+
+    if start_date:
+        params['start_date'] = normalize_date_str(start_date)
+        filters.append('trade_date >= :start_date')
+    if end_date:
+        params['end_date'] = normalize_date_str(end_date)
+        filters.append('trade_date <= :end_date')
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ''
+    sql = f"""
+        SELECT trade_date,
+               COUNT(*) AS row_count,
+               SUM(CASE WHEN stock_id = :market_symbol THEN 1 ELSE 0 END) AS market_symbol_rows
+        FROM daily_market_data
+        {where_clause}
+        GROUP BY trade_date
+        HAVING COUNT(*) > :min_rows
+        ORDER BY trade_date
+    """
+    dates_df = pd.read_sql(text(sql), engine, params=params)
+    if dates_df.empty:
+        return []
+
+    valid_dates: list[str] = []
+    for _, row in dates_df.iterrows():
+        normalized = normalize_date_str(row.get('trade_date'))
+        if not normalized or not _is_business_weekday(normalized):
+            continue
+
+        market_symbol_rows = int(row.get('market_symbol_rows', 0) or 0)
+        if market_symbol_rows <= 0:
+            continue
+
+        valid_dates.append(normalized)
+
+    return valid_dates
+
+
+def get_recommendation_dates(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    include_heartbeats: bool = True,
+) -> list[str]:
+    """取得推薦資料中存在的日期清單。"""
+    engine = get_db_engine()
+    filters = []
+    params = {}
+
+    if start_date:
+        params['start_date'] = normalize_date_str(start_date)
+        filters.append('trade_date >= :start_date')
+    if end_date:
+        params['end_date'] = normalize_date_str(end_date)
+        filters.append('trade_date <= :end_date')
+    if not include_heartbeats:
+        params['heartbeat_stock_id'] = RECOMMENDATION_HEARTBEAT_STOCK_ID
+        filters.append('stock_id <> :heartbeat_stock_id')
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ''
+    sql = f"""
+        SELECT DISTINCT trade_date
+        FROM daily_recommendations
+        {where_clause}
+        ORDER BY trade_date
+    """
+    dates_df = pd.read_sql(text(sql), engine, params=params)
+    if dates_df.empty:
+        return []
+
+    return [
+        normalized
+        for value in dates_df['trade_date'].tolist()
+        for normalized in [normalize_date_str(value)]
+        if normalized and _is_business_weekday(normalized)
+    ]
+
+
+def get_actual_latest_date(min_row_count: int = MIN_VALID_MARKET_ROWS):
+    """取得市場資料與推薦資料交集中的最新有效日期。"""
+    try:
+        market_dates = set(get_valid_market_dates(min_row_count=min_row_count))
+        if not market_dates:
+            return None
+
+        recommendation_dates = set(get_recommendation_dates(include_heartbeats=True))
+        shared_dates = sorted(market_dates & recommendation_dates)
+        if shared_dates:
+            return shared_dates[-1]
+    except Exception as e:
+        print(f"⚠️ 獲取實際最新日期失敗: {e}")
+    return None
 
 
 def get_stock_data(stock_id=None, date_str=None):
@@ -1108,7 +1228,8 @@ def get_news_sentiment(date_str: str = None) -> dict:
 
 
 def get_daily_recommendations(date_str: str = None, strategy: str = None,
-                              limit: int | None = None) -> pd.DataFrame:
+                              limit: int | None = None,
+                              include_heartbeats: bool = False) -> pd.DataFrame:
     """讀取每日推薦結果（供 Dashboard / Line Bot 共用）
 
     Args:
@@ -1122,7 +1243,7 @@ def get_daily_recommendations(date_str: str = None, strategy: str = None,
     engine = get_db_engine()
     try:
         if not date_str:
-            latest = get_latest_trade_date()
+            latest = get_actual_latest_date() or get_latest_trade_date()
             if not latest:
                 return pd.DataFrame()
             date_str = normalize_date_str(latest)
@@ -1145,7 +1266,14 @@ def get_daily_recommendations(date_str: str = None, strategy: str = None,
             sql += " LIMIT :limit"
             params["limit"] = int(limit)
 
-        return pd.read_sql(text(sql), engine, params=params)
+        result_df = pd.read_sql(text(sql), engine, params=params)
+        if include_heartbeats or result_df.empty or 'stock_id' not in result_df.columns:
+            return result_df
+
+        filtered_df = result_df[
+            result_df['stock_id'].astype(str).str.strip().str.upper() != RECOMMENDATION_HEARTBEAT_STOCK_ID
+        ].copy()
+        return filtered_df.reset_index(drop=True)
     except Exception as e:
         print(f"  ⚠️ 讀取 daily_recommendations 失敗: {e}")
         return pd.DataFrame()
@@ -1223,7 +1351,7 @@ def get_recommendations_with_market_fallback(
     max_fallback_age_days: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """取得推薦資料，熔斷日必要時回推最近安全日。"""
-    requested_date = normalize_date_str(date_str or get_latest_trade_date())
+    requested_date = normalize_date_str(date_str or get_actual_latest_date() or get_latest_trade_date())
     if not requested_date:
         return pd.DataFrame(), {
             'requested_date': None,

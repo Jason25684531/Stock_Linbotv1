@@ -366,7 +366,7 @@ def handle_message(event):
                 flex_msg = app_pkg.create_holdings_flex(
                     holdings=holdings_list,
                     strategy_name=holdings_list[0].get('strategy', ''),
-                    date_str=str(pd.Timestamp.now().date()),
+                    date_str=app_pkg._resolve_ui_baseline_date() or str(pd.Timestamp.now().date()),
                 )
                 reply_message(event.reply_token, [flex_msg])
                 return

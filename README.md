@@ -264,8 +264,10 @@ execution\evening_run.bat
 
 ```powershell
 python jobs/update_database.py   # 透過 MCP 抓市場/財報，合併籌碼與月營收後寫入 DB
-python jobs/run_daily.py         # 計算指標+選股+AI評分
+python jobs/run_daily.py         # 計算指標+選股+AI評分（零候選策略會寫入心跳）
 python jobs/push_to_line.py      # Line 推播（預設 evening 模式）
+python jobs/backfill_pipeline.py --start-date 2026-03-27 --dry-run  # 先掃描缺口
+python jobs/backfill_pipeline.py --start-date 2026-03-27            # 實際補齊市場/推薦缺口
 python scripts\setup_rich_menu.py  # 手動部署最新 Rich Menu 版面
 
 # Focused MCP / Rich Menu 驗證
@@ -417,7 +419,8 @@ Stock_Linbotv1/
 │   ├── train_model.py           # 多策略 XGBoost 批次訓練
 │   ├── run_backtest.py          # 多策略回測引擎（含組合回測）
 │   ├── push_to_line.py          # Line 推播 (SDK v3 Broadcast)
-│   └── optimize_params.py       # Optuna 參數最佳化
+│   ├── optimize_params.py       # Optuna 參數最佳化
+│   └── backfill_pipeline.py     # 掃描並補齊市場/推薦資料缺口
 │
 ├── 🧭 Legacy launchers（相容保留）
 │   ├── 1_update_database.py     # → jobs/update_database.py

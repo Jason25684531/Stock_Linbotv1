@@ -40,8 +40,10 @@ from config import (
 from core.db_helper import (
     create_user_simulation_trade,
     format_market_fallback_notice,
+    get_actual_latest_date,
     get_backtest_equity_curve,
     get_backtest_summary_from_db,
+    get_latest_trade_date,
     get_news_sentiment,
     get_open_holdings,
     get_recent_backtest_trades,
@@ -50,6 +52,7 @@ from core.db_helper import (
     get_stock_data,
     get_stock_sector,
     merge_recommendations_with_market_data,
+    normalize_date_str,
     safe_float,
     safe_int,
     supplement_financial_data,
@@ -249,6 +252,11 @@ def _build_summary_response(summary):
         'trade_count': summary['trade_count'],
         'avg_hold_days': summary['avg_hold_days'],
     }
+
+
+def _resolve_ui_baseline_date() -> str | None:
+    """取得 UI 與 LINE 共用的資料基準日。"""
+    return normalize_date_str(get_actual_latest_date() or get_latest_trade_date())
 
 
 def _normalize_line_text(text: str) -> str:
@@ -519,7 +527,7 @@ def _build_market_summary_messages() -> list:
         return [V3TextMessage(text=cached)]
 
     try:
-        trade_date = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        trade_date = _resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
         result = MCPClient().get_market_statistics_sync(trade_date)
         if result is None:
             return [V3TextMessage(text='📊 大盤快照\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。')]
@@ -560,7 +568,7 @@ def _build_chip_trend_messages() -> list:
         return [V3TextMessage(text=cached)]
 
     try:
-        trade_date = datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        trade_date = _resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
         result = MCPClient().get_foreign_investment_sync(trade_date)
         if result is None:
             return [V3TextMessage(text='🏦 籌碼動向\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。')]
@@ -609,7 +617,8 @@ def _build_random_strategy_messages() -> list:
             return [V3TextMessage(text='🎲 策略盲盒\n\n目前策略池為空，請至設定頁面配置可用策略。')]
 
         shuffled = random.sample(pool, len(pool))
-        df, date_str = get_stock_data()
+        baseline_date = _resolve_ui_baseline_date()
+        df, date_str = get_stock_data(date_str=baseline_date) if baseline_date else get_stock_data()
         if df is None or df.empty:
             return [V3TextMessage(text='🎲 策略盲盒\n\n目前無法取得市場資料，請稍後再試。')]
         if not date_str:
@@ -716,7 +725,8 @@ def _load_strategy_candidates(active, strategy_key: str, market_df: pd.DataFrame
 
 def get_v30_recommendation():
     try:
-        df, date_str = get_stock_data()
+        baseline_date = _resolve_ui_baseline_date()
+        df, date_str = get_stock_data(date_str=baseline_date) if baseline_date else get_stock_data()
         if df.empty:
             return '💤 今日無資料'
 
@@ -757,7 +767,8 @@ def get_strategy_recommendation(as_flex: bool = False):
         strategy_name = active.display_name
         strategy_key = active.name
 
-        df, date_str = get_stock_data()
+        baseline_date = _resolve_ui_baseline_date()
+        df, date_str = get_stock_data(date_str=baseline_date) if baseline_date else get_stock_data()
         if df.empty:
             return '💤 今日無資料\n請確認已執行 python jobs/update_database.py'
 
@@ -896,7 +907,11 @@ def get_strategy_recommendation(as_flex: bool = False):
 
 def query_stock(stock_id):
     try:
-        df, date_str = get_stock_data(stock_id=stock_id)
+        baseline_date = _resolve_ui_baseline_date()
+        query_kwargs = {'stock_id': stock_id}
+        if baseline_date:
+            query_kwargs['date_str'] = baseline_date
+        df, date_str = get_stock_data(**query_kwargs)
         if df.empty:
             return f'🔍 找不到 {stock_id} 的資料'
 
