@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -134,3 +135,34 @@ def test_company_basic_info_http_500_returns_none() -> None:
         )
 
     assert result is None
+
+
+def test_market_statistics_http_504_uses_longer_backoff_and_returns_none() -> None:
+    client = TWSEMCPClient(
+        base_url='http://localhost:8000',
+        max_retries=3,
+        backoff_base_seconds=1.0,
+        max_backoff_seconds=8.0,
+    )
+    response = httpx.Response(
+        504,
+        request=httpx.Request('POST', 'http://localhost:8000/v1/tools/get_market_statistics'),
+        json={'message': 'gateway timeout'},
+    )
+
+    class FakeAsyncClient:
+        async def post(self, endpoint, json):
+            return response
+
+        async def aclose(self):
+            return None
+
+    with patch.object(
+        TWSEMCPClient,
+        '_ensure_client',
+        new=AsyncMock(return_value=FakeAsyncClient()),
+    ), patch('core.mcp_client.asyncio.sleep', new=AsyncMock()) as mock_sleep:
+        result = client.get_market_statistics_sync('2026-04-08')
+
+    assert result is None
+    assert [call.args[0] for call in mock_sleep.await_args_list] == [2.0, 4.0]

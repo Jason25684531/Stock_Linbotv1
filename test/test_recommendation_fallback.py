@@ -569,3 +569,78 @@ def test_api_daily_signals_uses_actual_latest_date(monkeypatch):
     assert response.status_code == 200
     assert captured['date_str'] == '2026-04-10'
     assert payload['requested_date'] == '2026-04-10'
+
+
+def test_api_daily_signals_soft_fails_when_stock_news_lookup_raises(monkeypatch):
+    from app import app as flask_app
+    import app as app_module
+
+    market_df = pd.DataFrame([
+        {
+            'stock_id': '2330',
+            'close_price': 952.0,
+            'rsi': 59.0,
+            'volume': 200000,
+            'ma20': 910.0,
+            'ma60': 870.0,
+        }
+    ])
+    persisted_df = pd.DataFrame([
+        {
+            'stock_id': '2330',
+            'trade_date': '2026-04-10',
+            'strategy': 'v36_chip_momentum',
+            'close_price': 950.0,
+            'ai_score': 0.81,
+            'rsi': 58.5,
+            'volume': 180000,
+            'news_boost_reason': '',
+        }
+    ])
+
+    class FakeStrategy:
+        name = 'v36_chip_momentum'
+        display_name = '📊 籌碼動能 (V36)'
+        stop_loss = 0.08
+        take_profit = 0.15
+        features = []
+
+        def filter_candidates(self, df):
+            return df
+
+    class FakeManager:
+        def get_strategy(self, key):
+            return FakeStrategy() if key == 'v36_chip_momentum' else None
+
+        def get_active_strategy(self):
+            return FakeStrategy()
+
+        def get_active_strategy_names(self):
+            return ['v36_chip_momentum']
+
+    monkeypatch.setattr(app_module, 'get_actual_latest_date', lambda: '2026-04-10')
+    monkeypatch.setattr(app_module, 'get_stock_data', lambda *args, **kwargs: (market_df.copy(), kwargs.get('date_str') or '2026-04-10'))
+    monkeypatch.setattr(app_module, 'supplement_financial_data', lambda df: df)
+    monkeypatch.setattr(app_module, 'StrategyManager', FakeManager)
+    monkeypatch.setattr(app_module, '_get_stock_mentions_map', lambda stock_ids: (_ for _ in ()).throw(RuntimeError('news agent exploded')))
+    monkeypatch.setattr(
+        app_module,
+        'get_recommendations_with_market_fallback',
+        lambda **kwargs: (
+            persisted_df.copy(),
+            {
+                'requested_date': '2026-04-10',
+                'recommendation_date': '2026-04-10',
+                'fallback_used': False,
+                'market_circuit_breaker_active': False,
+            },
+        ),
+    )
+
+    client = flask_app.test_client()
+    response = client.get('/api/daily-signals?strategy=v36&top_n=3')
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload['signals'][0]['stock_id'] == '2330'
+    assert payload['signals'][0]['news_reason_items'] == []

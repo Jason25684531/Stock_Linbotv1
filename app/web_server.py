@@ -435,12 +435,20 @@ def api_daily_signals():
 
         signals = []
         signal_date = fallback_meta.get('recommendation_date') or date_str
-        stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
+        try:
+            stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
+        except Exception as news_exc:
+            print(f'⚠️ /api/daily-signals 個股新聞讀取失敗: {news_exc}')
+            stock_mentions_map = {}
         for _, row in picks.iterrows():
             close_price = float(row['close_price'])
             stop_loss_rate = float(getattr(active_strategy, 'stop_loss', Config.V30_STOP_LOSS)) if active_strategy else Config.V30_STOP_LOSS
             take_profit_rate = float(getattr(active_strategy, 'take_profit', Config.V30_TAKE_PROFIT)) if active_strategy else Config.V30_TAKE_PROFIT
-            news_info = app_pkg._resolve_signal_news_info(row, signal_date, stock_mentions_map)
+            try:
+                news_info = app_pkg._resolve_signal_news_info(row, signal_date, stock_mentions_map)
+            except Exception as news_exc:
+                print(f"⚠️ /api/daily-signals {row.get('stock_id')} 新聞摘要失敗: {news_exc}")
+                news_info = app_pkg._parse_news_reason(row.get('news_boost_reason') or '')
 
             signal = {
                 'stock_id': row['stock_id'],

@@ -26,14 +26,14 @@ class BaseStrategy(ABC):
     
     def __init__(self):
         """初始化策略"""
+        self._runtime_setting_overrides: Dict[str, Any] = {}
         self._validate_attributes()
 
     # ============================================
     # 共用工具 (子類可直接使用)
     # ============================================
 
-    @staticmethod
-    def _get_float_setting(key: str, default_value: float) -> float:
+    def _get_float_setting(self, key: str, default_value: float) -> float:
         """優先讀取 DB 設定，失敗時回退到預設值。
         
         用於策略門檻值可在 user_settings 表動態調整。
@@ -45,12 +45,22 @@ class BaseStrategy(ABC):
         Returns:
             float 設定值
         """
+        if key in self._runtime_setting_overrides:
+            return float(self._runtime_setting_overrides[key])
         try:
             from core.db_helper import get_setting
             value = get_setting(key, str(default_value))
             return float(value)
         except Exception:
             return float(default_value)
+
+    def set_runtime_overrides(self, overrides: Optional[Dict[str, Any]] = None):
+        """設定單次執行的參數覆寫，不寫回 DB。"""
+        self._runtime_setting_overrides = {
+            key: value
+            for key, value in (overrides or {}).items()
+            if value is not None
+        }
     
     # ============================================
     # 抽象屬性 (子類必須定義)

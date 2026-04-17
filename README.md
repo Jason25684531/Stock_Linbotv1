@@ -305,13 +305,20 @@ deactivate
 ```powershell
 # 單一策略回測
 python jobs/run_backtest.py --v31
+python jobs/run_backtest.py --strategy v35
 
-# 多策略組合回測
-python jobs/run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
+# 多策略組合回測（指定多個策略時會自動切換為組合模式）
+python jobs/run_backtest.py --strategies v33_low_vol,v35_innovation
 
 # 多策略「權重」組合回測（新支援）
 # 權重可為任意正數，系統會自動正規化；下例 = 70% / 30%
 python jobs/run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation --weights 7,3
+
+# 所有已註冊策略回測（自動從 StrategyManager 展開 v31~v38）
+python jobs/run_backtest.py --strategies all --days 365 --mode balanced
+
+# 若指定 end-date，days 會以結束日為基準回推
+python jobs/run_backtest.py --strategies all --end-date 2026-04-15 --days 365 --mode balanced
 
 # Web 回測（推薦；legacy facade 會轉發到 app package）
 python app.py
@@ -320,6 +327,10 @@ python app.py
 # 2. 設定回測期間（預設 1 年）
 # 3. 查看互動式圖表與績效指標
 ```
+
+- `--strategies all`：自動讀取 `StrategyManager` 內所有已註冊策略名稱。
+- `--days`：若未指定 `--start-date`，系統會以 `--end-date` 或資料庫最新交易日為基準回推。
+- `--mode`：會將 `aggressive / balanced / loose / conservative` preset 套用到 V34 / V35 篩選參數，且只影響當次回測，不會覆寫 DB 設定。
 
 ---
 
@@ -349,6 +360,7 @@ python app.py
 ```powershell
 # 執行回測
 python jobs/run_backtest.py
+python jobs/run_backtest.py --strategies all --days 365 --mode balanced
 
 # 重新訓練模型（為每個策略生成獨立 AI 模型）
 python jobs/train_model.py
@@ -382,6 +394,8 @@ python -m pytest test/ -v --tb=short
 
 # 4) 依模組分別測試（選擇性執行）
 python -m pytest test/test_strategy_factory.py -v      # 策略載入 & 篩選 (3 tests)
+python -m pytest test/test_run_backtest_cli.py -v      # 回測 CLI / all / mode 傳遞
+python -m pytest test/test_run_backtest_v30.py -v      # V30 出場邏輯相容性
 python -m pytest test/test_v35_refactor_flex.py -v     # Flex Message + 出場邏輯 (13 tests)
 python -m pytest test/test_phase2_chip_data.py -v      # 籌碼指標計算 (16 tests)
 python -m pytest test/test_v36_chip_momentum.py -v     # V36 籌碼動能策略 (29 tests)
@@ -389,6 +403,7 @@ python -m pytest test/test_v37_v38_strategies.py -v    # V37 均值回歸 + V38 
 
 # 5) 回測冒煙測試
 python jobs/run_backtest.py --v31
+python jobs/run_backtest.py --strategies all --days 365 --mode balanced
 
 # 6) 日常流程冒煙測試
 python jobs/run_daily.py

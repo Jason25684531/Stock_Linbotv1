@@ -83,6 +83,26 @@ def _clamp_limit(limit: int) -> int:
     return max(1, min(int(limit), 10))
 
 
+def _extract_error_status_code(exc: Exception) -> int | None:
+    for attr_name in ("status_code", "status", "code"):
+        value = getattr(exc, attr_name, None)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+
+    response = getattr(exc, 'response', None)
+    response_status = getattr(response, 'status_code', None)
+    if isinstance(response_status, int):
+        return response_status
+
+    match = re.search(r'\b(429|502|503|504)\b', str(exc))
+    if match:
+        return int(match.group(1))
+
+    return None
+
+
 def _records_to_json(records: list[dict]) -> str:
     return json.dumps(records, ensure_ascii=False)
 
@@ -799,8 +819,10 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
     results = {}
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     mcp_context = build_mcp_prompt_context()
+    client = genai.Client(api_key=Config.GEMINI_API_KEY)
+    service_unavailable_errors = 0
 
-    for sid in stock_ids[:15]:  # 最多處理 15 支，避免 API 超量
+    for sid in stock_ids[:8]:  # 最多處理 8 支，保留配額給其他操作
         try:
             # Yahoo 奇摩股市 RSS（個股新聞）
             rss_url = f"https://tw.stock.yahoo.com/rss?s={sid}"
@@ -835,7 +857,6 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
 - confidence: 0-1，研判信心程度
 - 只回傳 JSON，不要其他文字"""
 
-            client = genai.Client(api_key=Config.GEMINI_API_KEY)
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,
@@ -857,6 +878,19 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
                 results[str(sid)] = {"score": score, "reason": reason}
 
         except Exception as e:
+            status_code = _extract_error_status_code(e)
+            if status_code == 429:
+                print(f"    ⚠️ {sid} 個股新聞偵測收到 429 Quota，提前結束本輪請求")
+                break
+            if status_code == 503:
+                service_unavailable_errors += 1
+                print(
+                    f"    ⚠️ {sid} 個股新聞偵測收到 503 Unavailable "
+                    f"({service_unavailable_errors}/2)"
+                )
+                if results or service_unavailable_errors >= 2:
+                    break
+                continue
             print(f"    ⚠️ {sid} 個股新聞偵測失敗: {e}")
 
     if results:

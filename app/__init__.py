@@ -356,6 +356,8 @@ def _parse_news_reason(news_reason: str) -> dict:
 def _get_stock_mentions_map(stock_ids: list[str]) -> dict:
     if not stock_ids:
         return {}
+    if not Config.is_news_boost_enabled():
+        return {}
     try:
         from core.news_agent import get_stock_news_mentions
 
@@ -373,6 +375,8 @@ def _get_sector_news_summary(sector: str, date_str: str = None) -> dict:
         'title': '',
     }
     if not sector:
+        return payload
+    if not Config.is_news_boost_enabled():
         return payload
 
     sentiment = get_news_sentiment(date_str)
@@ -459,6 +463,9 @@ def _apply_news_sentiment_overlay(candidates: pd.DataFrame, date_str: str) -> pd
     if 'news_boost_reason' not in boosted.columns:
         boosted['news_boost_reason'] = ''
     if 'ai_score' not in boosted.columns:
+        return boosted
+    boosted['ai_score'] = pd.to_numeric(boosted['ai_score'], errors='coerce').astype('float64')
+    if not Config.is_news_boost_enabled():
         return boosted
 
     try:

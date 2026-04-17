@@ -46,6 +46,8 @@ JSONDict: TypeAlias = dict[str, Any]
 _T = TypeVar("_T")
 _LOGGER = logging.getLogger(__name__)
 _RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+_UPSTREAM_BACKOFF_STATUS_CODES = {502, 504}
+_SOFT_UNAVAILABLE_MESSAGE = "資料暫不可用"
 
 _TOOL_ROUTE_ENDPOINTS: dict[str, str] = {
     "company_basic_info": "/v1/tools/get_company_basic_info",
@@ -988,6 +990,7 @@ class MCPClient:
                     correlation_id=correlation_id,
                     attempt=attempt,
                     reason="transport_error",
+                    status_code=None,
                 )
                 continue
 
@@ -998,12 +1001,13 @@ class MCPClient:
                     correlation_id=correlation_id,
                 )
                 if attempt >= self.max_retries or not last_error.retryable:
-                    raise last_error
+                    raise self._finalize_retry_error(last_error)
                 await self._sleep_backoff(
                     endpoint=endpoint,
                     correlation_id=correlation_id,
                     attempt=attempt,
                     reason="service_error",
+                    status_code=last_error.status_code,
                 )
                 continue
 
@@ -1042,7 +1046,23 @@ class MCPClient:
                 correlation_id=correlation_id,
                 retryable=False,
             )
-        raise last_error
+        raise self._finalize_retry_error(last_error)
+
+    def _finalize_retry_error(
+        self,
+        error: MCPClientError,
+    ) -> MCPClientError:
+        if error.status_code not in _UPSTREAM_BACKOFF_STATUS_CODES:
+            return error
+
+        return MCPServiceError(
+            _SOFT_UNAVAILABLE_MESSAGE,
+            endpoint=error.endpoint,
+            correlation_id=error.correlation_id,
+            retryable=False,
+            status_code=error.status_code,
+            details=error.details,
+        )
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -1148,10 +1168,14 @@ class MCPClient:
         correlation_id: str,
         attempt: int,
         reason: str,
+        status_code: int | None,
     ) -> None:
+        is_upstream_unavailable = status_code in _UPSTREAM_BACKOFF_STATUS_CODES
+        base_delay = self.backoff_base_seconds * (2 if is_upstream_unavailable else 1)
+        max_delay = self.max_backoff_seconds * (2 if is_upstream_unavailable else 1)
         delay = min(
-            self.backoff_base_seconds * (2 ** (attempt - 1)),
-            self.max_backoff_seconds,
+            base_delay * (2 ** (attempt - 1)),
+            max_delay,
         )
         self._log(
             logging.WARNING,
@@ -1162,6 +1186,7 @@ class MCPClient:
             extra={
                 "backoff_seconds": delay,
                 "reason": reason,
+                "status_code": status_code,
             },
         )
         await asyncio.sleep(delay)

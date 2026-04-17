@@ -16,7 +16,10 @@
     python jobs/run_backtest.py --v34    # V34 雙渦輪飆股
     python jobs/run_backtest.py --v35    # V35 經營效益
     python jobs/run_backtest.py --portfolio --strategies v33_low_vol,v34_turbo
+    python jobs/run_backtest.py --strategies all --days 365 --mode balanced
 """
+import argparse
+from datetime import date, datetime, timedelta
 import pandas as pd
 from sqlalchemy import text
 import joblib
@@ -28,9 +31,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
-from config import Config
+from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core.strategy import get_v30_candidates, get_v30_params_from_db
-from core.db_helper import get_db_engine, get_market_trend as db_get_market_trend, save_backtest_results
+from core.db_helper import (
+    get_db_engine,
+    get_latest_trade_date,
+    get_market_trend as db_get_market_trend,
+    normalize_date_str,
+    save_backtest_results,
+)
 from core.strategy_manager import StrategyManager
 
 # ============================================
@@ -61,6 +70,254 @@ MODEL_PATH = Config.MODEL_PATH
 MARKET_SYMBOL = Config.MARKET_SYMBOL
 BOND_SYMBOL = Config.BOND_SYMBOL
 
+LEGACY_STRATEGY_FLAGS = {
+    'v30': 'v30',
+    'v31': 'v31_hybrid',
+    'v33': 'v33_low_vol',
+    'v34': 'v34_turbo',
+    'v35': 'v35_innovation',
+    'v36': 'v36_chip_momentum',
+    'v37': 'v37_mean_reversion',
+    'v38': 'v38_value_dividend',
+}
+
+STRATEGY_NAME_ALIASES = {
+    **LEGACY_STRATEGY_FLAGS,
+    'v31_hybrid': 'v31_hybrid',
+    'v33_low_vol': 'v33_low_vol',
+    'v34_turbo': 'v34_turbo',
+    'v35_innovation': 'v35_innovation',
+    'v36_chip_momentum': 'v36_chip_momentum',
+    'v37_mean_reversion': 'v37_mean_reversion',
+    'v38_value_dividend': 'v38_value_dividend',
+}
+
+SUPPORTED_FILTER_MODES = ('aggressive', 'balanced', 'loose', 'conservative')
+
+STRATEGY_MODE_PRESETS = {
+    'v34_turbo': V34_MODE_PRESETS,
+    'v35_innovation': V35_MODE_PRESETS,
+}
+
+
+def _parse_iso_date(value: str) -> str:
+    """將 CLI 日期參數標準化為 YYYY-MM-DD。"""
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').strftime('%Y-%m-%d')
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError('日期格式需為 YYYY-MM-DD') from exc
+
+
+def _parse_positive_days(value: str) -> int:
+    """驗證回測天數為正整數。"""
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError('days 必須是正整數') from exc
+
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError('days 必須大於 0')
+    return parsed
+
+
+def _parse_weights_csv(weights_text: str | None):
+    """解析逗號分隔的策略權重。"""
+    if not weights_text:
+        return None
+
+    values = []
+    for raw_value in weights_text.split(','):
+        token = raw_value.strip()
+        if not token:
+            continue
+        values.append(float(token))
+
+    return values or None
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """建立回測 CLI 參數解析器。"""
+    parser = argparse.ArgumentParser(description='執行單策略或多策略投資組合回測')
+    parser.add_argument(
+        '--strategy',
+        help='單一策略名稱，例如 v34 或 v34_turbo',
+    )
+    parser.add_argument(
+        '--strategies',
+        help='逗號分隔的策略名稱，或使用 all 代表所有已註冊策略',
+    )
+    parser.add_argument(
+        '--portfolio',
+        action='store_true',
+        help='強制使用多策略投資組合模式',
+    )
+    parser.add_argument(
+        '--weights',
+        help='投資組合權重，使用逗號分隔，例如 0.5,0.3,0.2',
+    )
+
+    date_group = parser.add_mutually_exclusive_group()
+    date_group.add_argument(
+        '--start-date',
+        type=_parse_iso_date,
+        help='回測起始日，格式 YYYY-MM-DD',
+    )
+    date_group.add_argument(
+        '--days',
+        type=_parse_positive_days,
+        help='依結束日或最新交易日回推的回測天數',
+    )
+
+    parser.add_argument(
+        '--end-date',
+        type=_parse_iso_date,
+        help='回測結束日，格式 YYYY-MM-DD',
+    )
+    parser.add_argument(
+        '--mode',
+        choices=SUPPORTED_FILTER_MODES,
+        help='V34/V35 等策略參數 preset，例：balanced',
+    )
+    parser.add_argument(
+        '--initial-capital',
+        type=float,
+        default=INITIAL_CAPITAL,
+        help='初始資金，預設 1000000',
+    )
+
+    legacy_group = parser.add_mutually_exclusive_group()
+    for legacy_flag in LEGACY_STRATEGY_FLAGS:
+        legacy_group.add_argument(
+            f'--{legacy_flag}',
+            action='store_true',
+            help=f'相容舊版單策略旗標：{legacy_flag.upper()}',
+        )
+
+    return parser
+
+
+def parse_cli_args(argv=None):
+    """解析回測 CLI 參數。"""
+    return build_arg_parser().parse_args(argv)
+
+
+def _coerce_to_date(date_value) -> date:
+    """將輸入日期值轉為 date 物件。"""
+    if isinstance(date_value, datetime):
+        return date_value.date()
+    if isinstance(date_value, date):
+        return date_value
+
+    normalized = normalize_date_str(date_value)
+    if not normalized:
+        raise ValueError('無法解析日期值')
+    return datetime.strptime(normalized, '%Y-%m-%d').date()
+
+
+def calculate_backtest_start_date(days: int | None, end_date: str | None = None, latest_trade_date=None) -> str:
+    """根據天數動態計算回測起始日。"""
+    if days is None:
+        return BACKTEST_START
+
+    if end_date:
+        anchor_date = _coerce_to_date(end_date)
+    elif latest_trade_date:
+        anchor_date = _coerce_to_date(latest_trade_date)
+    else:
+        db_latest = get_latest_trade_date()
+        anchor_date = _coerce_to_date(db_latest) if db_latest else date.today()
+
+    return (anchor_date - timedelta(days=days)).strftime('%Y-%m-%d')
+
+
+def get_registered_strategy_names(strategy_manager=None) -> list[str]:
+    """取得 StrategyManager 中所有已註冊的策略名稱。"""
+    manager = strategy_manager or StrategyManager()
+    return list(manager.list_strategies())
+
+
+def _resolve_strategy_names(args, strategy_manager=None):
+    """解析 CLI 指定的策略清單。"""
+    manager = strategy_manager or StrategyManager()
+    registered_names = get_registered_strategy_names(manager)
+
+    legacy_selected = [
+        flag_name for flag_name in LEGACY_STRATEGY_FLAGS
+        if getattr(args, flag_name, False)
+    ]
+
+    if legacy_selected and (args.strategy or args.strategies):
+        raise ValueError('請勿同時使用 --strategies/--strategy 與舊版 --vXX 旗標')
+
+    if legacy_selected:
+        requested_names = [LEGACY_STRATEGY_FLAGS[legacy_selected[0]]]
+    elif args.strategy:
+        requested_names = [args.strategy]
+    elif args.strategies:
+        requested_names = [
+            item.strip() for item in args.strategies.split(',')
+            if item.strip()
+        ]
+    else:
+        requested_names = ['v31_hybrid']
+
+    requested_all = len(requested_names) == 1 and requested_names[0].lower() == 'all'
+    if requested_all:
+        return registered_names, True
+
+    resolved_names = []
+    valid_names = set(registered_names)
+    valid_names.add('v30')
+
+    for requested_name in requested_names:
+        normalized_name = STRATEGY_NAME_ALIASES.get(requested_name.lower(), requested_name)
+        if normalized_name not in valid_names:
+            valid_display = ', '.join(['all', 'v30', *registered_names])
+            raise ValueError(f'未知策略: {requested_name}。可用選項: {valid_display}')
+
+        if normalized_name not in resolved_names:
+            resolved_names.append(normalized_name)
+
+    return resolved_names, False
+
+
+def resolve_backtest_plan(args, strategy_manager=None, latest_trade_date=None) -> dict:
+    """將 CLI 參數解析為回測執行計畫。"""
+    strategy_names, requested_all = _resolve_strategy_names(args, strategy_manager=strategy_manager)
+    run_portfolio = bool(args.portfolio or requested_all or len(strategy_names) > 1)
+    weights = _parse_weights_csv(args.weights)
+
+    if weights and not run_portfolio:
+        raise ValueError('單一策略回測不可指定 --weights，請改用多策略模式')
+
+    start_date = args.start_date or calculate_backtest_start_date(
+        args.days,
+        end_date=args.end_date,
+        latest_trade_date=latest_trade_date,
+    )
+
+    return {
+        'strategy_names': strategy_names,
+        'run_portfolio': run_portfolio,
+        'weights': weights,
+        'start_date': start_date,
+        'end_date': args.end_date,
+        'initial_capital': args.initial_capital,
+        'strategy_filter_mode': args.mode,
+    }
+
+
+def build_strategy_runtime_overrides(strategy_name: str, strategy_filter_mode: str | None) -> dict:
+    """根據 CLI mode 建立策略參數覆寫。"""
+    if not strategy_filter_mode:
+        return {}
+
+    presets = STRATEGY_MODE_PRESETS.get(strategy_name)
+    if not presets:
+        return {}
+
+    return dict(presets[strategy_filter_mode])
+
 
 class BacktestEngine:
     """
@@ -69,7 +326,7 @@ class BacktestEngine:
     """
     
     def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
-                 persist_results=True, use_db_params=USE_DB_PARAMS):
+                 persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None):
         """
         初始化回測引擎
         
@@ -81,6 +338,7 @@ class BacktestEngine:
             initial_capital: 初始資金
             persist_results: 是否輸出 CSV 並同步 DB
             use_db_params: V30 模式是否優先讀取 DB 參數
+            strategy_filter_mode: V34/V35 等策略的 preset 模式，例如 balanced
         """
         self.mode = mode.lower()
         self.start_date = start_date or BACKTEST_START
@@ -88,6 +346,7 @@ class BacktestEngine:
         self.initial_capital = initial_capital
         self.persist_results = persist_results
         self.use_db_params = use_db_params
+        self.strategy_filter_mode = strategy_filter_mode.lower() if strategy_filter_mode else None
         self.engine = get_db_engine()
         self.capital = initial_capital
         self.positions = {}
@@ -137,7 +396,24 @@ class BacktestEngine:
         try:
             mgr = StrategyManager()
             if registry_name in mgr.STRATEGY_REGISTRY:
-                return mgr._get_or_load_strategy(registry_name)
+                base_strategy = mgr.get_strategy(registry_name)
+                if base_strategy is None:
+                    return None
+
+                strategy = type(base_strategy)()
+                merged_overrides = {}
+                merged_overrides.update(mgr.get_strategy_overrides(registry_name))
+                merged_overrides.update(
+                    build_strategy_runtime_overrides(registry_name, self.strategy_filter_mode)
+                )
+
+                if merged_overrides and hasattr(strategy, 'set_runtime_overrides'):
+                    strategy.set_runtime_overrides(merged_overrides)
+
+                if self.strategy_filter_mode and registry_name in STRATEGY_MODE_PRESETS:
+                    print(f"🎛️ [{registry_name}] 套用 {self.strategy_filter_mode} 模式參數")
+
+                return strategy
         except Exception as e:
             print(f"⚠️ 策略物件載入失敗 ({self.mode}): {e}")
         return None
@@ -757,7 +1033,8 @@ class PortfolioBacktestEngine:
         result = engine.run_portfolio_backtest()
     """
     
-    def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000, weights: list = None):
+    def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000,
+                 weights: list = None, strategy_filter_mode: str | None = None):
         """初始化組合回測引擎
         
         Args:
@@ -770,6 +1047,7 @@ class PortfolioBacktestEngine:
         self.start_date = start_date
         self.end_date = end_date
         self.initial_capital = initial_capital
+        self.strategy_filter_mode = strategy_filter_mode.lower() if strategy_filter_mode else None
         self.weights = self._normalize_weights(strategies, weights)
         
         # 為每個策略建立獨立的回測引擎
@@ -781,8 +1059,14 @@ class PortfolioBacktestEngine:
         
         for strategy_name in strategies:
             # 建立該策略的回測引擎
-            engine = BacktestEngine(mode=strategy_name)
-            engine.capital = self.allocated_capital[strategy_name]
+            engine = BacktestEngine(
+                mode=strategy_name,
+                start_date=start_date,
+                end_date=end_date,
+                initial_capital=self.allocated_capital[strategy_name],
+                persist_results=False,
+                strategy_filter_mode=self.strategy_filter_mode,
+            )
             self.engines[strategy_name] = engine
         
         alloc_msg = ", ".join(
@@ -1016,52 +1300,45 @@ class PortfolioBacktestEngine:
         }
 
 
-def main():
+def main(argv=None):
     """主程式入口"""
-    # 解析命令列參數
-    mode = 'v31'  # 預設 V31
-    
-    if '--v30' in sys.argv:
-        mode = 'v30'
-    elif '--v31' in sys.argv:
-        mode = 'v31'
-    elif '--v33' in sys.argv:
-        mode = 'v33_low_vol'
-    elif '--v34' in sys.argv:
-        mode = 'v34_turbo'
-    elif '--v35' in sys.argv:
-        mode = 'v35_innovation'
-    elif '--v36' in sys.argv:
-        mode = 'v36_chip_momentum'
-    elif '--v37' in sys.argv:
-        mode = 'v37_mean_reversion'
-    elif '--v38' in sys.argv:
-        mode = 'v38_value_dividend'
-    elif '--portfolio' in sys.argv:
-        # 多策略組合模式
-        strategies = ['v33_low_vol', 'v35_innovation']  # 預設組合
-        weights = None
-        if '--strategies' in sys.argv:
-            idx = sys.argv.index('--strategies')
-            if idx + 1 < len(sys.argv):
-                strategies = sys.argv[idx + 1].split(',')
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
 
-        if '--weights' in sys.argv:
-            idx = sys.argv.index('--weights')
-            if idx + 1 < len(sys.argv):
-                weights = [float(w) for w in sys.argv[idx + 1].split(',')]
-        
+    try:
+        plan = resolve_backtest_plan(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    strategy_msg = ', '.join(plan['strategy_names'])
+    print(f"🧭 回測策略: {strategy_msg}")
+    print(f"📅 回測起始日: {plan['start_date']}")
+    if plan['end_date']:
+        print(f"📅 回測結束日: {plan['end_date']}")
+    if plan['strategy_filter_mode']:
+        print(f"🎛️ 篩選模式: {plan['strategy_filter_mode']}")
+
+    if plan['run_portfolio']:
         engine = PortfolioBacktestEngine(
-            strategies=strategies,
-            start_date=BACKTEST_START,
-            weights=weights,
+            strategies=plan['strategy_names'],
+            start_date=plan['start_date'],
+            end_date=plan['end_date'],
+            initial_capital=plan['initial_capital'],
+            weights=plan['weights'],
+            strategy_filter_mode=plan['strategy_filter_mode'],
         )
         engine.run_portfolio_backtest()
-        return
-    
-    # 執行單一策略回測
-    engine = BacktestEngine(mode=mode)
+        return 0
+
+    engine = BacktestEngine(
+        mode=plan['strategy_names'][0],
+        start_date=plan['start_date'],
+        end_date=plan['end_date'],
+        initial_capital=plan['initial_capital'],
+        strategy_filter_mode=plan['strategy_filter_mode'],
+    )
     engine.run()
+    return 0
 
 
 if __name__ == "__main__":

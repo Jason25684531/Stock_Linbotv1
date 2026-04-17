@@ -12,6 +12,14 @@ except ImportError:
     pass
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
     """Centralized runtime configuration surface."""
 
@@ -77,6 +85,10 @@ class Config:
             return strategy.look_ahead_days
         except Exception:
             return 7
+
+    @classmethod
+    def is_news_boost_enabled(cls) -> bool:
+        return _env_flag("NEWS_BOOST_ENABLED", cls.NEWS_BOOST_ENABLED)
 
     BOND_SYMBOL = "00679B"
     MARKET_SYMBOL = "2330"
@@ -236,7 +248,7 @@ class Config:
     LINE_CHANNEL_SECRET = os.getenv("LINE_SECRET", "")
     GEMINI_API_KEY = os.getenv("GEMINI_KEY", "")
 
-    NEWS_BOOST_ENABLED = True
+    NEWS_BOOST_ENABLED = _env_flag("NEWS_BOOST_ENABLED", False)
     NEWS_BOOST_FACTOR = 0.10
     NEWS_BOOST_MAX = 0.15
     NEWS_PENALTY_FACTOR = 0.10
