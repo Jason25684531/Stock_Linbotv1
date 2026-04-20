@@ -10,7 +10,6 @@ from PIL import Image
 from linebot.v3.messaging import (
     ApiClient,
     Configuration,
-    MessageAction,
     MessagingApi,
     PostbackAction,
     RichMenuArea,
@@ -38,13 +37,13 @@ def build_default_rich_menu_request() -> RichMenuRequest:
     Layout (2500x1686 px canvas, each cell 1250x843):
 
     +-----------------+-----------------+
-    |  個股診斷       |  總經與大盤     |
-    |  MessageAction  |  PostbackAction |
-    |  text="診斷 "   |  market_summary |
-    +-----------------+-----------------+
-    |  籌碼動向       |  策略盲盒       |
+    |  個股診斷       |  總經摘要       |
     |  PostbackAction |  PostbackAction |
-    |  chip_trend     |  random_strategy|
+    |  prompt_stock   |  macro_summary  |
+    +-----------------+-----------------+
+    |  日誌反思       |  策略選股       |
+    |  PostbackAction |  PostbackAction |
+    | journal_reflect | choose_strategy |
     +-----------------+-----------------+
     """
     return RichMenuRequest(
@@ -53,12 +52,16 @@ def build_default_rich_menu_request() -> RichMenuRequest:
         name=DEFAULT_RICH_MENU_NAME,
         chat_bar_text=DEFAULT_CHAT_BAR_TEXT,
         areas=[
-            # 左上：個股診斷（保持 MessageAction，觸發診斷流程）
+            # 左上：個股診斷（引導輸入 4 碼股票代號）
             RichMenuArea(
                 bounds=RichMenuBounds(x=0, y=0, width=RICH_MENU_HALF_WIDTH, height=RICH_MENU_HALF_HEIGHT),
-                action=MessageAction(label="個股診斷", text="診斷 "),
+                action=PostbackAction(
+                    label="個股診斷",
+                    data="action=prompt_stock_diagnosis",
+                    display_text="個股診斷",
+                ),
             ),
-            # 右上：總經與大盤（PostbackAction → market_summary）
+            # 右上：總經摘要（PostbackAction → macro_summary）
             RichMenuArea(
                 bounds=RichMenuBounds(
                     x=RICH_MENU_HALF_WIDTH,
@@ -67,12 +70,12 @@ def build_default_rich_menu_request() -> RichMenuRequest:
                     height=RICH_MENU_HALF_HEIGHT,
                 ),
                 action=PostbackAction(
-                    label="總經與大盤",
-                    data="action=market_summary",
-                    display_text="總經與大盤",
+                    label="總經摘要",
+                    data="action=macro_summary",
+                    display_text="總經摘要",
                 ),
             ),
-            # 左下：籌碼動向（PostbackAction → chip_trend）
+            # 左下：日誌反思（PostbackAction → journal_reflection）
             RichMenuArea(
                 bounds=RichMenuBounds(
                     x=0,
@@ -81,12 +84,12 @@ def build_default_rich_menu_request() -> RichMenuRequest:
                     height=RICH_MENU_HALF_HEIGHT,
                 ),
                 action=PostbackAction(
-                    label="籌碼動向",
-                    data="action=chip_trend",
-                    display_text="籌碼動向",
+                    label="日誌反思",
+                    data="action=journal_reflection",
+                    display_text="日誌反思",
                 ),
             ),
-            # 右下：策略盲盒（PostbackAction → random_strategy）
+            # 右下：策略選股（PostbackAction → choose_strategy）
             RichMenuArea(
                 bounds=RichMenuBounds(
                     x=RICH_MENU_HALF_WIDTH,
@@ -95,9 +98,9 @@ def build_default_rich_menu_request() -> RichMenuRequest:
                     height=RICH_MENU_HALF_HEIGHT,
                 ),
                 action=PostbackAction(
-                    label="策略盲盒",
-                    data="action=random_strategy",
-                    display_text="策略盲盒",
+                    label="策略選股",
+                    data="action=choose_strategy",
+                    display_text="策略選股",
                 ),
             ),
         ],

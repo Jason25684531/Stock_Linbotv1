@@ -391,12 +391,6 @@ def api_daily_signals():
                 except Exception as score_error:
                     print(f'⚠️ /api/daily-signals AI 排名失敗: {score_error}')
 
-            if not has_persisted and not candidates.empty and 'ai_score' in candidates.columns:
-                candidates = app_pkg._apply_news_sentiment_overlay(
-                    candidates,
-                    fallback_meta.get('recommendation_date') or date_str,
-                )
-
             if candidates.empty:
                 return jsonify(
                     {
@@ -435,46 +429,55 @@ def api_daily_signals():
 
         signals = []
         signal_date = fallback_meta.get('recommendation_date') or date_str
-        try:
-            stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
-        except Exception as news_exc:
-            print(f'⚠️ /api/daily-signals 個股新聞讀取失敗: {news_exc}')
-            stock_mentions_map = {}
-        for _, row in picks.iterrows():
-            close_price = float(row['close_price'])
-            stop_loss_rate = float(getattr(active_strategy, 'stop_loss', Config.V30_STOP_LOSS)) if active_strategy else Config.V30_STOP_LOSS
-            take_profit_rate = float(getattr(active_strategy, 'take_profit', Config.V30_TAKE_PROFIT)) if active_strategy else Config.V30_TAKE_PROFIT
-            try:
-                news_info = app_pkg._resolve_signal_news_info(row, signal_date, stock_mentions_map)
-            except Exception as news_exc:
-                print(f"⚠️ /api/daily-signals {row.get('stock_id')} 新聞摘要失敗: {news_exc}")
-                news_info = app_pkg._parse_news_reason(row.get('news_boost_reason') or '')
+        with app_pkg._live_signal_news_timeout_scope():
+            if active_strategy is not None and not has_persisted and not candidates.empty and 'ai_score' in candidates.columns:
+                candidates = app_pkg._apply_news_sentiment_overlay(
+                    candidates,
+                    signal_date,
+                )
+                picks = candidates.head(top_n)
 
-            signal = {
-                'stock_id': row['stock_id'],
-                'close_price': close_price,
-                'strategy': strategy_name,
-                'strategy_key': strategy_key,
-                'ai_score': app_pkg.safe_float(row.get('ai_score')) if 'ai_score' in row else None,
-                'rsi': app_pkg.safe_float(row.get('rsi')) if 'rsi' in row else None,
-                'volume': app_pkg.safe_int(row.get('volume')) if 'volume' in row else None,
-                'ma20': app_pkg.safe_float(row.get('ma20')) if 'ma20' in row else None,
-                'ma60': app_pkg.safe_float(row.get('ma60')) if 'ma60' in row else None,
-                'bias': app_pkg.safe_float(row.get('bias')) if 'bias' in row else None,
-                'op_profit_margin': app_pkg.safe_float(row.get('op_profit_margin')) if 'op_profit_margin' in row else None,
-                'revenue_yoy': app_pkg.safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
-                'chip_score': app_pkg.safe_float(row.get('chip_score')) if 'chip_score' in row else None,
-                'foreign_buy': app_pkg.safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
-                'news_boost_reason': news_info['raw'],
-                'news_reason_items': news_info['items'],
-                'news_signal_title': news_info['title'],
-                'news_is_bearish': news_info['is_bearish'],
-                'suggested_buy_price': round(close_price, 2),
-                'suggested_sell_price': round(close_price * (1 + take_profit_rate), 2),
-                'suggested_stop_loss_price': round(close_price * (1 - stop_loss_rate), 2),
-                'detail_url': f"https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID={row['stock_id']}",
-            }
-            signals.append(signal)
+            try:
+                stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
+            except Exception as news_exc:
+                print(f'⚠️ /api/daily-signals 個股新聞讀取失敗: {news_exc}')
+                stock_mentions_map = {}
+
+            for _, row in picks.iterrows():
+                close_price = float(row['close_price'])
+                stop_loss_rate = float(getattr(active_strategy, 'stop_loss', Config.V30_STOP_LOSS)) if active_strategy else Config.V30_STOP_LOSS
+                take_profit_rate = float(getattr(active_strategy, 'take_profit', Config.V30_TAKE_PROFIT)) if active_strategy else Config.V30_TAKE_PROFIT
+                try:
+                    news_info = app_pkg._resolve_signal_news_info(row, signal_date, stock_mentions_map)
+                except Exception as news_exc:
+                    print(f"⚠️ /api/daily-signals {row.get('stock_id')} 新聞摘要失敗: {news_exc}")
+                    news_info = app_pkg._parse_news_reason(row.get('news_boost_reason') or '')
+
+                signal = {
+                    'stock_id': row['stock_id'],
+                    'close_price': close_price,
+                    'strategy': strategy_name,
+                    'strategy_key': strategy_key,
+                    'ai_score': app_pkg.safe_float(row.get('ai_score')) if 'ai_score' in row else None,
+                    'rsi': app_pkg.safe_float(row.get('rsi')) if 'rsi' in row else None,
+                    'volume': app_pkg.safe_int(row.get('volume')) if 'volume' in row else None,
+                    'ma20': app_pkg.safe_float(row.get('ma20')) if 'ma20' in row else None,
+                    'ma60': app_pkg.safe_float(row.get('ma60')) if 'ma60' in row else None,
+                    'bias': app_pkg.safe_float(row.get('bias')) if 'bias' in row else None,
+                    'op_profit_margin': app_pkg.safe_float(row.get('op_profit_margin')) if 'op_profit_margin' in row else None,
+                    'revenue_yoy': app_pkg.safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
+                    'chip_score': app_pkg.safe_float(row.get('chip_score')) if 'chip_score' in row else None,
+                    'foreign_buy': app_pkg.safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
+                    'news_boost_reason': news_info['raw'],
+                    'news_reason_items': news_info['items'],
+                    'news_signal_title': news_info['title'],
+                    'news_is_bearish': news_info['is_bearish'],
+                    'suggested_buy_price': round(close_price, 2),
+                    'suggested_sell_price': round(close_price * (1 + take_profit_rate), 2),
+                    'suggested_stop_loss_price': round(close_price * (1 - stop_loss_rate), 2),
+                    'detail_url': f"https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID={row['stock_id']}",
+                }
+                signals.append(signal)
 
         return jsonify(
             {

@@ -288,6 +288,38 @@ class TestRandomStrategyHandler:
 class TestPostbackRouter:
     """驗證 _build_postback_reply_messages 的路由分派行為。"""
 
+    def test_macro_summary_routes_correctly(self):
+        with patch('app._build_macro_news_messages') as mock_handler:
+            mock_handler.return_value = ['msg']
+            from app import _build_postback_reply_messages  # type: ignore[attr-defined]
+            result = _build_postback_reply_messages('macro_summary')
+            mock_handler.assert_called_once()
+            assert result == ['msg']
+
+    def test_journal_reflection_routes_correctly(self):
+        with patch('app._build_journal_reflection_messages') as mock_handler:
+            mock_handler.return_value = ['msg']
+            from app import _build_postback_reply_messages  # type: ignore[attr-defined]
+            result = _build_postback_reply_messages('journal_reflection')
+            mock_handler.assert_called_once()
+            assert result == ['msg']
+
+    def test_choose_strategy_routes_correctly(self):
+        with patch('app._build_strategy_picker_messages') as mock_handler:
+            mock_handler.return_value = ['msg']
+            from app import _build_postback_reply_messages  # type: ignore[attr-defined]
+            result = _build_postback_reply_messages('choose_strategy')
+            mock_handler.assert_called_once()
+            assert result == ['msg']
+
+    def test_select_strategy_routes_with_payload(self):
+        with patch('app._build_selected_strategy_messages') as mock_handler:
+            mock_handler.return_value = ['msg']
+            from app import _build_postback_reply_messages  # type: ignore[attr-defined]
+            result = _build_postback_reply_messages('select_strategy', payload={'strategy': 'v35_innovation'})
+            mock_handler.assert_called_once_with({'strategy': 'v35_innovation'})
+            assert result == ['msg']
+
     def test_market_summary_routes_correctly(self):
         with patch('app._build_market_summary_messages') as mock_handler:
             mock_handler.return_value = ['msg']
@@ -385,7 +417,7 @@ class TestRichMenuLayout:
         req = build_default_rich_menu_request()
         assert len(req.areas) == 4, f"預期 4 個區域，實際有 {len(req.areas)} 個"
 
-    def test_market_summary_area_exists(self):
+    def test_macro_summary_area_exists(self):
         from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
@@ -394,10 +426,10 @@ class TestRichMenuLayout:
             for area in req.areas
             if isinstance(area.action, PostbackAction) and area.action.data
         ]
-        assert 'action=market_summary' in postback_data, \
-            f"找不到 market_summary postback action，現有: {postback_data}"
+        assert 'action=macro_summary' in postback_data, \
+            f"找不到 macro_summary postback action，現有: {postback_data}"
 
-    def test_chip_trend_area_exists(self):
+    def test_journal_reflection_area_exists(self):
         from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
@@ -406,10 +438,10 @@ class TestRichMenuLayout:
             for area in req.areas
             if isinstance(area.action, PostbackAction) and area.action.data
         ]
-        assert 'action=chip_trend' in postback_data, \
-            f"找不到 chip_trend postback action，現有: {postback_data}"
+        assert 'action=journal_reflection' in postback_data, \
+            f"找不到 journal_reflection postback action，現有: {postback_data}"
 
-    def test_random_strategy_area_exists(self):
+    def test_choose_strategy_area_exists(self):
         from core.richmenu import build_default_rich_menu_request
         from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
@@ -418,21 +450,21 @@ class TestRichMenuLayout:
             for area in req.areas
             if isinstance(area.action, PostbackAction) and area.action.data
         ]
-        assert 'action=random_strategy' in postback_data, \
-            f"找不到 random_strategy postback action，現有: {postback_data}"
+        assert 'action=choose_strategy' in postback_data, \
+            f"找不到 choose_strategy postback action，現有: {postback_data}"
 
-    def test_stock_diagnosis_message_action_exists(self):
-        """左上角「個股診斷」應使用 MessageAction。"""
+    def test_stock_diagnosis_postback_exists(self):
+        """左上角「個股診斷」應使用 PostbackAction 引導輸入。"""
         from core.richmenu import build_default_rich_menu_request
-        from linebot.v3.messaging import MessageAction
+        from linebot.v3.messaging import PostbackAction
         req = build_default_rich_menu_request()
-        message_labels = [
-            area.action.label
+        postback_data = [
+            area.action.data
             for area in req.areas
-            if isinstance(area.action, MessageAction)
+            if isinstance(area.action, PostbackAction) and area.action.data
         ]
-        assert '個股診斷' in message_labels, \
-            f"找不到 MessageAction 標籤「個股診斷」，現有: {message_labels}"
+        assert 'action=prompt_stock_diagnosis' in postback_data, \
+            f"找不到 prompt_stock_diagnosis postback action，現有: {postback_data}"
 
 
 class TestRichMenuSync:
@@ -488,14 +520,14 @@ class TestPostbackFlow:
 
     def test_extract_action_from_standard_payload(self):
         from app import _extract_postback_action  # type: ignore[attr-defined]
-        assert _extract_postback_action('action=market_summary') == 'market_summary'
-        assert _extract_postback_action('action=chip_trend') == 'chip_trend'
-        assert _extract_postback_action('action=random_strategy') == 'random_strategy'
-        assert _extract_postback_action('action=get_macro_news') == 'get_macro_news'
+        assert _extract_postback_action('action=prompt_stock_diagnosis') == 'prompt_stock_diagnosis'
+        assert _extract_postback_action('action=macro_summary') == 'macro_summary'
+        assert _extract_postback_action('action=journal_reflection') == 'journal_reflection'
+        assert _extract_postback_action('action=choose_strategy') == 'choose_strategy'
 
     def test_extract_action_with_extra_query_params(self):
         from app import _extract_postback_action  # type: ignore[attr-defined]
-        assert _extract_postback_action('action=get_journal&foo=bar') == 'get_journal'
+        assert _extract_postback_action('action=select_strategy&strategy=v35_innovation') == 'select_strategy'
 
     def test_extract_action_empty_string(self):
         from app import _extract_postback_action  # type: ignore[attr-defined]
@@ -530,11 +562,11 @@ class TestPostbackFlow:
             mock_handler.assert_called_once()
 
     def test_backward_compat_get_journal(self):
-        with patch('app._build_journal_reflection_text') as mock_journal:
-            mock_journal.return_value = '日誌反思文字'
+        with patch('app._build_journal_reflection_messages') as mock_journal:
+            mock_journal.return_value = ['日誌反思訊息']
             from app import _build_postback_reply_messages  # type: ignore
             result = _build_postback_reply_messages('get_journal')
-            assert any('日誌反思文字' in getattr(m, 'text', '') for m in result)
+            assert result == ['日誌反思訊息']
 
     def test_postback_handler_routes_reply_message(self, monkeypatch):
         import app as app_module
@@ -561,14 +593,19 @@ class TestPostbackFlow:
         monkeypatch.setattr(app_module, 'ApiClient', DummyApiClient)
         monkeypatch.setattr(app_module, 'MessagingApi', DummyMessagingApi)
         monkeypatch.setattr(app_module, 'ReplyMessageRequest', lambda **kwargs: kwargs)
-        monkeypatch.setattr(app_module, '_build_postback_reply_messages', lambda action: [f'reply:{action}'])
+        monkeypatch.setattr(
+            app_module,
+            '_build_postback_reply_messages',
+            lambda action, payload=None, source_id='': [f'reply:{action}:{payload.get("strategy") if payload else ""}:{source_id}'],
+        )
 
         event = SimpleNamespace(
             reply_token='reply-token-1',
-            postback=SimpleNamespace(data='action=get_journal'),
+            postback=SimpleNamespace(data='action=select_strategy&strategy=v35_innovation'),
+            source=SimpleNamespace(user_id='user-1'),
         )
 
         app_module.postback_handler(event)
 
         assert sent['reply_token'] == 'reply-token-1'
-        assert sent['messages'] == ['reply:get_journal']
+        assert sent['messages'] == ['reply:select_strategy:v35_innovation:user-1']

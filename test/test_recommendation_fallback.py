@@ -219,6 +219,40 @@ def test_get_daily_recommendations_filters_heartbeat_rows(monkeypatch):
     assert result['stock_id'].tolist() == ['2330']
 
 
+def test_filter_common_stock_universe_excludes_non_stock_identifiers():
+    market_df = pd.DataFrame([
+        {'stock_id': '0312', 'close_price': 10.0},
+        {'stock_id': '0812', 'close_price': 10.0},
+        {'stock_id': '2330', 'close_price': 952.0},
+        {'stock_id': '00878', 'close_price': 21.0},
+        {'stock_id': '12345', 'close_price': 30.0},
+        {'stock_id': 'ABCD', 'close_price': 40.0},
+        {'stock_id': ' 2881 ', 'close_price': 50.0},
+    ])
+
+    filtered = db_helper.filter_common_stock_universe(market_df)
+
+    assert filtered['stock_id'].tolist() == ['2330', '2881']
+
+
+def test_get_stock_data_filters_non_common_stock_rows(monkeypatch):
+    market_rows = pd.DataFrame([
+        {'stock_id': '0312', 'close_price': 10.0},
+        {'stock_id': '2330', 'close_price': 952.0},
+        {'stock_id': '00878', 'close_price': 21.0},
+        {'stock_id': '2881', 'close_price': 50.0},
+        {'stock_id': 'ABCD', 'close_price': 40.0},
+    ])
+
+    monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
+    monkeypatch.setattr(db_helper.pd, 'read_sql', lambda sql, engine, params=None: market_rows.copy())
+
+    result, date_str = db_helper.get_stock_data(date_str='2026-04-18')
+
+    assert date_str == '2026-04-18'
+    assert result['stock_id'].tolist() == ['2330', '2881']
+
+
 def test_format_market_fallback_notice_handles_no_safe_day():
     notice = db_helper.format_market_fallback_notice({
         'requested_date': '2026-03-13',
@@ -263,6 +297,7 @@ def test_format_market_fallback_notice_handles_stale_data():
 def test_get_sector_news_summary_only_returns_matching_sector(monkeypatch):
     import app as app_module
 
+    monkeypatch.setattr(app_module.Config, 'is_news_boost_enabled', classmethod(lambda cls: True))
     monkeypatch.setattr(
         app_module,
         'get_news_sentiment',
@@ -347,6 +382,7 @@ def test_api_daily_signals_returns_fallback_metadata(monkeypatch):
     monkeypatch.setattr(app_module, 'get_stock_data', lambda *args, **kwargs: (market_df.copy(), kwargs.get('date_str') or '2026-03-13'))
     monkeypatch.setattr(app_module, 'supplement_financial_data', lambda df: df)
     monkeypatch.setattr(app_module, 'StrategyManager', FakeManager)
+    monkeypatch.setattr(app_module.Config, 'is_news_boost_enabled', classmethod(lambda cls: True))
     monkeypatch.setattr(app_module, 'get_stock_sector', lambda stock_id: '半導體')
     monkeypatch.setattr(app_module, '_get_stock_mentions_map', lambda stock_ids: {})
     monkeypatch.setattr(
@@ -643,4 +679,95 @@ def test_api_daily_signals_soft_fails_when_stock_news_lookup_raises(monkeypatch)
 
     assert response.status_code == 200
     assert payload['signals'][0]['stock_id'] == '2330'
+    assert payload['signals'][0]['news_reason_items'] == []
+
+
+def test_api_daily_signals_returns_degraded_payload_when_news_timeout(monkeypatch):
+    from app import app as flask_app
+    import app as app_module
+    from core import model_utils, news_agent
+
+    captured = {}
+    market_df = pd.DataFrame([
+        {
+            'stock_id': '2330',
+            'close_price': 952.0,
+            'rsi': 59.0,
+            'volume': 200000,
+            'ma20': 910.0,
+            'ma60': 870.0,
+        }
+    ])
+    dynamic_candidates = pd.DataFrame([
+        {
+            'stock_id': '2330',
+            'close_price': 952.0,
+            'rsi': 59.0,
+            'volume': 200000,
+            'ma20': 910.0,
+            'ma60': 870.0,
+            'chip_score': 72.0,
+        }
+    ])
+
+    class FakeStrategy:
+        name = 'v36_chip_momentum'
+        display_name = '📊 籌碼動能 (V36)'
+        stop_loss = 0.08
+        take_profit = 0.15
+        features = []
+
+        def filter_candidates(self, df):
+            return df
+
+    class FakeManager:
+        def get_strategy(self, key):
+            return FakeStrategy() if key == 'v36_chip_momentum' else None
+
+        def get_active_strategy(self):
+            return FakeStrategy()
+
+        def get_active_strategy_names(self):
+            return ['v36_chip_momentum']
+
+    def fake_get_stock_news_mentions(stock_ids, deadline_monotonic=None):
+        captured['deadline_monotonic'] = deadline_monotonic
+        raise TimeoutError('request timed out')
+
+    monkeypatch.setattr(app_module, 'get_actual_latest_date', lambda: '2026-04-10')
+    monkeypatch.setattr(app_module, 'get_stock_data', lambda *args, **kwargs: (market_df.copy(), kwargs.get('date_str') or '2026-04-10'))
+    monkeypatch.setattr(app_module, 'supplement_financial_data', lambda df: df)
+    monkeypatch.setattr(app_module, 'StrategyManager', FakeManager)
+    monkeypatch.setattr(app_module, 'get_stock_sector', lambda stock_id: '金融保險')
+    monkeypatch.setattr(app_module, 'get_news_sentiment', lambda date_str=None: {
+        'bull_sectors': [],
+        'bear_sectors': [],
+        'bull_reasons': [],
+        'bear_reasons': [],
+        'bull_theme_map': {},
+        'bear_theme_map': {},
+    })
+    monkeypatch.setattr(app_module.Config, 'is_news_boost_enabled', classmethod(lambda cls: True))
+    monkeypatch.setattr(app_module.Config, 'DASHBOARD_NEWS_TIMEOUT_SECONDS', 3.0)
+    monkeypatch.setattr(app_module, '_load_strategy_candidates', lambda **kwargs: (
+        dynamic_candidates.copy(),
+        {
+            'requested_date': '2026-04-10',
+            'recommendation_date': '2026-04-10',
+            'fallback_used': False,
+            'market_circuit_breaker_active': False,
+        },
+        False,
+    ))
+    monkeypatch.setattr(model_utils, 'load_model', lambda strategy_key: (None, [], None, None))
+    monkeypatch.setattr(news_agent, 'get_stock_news_mentions', fake_get_stock_news_mentions)
+
+    client = flask_app.test_client()
+    response = client.get('/api/daily-signals?strategy=v36&top_n=3')
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert captured['deadline_monotonic'] is not None
+    assert payload['signals'][0]['stock_id'] == '2330'
+    assert payload['signals'][0]['ai_score'] is None
     assert payload['signals'][0]['news_reason_items'] == []

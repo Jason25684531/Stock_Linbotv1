@@ -17,6 +17,8 @@ import json
 import feedparser
 import datetime
 import re
+import threading
+import time
 from typing import ClassVar
 from urllib.parse import quote_plus
 
@@ -101,6 +103,147 @@ def _extract_error_status_code(exc: Exception) -> int | None:
         return int(match.group(1))
 
     return None
+
+
+_STOCK_NEWS_GUARD_LOCK = threading.Lock()
+_STOCK_NEWS_GUARD_STATE = {
+    'consecutive_failures': 0,
+    'breaker_open_until': 0.0,
+    'last_error': '',
+    'last_status_code': None,
+    'last_timeout_seconds': None,
+}
+
+
+def _stock_news_timeout_seconds() -> float:
+    try:
+        return max(0.1, float(Config.DASHBOARD_NEWS_TIMEOUT_SECONDS))
+    except Exception:
+        return 3.0
+
+
+def _stock_news_failure_threshold() -> int:
+    try:
+        return max(1, int(Config.DASHBOARD_NEWS_FAILURE_THRESHOLD))
+    except Exception:
+        return 2
+
+
+def _stock_news_breaker_cooldown_seconds() -> float:
+    try:
+        return max(1.0, float(Config.DASHBOARD_NEWS_BREAKER_COOLDOWN_SECONDS))
+    except Exception:
+        return 60.0
+
+
+def _normalize_timeout_seconds(timeout_seconds: float | None) -> float | None:
+    if timeout_seconds is None:
+        return None
+
+    try:
+        normalized = float(timeout_seconds)
+    except (TypeError, ValueError):
+        return None
+
+    if normalized <= 0:
+        return 0.0
+    return normalized
+
+
+def _resolve_stock_news_timeout(deadline_monotonic: float | None = None) -> float:
+    timeout_seconds = _stock_news_timeout_seconds()
+    if deadline_monotonic is None:
+        return timeout_seconds
+
+    remaining = float(deadline_monotonic) - time.monotonic()
+    if remaining <= 0:
+        return 0.0
+    return min(timeout_seconds, remaining)
+
+
+def _expire_stock_news_breaker_if_needed(now_monotonic: float | None = None) -> None:
+    now_monotonic = time.monotonic() if now_monotonic is None else now_monotonic
+    with _STOCK_NEWS_GUARD_LOCK:
+        breaker_open_until = float(_STOCK_NEWS_GUARD_STATE['breaker_open_until'] or 0.0)
+        if breaker_open_until and breaker_open_until <= now_monotonic:
+            _STOCK_NEWS_GUARD_STATE['consecutive_failures'] = 0
+            _STOCK_NEWS_GUARD_STATE['breaker_open_until'] = 0.0
+
+
+def reset_stock_news_guard_state() -> None:
+    with _STOCK_NEWS_GUARD_LOCK:
+        _STOCK_NEWS_GUARD_STATE['consecutive_failures'] = 0
+        _STOCK_NEWS_GUARD_STATE['breaker_open_until'] = 0.0
+        _STOCK_NEWS_GUARD_STATE['last_error'] = ''
+        _STOCK_NEWS_GUARD_STATE['last_status_code'] = None
+        _STOCK_NEWS_GUARD_STATE['last_timeout_seconds'] = None
+
+
+def get_stock_news_guard_snapshot(now_monotonic: float | None = None) -> dict:
+    now_monotonic = time.monotonic() if now_monotonic is None else now_monotonic
+    _expire_stock_news_breaker_if_needed(now_monotonic)
+    with _STOCK_NEWS_GUARD_LOCK:
+        breaker_open_until = float(_STOCK_NEWS_GUARD_STATE['breaker_open_until'] or 0.0)
+        cooldown_remaining_seconds = max(0.0, breaker_open_until - now_monotonic)
+        return {
+            'breaker_open': cooldown_remaining_seconds > 0,
+            'cooldown_remaining_seconds': cooldown_remaining_seconds,
+            'consecutive_failures': int(_STOCK_NEWS_GUARD_STATE['consecutive_failures'] or 0),
+            'last_error': str(_STOCK_NEWS_GUARD_STATE['last_error'] or ''),
+            'last_status_code': _STOCK_NEWS_GUARD_STATE['last_status_code'],
+            'last_timeout_seconds': _STOCK_NEWS_GUARD_STATE['last_timeout_seconds'],
+        }
+
+
+def _record_stock_news_success() -> None:
+    with _STOCK_NEWS_GUARD_LOCK:
+        _STOCK_NEWS_GUARD_STATE['consecutive_failures'] = 0
+        _STOCK_NEWS_GUARD_STATE['last_error'] = ''
+        _STOCK_NEWS_GUARD_STATE['last_status_code'] = None
+        _STOCK_NEWS_GUARD_STATE['last_timeout_seconds'] = None
+
+
+def _record_stock_news_failure(
+    reason: str,
+    *,
+    status_code: int | None = None,
+    timeout_seconds: float | None = None,
+) -> dict:
+    now_monotonic = time.monotonic()
+    _expire_stock_news_breaker_if_needed(now_monotonic)
+
+    with _STOCK_NEWS_GUARD_LOCK:
+        _STOCK_NEWS_GUARD_STATE['consecutive_failures'] += 1
+        _STOCK_NEWS_GUARD_STATE['last_error'] = str(reason or '').strip()
+        _STOCK_NEWS_GUARD_STATE['last_status_code'] = status_code
+        _STOCK_NEWS_GUARD_STATE['last_timeout_seconds'] = _normalize_timeout_seconds(timeout_seconds)
+
+        if _STOCK_NEWS_GUARD_STATE['consecutive_failures'] >= _stock_news_failure_threshold():
+            _STOCK_NEWS_GUARD_STATE['breaker_open_until'] = max(
+                float(_STOCK_NEWS_GUARD_STATE['breaker_open_until'] or 0.0),
+                now_monotonic + _stock_news_breaker_cooldown_seconds(),
+            )
+
+    return get_stock_news_guard_snapshot(now_monotonic)
+
+
+def _is_timeout_error(exc: Exception) -> bool:
+    message = f"{type(exc).__name__} {exc}".lower()
+    timeout_markers = (
+        'timeout',
+        'timed out',
+        'deadline exceeded',
+        'readtimeout',
+    )
+    return any(marker in message for marker in timeout_markers)
+
+
+def _build_stock_news_client(timeout_seconds: float | None = None):
+    normalized_timeout = _normalize_timeout_seconds(timeout_seconds)
+    http_options = None
+    if normalized_timeout is not None and normalized_timeout > 0:
+        http_options = types.HttpOptions(timeout=max(1, int(normalized_timeout * 1000)))
+    return genai.Client(api_key=Config.GEMINI_API_KEY, http_options=http_options)
 
 
 def _records_to_json(records: list[dict]) -> str:
@@ -794,7 +937,7 @@ def get_news_sector_boost() -> dict:
         return default
 
 
-def get_stock_news_mentions(stock_ids: list) -> dict:
+def get_stock_news_mentions(stock_ids: list, deadline_monotonic: float | None = None) -> dict:
     """個股層級新聞偵測（Yahoo 奇摩股市 RSS + Gemini 情緒判斷）
 
     只對「已通過策略篩選的候選股」呼叫，控制 API 成本。
@@ -811,18 +954,38 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
         score: 1=正面, 0=中性/無資料, -1=負面
         信心度 < 0.7 的結果不回傳（避免誤判）
     """
-    import json
-
     if not Config.GEMINI_API_KEY or not stock_ids:
+        return {}
+
+    guard_state = get_stock_news_guard_snapshot()
+    if guard_state['breaker_open']:
+        print(
+            '  ⚠️ 個股新聞 breaker 開啟中，略過本輪請求 '
+            f"({guard_state['cooldown_remaining_seconds']:.1f}s)"
+        )
+        return {}
+
+    if deadline_monotonic is not None and _resolve_stock_news_timeout(deadline_monotonic) <= 0:
+        print('  ⚠️ 個股新聞逾時預算已耗盡，略過本輪請求')
         return {}
 
     results = {}
     today = datetime.datetime.now().strftime('%Y-%m-%d')
-    mcp_context = build_mcp_prompt_context()
-    client = genai.Client(api_key=Config.GEMINI_API_KEY)
+    try:
+        mcp_context = build_mcp_prompt_context()
+    except Exception as exc:
+        print(f'  ⚠️ 個股新聞上下文取得失敗: {exc}')
+        mcp_context = '- MCP 上下文暫不可用'
+
     service_unavailable_errors = 0
+    failure_threshold = _stock_news_failure_threshold()
 
     for sid in stock_ids[:8]:  # 最多處理 8 支，保留配額給其他操作
+        call_timeout_seconds = _resolve_stock_news_timeout(deadline_monotonic)
+        if deadline_monotonic is not None and call_timeout_seconds <= 0:
+            print('    ⚠️ 個股新聞逾時，略過剩餘個股新聞判讀')
+            break
+
         try:
             # Yahoo 奇摩股市 RSS（個股新聞）
             rss_url = f"https://tw.stock.yahoo.com/rss?s={sid}"
@@ -857,6 +1020,7 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
 - confidence: 0-1，研判信心程度
 - 只回傳 JSON，不要其他文字"""
 
+            client = _build_stock_news_client(call_timeout_seconds)
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,
@@ -874,24 +1038,45 @@ def get_stock_news_mentions(stock_ids: list) -> dict:
             confidence = float(item.get('confidence', 0))
             reason = item.get('reason', '')
 
+            _record_stock_news_success()
+
             if confidence >= 0.7 and score != 0:
                 results[str(sid)] = {"score": score, "reason": reason}
 
         except Exception as e:
             status_code = _extract_error_status_code(e)
+            if _is_timeout_error(e):
+                _record_stock_news_failure(
+                    'timeout',
+                    timeout_seconds=call_timeout_seconds,
+                )
+                print(
+                    f'    ⚠️ {sid} 個股新聞偵測逾時 '
+                    f'({call_timeout_seconds:.2f}s)，略過剩餘請求'
+                )
+                break
+
+            failure_state = _record_stock_news_failure(
+                str(e),
+                status_code=status_code,
+                timeout_seconds=call_timeout_seconds,
+            )
             if status_code == 429:
                 print(f"    ⚠️ {sid} 個股新聞偵測收到 429 Quota，提前結束本輪請求")
                 break
-            if status_code == 503:
+            if status_code in (502, 503, 504):
                 service_unavailable_errors += 1
                 print(
-                    f"    ⚠️ {sid} 個股新聞偵測收到 503 Unavailable "
-                    f"({service_unavailable_errors}/2)"
+                    f'    ⚠️ {sid} 個股新聞偵測收到 {status_code} 異常 '
+                    f'({service_unavailable_errors}/{failure_threshold})'
                 )
-                if results or service_unavailable_errors >= 2:
+                if results or failure_state['breaker_open']:
                     break
                 continue
             print(f"    ⚠️ {sid} 個股新聞偵測失敗: {e}")
+            if failure_state['breaker_open']:
+                print('    ⚠️ 個股新聞 breaker 已開啟，停止後續新聞判讀')
+                break
 
     if results:
         pos = [k for k, v in results.items() if v['score'] > 0]

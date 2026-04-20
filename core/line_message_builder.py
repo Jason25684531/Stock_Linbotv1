@@ -9,6 +9,8 @@ Line Bot Flex Message 建構器
 3. create_backtest_summary_flex(): 建構回測績效摘要 Flex 卡片
 4. create_holdings_flex(): 建構 AI 持股狀態 Flex 卡片
 5. create_news_flex(): 建構新聞摘要 Flex 卡片
+6. create_journal_reflection_flex(): 建構日誌反思 Flex 卡片
+7. create_strategy_picker_message(): 建構策略選擇 Quick Reply
 6. 內部 helper: _color_by_value(), _format_pct() 等
 
 🔄 V36 Upgrade:
@@ -32,6 +34,10 @@ from linebot.v3.messaging import (
     FlexSeparator,
     FlexIcon,
     FlexFiller,
+    TextMessage,
+    QuickReply,
+    QuickReplyItem,
+    PostbackAction,
     URIAction,
 )
 
@@ -266,6 +272,66 @@ def _make_data_row(label: str, value: str, value_color: str = '#FFFFFF') -> Flex
             ),
         ],
         margin='md',
+    )
+
+
+def _clean_summary_lines(summary: str) -> List[str]:
+    return [line.strip() for line in str(summary or '').splitlines() if line.strip()]
+
+
+def _truncate_text(value: str, limit: int) -> str:
+    text = str(value or '').strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(limit - 3, 0)] + '...'
+
+
+def create_empty_state_flex(
+    title: str,
+    message: str,
+    date_str: str = '',
+    subtitle: str = '',
+) -> FlexMessage:
+    """建構通用空狀態 Flex Bubble。"""
+    header_contents = [
+        FlexText(text=title, weight='bold', size='lg', color='#FFFFFF', flex=3),
+    ]
+    if date_str:
+        header_contents.append(
+            FlexText(
+                text=date_str,
+                size='xs',
+                color='#AAAAAA',
+                align='end',
+                gravity='center',
+                flex=0,
+            )
+        )
+
+    body_contents: List[Any] = []
+    if subtitle:
+        body_contents.append(FlexText(text=subtitle, size='xs', color='#4FC3F7', wrap=True))
+        body_contents.append(FlexSeparator(margin='md'))
+    body_contents.append(FlexText(text=message, size='sm', color='#DDDDDD', wrap=True, margin='md'))
+
+    bubble = FlexBubble(
+        size='mega',
+        header=FlexBox(
+            layout='horizontal',
+            contents=header_contents,
+            padding_all='14px',
+            background_color='#1A1A2E',
+        ),
+        body=FlexBox(
+            layout='vertical',
+            contents=body_contents,
+            padding_all='14px',
+            background_color='#0F3460',
+        ),
+    )
+    return FlexMessage(
+        alt_text=_truncate_text(f'{title} {date_str}'.strip(), 100),
+        contents=bubble,
     )
 
 
@@ -738,9 +804,124 @@ def create_holdings_flex(
 # 📰 Flex Bubble: 新聞摘要
 # ============================================
 
+def build_news_summary_bubble(
+    news_summary: str,
+    date_str: str = '',
+    title: str = '📰 AI 財經早報',
+    footer_text: str = '來源: 鉅亨網 | AI 分析: Gemini',
+) -> FlexBubble:
+    """建構共用新聞摘要 Bubble，供單一 Flex 或 Carousel 共用。"""
+    header = FlexBox(
+        layout='horizontal',
+        contents=[
+            FlexText(text=title, weight='bold', size='lg', color='#FFFFFF', flex=3),
+            FlexText(
+                text=date_str,
+                size='xs',
+                color='#AAAAAA',
+                align='end',
+                gravity='center',
+                flex=0,
+            ),
+        ],
+        padding_all='14px',
+        background_color='#1A1A2E',
+    )
+
+    lines = _clean_summary_lines(news_summary)
+    outline_lines: List[str] = []
+    commentary_lines: List[str] = []
+    in_commentary = False
+    for line in lines:
+        if line.startswith('📊'):
+            in_commentary = True
+            commentary_lines.append(line)
+            continue
+        if in_commentary:
+            commentary_lines.append(line)
+        else:
+            outline_lines.append(line)
+
+    if not outline_lines and not commentary_lines:
+        outline_lines = ['目前暫無摘要內容，請稍後再試。']
+
+    rows: List[Any] = [
+        FlexText(text='大綱', size='xs', color='#4FC3F7', weight='bold'),
+    ]
+    for line in outline_lines:
+        if line.startswith('📌'):
+            rows.append(FlexText(
+                text=line,
+                size='sm',
+                color='#FFD700',
+                weight='bold',
+                wrap=True,
+                margin='sm',
+            ))
+        elif line.startswith('→'):
+            rows.append(FlexText(
+                text=line,
+                size='xs',
+                color='#DDDDDD',
+                wrap=True,
+                margin='xs',
+            ))
+        else:
+            rows.append(FlexText(
+                text=line,
+                size='xs',
+                color='#BBBBBB',
+                wrap=True,
+                margin='xs',
+            ))
+
+    if commentary_lines:
+        rows.append(FlexSeparator(margin='lg'))
+        rows.append(FlexText(text='AI 點評', size='xs', color='#81C784', weight='bold', margin='md'))
+        for line in commentary_lines:
+            rows.append(FlexText(
+                text=line,
+                size='xs',
+                color='#D7F6DA',
+                wrap=True,
+                margin='xs',
+            ))
+
+    body = FlexBox(
+        layout='vertical',
+        contents=rows,
+        padding_all='14px',
+        background_color='#0F3460',
+    )
+
+    footer = FlexBox(
+        layout='vertical',
+        contents=[
+            FlexText(
+                text=footer_text,
+                size='xxs',
+                color='#888888',
+                align='center',
+                wrap=True,
+            ),
+        ],
+        padding_all='8px',
+        background_color='#1A1A2E',
+    )
+
+    return FlexBubble(
+        size='mega',
+        header=header,
+        body=body,
+        footer=footer,
+    )
+
 def create_news_flex(
     news_summary: str,
     date_str: str = '',
+    title: str = '📰 AI 財經早報',
+    alt_text: Optional[str] = None,
+    footer_text: str = '來源: 鉅亨網 | AI 分析: Gemini',
 ) -> FlexMessage:
     """建構新聞摘要 Flex Bubble
 
@@ -751,84 +932,105 @@ def create_news_flex(
     Returns:
         FlexMessage: 新聞摘要 Bubble
     """
-    # Header
-    header = FlexBox(
-        layout='horizontal',
-        contents=[
-            FlexText(text='📰 AI 財經早報', weight='bold',
-                     size='lg', color='#FFFFFF', flex=3),
-            FlexText(text=date_str, size='xs',
-                     color='#AAAAAA', align='end',
-                     gravity='center', flex=0),
-        ],
-        padding_all='14px',
-        background_color='#1A1A2E',
+    bubble = build_news_summary_bubble(
+        news_summary=news_summary,
+        date_str=date_str,
+        title=title,
+        footer_text=footer_text,
+    )
+    return FlexMessage(
+        alt_text=_truncate_text(alt_text or f'{title} {date_str}'.strip(), 100),
+        contents=bubble,
     )
 
-    # Body — 將 Gemini 摘要拆行顯示
-    rows: List[FlexText | FlexSeparator] = []
-    lines = news_summary.strip().split('\n')
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        # 標題行（📌 開頭或 📊 開頭）用粗體 + 強調色
-        if line.startswith('📌'):
-            rows.append(FlexSeparator(margin='md'))
-            rows.append(FlexText(
-                text=line, size='sm', color='#FFD700',
-                weight='bold', wrap=True, margin='sm',
-            ))
-        elif line.startswith('📊'):
-            rows.append(FlexSeparator(margin='lg'))
-            rows.append(FlexText(
-                text=line, size='sm', color='#4FC3F7',
-                weight='bold', wrap=True, margin='sm',
-            ))
-        elif line.startswith('→'):
-            rows.append(FlexText(
-                text=line, size='xs', color='#CCCCCC',
-                wrap=True, margin='xs',
-            ))
-        else:
-            rows.append(FlexText(
-                text=line, size='xs', color='#BBBBBB',
-                wrap=True, margin='xs',
-            ))
 
-    if not rows:
-        rows.append(FlexText(
-            text=news_summary[:500], size='xs',
-            color='#CCCCCC', wrap=True,
-        ))
+def create_journal_reflection_flex(
+    active_strategy_labels: List[str],
+    total_roi: Optional[float],
+    win_rate: Optional[float],
+    today_pick_status: str,
+    date_str: str = '',
+    trade_count: Optional[int] = None,
+    latest_trade_summary: str = '',
+) -> FlexMessage:
+    """建構日誌反思 Flex Bubble。"""
+    strategies_text = '、'.join(active_strategy_labels) if active_strategy_labels else '尚未啟用策略'
+    roi_value = total_roi if total_roi is not None else 0.0
+    win_rate_value = win_rate if win_rate is not None else 0.0
+    roi_color = '#1DB446' if roi_value >= 0 else '#DD2222'
+    win_color = '#1DB446' if win_rate_value >= 50 else '#FFD54F'
 
-    body = FlexBox(
-        layout='vertical',
-        contents=rows,
-        padding_all='14px',
-        background_color='#0F3460',
-    )
+    rows: List[Any] = [
+        FlexText(text='目前啟用策略', size='xs', color='#4FC3F7', weight='bold'),
+        FlexText(text=strategies_text, size='sm', color='#FFFFFF', wrap=True, margin='sm'),
+        FlexSeparator(margin='lg'),
+        _make_data_row('最近回測總報酬', f'{roi_value:+.1f}%', roi_color),
+        FlexSeparator(margin='md'),
+        _make_data_row('最近回測勝率', f'{win_rate_value:.1f}%', win_color),
+        FlexSeparator(margin='md'),
+        _make_data_row('今日選股狀態', today_pick_status, '#FFFFFF'),
+    ]
 
-    # Footer
-    footer = FlexBox(
-        layout='vertical',
-        contents=[
-            FlexText(
-                text='來源: 鉅亨網 | AI 分析: Gemini',
-                size='xxs', color='#888888', align='center',
-            ),
-        ],
-        padding_all='8px',
-        background_color='#1A1A2E',
-    )
+    if trade_count is not None:
+        rows.extend([
+            FlexSeparator(margin='md'),
+            _make_data_row('回測交易筆數', str(trade_count), '#FFFFFF'),
+        ])
+
+    if latest_trade_summary:
+        rows.extend([
+            FlexSeparator(margin='lg'),
+            FlexText(text='最近一筆觀察', size='xs', color='#81C784', weight='bold', margin='md'),
+            FlexText(text=latest_trade_summary, size='xs', color='#D7F6DA', wrap=True, margin='sm'),
+        ])
 
     bubble = FlexBubble(
         size='mega',
-        header=header,
-        body=body,
-        footer=footer,
+        header=FlexBox(
+            layout='horizontal',
+            contents=[
+                FlexText(text='📝 日誌反思', weight='bold', size='lg', color='#FFFFFF', flex=3),
+                FlexText(text=date_str, size='xs', color='#AAAAAA', align='end', gravity='center', flex=0),
+            ],
+            padding_all='14px',
+            background_color='#1A1A2E',
+        ),
+        body=FlexBox(
+            layout='vertical',
+            contents=rows,
+            padding_all='14px',
+            background_color='#0F3460',
+        ),
     )
     return FlexMessage(
-        alt_text=f'📰 AI 財經早報 {date_str}',
+        alt_text=_truncate_text(f'📝 日誌反思 {today_pick_status}', 100),
         contents=bubble,
+    )
+
+
+def create_strategy_picker_message(
+    strategies: List[Dict[str, str]],
+    prompt_text: str = '🎯 請選擇想查看的策略',
+) -> TextMessage:
+    """建構策略選擇 Quick Reply。"""
+    items = []
+    for strategy in strategies[:13]:
+        label = _truncate_text(strategy.get('short_label') or strategy.get('label') or '策略', 20)
+        display_text = strategy.get('display_text') or label
+        strategy_key = strategy.get('key') or ''
+        if not strategy_key:
+            continue
+        items.append(
+            QuickReplyItem(
+                action=PostbackAction(
+                    label=label,
+                    data=f'action=select_strategy&strategy={strategy_key}',
+                    display_text=display_text,
+                )
+            )
+        )
+
+    return TextMessage(
+        text=prompt_text,
+        quick_reply=QuickReply(items=items),
     )

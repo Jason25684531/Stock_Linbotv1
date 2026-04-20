@@ -27,6 +27,22 @@ def reply_message(reply_token: str, messages) -> None:
         )
 
 
+def _reply_stock_diagnosis(reply_token: str, stock_id: str) -> bool:
+    report = app_pkg.get_stock_report(stock_id)
+    if report is None:
+        reply_message(reply_token, [app_pkg.V3TextMessage(text='❌ 查無此股票資料')])
+        return True
+
+    try:
+        flex_msg = app_pkg.create_stock_flex_message(stock_id, report)
+        reply_message(reply_token, [flex_msg])
+        return True
+    except Exception as exc:
+        print(f'⚠️ Flex Message 建構失敗，降級為文字: {exc}')
+        reply_message(reply_token, [app_pkg.V3TextMessage(text=app_pkg.format_stock_diagnosis(report))])
+        return True
+
+
 @app.route('/callback', methods=['POST'])
 def callback():
     """LINE webhook callback route."""
@@ -57,8 +73,11 @@ def callback():
 @handler.add(app_pkg.PostbackEvent)
 def postback_handler(event):
     """Handle Rich Menu postback actions."""
-    action = app_pkg._extract_postback_action(getattr(getattr(event, 'postback', None), 'data', ''))
-    messages = app_pkg._build_postback_reply_messages(action)
+    data = getattr(getattr(event, 'postback', None), 'data', '')
+    payload = app_pkg._parse_postback_payload(data)
+    action = payload.get('action', '')
+    source_id = app_pkg._extract_line_source_id(event)
+    messages = app_pkg._build_postback_reply_messages(action, payload=payload, source_id=source_id)
     reply_message(event.reply_token, messages)
 
 
@@ -68,6 +87,28 @@ def handle_message(event):
     raw_text = event.message.text if event.message and event.message.text else ''
     msg_text = app_pkg._normalize_line_text(raw_text)
     msg_key = app_pkg._compact_command_key(msg_text)
+    source_id = app_pkg._extract_line_source_id(event)
+
+    pending_state = app_pkg._line_interaction_state.get(source_id)
+    if pending_state and pending_state.get('action') == 'stock_diagnosis':
+        if msg_text in ['取消', 'cancel', '結束']:
+            app_pkg._line_interaction_state.clear(source_id)
+            reply_message(event.reply_token, [app_pkg.V3TextMessage(text='✅ 已取消個股診斷流程')])
+            return
+        if re.fullmatch(r'\d{4}', msg_text):
+            app_pkg._line_interaction_state.clear(source_id)
+            _reply_stock_diagnosis(event.reply_token, msg_text)
+            return
+
+    diagnose_match = re.match(r'^診斷\s*(\d{4})?\s*$', msg_text)
+    if diagnose_match:
+        stock_id = diagnose_match.group(1)
+        if stock_id:
+            _reply_stock_diagnosis(event.reply_token, stock_id)
+            return
+        app_pkg._line_interaction_state.set(source_id, {'action': 'stock_diagnosis'})
+        reply_message(event.reply_token, [app_pkg.V3TextMessage(text='🔎 請輸入 4 碼股票代號，例如 2330。')])
+        return
 
     if msg_key in app_pkg.MODE_CMD_MAP:
         mode_label, preset_key = app_pkg.MODE_CMD_MAP[msg_key]
@@ -322,18 +363,14 @@ def handle_message(event):
             print(f'⚠️ Flex Carousel 建構失敗，降級為純文字: {exc}')
             reply = app_pkg.get_strategy_recommendation(as_flex=False)
 
+    elif msg_text in ['策略選股', '策略挑選', '選策略']:
+        messages = app_pkg._build_strategy_picker_messages()
+        reply_message(event.reply_token, messages)
+        return
+
     elif msg_text.isdigit() and len(msg_text) == 4:
-        report = app_pkg.get_stock_report(msg_text)
-        if report is not None:
-            try:
-                flex_msg = app_pkg.create_stock_flex_message(msg_text, report)
-                reply_message(event.reply_token, [flex_msg])
-                return
-            except Exception as exc:
-                print(f'⚠️ Flex Message 建構失敗，降級為文字: {exc}')
-                reply = app_pkg.format_stock_diagnosis(report)
-        else:
-            reply = '❌ 查無此股票資料'
+        _reply_stock_diagnosis(event.reply_token, msg_text)
+        return
 
     elif msg_text.startswith('查詢'):
         stock_id = msg_text.replace('查詢', '').strip()
@@ -376,7 +413,8 @@ def handle_message(event):
             reply = '📭 目前無持股紀錄\n輸入「推薦」取得今日選股建議'
 
     elif msg_text in ['日誌', '反思', 'journal']:
-        reply = app_pkg._build_journal_reflection_text()
+        reply_message(event.reply_token, app_pkg._build_journal_reflection_messages())
+        return
 
     elif msg_text in ['回測', '績效', '回測結果', 'backtest']:
         try:

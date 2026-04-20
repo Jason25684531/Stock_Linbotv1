@@ -253,6 +253,15 @@ class Config:
     NEWS_BOOST_MAX = 0.15
     NEWS_PENALTY_FACTOR = 0.10
     NEWS_BEAR_MAX_HOLDINGS = 2
+    DASHBOARD_NEWS_TIMEOUT_SECONDS = float(
+        os.getenv("DASHBOARD_NEWS_TIMEOUT_SECONDS", "3")
+    )
+    DASHBOARD_NEWS_FAILURE_THRESHOLD = int(
+        os.getenv("DASHBOARD_NEWS_FAILURE_THRESHOLD", "2")
+    )
+    DASHBOARD_NEWS_BREAKER_COOLDOWN_SECONDS = float(
+        os.getenv("DASHBOARD_NEWS_BREAKER_COOLDOWN_SECONDS", "60")
+    )
 
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
     FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-in-production")

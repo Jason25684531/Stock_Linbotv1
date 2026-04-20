@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-04-17T17:20:27.575224",
+  "last_updated": "2026-04-17T20:40:39.566854",
   "active_strategies": [
-    "v38_value_dividend"
+    "v34_turbo"
   ],
   "random_strategy_pool": [
     "v35_innovation",

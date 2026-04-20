@@ -7,6 +7,7 @@
 3. 資料查詢輔助函數
 """
 import pandas as pd
+import re
 import time
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
@@ -25,6 +26,36 @@ _ALLOWED_TABLES = {
 
 MIN_VALID_MARKET_ROWS = 100
 RECOMMENDATION_HEARTBEAT_STOCK_ID = 'NONE'
+COMMON_STOCK_ID_PATTERN = re.compile(r'^\d{4}$')
+COMMON_STOCK_EXCLUDED_PREFIXES = ('03', '08')
+
+
+def normalize_stock_id_value(stock_id) -> str:
+    """將 stock_id 正規化為可比對字串。"""
+    normalized = str(stock_id or '').strip()
+    if normalized.endswith('.0'):
+        normalized = normalized[:-2]
+    return normalized
+
+
+def is_common_stock_id(stock_id) -> bool:
+    """判斷是否為一般上市櫃股票代號。"""
+    normalized = normalize_stock_id_value(stock_id)
+    return bool(COMMON_STOCK_ID_PATTERN.fullmatch(normalized)) and not normalized.startswith(COMMON_STOCK_EXCLUDED_PREFIXES)
+
+
+def filter_common_stock_universe(df: pd.DataFrame) -> pd.DataFrame:
+    """過濾出一般上市櫃股票，排除權證、ETF 與其他非普通股代號。"""
+    if df is None:
+        return pd.DataFrame()
+    if df.empty or 'stock_id' not in df.columns:
+        return df
+
+    normalized_stock_ids = df['stock_id'].map(normalize_stock_id_value)
+    mask = normalized_stock_ids.map(is_common_stock_id)
+    filtered = df.loc[mask].copy()
+    filtered['stock_id'] = normalized_stock_ids.loc[mask]
+    return filtered
 
 
 def get_db_engine(max_retries: int = 3):
@@ -312,6 +343,7 @@ def get_stock_data(stock_id=None, date_str=None):
                     'inverse': '00632R'
                 }
             )
+            df = filter_common_stock_universe(df)
             
         return df, date_str
         

@@ -1,6 +1,7 @@
 """Canonical application package integrating Web and LINE entrypoints."""
 
 # -*- coding: utf-8 -*-
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -42,6 +43,7 @@ from core.db_helper import (
     format_market_fallback_notice,
     get_actual_latest_date,
     get_backtest_equity_curve,
+    get_daily_recommendations,
     get_backtest_summary_from_db,
     get_latest_trade_date,
     get_news_sentiment,
@@ -61,9 +63,12 @@ from core.db_helper import (
 )
 from core.line_message_builder import (
     create_backtest_summary_flex,
+    create_empty_state_flex,
     create_holdings_flex,
+    create_journal_reflection_flex,
     create_news_flex,
     create_recommendation_carousel,
+    create_strategy_picker_message,
     create_stock_flex_message,
 )
 from core.mcp_client import MCPClientError, TWSEMCPClient as MCPClient
@@ -175,6 +180,48 @@ class _PostbackCache:
 _postback_cache = _PostbackCache()
 
 
+class _LineInteractionStateStore:
+    """短生命週期的 LINE 對話狀態儲存，用於 Rich Menu 引導式流程。"""
+
+    _TTL_SECONDS: float = 300.0
+
+    def __init__(self) -> None:
+        self._store: dict[str, tuple[dict[str, str], float]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, source_id: str) -> dict[str, str] | None:
+        source_key = str(source_id or '').strip()
+        if not source_key:
+            return None
+        with self._lock:
+            entry = self._store.get(source_key)
+            if entry is None:
+                return None
+            payload, expires_at = entry
+            if time.monotonic() > expires_at:
+                del self._store[source_key]
+                return None
+            return dict(payload)
+
+    def set(self, source_id: str, payload: dict[str, str]) -> None:
+        source_key = str(source_id or '').strip()
+        if not source_key or not payload:
+            return
+        expires_at = time.monotonic() + self._TTL_SECONDS
+        with self._lock:
+            self._store[source_key] = (dict(payload), expires_at)
+
+    def clear(self, source_id: str) -> None:
+        source_key = str(source_id or '').strip()
+        if not source_key:
+            return
+        with self._lock:
+            self._store.pop(source_key, None)
+
+
+_line_interaction_state = _LineInteractionStateStore()
+
+
 def get_ngrok_url() -> str:
     """自動偵測 ngrok 公開 URL。"""
     import json as _json
@@ -272,6 +319,117 @@ def _compact_command_key(text: str) -> str:
     return compact.lower()
 
 
+def _extract_line_source_id(source_or_event) -> str:
+    source = getattr(source_or_event, 'source', source_or_event)
+    for attr in ('user_id', 'group_id', 'room_id'):
+        value = getattr(source, attr, None)
+        if value:
+            return str(value)
+    return ''
+
+
+def _parse_postback_payload(data: str) -> dict[str, str]:
+    raw = str(data or '').strip()
+    if not raw:
+        return {}
+    parsed = {
+        key: (values[0].strip() if values else '')
+        for key, values in parse_qs(raw, keep_blank_values=True).items()
+    }
+    if not parsed:
+        return {'action': raw}
+    if 'action' not in parsed:
+        parsed['action'] = raw
+    return parsed
+
+
+def _get_strategy_display_name(strategy_key: str) -> str:
+    strategy = strategy_manager.get_strategy(strategy_key)
+    if strategy is None:
+        return strategy_key
+    return getattr(strategy, 'display_name', strategy_key)
+
+
+def _list_strategy_picker_options() -> list[dict[str, str]]:
+    options: list[dict[str, str]] = []
+    for strategy_key in strategy_manager.list_strategies():
+        strategy = strategy_manager.get_strategy(strategy_key)
+        if strategy is None:
+            continue
+        display_name = getattr(strategy, 'display_name', strategy_key)
+        match = re.search(r'V\d+', display_name, flags=re.IGNORECASE)
+        short_label = match.group(0).upper() if match else strategy_key.upper()
+        options.append(
+            {
+                'key': strategy_key,
+                'label': display_name,
+                'short_label': short_label,
+                'display_text': f'查看 {display_name}',
+            }
+        )
+    return options
+
+
+def _summarize_today_pick_status(strategy_keys: list[str], date_str: str) -> str:
+    ready_labels: list[str] = []
+    for strategy_key in strategy_keys:
+        df = get_daily_recommendations(date_str=date_str, strategy=strategy_key, limit=1)
+        if not df.empty:
+            ready_labels.append(_get_strategy_display_name(strategy_key))
+
+    if not ready_labels:
+        return '今日無標的'
+    if len(ready_labels) == 1:
+        return f'有標的（{ready_labels[0]}）'
+    return f'有標的（{ready_labels[0]} 等 {len(ready_labels)} 策略）'
+
+
+def _load_backtest_summary_snapshot() -> dict | None:
+    summary = get_backtest_summary_from_db()
+    if summary is not None:
+        return summary
+    try:
+        from core.viz_helper import get_backtest_summary
+
+        return get_backtest_summary()
+    except Exception as exc:
+        print(f'⚠️ 讀取回測摘要 fallback 失敗: {exc}')
+        return None
+
+
+def _build_journal_reflection_snapshot() -> dict[str, object]:
+    active_keys = strategy_manager.get_active_strategy_names()
+    active_labels = [_get_strategy_display_name(key) for key in active_keys] or ['尚未啟用策略']
+    date_str = _resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+    today_pick_status = _summarize_today_pick_status(active_keys, date_str)
+
+    try:
+        recent_trades = get_recent_backtest_trades(limit=1) or []
+    except Exception as exc:
+        print(f'⚠️ 讀取最近交易失敗: {exc}')
+        recent_trades = []
+
+    latest_trade_summary = ''
+    if recent_trades:
+        latest_trade = recent_trades[0]
+        stock_id = latest_trade.get('stock_id') or 'N/A'
+        profit_pct = safe_float(latest_trade.get('profit_pct'))
+        reason = str(latest_trade.get('reason') or '未記錄').strip()
+        if profit_pct is None:
+            latest_trade_summary = f'{stock_id}｜出場原因：{reason}'
+        else:
+            latest_trade_summary = f'{stock_id} {profit_pct:+.1f}%｜出場原因：{reason}'
+
+    return {
+        'active_keys': active_keys,
+        'active_labels': active_labels,
+        'date_str': date_str,
+        'today_pick_status': today_pick_status,
+        'summary': _load_backtest_summary_snapshot(),
+        'latest_trade_summary': latest_trade_summary,
+    }
+
+
 def _is_quick_mode_cmd(text: str, version: str, style: str) -> bool:
     compact = _compact_command_key(text)
     aliases = {
@@ -340,6 +498,41 @@ def _match_strategy_switch(text_lower: str):
     return key, info['display'], info['features']
 
 
+_stock_news_runtime = threading.local()
+
+
+def _get_current_stock_news_deadline() -> float | None:
+    deadline = getattr(_stock_news_runtime, 'deadline_monotonic', None)
+    if isinstance(deadline, (int, float)):
+        return float(deadline)
+    return None
+
+
+@contextmanager
+def _live_signal_news_timeout_scope():
+    timeout_seconds = 0.0
+    try:
+        timeout_seconds = max(0.0, float(Config.DASHBOARD_NEWS_TIMEOUT_SECONDS))
+    except Exception:
+        timeout_seconds = 3.0
+
+    previous_deadline = _get_current_stock_news_deadline()
+    next_deadline = previous_deadline
+    if timeout_seconds > 0:
+        candidate_deadline = time.monotonic() + timeout_seconds
+        next_deadline = min(previous_deadline, candidate_deadline) if previous_deadline is not None else candidate_deadline
+
+    _stock_news_runtime.deadline_monotonic = next_deadline
+    try:
+        yield next_deadline
+    finally:
+        if previous_deadline is None:
+            if hasattr(_stock_news_runtime, 'deadline_monotonic'):
+                delattr(_stock_news_runtime, 'deadline_monotonic')
+        else:
+            _stock_news_runtime.deadline_monotonic = previous_deadline
+
+
 def _parse_news_reason(news_reason: str) -> dict:
     raw = str(news_reason or '').strip()
     normalized = raw.replace('|', '｜')
@@ -361,7 +554,10 @@ def _get_stock_mentions_map(stock_ids: list[str]) -> dict:
     try:
         from core.news_agent import get_stock_news_mentions
 
-        return get_stock_news_mentions(stock_ids)
+        return get_stock_news_mentions(
+            stock_ids,
+            deadline_monotonic=_get_current_stock_news_deadline(),
+        )
     except Exception as exc:
         print(f'⚠️ 個股新聞讀取失敗: {exc}')
         return {}
@@ -522,10 +718,73 @@ def _build_macro_news_messages() -> list:
 
         news_summary = get_morning_news_summary()
         today_str = pd.Timestamp.now().strftime('%Y-%m-%d')
-        return [create_news_flex(news_summary, today_str)]
+        return [
+            create_news_flex(
+                news_summary,
+                today_str,
+                title='📰 總經摘要',
+                alt_text=f'📰 總經摘要 {today_str}',
+            )
+        ]
     except Exception as exc:
         print(f'⚠️ 總經摘要產生失敗: {exc}')
         return [V3TextMessage(text='📰 總經摘要\n\n目前暫時無法取得最新摘要，請稍後再試。')]
+
+
+def _build_stock_diagnosis_prompt_messages(source_id: str = '') -> list:
+    if source_id:
+        _line_interaction_state.set(source_id, {'action': 'stock_diagnosis'})
+    return [V3TextMessage(text='🔎 請輸入 4 碼股票代號，例如 2330。')]
+
+
+def _build_strategy_picker_messages() -> list:
+    options = _list_strategy_picker_options()
+    if not options:
+        return [V3TextMessage(text='🎯 策略選股\n\n目前沒有可用策略，請先檢查策略設定。')]
+    return [create_strategy_picker_message(options, prompt_text='🎯 請選擇想查看的策略（V31-V38）')]
+
+
+def _build_selected_strategy_messages(payload: dict[str, str] | None = None) -> list:
+    strategy_key = str((payload or {}).get('strategy') or '').strip()
+    if not strategy_key:
+        return [V3TextMessage(text='⚠️ 缺少策略代號，請重新點選「策略選股」。')]
+
+    recommendation = get_strategy_recommendation(as_flex=True, strategy_key=strategy_key)
+    if isinstance(recommendation, str):
+        return [V3TextMessage(text=recommendation)]
+    return [recommendation]
+
+
+def _build_journal_reflection_messages() -> list:
+    snapshot = _build_journal_reflection_snapshot()
+    summary = snapshot.get('summary') or {}
+    active_labels = snapshot.get('active_labels') or ['尚未啟用策略']
+    date_str = str(snapshot.get('date_str') or '')
+    today_pick_status = str(snapshot.get('today_pick_status') or '今日無標的')
+    latest_trade_summary = str(snapshot.get('latest_trade_summary') or '')
+
+    if not summary:
+        subtitle = f'啟用策略：{"、".join(active_labels)}｜{today_pick_status}'
+        return [
+            create_empty_state_flex(
+                title='📝 日誌反思',
+                message='目前尚無可用回測摘要，可先執行回測再回來查看近期表現。',
+                date_str=date_str,
+                subtitle=subtitle,
+            )
+        ]
+
+    return [
+        create_journal_reflection_flex(
+            active_strategy_labels=list(active_labels),
+            total_roi=safe_float(summary.get('total_roi')),
+            win_rate=safe_float(summary.get('win_rate')),
+            today_pick_status=today_pick_status,
+            date_str=date_str,
+            trade_count=safe_int(summary.get('trade_count')),
+            latest_trade_summary=latest_trade_summary,
+        )
+    ]
 
 
 def _build_market_summary_messages() -> list:
@@ -660,61 +919,58 @@ def _build_random_strategy_messages() -> list:
 
 
 def _build_journal_reflection_text() -> str:
-    try:
-        recent_trades = get_recent_backtest_trades(limit=5) or []
-    except Exception as exc:
-        print(f'⚠️ 讀取最近交易失敗: {exc}')
-        recent_trades = []
+    snapshot = _build_journal_reflection_snapshot()
+    summary = snapshot.get('summary') or {}
+    active_labels = snapshot.get('active_labels') or ['尚未啟用策略']
+    today_pick_status = str(snapshot.get('today_pick_status') or '今日無標的')
+    latest_trade_summary = str(snapshot.get('latest_trade_summary') or '')
 
-    try:
-        open_holdings = get_open_holdings(limit=5) or []
-    except Exception as exc:
-        print(f'⚠️ 讀取持股日誌失敗: {exc}')
-        open_holdings = []
+    if not summary:
+        return (
+            '📝 日誌反思\n\n'
+            f'啟用策略：{"、".join(active_labels)}\n'
+            f'今日選股：{today_pick_status}\n\n'
+            '目前還沒有足夠的回測摘要可供反思。\n可以先執行一次回測累積樣本。'
+        )
 
-    if not recent_trades:
-        return '📝 日誌反思\n\n目前還沒有足夠的交易紀錄可供反思。\n可以先用「推薦」找標的，或先執行一次回測累積樣本。'
+    total_roi = safe_float(summary.get('total_roi')) or 0.0
+    win_rate = safe_float(summary.get('win_rate')) or 0.0
+    trade_count = safe_int(summary.get('trade_count')) or 0
 
-    profit_values = [safe_float(trade.get('profit_pct')) or 0.0 for trade in recent_trades]
-    avg_profit = sum(profit_values) / len(profit_values)
-    win_rate = sum(1 for value in profit_values if value > 0) / len(profit_values) * 100
-    avg_hold_days = sum((safe_int(trade.get('days')) or 0) for trade in recent_trades) / len(recent_trades)
-    last_trade = recent_trades[0]
-    last_stock = last_trade.get('stock_id') or 'N/A'
-    last_reason = last_trade.get('reason') or '未記錄'
-    last_profit = safe_float(last_trade.get('profit_pct')) or 0.0
-    holdings_count = len(open_holdings)
-
-    return (
+    body = (
         '📝 日誌反思\n\n'
-        f'最近 {len(recent_trades)} 筆回測交易勝率 {win_rate:.0f}%，平均報酬 {avg_profit:+.1f}%，平均持有 {avg_hold_days:.1f} 天。\n'
-        f'最近一筆：{last_stock} {last_profit:+.1f}% ，出場原因：{last_reason}。\n'
-        f'目前仍有 {holdings_count} 檔開倉，建議確認進場理由是否仍成立、停損停利是否有跟上。'
+        f'啟用策略：{"、".join(active_labels)}\n'
+        f'最近回測：總報酬 {total_roi:+.1f}% / 勝率 {win_rate:.1f}% / {trade_count} 筆交易\n'
+        f'今日選股：{today_pick_status}'
     )
+    if latest_trade_summary:
+        body += f'\n最近一筆：{latest_trade_summary}'
+    return body
 
 
 def _extract_postback_action(data: str) -> str:
-    raw = str(data or '').strip()
-    if not raw:
-        return ''
-    parsed = parse_qs(raw, keep_blank_values=True)
-    return (parsed.get('action') or [raw])[0].strip()
+    return _parse_postback_payload(data).get('action', '')
 
 
 def _register_postback_handlers() -> dict:
     return {
-        'get_macro_news': _build_macro_news_messages,
-        'get_journal': lambda: [V3TextMessage(text=_build_journal_reflection_text())],
-        'market_summary': _build_market_summary_messages,
-        'chip_trend': _build_chip_trend_messages,
-        'random_strategy': _build_random_strategy_messages,
+        'prompt_stock_diagnosis': lambda payload=None, source_id='': _build_stock_diagnosis_prompt_messages(source_id),
+        'macro_summary': lambda payload=None, source_id='': _build_macro_news_messages(),
+        'journal_reflection': lambda payload=None, source_id='': _build_journal_reflection_messages(),
+        'choose_strategy': lambda payload=None, source_id='': _build_strategy_picker_messages(),
+        'select_strategy': lambda payload=None, source_id='': _build_selected_strategy_messages(payload),
+        'get_macro_news': lambda payload=None, source_id='': _build_macro_news_messages(),
+        'get_journal': lambda payload=None, source_id='': _build_journal_reflection_messages(),
+        'market_summary': lambda payload=None, source_id='': _build_market_summary_messages(),
+        'chip_trend': lambda payload=None, source_id='': _build_chip_trend_messages(),
+        'random_strategy': lambda payload=None, source_id='': _build_random_strategy_messages(),
     }
 
 
-def _build_postback_reply_messages(action: str) -> list:
+def _build_postback_reply_messages(action: str, payload: dict[str, str] | None = None, source_id: str = '') -> list:
     handler_fn = _register_postback_handlers().get(action)
     if handler_fn is not None:
-        return handler_fn()
+        return handler_fn(payload=payload, source_id=source_id)
     return [V3TextMessage(text='⚠️ 尚未支援的 Rich Menu 指令')]
 
 
@@ -764,15 +1020,15 @@ def get_v30_recommendation():
         return f'❌ 運算錯誤: {str(exc)[:100]}'
 
 
-def get_strategy_recommendation(as_flex: bool = False):
+def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None = None):
     try:
         mgr = StrategyManager()
-        active = mgr.get_active_strategy()
+        active = mgr.get_strategy(strategy_key) if strategy_key else mgr.get_active_strategy()
         if active is None:
             return '❌ 策略載入失敗，請先輸入「切換V30」設定策略'
 
         strategy_name = active.display_name
-        strategy_key = active.name
+        active_strategy_key = active.name
 
         baseline_date = _resolve_ui_baseline_date()
         df, date_str = get_stock_data(date_str=baseline_date) if baseline_date else get_stock_data()
@@ -782,7 +1038,7 @@ def get_strategy_recommendation(as_flex: bool = False):
         df = supplement_financial_data(df)
         candidates, fallback_meta, has_persisted = _load_strategy_candidates(
             active=active,
-            strategy_key=strategy_key,
+            strategy_key=active_strategy_key,
             market_df=df,
             requested_date=date_str,
             limit=5,
@@ -792,6 +1048,16 @@ def get_strategy_recommendation(as_flex: bool = False):
 
         if candidates.empty:
             warning_block = f'{market_notice}\n\n' if market_notice else ''
+            if as_flex:
+                subtitle = f'📅 {display_date}'
+                if market_notice:
+                    subtitle += f'｜{market_notice}'
+                return create_empty_state_flex(
+                    title=f'🎯 {strategy_name}',
+                    message='今日無符合條件的股票，可改看其他策略或等待下一個交易日。',
+                    date_str=display_date,
+                    subtitle=subtitle,
+                )
             return (
                 f'🔍 【{strategy_name}】選股結果\n'
                 f'日期：{display_date}\n\n'
