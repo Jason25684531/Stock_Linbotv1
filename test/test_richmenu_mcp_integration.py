@@ -320,6 +320,22 @@ class TestPostbackRouter:
             mock_handler.assert_called_once_with({'strategy': 'v35_innovation'})
             assert result == ['msg']
 
+    def test_strategy_select_routes_with_payload(self):
+        with patch('app._build_selected_strategy_messages') as mock_handler:
+            mock_handler.return_value = ['msg']
+            from app import _build_postback_reply_messages  # type: ignore[attr-defined]
+            result = _build_postback_reply_messages('strategy_select', payload={'strategy': 'v35'})
+            mock_handler.assert_called_once_with({'strategy': 'v35'})
+            assert result == ['msg']
+
+    def test_backtest_reflect_routes_with_payload(self):
+        with patch('app._build_backtest_reflection_messages') as mock_handler:
+            mock_handler.return_value = ['msg']
+            from app import _build_postback_reply_messages  # type: ignore[attr-defined]
+            result = _build_postback_reply_messages('backtest_reflect', payload={'strategy': 'v31'})
+            mock_handler.assert_called_once_with({'strategy': 'v31'})
+            assert result == ['msg']
+
     def test_market_summary_routes_correctly(self):
         with patch('app._build_market_summary_messages') as mock_handler:
             mock_handler.return_value = ['msg']
@@ -353,10 +369,13 @@ class TestPostbackRouter:
             assert result == ['news_msg']
 
     def test_unknown_action_returns_unsupported(self):
+        from linebot.v3.messaging import FlexMessage
         from app import _build_postback_reply_messages  # type: ignore[attr-defined]
         result = _build_postback_reply_messages('this_action_does_not_exist')
         assert len(result) == 1
-        assert '尚未支援' in result[0].text
+        assert isinstance(result[0], FlexMessage)
+        rendered = json.dumps(json.loads(result[0].to_json()), ensure_ascii=False)
+        assert '尚未支援' in rendered
 
 
 # ──────────────────────────────────────────────
@@ -528,6 +547,8 @@ class TestPostbackFlow:
     def test_extract_action_with_extra_query_params(self):
         from app import _extract_postback_action  # type: ignore[attr-defined]
         assert _extract_postback_action('action=select_strategy&strategy=v35_innovation') == 'select_strategy'
+        assert _extract_postback_action('action=strategy_select&strategy=v35') == 'strategy_select'
+        assert _extract_postback_action('action=backtest_reflect&strategy=v31') == 'backtest_reflect'
 
     def test_extract_action_empty_string(self):
         from app import _extract_postback_action  # type: ignore[attr-defined]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -62,9 +63,9 @@ def test_handle_message_consumes_pending_diagnosis(monkeypatch):
     assert app_module._line_interaction_state.get('user-1') is None
 
 
-def test_build_strategy_picker_messages_returns_quick_reply(monkeypatch):
+def test_build_strategy_picker_messages_returns_flex_prompt(monkeypatch):
     import app as app_module
-    from linebot.v3.messaging import TextMessage as V3TextMessage
+    from linebot.v3.messaging import FlexMessage
 
     monkeypatch.setattr(
         app_module,
@@ -74,6 +75,7 @@ def test_build_strategy_picker_messages_returns_quick_reply(monkeypatch):
                 'key': 'v35_innovation',
                 'label': 'V35 經營效益策略',
                 'short_label': 'V35',
+                'payload_key': 'v35',
                 'display_text': '查看 V35 經營效益策略',
             }
         ],
@@ -82,9 +84,10 @@ def test_build_strategy_picker_messages_returns_quick_reply(monkeypatch):
     result = app_module._build_strategy_picker_messages()
 
     assert len(result) == 1
-    assert isinstance(result[0], V3TextMessage)
-    assert result[0].quick_reply is not None
-    assert result[0].quick_reply.items[0].action.data == 'action=select_strategy&strategy=v35_innovation'
+    assert isinstance(result[0], FlexMessage)
+    payload = result[0].to_json()
+    assert 'action=strategy_select&strategy=v35' in payload
+    assert '策略選股' in result[0].alt_text
 
 
 def test_build_selected_strategy_messages_targets_requested_strategy(monkeypatch):
@@ -100,7 +103,7 @@ def test_build_selected_strategy_messages_targets_requested_strategy(monkeypatch
 
     monkeypatch.setattr(app_module, 'get_strategy_recommendation', fake_get_strategy_recommendation)
 
-    result = app_module._build_selected_strategy_messages({'strategy': 'v35_innovation'})
+    result = app_module._build_selected_strategy_messages({'strategy': 'v35'})
 
     assert captured == {'as_flex': True, 'strategy_key': 'v35_innovation'}
     assert result == [marker]
@@ -112,18 +115,16 @@ def test_build_journal_reflection_messages_returns_flex(monkeypatch):
 
     monkeypatch.setattr(
         app_module,
-        '_build_journal_reflection_snapshot',
-        lambda: {
-            'active_labels': ['V35 經營效益策略'],
-            'date_str': '2026-04-19',
-            'today_pick_status': '有標的（V35 經營效益策略）',
-            'summary': {
-                'total_roi': 18.4,
-                'win_rate': 62.5,
-                'trade_count': 16,
-            },
-            'latest_trade_summary': '2330 +5.2%｜出場原因：停利',
-        },
+        '_list_strategy_picker_options',
+        lambda: [
+            {
+                'key': 'v35_innovation',
+                'label': 'V35 經營效益策略',
+                'short_label': 'V35',
+                'payload_key': 'v35',
+                'display_text': '查看 V35 經營效益策略',
+            }
+        ],
     )
 
     result = app_module._build_journal_reflection_messages()
@@ -131,3 +132,75 @@ def test_build_journal_reflection_messages_returns_flex(monkeypatch):
     assert len(result) == 1
     assert isinstance(result[0], FlexMessage)
     assert '日誌反思' in result[0].alt_text
+    assert 'action=backtest_reflect&strategy=v35' in result[0].to_json()
+
+
+def test_build_backtest_reflection_messages_returns_flex(monkeypatch):
+    import app as app_module
+    from linebot.v3.messaging import FlexMessage
+
+    monkeypatch.setattr(
+        app_module,
+        '_build_strategy_backtest_snapshot',
+        lambda strategy_key: {
+            'has_data': True,
+            'strategy_key': 'v35_innovation',
+            'strategy_name': 'V35 經營效益策略',
+            'date_str': '2026-04-19',
+            'source_label': '資料來源: 回測資料庫',
+            'total_roi': 18.4,
+            'win_rate': 62.5,
+            'max_drawdown': -6.8,
+            'trade_count': 16,
+            'avg_hold_days': 5.2,
+            'latest_trade_summary': '2330 +5.2%｜出場原因：停利',
+        },
+    )
+    monkeypatch.setattr(
+        app_module,
+        '_build_strategy_reflection_suggestions',
+        lambda snapshot: ['維持強勢族群觀察', '留意回撤控制'],
+    )
+
+    result = app_module._build_backtest_reflection_messages({'strategy': 'v35'})
+
+    assert len(result) == 1
+    assert isinstance(result[0], FlexMessage)
+    rendered = json.dumps(json.loads(result[0].to_json()), ensure_ascii=False)
+    assert 'V35 經營效益策略' in rendered
+    assert '維持強勢族群觀察' in rendered
+
+
+def test_build_backtest_reflection_messages_returns_empty_state_when_no_data(monkeypatch):
+    import app as app_module
+    from linebot.v3.messaging import FlexMessage
+
+    monkeypatch.setattr(
+        app_module,
+        '_build_strategy_backtest_snapshot',
+        lambda strategy_key: {
+            'has_data': False,
+            'strategy_key': 'v37_mean_reversion',
+            'strategy_name': 'V37 均值回歸策略',
+            'date_str': '2026-04-19',
+        },
+    )
+
+    result = app_module._build_backtest_reflection_messages({'strategy': 'v37'})
+
+    assert len(result) == 1
+    assert isinstance(result[0], FlexMessage)
+    rendered = json.dumps(json.loads(result[0].to_json()), ensure_ascii=False)
+    assert '尚無該策略回測資料' in rendered
+
+
+def test_build_selected_strategy_messages_returns_empty_state_on_missing_strategy():
+    import app as app_module
+    from linebot.v3.messaging import FlexMessage
+
+    result = app_module._build_selected_strategy_messages({})
+
+    assert len(result) == 1
+    assert isinstance(result[0], FlexMessage)
+    rendered = json.dumps(json.loads(result[0].to_json()), ensure_ascii=False)
+    assert '缺少策略代號' in rendered

@@ -11,6 +11,7 @@ from linebot.v3.messaging import (
     ApiClient,
     Configuration,
     MessagingApi,
+    MessageAction,
     PostbackAction,
     RichMenuArea,
     RichMenuBounds,
@@ -38,8 +39,8 @@ def build_default_rich_menu_request() -> RichMenuRequest:
 
     +-----------------+-----------------+
     |  個股診斷       |  總經摘要       |
-    |  PostbackAction |  PostbackAction |
-    |  prompt_stock   |  macro_summary  |
+    |  MessageAction  |  PostbackAction |
+    |     診斷        |  macro_summary  |
     +-----------------+-----------------+
     |  日誌反思       |  策略選股       |
     |  PostbackAction |  PostbackAction |
@@ -55,10 +56,9 @@ def build_default_rich_menu_request() -> RichMenuRequest:
             # 左上：個股診斷（引導輸入 4 碼股票代號）
             RichMenuArea(
                 bounds=RichMenuBounds(x=0, y=0, width=RICH_MENU_HALF_WIDTH, height=RICH_MENU_HALF_HEIGHT),
-                action=PostbackAction(
+                action=MessageAction(
                     label="個股診斷",
-                    data="action=prompt_stock_diagnosis",
-                    display_text="個股診斷",
+                    text="診斷",
                 ),
             ),
             # 右上：總經摘要（PostbackAction → macro_summary）

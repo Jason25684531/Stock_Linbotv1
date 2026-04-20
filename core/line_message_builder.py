@@ -10,8 +10,11 @@ Line Bot Flex Message 建構器
 4. create_holdings_flex(): 建構 AI 持股狀態 Flex 卡片
 5. create_news_flex(): 建構新聞摘要 Flex 卡片
 6. create_journal_reflection_flex(): 建構日誌反思 Flex 卡片
-7. create_strategy_picker_message(): 建構策略選擇 Quick Reply
-6. 內部 helper: _color_by_value(), _format_pct() 等
+7. build_macro_summary_flex(): 建構綜合新聞與盤勢 Flex 卡片
+8. build_strategy_prompt_flex(): 建構兩段式策略選擇 Flex 卡片
+9. build_backtest_reflection_flex(): 建構策略回測摘要 Flex 卡片
+10. create_strategy_picker_message(): 建構策略選擇 Quick Reply
+11. 內部 helper: _color_by_value(), _format_pct() 等
 
 🔄 V36 Upgrade:
 - 新增 Flex Carousel 推薦清單（最多 10 張卡片）
@@ -284,6 +287,41 @@ def _truncate_text(value: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(limit - 3, 0)] + '...'
+
+
+def _format_signed_pct(value: Optional[float], na: str = 'N/A') -> str:
+    if value is None:
+        return na
+    sign = '+' if value > 0 else ''
+    return f'{sign}{value:.1f}%'
+
+
+def _format_lot_delta(value: Optional[float], na: str = 'N/A') -> str:
+    if value is None:
+        return na
+    sign = '▲' if value > 0 else ('▼' if value < 0 else '─')
+    return f'{sign} {abs(int(value)):,} 張'
+
+
+def _make_section_header(text: str, color: str = '#4FC3F7') -> FlexText:
+    return FlexText(text=text, size='xs', color=color, weight='bold', margin='md')
+
+
+def _split_news_summary_sections(news_summary: str) -> tuple[List[str], List[str]]:
+    lines = _clean_summary_lines(news_summary)
+    outline_lines: List[str] = []
+    commentary_lines: List[str] = []
+    in_commentary = False
+    for line in lines:
+        if line.startswith('📊'):
+            in_commentary = True
+            commentary_lines.append(line)
+            continue
+        if in_commentary:
+            commentary_lines.append(line)
+        else:
+            outline_lines.append(line)
+    return outline_lines, commentary_lines
 
 
 def create_empty_state_flex(
@@ -828,19 +866,7 @@ def build_news_summary_bubble(
         background_color='#1A1A2E',
     )
 
-    lines = _clean_summary_lines(news_summary)
-    outline_lines: List[str] = []
-    commentary_lines: List[str] = []
-    in_commentary = False
-    for line in lines:
-        if line.startswith('📊'):
-            in_commentary = True
-            commentary_lines.append(line)
-            continue
-        if in_commentary:
-            commentary_lines.append(line)
-        else:
-            outline_lines.append(line)
+    outline_lines, commentary_lines = _split_news_summary_sections(news_summary)
 
     if not outline_lines and not commentary_lines:
         outline_lines = ['目前暫無摘要內容，請稍後再試。']
@@ -914,6 +940,320 @@ def build_news_summary_bubble(
         header=header,
         body=body,
         footer=footer,
+    )
+
+
+def build_macro_summary_flex(
+    news_summary: str,
+    market_snapshot: Optional[Dict[str, Any]] = None,
+    chip_snapshot: Optional[Dict[str, Any]] = None,
+    date_str: str = '',
+    title: str = '📰 總經摘要',
+) -> FlexMessage:
+    """建構綜合新聞、盤勢與籌碼摘要的單張 Flex 卡片。"""
+    market_snapshot = dict(market_snapshot or {})
+    chip_snapshot = dict(chip_snapshot or {})
+    display_date = (
+        date_str
+        or str(market_snapshot.get('date_str') or '').strip()
+        or str(chip_snapshot.get('date_str') or '').strip()
+    )
+
+    outline_lines, commentary_lines = _split_news_summary_sections(news_summary)
+    if not outline_lines and not commentary_lines:
+        outline_lines = ['目前暫無當日新聞摘要，請稍後再試。']
+
+    body_contents: List[Any] = [_make_section_header('消息面綜整')]
+    for line in outline_lines[:8]:
+        if line.startswith('📌'):
+            body_contents.append(FlexText(text=line, size='sm', color='#FFD700', weight='bold', wrap=True, margin='sm'))
+        elif line.startswith('→'):
+            body_contents.append(FlexText(text=line, size='xs', color='#DDDDDD', wrap=True, margin='xs'))
+        else:
+            body_contents.append(FlexText(text=line, size='xs', color='#C5D9EA', wrap=True, margin='xs'))
+
+    if commentary_lines:
+        body_contents.append(FlexSeparator(margin='lg'))
+        body_contents.append(_make_section_header('綜合研判', color='#81C784'))
+        for line in commentary_lines[:4]:
+            body_contents.append(FlexText(text=line, size='xs', color='#D7F6DA', wrap=True, margin='xs'))
+
+    body_contents.append(FlexSeparator(margin='lg'))
+    body_contents.append(_make_section_header('盤勢快照'))
+    if market_snapshot.get('status') == 'ok':
+        body_contents.extend([
+            _make_data_row('▲ 上漲家數', str(market_snapshot.get('rising', 0)), '#81C784'),
+            FlexSeparator(margin='sm'),
+            _make_data_row('▼ 下跌家數', str(market_snapshot.get('falling', 0)), '#E57373'),
+            FlexSeparator(margin='sm'),
+            _make_data_row('─ 平盤家數', str(market_snapshot.get('flat', 0)), '#FFFFFF'),
+            FlexSeparator(margin='sm'),
+            _make_data_row('💹 總成交量', f"{float(market_snapshot.get('total_volume_b', 0.0)):.1f} 億股", '#FFFFFF'),
+        ])
+        summary_text = str(market_snapshot.get('summary') or '').strip()
+        if summary_text:
+            body_contents.append(FlexText(text=summary_text, size='xxs', color='#9CC5E8', wrap=True, margin='sm'))
+    else:
+        body_contents.append(
+            FlexText(
+                text=str(market_snapshot.get('message') or '目前暫無可用盤勢資料。'),
+                size='xs',
+                color='#DDDDDD',
+                wrap=True,
+                margin='sm',
+            )
+        )
+
+    body_contents.append(FlexSeparator(margin='lg'))
+    body_contents.append(_make_section_header('籌碼面狀態', color='#4DD0E1'))
+    if chip_snapshot.get('status') == 'ok':
+        body_contents.extend([
+            _make_data_row('外資', _format_lot_delta(chip_snapshot.get('foreign_net')), _color_by_value(chip_snapshot.get('foreign_net'))),
+            FlexSeparator(margin='sm'),
+            _make_data_row('投信', _format_lot_delta(chip_snapshot.get('trust_net')), _color_by_value(chip_snapshot.get('trust_net'))),
+            FlexSeparator(margin='sm'),
+            _make_data_row('自營商', _format_lot_delta(chip_snapshot.get('dealer_net')), _color_by_value(chip_snapshot.get('dealer_net'))),
+            FlexSeparator(margin='sm'),
+            _make_data_row('合計', _format_lot_delta(chip_snapshot.get('total_net')), _color_by_value(chip_snapshot.get('total_net'))),
+        ])
+        chip_summary = str(chip_snapshot.get('summary') or '').strip()
+        if chip_summary:
+            body_contents.append(FlexText(text=chip_summary, size='xxs', color='#B4F1FA', wrap=True, margin='sm'))
+    else:
+        body_contents.append(
+            FlexText(
+                text=str(chip_snapshot.get('message') or '目前暫無可用籌碼資料。'),
+                size='xs',
+                color='#DDDDDD',
+                wrap=True,
+                margin='sm',
+            )
+        )
+
+    bubble = FlexBubble(
+        size='mega',
+        header=FlexBox(
+            layout='horizontal',
+            contents=[
+                FlexText(text=title, weight='bold', size='lg', color='#FFFFFF', flex=3),
+                FlexText(text=display_date, size='xs', color='#AAAAAA', align='end', gravity='center', flex=0),
+            ],
+            padding_all='14px',
+            background_color='#1A1A2E',
+        ),
+        body=FlexBox(
+            layout='vertical',
+            contents=body_contents,
+            padding_all='14px',
+            background_color='#0F3460',
+        ),
+        footer=FlexBox(
+            layout='vertical',
+            contents=[
+                FlexText(
+                    text='消息: 鉅亨網 / Gemini｜盤勢與籌碼: TWSE MCP',
+                    size='xxs',
+                    color='#888888',
+                    align='center',
+                    wrap=True,
+                ),
+            ],
+            padding_all='8px',
+            background_color='#1A1A2E',
+        ),
+    )
+    return FlexMessage(
+        alt_text=_truncate_text(f'{title} {display_date}'.strip(), 100),
+        contents=bubble,
+    )
+
+
+def build_strategy_prompt_flex(
+    title: str,
+    prompt_text: str,
+    strategies: List[Dict[str, str]],
+    action: str,
+    date_str: str = '',
+    subtitle: str = '',
+    alt_text: Optional[str] = None,
+) -> FlexMessage:
+    """建構 Rich Menu 兩段式對話的策略選擇 Flex 卡片。"""
+    body_contents: List[Any] = [
+        FlexText(text=prompt_text, size='sm', color='#FFFFFF', wrap=True),
+    ]
+
+    if subtitle:
+        body_contents.append(FlexText(text=subtitle, size='xs', color='#8FD3FE', wrap=True, margin='sm'))
+
+    body_contents.append(FlexSeparator(margin='lg'))
+    body_contents.append(_make_section_header('策略列表'))
+
+    for strategy in strategies[:12]:
+        payload_key = str(strategy.get('payload_key') or strategy.get('key') or '').strip()
+        if not payload_key:
+            continue
+        label = _truncate_text(strategy.get('label') or strategy.get('short_label') or payload_key.upper(), 40)
+        button_label = _truncate_text(strategy.get('short_label') or strategy.get('label') or payload_key.upper(), 20)
+        display_text = strategy.get('display_text') or f'查看 {label}'
+        style = _get_strategy_style(strategy.get('key') or payload_key)
+        body_contents.append(
+            FlexBox(
+                layout='vertical',
+                contents=[
+                    FlexText(text=label, size='xs', color='#DDDDDD', wrap=True, margin='sm'),
+                    FlexButton(
+                        action=PostbackAction(
+                            label=button_label,
+                            data=f'action={action}&strategy={payload_key}',
+                            display_text=display_text,
+                        ),
+                        style='primary',
+                        color=style['accent'],
+                        height='sm',
+                        margin='sm',
+                    ),
+                ],
+                margin='sm',
+            )
+        )
+
+    bubble = FlexBubble(
+        size='mega',
+        header=FlexBox(
+            layout='horizontal',
+            contents=[
+                FlexText(text=title, weight='bold', size='lg', color='#FFFFFF', flex=3),
+                FlexText(text=date_str, size='xs', color='#AAAAAA', align='end', gravity='center', flex=0),
+            ],
+            padding_all='14px',
+            background_color='#1A1A2E',
+        ),
+        body=FlexBox(
+            layout='vertical',
+            contents=body_contents,
+            padding_all='14px',
+            background_color='#0F3460',
+        ),
+        footer=FlexBox(
+            layout='vertical',
+            contents=[
+                FlexText(
+                    text='點擊按鈕即可進入下一步，不會切換目前主策略設定。',
+                    size='xxs',
+                    color='#888888',
+                    wrap=True,
+                    align='center',
+                )
+            ],
+            padding_all='8px',
+            background_color='#1A1A2E',
+        ),
+    )
+    return FlexMessage(
+        alt_text=_truncate_text(alt_text or title, 100),
+        contents=bubble,
+    )
+
+
+def build_backtest_reflection_flex(
+    strategy_name: str,
+    total_roi: Optional[float],
+    win_rate: Optional[float],
+    max_drawdown: Optional[float],
+    trade_count: Optional[int],
+    date_str: str = '',
+    avg_hold_days: Optional[float] = None,
+    latest_trade_summary: str = '',
+    suggestions: Optional[List[str]] = None,
+    source_label: str = '',
+) -> FlexMessage:
+    """建構策略級回測摘要與反思 Flex 卡片。"""
+    style = _get_strategy_style(strategy_name)
+    roi_value = total_roi if total_roi is not None else 0.0
+    win_rate_value = win_rate if win_rate is not None else 0.0
+    mdd_value = max_drawdown if max_drawdown is not None else 0.0
+    trade_count_value = trade_count if trade_count is not None else 0
+    avg_hold_value = avg_hold_days if avg_hold_days is not None else 0.0
+    reflection_items = [item for item in (suggestions or []) if str(item).strip()]
+
+    body_contents: List[Any] = [
+        FlexText(text='策略回測摘要', size='xs', color='#4FC3F7', weight='bold'),
+        _make_data_row('總報酬率', _format_signed_pct(roi_value), _color_by_value(roi_value)),
+        FlexSeparator(margin='sm'),
+        _make_data_row('勝率', f'{win_rate_value:.1f}%', '#81C784' if win_rate_value >= 50 else '#FFD54F'),
+        FlexSeparator(margin='sm'),
+        _make_data_row('近似最大回撤', f'{mdd_value:.1f}%', _color_by_value(mdd_value)),
+        FlexSeparator(margin='sm'),
+        _make_data_row('交易筆數', str(trade_count_value), '#FFFFFF'),
+    ]
+
+    if avg_hold_days is not None:
+        body_contents.extend([
+            FlexSeparator(margin='sm'),
+            _make_data_row('平均持有天數', f'{avg_hold_value:.1f} 天', '#FFFFFF'),
+        ])
+
+    if latest_trade_summary:
+        body_contents.extend([
+            FlexSeparator(margin='lg'),
+            _make_section_header('最近一筆交易', color='#81C784'),
+            FlexText(text=latest_trade_summary, size='xs', color='#D7F6DA', wrap=True, margin='sm'),
+        ])
+
+    if reflection_items:
+        body_contents.append(FlexSeparator(margin='lg'))
+        body_contents.append(_make_section_header('系統反思', color='#FFD54F'))
+        for item in reflection_items[:3]:
+            body_contents.append(FlexText(text=f'• {item}', size='xs', color='#F8E7A5', wrap=True, margin='xs'))
+
+    footer_text = '回測摘要以交易序列近似推導'
+    if source_label:
+        footer_text = f'{source_label}｜{footer_text}'
+
+    bubble = FlexBubble(
+        size='mega',
+        header=FlexBox(
+            layout='horizontal',
+            contents=[
+                FlexText(text=f'📝 {strategy_name}', weight='bold', size='lg', color='#FFFFFF', flex=3),
+                FlexText(text=date_str, size='xs', color='#AAAAAA', align='end', gravity='center', flex=0),
+            ],
+            padding_all='14px',
+            background_color=style['bg'],
+        ),
+        hero=FlexBox(
+            layout='vertical',
+            contents=[
+                FlexText(text='總報酬率', size='xs', color='#AAAAAA', align='center'),
+                FlexText(
+                    text=_format_signed_pct(roi_value),
+                    size='3xl',
+                    weight='bold',
+                    color=_color_by_value(roi_value),
+                    align='center',
+                ),
+            ],
+            padding_all='14px',
+            background_color='#16213E',
+        ),
+        body=FlexBox(
+            layout='vertical',
+            contents=body_contents,
+            padding_all='14px',
+            background_color='#0F3460',
+        ),
+        footer=FlexBox(
+            layout='vertical',
+            contents=[
+                FlexText(text=footer_text, size='xxs', color='#888888', wrap=True, align='center')
+            ],
+            padding_all='8px',
+            background_color=style['bg'],
+        ),
+    )
+    return FlexMessage(
+        alt_text=_truncate_text(f'📝 {strategy_name} 策略回測摘要', 100),
+        contents=bubble,
     )
 
 def create_news_flex(

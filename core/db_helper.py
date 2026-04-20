@@ -826,20 +826,27 @@ def save_backtest_results(trades_df: pd.DataFrame = None, equity_df: pd.DataFram
         return False
 
 
-def get_recent_backtest_trades(limit: int = 50):
-    """取得最近回測交易紀錄（依賣出日新到舊）。"""
+def get_backtest_trades(strategy: str = None, limit: int = None):
+    """取得回測交易紀錄，可選擇依策略過濾。"""
     try:
         ensure_backtest_tables()
-        lim = max(1, min(int(limit), 500))
         engine = get_db_engine()
+        params = {}
+        sql = """
+            SELECT strategy, stock_id, buy_date, sell_date,
+                   buy_price, sell_price, profit_pct, reason, days
+            FROM backtest_trades
+        """
+        if strategy:
+            sql += " WHERE strategy = :strategy"
+            params['strategy'] = str(strategy).strip()
+        sql += " ORDER BY sell_date DESC, id DESC"
+        if limit is not None:
+            params['lim'] = max(1, min(int(limit), 5000))
+            sql += " LIMIT :lim"
+
         with engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT strategy, stock_id, buy_date, sell_date,
-                       buy_price, sell_price, profit_pct, reason, days
-                FROM backtest_trades
-                ORDER BY sell_date DESC, id DESC
-                LIMIT :lim
-            """), {'lim': lim})
+            result = conn.execute(text(sql), params)
             rows = result.fetchall()
 
         return [
@@ -856,6 +863,15 @@ def get_recent_backtest_trades(limit: int = 50):
             }
             for row in rows
         ]
+    except Exception as e:
+        print(f"❌ get_backtest_trades 失敗: {e}")
+        return []
+
+
+def get_recent_backtest_trades(limit: int = 50):
+    """取得最近回測交易紀錄（依賣出日新到舊）。"""
+    try:
+        return get_backtest_trades(limit=limit)
     except Exception as e:
         print(f"❌ get_recent_backtest_trades 失敗: {e}")
         return []

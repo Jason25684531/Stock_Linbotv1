@@ -42,6 +42,7 @@ from core.db_helper import (
     create_user_simulation_trade,
     format_market_fallback_notice,
     get_actual_latest_date,
+    get_backtest_trades,
     get_backtest_equity_curve,
     get_daily_recommendations,
     get_backtest_summary_from_db,
@@ -62,6 +63,9 @@ from core.db_helper import (
     validate_setting,
 )
 from core.line_message_builder import (
+    build_backtest_reflection_flex,
+    build_macro_summary_flex,
+    build_strategy_prompt_flex,
     create_backtest_summary_flex,
     create_empty_state_flex,
     create_holdings_flex,
@@ -350,6 +354,53 @@ def _get_strategy_display_name(strategy_key: str) -> str:
     return getattr(strategy, 'display_name', strategy_key)
 
 
+def _get_strategy_payload_key(strategy_key: str, display_name: str = '') -> str:
+    for candidate in (strategy_key, display_name):
+        match = re.search(r'V\d+', str(candidate or ''), flags=re.IGNORECASE)
+        if match:
+            return match.group(0).lower()
+    return str(strategy_key or '').strip()
+
+
+def _normalize_strategy_request_key(strategy_value: str) -> str:
+    raw = str(strategy_value or '').strip()
+    if not raw:
+        return ''
+
+    lowered = raw.lower()
+    strategy_keys = list(strategy_manager.list_strategies())
+    for strategy_key in strategy_keys:
+        if strategy_key.lower() == lowered:
+            return strategy_key
+
+    for strategy_key in strategy_keys:
+        display_name = _get_strategy_display_name(strategy_key)
+        aliases = {
+            strategy_key.lower(),
+            _get_strategy_payload_key(strategy_key, display_name).lower(),
+        }
+        display_match = re.search(r'V\d+', display_name, flags=re.IGNORECASE)
+        if display_match:
+            aliases.add(display_match.group(0).lower())
+        if lowered in aliases:
+            return strategy_key
+
+    return raw
+
+
+def _current_line_date() -> str:
+    return _resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+
+
+def _build_postback_empty_state(title: str, message: str, subtitle: str = ''):
+    return create_empty_state_flex(
+        title=title,
+        message=message,
+        date_str=_current_line_date(),
+        subtitle=subtitle,
+    )
+
+
 def _list_strategy_picker_options() -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
     for strategy_key in strategy_manager.list_strategies():
@@ -364,6 +415,7 @@ def _list_strategy_picker_options() -> list[dict[str, str]]:
                 'key': strategy_key,
                 'label': display_name,
                 'short_label': short_label,
+                'payload_key': _get_strategy_payload_key(strategy_key, display_name),
                 'display_text': f'查看 {display_name}',
             }
         )
@@ -712,23 +764,303 @@ def _apply_news_sentiment_overlay(candidates: pd.DataFrame, date_str: str) -> pd
         return boosted
 
 
+def _summarize_market_snapshot(rising: int, falling: int, flat: int) -> str:
+    total = max(rising + falling + flat, 1)
+    if rising >= falling * 1.2 and rising >= total * 0.45:
+        return '盤面偏多，上漲家數明顯優於下跌家數。'
+    if falling >= rising * 1.2 and falling >= total * 0.45:
+        return '盤面偏弱，下跌家數占優，短線宜控管追價風險。'
+    return '盤勢中性，建議搭配題材與法人方向交叉確認。'
+
+
+def _summarize_chip_snapshot(foreign_net: int, trust_net: int, dealer_net: int) -> str:
+    total_net = foreign_net + trust_net + dealer_net
+    if total_net > 0 and foreign_net > 0:
+        return '三大法人偏多，且外資站在買方，籌碼面偏正向。'
+    if total_net < 0 and foreign_net < 0:
+        return '三大法人偏空，外資同步調節，需留意高檔震盪。'
+    return '法人分歧，籌碼面缺乏一致性，宜搭配價格結構判讀。'
+
+
+def _build_market_snapshot() -> dict[str, object]:
+    cached = _postback_cache.get('market_summary_snapshot')
+    if isinstance(cached, dict) and cached:
+        return dict(cached)
+
+    trade_date = _current_line_date()
+    try:
+        result = MCPClient().get_market_statistics_sync(trade_date)
+        if result is None:
+            return {
+                'status': 'error',
+                'date_str': trade_date,
+                'message': '目前暫時無法連線至 TWSE MCP Server，盤勢快照暫不可用。',
+            }
+
+        records: list[dict] = result.get('records') or []
+        if not records:
+            return {
+                'status': 'empty',
+                'date_str': result.get('as_of_date') or trade_date,
+                'message': '目前尚無今日盤勢資料，請於盤後再試。',
+            }
+
+        rising = sum(1 for record in records if (safe_float(record.get('close_price')) or 0) > (safe_float(record.get('open_price')) or 0))
+        falling = sum(1 for record in records if (safe_float(record.get('close_price')) or 0) < (safe_float(record.get('open_price')) or 0))
+        flat = len(records) - rising - falling
+        total_volume = sum(int(safe_float(record.get('volume')) or 0) for record in records)
+        snapshot = {
+            'status': 'ok',
+            'date_str': result.get('as_of_date') or trade_date,
+            'rising': rising,
+            'falling': falling,
+            'flat': flat,
+            'total_volume_b': total_volume / 1_000_000_000,
+            'summary': _summarize_market_snapshot(rising, falling, flat),
+        }
+        _postback_cache.set('market_summary_snapshot', snapshot)
+        return snapshot
+    except MCPClientError as exc:
+        print(f'⚠️ MCP market snapshot 失敗: {exc}')
+        return {
+            'status': 'error',
+            'date_str': trade_date,
+            'message': '盤勢快照暫時無法取得，請稍後再試。',
+        }
+    except Exception as exc:
+        print(f'⚠️ _build_market_snapshot 未預期錯誤: {exc}')
+        return {
+            'status': 'error',
+            'date_str': trade_date,
+            'message': '盤勢快照資料處理異常，請稍後再試。',
+        }
+
+
+def _build_chip_snapshot() -> dict[str, object]:
+    cached = _postback_cache.get('chip_trend_snapshot')
+    if isinstance(cached, dict) and cached:
+        return dict(cached)
+
+    trade_date = _current_line_date()
+    try:
+        result = MCPClient().get_foreign_investment_sync(trade_date)
+        if result is None:
+            return {
+                'status': 'error',
+                'date_str': trade_date,
+                'message': '目前暫時無法連線至 TWSE MCP Server，籌碼資料暫不可用。',
+            }
+
+        records: list[dict] = result.get('records') or []
+        if not records:
+            return {
+                'status': 'empty',
+                'date_str': result.get('as_of_date') or trade_date,
+                'message': '目前尚無今日法人資料，請於盤後再試。',
+            }
+
+        def _sum_net(key: str) -> int:
+            return sum(int(safe_float(record.get(key)) or 0) for record in records)
+
+        foreign_net = _sum_net('foreign_buy')
+        trust_net = _sum_net('trust_buy')
+        dealer_net = _sum_net('dealer_buy')
+        total_net = foreign_net + trust_net + dealer_net
+        snapshot = {
+            'status': 'ok',
+            'date_str': result.get('as_of_date') or trade_date,
+            'foreign_net': foreign_net,
+            'trust_net': trust_net,
+            'dealer_net': dealer_net,
+            'total_net': total_net,
+            'summary': _summarize_chip_snapshot(foreign_net, trust_net, dealer_net),
+        }
+        _postback_cache.set('chip_trend_snapshot', snapshot)
+        return snapshot
+    except MCPClientError as exc:
+        print(f'⚠️ MCP chip snapshot 失敗: {exc}')
+        return {
+            'status': 'error',
+            'date_str': trade_date,
+            'message': '籌碼資料暫時無法取得，請稍後再試。',
+        }
+    except Exception as exc:
+        print(f'⚠️ _build_chip_snapshot 未預期錯誤: {exc}')
+        return {
+            'status': 'error',
+            'date_str': trade_date,
+            'message': '籌碼資料處理異常，請稍後再試。',
+        }
+
+
+def _load_strategy_backtest_frame(strategy_key: str) -> tuple[pd.DataFrame, str]:
+    normalized_key = _normalize_strategy_request_key(strategy_key)
+    if not normalized_key:
+        return pd.DataFrame(), ''
+
+    try:
+        trades = get_backtest_trades(strategy=normalized_key)
+    except Exception as exc:
+        print(f'⚠️ 讀取 DB 回測交易失敗 [{normalized_key}]: {exc}')
+        trades = []
+
+    if trades:
+        return pd.DataFrame(trades), '資料來源: 回測資料庫'
+
+    csv_path = REPO_ROOT / 'ML_Data' / 'backtest_result.csv'
+    if not csv_path.exists():
+        return pd.DataFrame(), ''
+
+    try:
+        trades_df = pd.read_csv(csv_path, encoding='utf-8-sig')
+    except Exception as exc:
+        print(f'⚠️ 讀取回測 CSV 失敗 [{normalized_key}]: {exc}')
+        return pd.DataFrame(), ''
+
+    if 'strategy' not in trades_df.columns:
+        return pd.DataFrame(), ''
+
+    filtered = trades_df[trades_df['strategy'].astype(str).str.strip().str.lower() == normalized_key.lower()].copy()
+    if filtered.empty:
+        return pd.DataFrame(), ''
+    return filtered, '資料來源: backtest_result.csv'
+
+
+def _calculate_trade_sequence_drawdown(profit_pct_values: list[float]) -> tuple[float, float]:
+    equity = 1.0
+    peak = 1.0
+    max_drawdown = 0.0
+
+    for profit_pct in profit_pct_values:
+        factor = 1 + (profit_pct / 100.0)
+        equity = 0.0 if factor <= 0 else equity * factor
+        if equity > peak:
+            peak = equity
+        if peak > 0:
+            drawdown = ((equity - peak) / peak) * 100
+            if drawdown < max_drawdown:
+                max_drawdown = drawdown
+
+    total_roi = (equity - 1) * 100
+    return round(total_roi, 2), round(max_drawdown, 2)
+
+
+def _format_backtest_trade_summary(row: pd.Series) -> str:
+    stock_id = str(row.get('stock_id') or 'N/A').strip()
+    profit_pct = safe_float(row.get('profit_pct'))
+    reason = str(row.get('reason') or '未記錄').strip()
+    if profit_pct is None:
+        return f'{stock_id}｜出場原因：{reason}'
+    return f'{stock_id} {profit_pct:+.1f}%｜出場原因：{reason}'
+
+
+def _build_strategy_reflection_suggestions(snapshot: dict[str, object]) -> list[str]:
+    roi = safe_float(snapshot.get('total_roi')) or 0.0
+    win_rate = safe_float(snapshot.get('win_rate')) or 0.0
+    max_drawdown = safe_float(snapshot.get('max_drawdown')) or 0.0
+    trade_count = safe_int(snapshot.get('trade_count')) or 0
+    avg_hold_days = safe_float(snapshot.get('avg_hold_days')) or 0.0
+
+    suggestions: list[str] = []
+    if max_drawdown <= -15:
+        suggestions.append('回撤偏深，建議先收斂停損幅度或降低單筆部位曝險。')
+    elif max_drawdown <= -8:
+        suggestions.append('回撤仍需關注，建議搭配市場濾網與題材強弱同步判斷。')
+
+    if win_rate < 45 and trade_count >= 8:
+        suggestions.append('勝率偏低且樣本已具規模，建議提高進場條件或縮短持有週期。')
+    elif win_rate >= 55 and roi > 0:
+        suggestions.append('勝率與報酬同步為正，可維持現行節奏並觀察強勢族群延續性。')
+
+    if trade_count < 5:
+        suggestions.append('目前樣本數偏少，建議累積更多回測樣本後再做參數微調。')
+    elif avg_hold_days >= 10:
+        suggestions.append('平均持有天數偏長，建議檢查出場條件是否過於遲滯。')
+
+    if not suggestions:
+        suggestions.append('目前指標中性，建議持續觀察最新交易樣本與市場 regime 變化。')
+    return suggestions[:3]
+
+
+def _build_strategy_backtest_snapshot(strategy_key: str) -> dict[str, object]:
+    normalized_key = _normalize_strategy_request_key(strategy_key)
+    display_name = _get_strategy_display_name(normalized_key or strategy_key)
+    trades_df, source_label = _load_strategy_backtest_frame(normalized_key)
+    if trades_df.empty:
+        return {
+            'has_data': False,
+            'strategy_key': normalized_key,
+            'strategy_name': display_name,
+            'date_str': _current_line_date(),
+        }
+
+    prepared = trades_df.copy()
+    for column in ('profit_pct', 'days'):
+        if column in prepared.columns:
+            prepared[column] = pd.to_numeric(prepared[column], errors='coerce')
+    for column in ('buy_date', 'sell_date'):
+        if column in prepared.columns:
+            prepared[column] = pd.to_datetime(prepared[column], errors='coerce')
+
+    valid_profits = [float(value) for value in prepared.get('profit_pct', pd.Series(dtype='float64')).dropna().tolist()]
+    if not valid_profits:
+        return {
+            'has_data': False,
+            'strategy_key': normalized_key,
+            'strategy_name': display_name,
+            'date_str': _current_line_date(),
+        }
+
+    total_roi, max_drawdown = _calculate_trade_sequence_drawdown(valid_profits)
+    trade_count = len(valid_profits)
+    win_rate = round((sum(1 for value in valid_profits if value > 0) / trade_count) * 100, 1) if trade_count else 0.0
+    avg_hold_days = round(float(prepared['days'].dropna().mean()), 1) if 'days' in prepared.columns and prepared['days'].notna().any() else None
+
+    sort_columns = [column for column in ('sell_date', 'buy_date') if column in prepared.columns]
+    latest_trade = prepared.sort_values(sort_columns, ascending=False, na_position='last').iloc[0] if sort_columns else prepared.iloc[0]
+    latest_trade_summary = _format_backtest_trade_summary(latest_trade)
+    latest_date = latest_trade.get('sell_date') if 'sell_date' in latest_trade.index else None
+    date_str = latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') and not pd.isna(latest_date) else _current_line_date()
+
+    return {
+        'has_data': True,
+        'strategy_key': normalized_key,
+        'strategy_name': display_name,
+        'date_str': date_str,
+        'source_label': source_label,
+        'total_roi': total_roi,
+        'win_rate': win_rate,
+        'max_drawdown': max_drawdown,
+        'trade_count': trade_count,
+        'avg_hold_days': avg_hold_days,
+        'latest_trade_summary': latest_trade_summary,
+    }
+
+
 def _build_macro_news_messages() -> list:
+    market_snapshot = _build_market_snapshot()
+    chip_snapshot = _build_chip_snapshot()
+    display_date = str(market_snapshot.get('date_str') or chip_snapshot.get('date_str') or _current_line_date())
+
     try:
         from core.news_agent import get_morning_news_summary
 
         news_summary = get_morning_news_summary()
-        today_str = pd.Timestamp.now().strftime('%Y-%m-%d')
-        return [
-            create_news_flex(
-                news_summary,
-                today_str,
-                title='📰 總經摘要',
-                alt_text=f'📰 總經摘要 {today_str}',
-            )
-        ]
+        if not str(news_summary or '').strip() or str(news_summary).startswith('⚠️'):
+            news_summary = '目前暫無當日新聞摘要，請稍後再試。'
     except Exception as exc:
         print(f'⚠️ 總經摘要產生失敗: {exc}')
-        return [V3TextMessage(text='📰 總經摘要\n\n目前暫時無法取得最新摘要，請稍後再試。')]
+        news_summary = '目前暫時無法取得最新新聞摘要，請稍後再試。'
+
+    return [
+        build_macro_summary_flex(
+            news_summary=news_summary,
+            market_snapshot=market_snapshot,
+            chip_snapshot=chip_snapshot,
+            date_str=display_date,
+            title='📰 總經摘要',
+        )
+    ]
 
 
 def _build_stock_diagnosis_prompt_messages(source_id: str = '') -> list:
@@ -740,49 +1072,107 @@ def _build_stock_diagnosis_prompt_messages(source_id: str = '') -> list:
 def _build_strategy_picker_messages() -> list:
     options = _list_strategy_picker_options()
     if not options:
-        return [V3TextMessage(text='🎯 策略選股\n\n目前沒有可用策略，請先檢查策略設定。')]
-    return [create_strategy_picker_message(options, prompt_text='🎯 請選擇想查看的策略（V31-V38）')]
+        return [
+            _build_postback_empty_state(
+                title='🎯 策略選股',
+                message='目前沒有可用策略，請先檢查策略設定。',
+            )
+        ]
+    return [
+        build_strategy_prompt_flex(
+            title='🎯 策略選股',
+            prompt_text='請選擇您要觀看的策略選股盤勢。',
+            strategies=options,
+            action='strategy_select',
+            date_str=_current_line_date(),
+            subtitle='固定列出所有已註冊策略（V31~V38），結果階段將沿用既有選股 Flex 樣板。',
+            alt_text='🎯 策略選股',
+        )
+    ]
 
 
 def _build_selected_strategy_messages(payload: dict[str, str] | None = None) -> list:
-    strategy_key = str((payload or {}).get('strategy') or '').strip()
-    if not strategy_key:
-        return [V3TextMessage(text='⚠️ 缺少策略代號，請重新點選「策略選股」。')]
+    raw_strategy_key = str((payload or {}).get('strategy') or '').strip()
+    if not raw_strategy_key:
+        return [
+            _build_postback_empty_state(
+                title='🎯 策略選股',
+                message='缺少策略代號，請重新點選「策略選股」。',
+            )
+        ]
 
+    strategy_key = _normalize_strategy_request_key(raw_strategy_key)
+    display_name = _get_strategy_display_name(strategy_key or raw_strategy_key)
     recommendation = get_strategy_recommendation(as_flex=True, strategy_key=strategy_key)
     if isinstance(recommendation, str):
-        return [V3TextMessage(text=recommendation)]
+        return [
+            create_empty_state_flex(
+                title=f'🎯 {display_name}',
+                message=recommendation,
+                date_str=_current_line_date(),
+                subtitle='請重新選擇策略，或稍後再試。',
+            )
+        ]
     return [recommendation]
 
 
 def _build_journal_reflection_messages() -> list:
-    snapshot = _build_journal_reflection_snapshot()
-    summary = snapshot.get('summary') or {}
-    active_labels = snapshot.get('active_labels') or ['尚未啟用策略']
-    date_str = str(snapshot.get('date_str') or '')
-    today_pick_status = str(snapshot.get('today_pick_status') or '今日無標的')
-    latest_trade_summary = str(snapshot.get('latest_trade_summary') or '')
-
-    if not summary:
-        subtitle = f'啟用策略：{"、".join(active_labels)}｜{today_pick_status}'
+    options = _list_strategy_picker_options()
+    if not options:
         return [
-            create_empty_state_flex(
+            _build_postback_empty_state(
                 title='📝 日誌反思',
-                message='目前尚無可用回測摘要，可先執行回測再回來查看近期表現。',
-                date_str=date_str,
-                subtitle=subtitle,
+                message='目前沒有可用策略，請先檢查策略設定。',
             )
         ]
 
     return [
-        create_journal_reflection_flex(
-            active_strategy_labels=list(active_labels),
-            total_roi=safe_float(summary.get('total_roi')),
-            win_rate=safe_float(summary.get('win_rate')),
-            today_pick_status=today_pick_status,
-            date_str=date_str,
-            trade_count=safe_int(summary.get('trade_count')),
-            latest_trade_summary=latest_trade_summary,
+        build_strategy_prompt_flex(
+            title='📝 日誌反思',
+            prompt_text='請選擇您要查看回測數據與反思的策略。',
+            strategies=options,
+            action='backtest_reflect',
+            date_str=_current_line_date(),
+            subtitle='固定列出所有已註冊策略；若該策略暫無回測資料，將回傳 Empty State Flex Card。',
+            alt_text='📝 日誌反思',
+        )
+    ]
+
+
+def _build_backtest_reflection_messages(payload: dict[str, str] | None = None) -> list:
+    raw_strategy_key = str((payload or {}).get('strategy') or '').strip()
+    if not raw_strategy_key:
+        return [
+            _build_postback_empty_state(
+                title='📝 日誌反思',
+                message='缺少策略代號，請重新選擇想查看的策略。',
+            )
+        ]
+
+    snapshot = _build_strategy_backtest_snapshot(raw_strategy_key)
+    strategy_name = str(snapshot.get('strategy_name') or raw_strategy_key.upper())
+    if not snapshot.get('has_data'):
+        return [
+            create_empty_state_flex(
+                title=f'📝 {strategy_name}',
+                message='尚無該策略回測資料，可先執行該策略回測後再查看。',
+                date_str=str(snapshot.get('date_str') or _current_line_date()),
+                subtitle='系統仍保留該策略在清單中，方便你直接檢查是否已有新資料。',
+            )
+        ]
+
+    return [
+        build_backtest_reflection_flex(
+            strategy_name=strategy_name,
+            total_roi=safe_float(snapshot.get('total_roi')),
+            win_rate=safe_float(snapshot.get('win_rate')),
+            max_drawdown=safe_float(snapshot.get('max_drawdown')),
+            trade_count=safe_int(snapshot.get('trade_count')),
+            date_str=str(snapshot.get('date_str') or _current_line_date()),
+            avg_hold_days=safe_float(snapshot.get('avg_hold_days')),
+            latest_trade_summary=str(snapshot.get('latest_trade_summary') or ''),
+            suggestions=_build_strategy_reflection_suggestions(snapshot),
+            source_label=str(snapshot.get('source_label') or ''),
         )
     ]
 
@@ -958,6 +1348,8 @@ def _register_postback_handlers() -> dict:
         'macro_summary': lambda payload=None, source_id='': _build_macro_news_messages(),
         'journal_reflection': lambda payload=None, source_id='': _build_journal_reflection_messages(),
         'choose_strategy': lambda payload=None, source_id='': _build_strategy_picker_messages(),
+        'backtest_reflect': lambda payload=None, source_id='': _build_backtest_reflection_messages(payload),
+        'strategy_select': lambda payload=None, source_id='': _build_selected_strategy_messages(payload),
         'select_strategy': lambda payload=None, source_id='': _build_selected_strategy_messages(payload),
         'get_macro_news': lambda payload=None, source_id='': _build_macro_news_messages(),
         'get_journal': lambda payload=None, source_id='': _build_journal_reflection_messages(),
@@ -971,7 +1363,12 @@ def _build_postback_reply_messages(action: str, payload: dict[str, str] | None =
     handler_fn = _register_postback_handlers().get(action)
     if handler_fn is not None:
         return handler_fn(payload=payload, source_id=source_id)
-    return [V3TextMessage(text='⚠️ 尚未支援的 Rich Menu 指令')]
+    return [
+        _build_postback_empty_state(
+            title='⚠️ Rich Menu',
+            message='尚未支援的 Rich Menu 指令。',
+        )
+    ]
 
 
 def _load_strategy_candidates(active, strategy_key: str, market_df: pd.DataFrame, requested_date: str, limit: int) -> tuple[pd.DataFrame, dict, bool]:
