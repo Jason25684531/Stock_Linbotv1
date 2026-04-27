@@ -39,7 +39,7 @@ from core.db_helper import (
     get_latest_trade_date,
     normalize_date_str,
 )
-from core.line_message_builder import build_news_summary_bubble, create_news_flex
+from core.line_message_builder import build_news_summary_bubble
 from core.strategy_manager import StrategyManager
 
 # ==========================================
@@ -86,6 +86,133 @@ def get_market_status(engine, date_str):
 
 
 DEFAULT_FEATURED_STRATEGY = 'v36_chip_momentum'
+SCHEDULED_PUSH_BUBBLE_SIZE = 'mega'
+MORNING_NEWS_FALLBACK = '目前暫無今晨摘要，先以前一交易日盤後資訊持續追蹤。'
+MORNING_PICKS_EMPTY_STATE = '今日尚無新的精選標的，先觀察既有市場訊號。'
+MORNING_BASELINE_NOTE = '若今日新資料尚未落地，內容引用最近交易日快照。'
+
+
+def _normalize_news_summary(news_summary: str | None, fallback_text: str) -> str:
+    """標準化新聞摘要，避免空字串導致卡片內容缺失。"""
+    normalized = str(news_summary or '').strip()
+    return normalized or fallback_text
+
+
+def _build_stock_items(picks: list) -> list[FlexBox]:
+    """建立精選股票列表元件。"""
+    stock_items: list[FlexBox] = []
+    for i, (_strategy_label, stock_id, price, ai_score) in enumerate(picks, 1):
+        score_text = f"{ai_score:.0%}" if ai_score else 'N/A'
+        stock_items.append(
+            FlexBox(
+                layout='horizontal',
+                margin='sm',
+                contents=[
+                    FlexText(text=f'{i}.', size='sm', color='#888888',
+                             flex=0, min_width='20px'),
+                    FlexText(text=stock_id, weight='bold', size='md',
+                             color='#ffffff', flex=1),
+                    FlexText(text=f'${price:.2f}', size='sm',
+                             color='#4ecca3', flex=1, align='center'),
+                    FlexText(text=score_text, size='sm',
+                             color='#e94560', flex=1, align='end'),
+                ]
+            )
+        )
+    return stock_items
+
+
+def _build_morning_overview_bubble(date_str: str, market_status: str) -> FlexBubble:
+    """建構早晨市場概況卡。"""
+    return FlexBubble(
+        size=SCHEDULED_PUSH_BUBBLE_SIZE,
+        header=FlexBox(
+            layout='vertical',
+            background_color='#1a1a2e',
+            padding_all='16px',
+            contents=[
+                FlexText(text='🌅 StockAI 早報', weight='bold',
+                         size='lg', color='#e0e0e0'),
+                FlexText(text=f'📅 {date_str}', size='xs',
+                         color='#aaaaaa', margin='sm'),
+            ]
+        ),
+        body=FlexBox(
+            layout='vertical',
+            background_color='#16213e',
+            padding_all='16px',
+            contents=[
+                FlexText(text='📊 市場概況', weight='bold',
+                         size='md', color='#4dd0e1'),
+                FlexText(text=market_status or '⚪ 資料不足',
+                         size='sm', color='#d0f0ff', wrap=True, margin='md'),
+                FlexSeparator(margin='lg', color='#333333'),
+                FlexText(text='🗂️ 資料基準', weight='bold',
+                         size='md', color='#ffd54f', margin='lg'),
+                FlexText(text=f'{date_str} 收盤後可用快照',
+                         size='sm', color='#f6e9b2', wrap=True, margin='md'),
+                FlexText(text=MORNING_BASELINE_NOTE,
+                         size='xs', color='#b9c0c8', wrap=True, margin='lg'),
+            ]
+        ),
+    )
+
+
+def _build_morning_picks_bubble(picks: list, market_status: str,
+                                date_str: str, picks_title: str) -> FlexBubble:
+    """建構早晨精選五股卡，無資料時維持空狀態卡片。"""
+    stock_items = _build_stock_items(picks)
+    body_contents = [
+        FlexBox(
+            layout='horizontal',
+            margin='sm',
+            contents=[
+                FlexText(text='#', size='xs', color='#555555',
+                         flex=0, min_width='20px'),
+                FlexText(text='股票', size='xs', color='#555555', flex=1),
+                FlexText(text='現價', size='xs', color='#555555',
+                         flex=1, align='center'),
+                FlexText(text='AI信心', size='xs', color='#555555',
+                         flex=1, align='end'),
+            ]
+        ),
+    ]
+
+    if stock_items:
+        body_contents.extend(stock_items)
+    else:
+        body_contents.append(
+            FlexText(text=MORNING_PICKS_EMPTY_STATE,
+                     size='sm', color='#d7f6da', wrap=True, margin='lg')
+        )
+
+    body_contents.extend([
+        FlexSeparator(margin='lg', color='#333333'),
+        FlexText(text='💡 以上僅供參考，請嚴格執行停損停利',
+                 size='xxs', color='#666666', margin='md'),
+    ])
+
+    return FlexBubble(
+        size=SCHEDULED_PUSH_BUBBLE_SIZE,
+        header=FlexBox(
+            layout='vertical',
+            background_color='#1a1a2e',
+            padding_all='16px',
+            contents=[
+                FlexText(text='🎯 今日精選五股', weight='bold',
+                         size='lg', color='#e0e0e0'),
+                FlexText(text=f'📅 {date_str}  {market_status or "⚪ 資料不足"}',
+                         size='xs', color='#aaaaaa', margin='sm'),
+                FlexText(text=picks_title, size='xs', color='#cccccc', margin='sm'),
+            ]
+        ),
+        body=FlexBox(
+            layout='vertical',
+            background_color='#16213e',
+            padding_all='16px',
+            contents=body_contents,
+        ),
+    )
 
 
 def _pick_featured_stocks(engine, date_str: str, strategy_names: list[str] | None = None,
@@ -194,75 +321,19 @@ def _build_morning_flex(news_summary: str, picks: list,
     Args:
         picks: list of (strategy_label, stock_id, price, ai_score)
     """
-    # 建立精選股票列表元件
-    stock_items = []
-    for i, (strategy_label, stock_id, price, ai_score) in enumerate(picks, 1):
-        score_text = f"{ai_score:.0%}" if ai_score else "N/A"
-        stock_items.append(
-            FlexBox(
-                layout="horizontal",
-                margin="sm",
-                contents=[
-                    FlexText(text=f"{i}.", size="sm", color="#888888",
-                             flex=0, min_width="20px"),
-                    FlexText(text=stock_id, weight="bold", size="md",
-                             color="#ffffff", flex=1),
-                    FlexText(text=f"${price:.2f}", size="sm",
-                             color="#4ecca3", flex=1, align="center"),
-                    FlexText(text=score_text, size="sm",
-                             color="#e94560", flex=1, align="end"),
-                ]
-            )
-        )
+    full_news_summary = _normalize_news_summary(news_summary, MORNING_NEWS_FALLBACK)
+    overview_bubble = _build_morning_overview_bubble(date_str, market_status)
 
     news_bubble = build_news_summary_bubble(
-        news_summary=news_summary,
+        news_summary=full_news_summary,
         date_str=date_str,
         title='🌅 早安總經摘要',
     )
 
-    picks_bubble = FlexBubble(
-        size="giga",
-        header=FlexBox(
-            layout="vertical",
-            background_color="#1a1a2e",
-            padding_all="16px",
-            contents=[
-                FlexText(text="🎯 今日精選五股", weight="bold",
-                         size="lg", color="#e0e0e0"),
-                FlexText(text=f"📅 {date_str}  {market_status}",
-                         size="xs", color="#aaaaaa", margin="sm"),
-                FlexText(text=picks_title, size="xs", color="#cccccc", margin="sm"),
-            ]
-        ),
-        body=FlexBox(
-            layout="vertical",
-            background_color="#16213e",
-            padding_all="16px",
-            contents=[
-                FlexBox(
-                    layout="horizontal",
-                    margin="sm",
-                    contents=[
-                        FlexText(text="#", size="xs", color="#555555",
-                                 flex=0, min_width="20px"),
-                        FlexText(text="股票", size="xs", color="#555555", flex=1),
-                        FlexText(text="現價", size="xs", color="#555555",
-                                 flex=1, align="center"),
-                        FlexText(text="AI信心", size="xs", color="#555555",
-                                 flex=1, align="end"),
-                    ]
-                ),
-                *stock_items,
-                FlexSeparator(margin="lg", color="#333333"),
-                FlexText(text="💡 以上僅供參考，請嚴格執行停損停利",
-                         size="xxs", color="#666666", margin="md"),
-            ]
-        ),
-    )
+    picks_bubble = _build_morning_picks_bubble(picks, market_status, date_str, picks_title)
     return FlexMessage(
-        alt_text=f"🌅 StockAI 早安大局觀 {date_str}",
-        contents=FlexCarousel(contents=[news_bubble, picks_bubble]),
+        alt_text=f'🌅 StockAI 早報 {date_str}',
+        contents=FlexCarousel(contents=[overview_bubble, news_bubble, picks_bubble]),
     )
 
 
@@ -308,7 +379,7 @@ def _build_evening_flex(news_summary: str, picks: list,
         )
 
     overview_bubble = FlexBubble(
-        size="giga",
+        size=SCHEDULED_PUSH_BUBBLE_SIZE,
         header=FlexBox(
             layout="vertical",
             background_color="#1a1a2e",
@@ -349,7 +420,7 @@ def _build_evening_flex(news_summary: str, picks: list,
     )
 
     picks_bubble = FlexBubble(
-        size="giga",
+        size=SCHEDULED_PUSH_BUBBLE_SIZE,
         header=FlexBox(
             layout="vertical",
             background_color="#1a1a2e",
@@ -399,7 +470,7 @@ def _build_evening_flex(news_summary: str, picks: list,
 # ==========================================
 
 def run_morning():
-    """早晨大局觀：新聞摘要 + 隨機策略精選一股"""
+    """早晨大局觀：市場概況 + 新聞摘要 + 精選五股。"""
     print("🌅 早晨大局觀模式啟動...")
 
     engine = get_db_engine()
@@ -415,6 +486,7 @@ def run_morning():
         news_summary = get_morning_news_summary()
     except Exception as e:
         news_summary = f"⚠️ 新聞取得失敗: {e}"
+    news_summary = _normalize_news_summary(news_summary, MORNING_NEWS_FALLBACK)
     print(f"  ✓ 新聞摘要完成 ({len(news_summary)} 字)")
 
     # 2. 市場狀態
@@ -431,12 +503,11 @@ def run_morning():
         n=5,
     )
     if not picks:
-        print("⚠️ 啟用策略無推薦股票，僅推播新聞摘要 Flex")
-        _broadcast_flex(create_news_flex(news_summary, date_str, title='🌅 早安總經摘要'))
-        return
-
-    for strategy_label, stock_id, price, ai_score in picks:
-        print(f"  ✓ 精選: {stock_id} (${price:.2f}) from {strategy_label}")
+        print("⚠️ 啟用策略無推薦股票，改用精選空狀態卡片")
+        picks_title = '多策略精選｜暫無新標的'
+    else:
+        for strategy_label, stock_id, price, ai_score in picks:
+            print(f"  ✓ 精選: {stock_id} (${price:.2f}) from {strategy_label}")
 
     # 4. 建構 Flex Message
     flex = _build_morning_flex(
