@@ -1380,7 +1380,7 @@ def _load_strategy_candidates(active, strategy_key: str, market_df: pd.DataFrame
     )
     if not persisted.empty:
         return merge_recommendations_with_market_data(persisted, market_df), meta, True
-    return active.filter_candidates(market_df.copy()), meta, False
+    return pd.DataFrame(), meta, bool(meta.get('has_persisted_snapshot', False))
 
 
 def get_v30_recommendation():
@@ -1427,6 +1427,7 @@ def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None 
         strategy_name = active.display_name
         active_strategy_key = active.name
 
+        requested_date = _current_line_date()
         baseline_date = _resolve_ui_baseline_date()
         df, date_str = get_stock_data(date_str=baseline_date) if baseline_date else get_stock_data()
         if df.empty:
@@ -1437,7 +1438,7 @@ def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None 
             active=active,
             strategy_key=active_strategy_key,
             market_df=df,
-            requested_date=date_str,
+            requested_date=requested_date,
             limit=5,
         )
         display_date = fallback_meta.get('recommendation_date') or date_str
@@ -1466,30 +1467,7 @@ def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None 
                 '• 輸入「查看策略」檢視篩選條件'
             )
 
-        has_ai = False
-        if has_persisted:
-            has_ai = 'ai_score' in candidates.columns and candidates['ai_score'].notna().any()
-        else:
-            try:
-                from core.model_utils import load_model as _load_model
-
-                strat_model, strat_features, _, _ = _load_model(strategy_key)
-                if strat_model is not None:
-                    features = strat_features or active.features
-                    df_score = candidates.copy()
-                    for feature_name in features:
-                        if feature_name not in df_score.columns:
-                            df_score[feature_name] = 0
-                    probs = strat_model.predict_proba(df_score[features].fillna(0))[:, 1]
-                    candidates = candidates.copy()
-                    candidates['ai_score'] = probs
-                    candidates = candidates.sort_values('ai_score', ascending=False)
-                    has_ai = True
-            except Exception as exc:
-                print(f'⚠️ AI 排名失敗（使用原始排序）: {exc}')
-
-        if not has_persisted and has_ai:
-            candidates = _apply_news_sentiment_overlay(candidates, display_date)
+        has_ai = bool(has_persisted and 'ai_score' in candidates.columns and candidates['ai_score'].notna().any())
 
         top_n = candidates.head(5)
         total_count = len(candidates)

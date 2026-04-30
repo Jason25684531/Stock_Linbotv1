@@ -26,11 +26,21 @@ def test_update_market_date_skips_when_rows_too_few(monkeypatch):
 
 
 def test_scan_pipeline_gaps_detects_market_and_recommendation_holes(monkeypatch):
+    class _FakeManager:
+        def get_persistence_strategy_names(self):
+            return ['v31_hybrid', 'v34_turbo']
+
+    monkeypatch.setattr(backfill_pipeline, 'StrategyManager', _FakeManager)
     monkeypatch.setattr(backfill_pipeline, 'get_valid_market_dates', lambda start_date=None, end_date=None: ['2026-03-27', '2026-03-31'])
     monkeypatch.setattr(
         backfill_pipeline,
         'get_recommendation_dates',
         lambda start_date=None, end_date=None, include_heartbeats=True: ['2026-03-27'],
+    )
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'get_completed_recommendation_strategy_days',
+        lambda start_date=None, end_date=None, strategies=None: {('2026-03-27', 'v31_hybrid')},
     )
     monkeypatch.setattr(
         backfill_pipeline.yf,
@@ -41,15 +51,35 @@ def test_scan_pipeline_gaps_detects_market_and_recommendation_holes(monkeypatch)
     gaps = backfill_pipeline.scan_pipeline_gaps('2026-03-27', '2026-03-31')
 
     assert gaps['missing_market_dates'] == ['2026-03-30']
-    assert gaps['missing_recommendation_dates'] == ['2026-03-31']
+    assert gaps['missing_recommendation_dates'] == ['2026-03-27', '2026-03-31']
+    assert gaps['missing_recommendation_strategy_days'] == [
+        {'date': '2026-03-27', 'strategy': 'v34_turbo'},
+        {'date': '2026-03-31', 'strategy': 'v31_hybrid'},
+        {'date': '2026-03-31', 'strategy': 'v34_turbo'},
+    ]
 
 
 def test_scan_pipeline_gaps_excludes_exchange_holidays(monkeypatch):
+    class _FakeManager:
+        def get_persistence_strategy_names(self):
+            return ['v31_hybrid', 'v34_turbo']
+
+    monkeypatch.setattr(backfill_pipeline, 'StrategyManager', _FakeManager)
     monkeypatch.setattr(backfill_pipeline, 'get_valid_market_dates', lambda start_date=None, end_date=None: ['2026-04-02', '2026-04-07'])
     monkeypatch.setattr(
         backfill_pipeline,
         'get_recommendation_dates',
         lambda start_date=None, end_date=None, include_heartbeats=True: ['2026-04-02', '2026-04-07'],
+    )
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'get_completed_recommendation_strategy_days',
+        lambda start_date=None, end_date=None, strategies=None: {
+            ('2026-04-02', 'v31_hybrid'),
+            ('2026-04-02', 'v34_turbo'),
+            ('2026-04-07', 'v31_hybrid'),
+            ('2026-04-07', 'v34_turbo'),
+        },
     )
     monkeypatch.setattr(
         backfill_pipeline.yf,
@@ -65,11 +95,21 @@ def test_scan_pipeline_gaps_excludes_exchange_holidays(monkeypatch):
 
 
 def test_scan_pipeline_gaps_falls_back_when_calendar_unavailable(monkeypatch):
+    class _FakeManager:
+        def get_persistence_strategy_names(self):
+            return ['v31_hybrid', 'v34_turbo']
+
+    monkeypatch.setattr(backfill_pipeline, 'StrategyManager', _FakeManager)
     monkeypatch.setattr(backfill_pipeline, 'get_valid_market_dates', lambda start_date=None, end_date=None: ['2026-03-27', '2026-03-31'])
     monkeypatch.setattr(
         backfill_pipeline,
         'get_recommendation_dates',
         lambda start_date=None, end_date=None, include_heartbeats=True: ['2026-03-27'],
+    )
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'get_completed_recommendation_strategy_days',
+        lambda start_date=None, end_date=None, strategies=None: {('2026-03-27', 'v31_hybrid')},
     )
     monkeypatch.setattr(backfill_pipeline.yf, 'download', lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError('calendar down')))
     monkeypatch.setattr(backfill_pipeline, '_is_exchange_trading_day', lambda date_str, mcp_client=None: True)
@@ -77,11 +117,16 @@ def test_scan_pipeline_gaps_falls_back_when_calendar_unavailable(monkeypatch):
     gaps = backfill_pipeline.scan_pipeline_gaps('2026-03-27', '2026-03-31')
 
     assert gaps['missing_market_dates'] == ['2026-03-30']
+    assert gaps['missing_recommendation_dates'] == ['2026-03-27', '2026-03-31']
     assert gaps['excluded_non_trading_dates'] == []
     assert gaps['unverified_dates'] == []
 
 
 def test_backfill_pipeline_repairs_missing_dates(monkeypatch):
+    class _FakeManager:
+        def get_persistence_strategy_names(self):
+            return ['v31_hybrid', 'v34_turbo']
+
     market_sequences = iter([
         ['2026-03-27', '2026-03-31'],
         ['2026-03-27', '2026-03-30', '2026-03-31'],
@@ -92,15 +137,33 @@ def test_backfill_pipeline_repairs_missing_dates(monkeypatch):
         ['2026-03-27'],
         ['2026-03-27', '2026-03-30', '2026-03-31'],
     ])
+    completion_sequences = iter([
+        {('2026-03-27', 'v31_hybrid')},
+        {('2026-03-27', 'v31_hybrid')},
+        {
+            ('2026-03-27', 'v31_hybrid'),
+            ('2026-03-27', 'v34_turbo'),
+            ('2026-03-30', 'v31_hybrid'),
+            ('2026-03-30', 'v34_turbo'),
+            ('2026-03-31', 'v31_hybrid'),
+            ('2026-03-31', 'v34_turbo'),
+        },
+    ])
     updated_market_dates = []
     rebuilt_recommendation_dates = []
 
+    monkeypatch.setattr(backfill_pipeline, 'StrategyManager', _FakeManager)
     monkeypatch.setattr(backfill_pipeline, 'get_db_engine', lambda: object())
     monkeypatch.setattr(backfill_pipeline, 'get_valid_market_dates', lambda start_date=None, end_date=None: next(market_sequences))
     monkeypatch.setattr(
         backfill_pipeline,
         'get_recommendation_dates',
         lambda start_date=None, end_date=None, include_heartbeats=True: next(recommendation_sequences),
+    )
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'get_completed_recommendation_strategy_days',
+        lambda start_date=None, end_date=None, strategies=None: next(completion_sequences),
     )
     monkeypatch.setattr(
         backfill_pipeline.yf,
@@ -121,6 +184,37 @@ def test_backfill_pipeline_repairs_missing_dates(monkeypatch):
     summary = backfill_pipeline.backfill_pipeline('2026-03-27', '2026-03-31', dry_run=False)
 
     assert updated_market_dates == ['2026-03-30']
-    assert rebuilt_recommendation_dates == ['2026-03-30', '2026-03-31']
+    assert rebuilt_recommendation_dates == ['2026-03-27', '2026-03-30', '2026-03-31']
     assert summary['remaining_market_dates'] == []
     assert summary['remaining_recommendation_dates'] == []
+
+
+def test_scan_pipeline_gaps_flags_false_healthy_partial_strategy_days(monkeypatch):
+    class _FakeManager:
+        def get_persistence_strategy_names(self):
+            return ['v31_hybrid', 'v34_turbo']
+
+    monkeypatch.setattr(backfill_pipeline, 'StrategyManager', _FakeManager)
+    monkeypatch.setattr(backfill_pipeline, 'get_valid_market_dates', lambda start_date=None, end_date=None: ['2026-04-28'])
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'get_recommendation_dates',
+        lambda start_date=None, end_date=None, include_heartbeats=True: ['2026-04-28'],
+    )
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'get_completed_recommendation_strategy_days',
+        lambda start_date=None, end_date=None, strategies=None: {('2026-04-28', 'v34_turbo')},
+    )
+    monkeypatch.setattr(
+        backfill_pipeline.yf,
+        'download',
+        lambda *args, **kwargs: _fake_calendar_frame(['2026-04-28']),
+    )
+
+    gaps = backfill_pipeline.scan_pipeline_gaps('2026-04-28', '2026-04-28')
+
+    assert gaps['missing_recommendation_dates'] == ['2026-04-28']
+    assert gaps['missing_recommendation_strategy_days'] == [
+        {'date': '2026-04-28', 'strategy': 'v31_hybrid'},
+    ]

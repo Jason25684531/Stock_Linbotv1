@@ -283,6 +283,52 @@ def get_recommendation_dates(
     ]
 
 
+def get_completed_recommendation_strategy_days(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    strategies: list[str] | None = None,
+) -> set[tuple[str, str]]:
+    """取得已完成落庫的推薦日期/策略組合（含 heartbeat）。"""
+    engine = get_db_engine()
+    filters = []
+    params: dict[str, object] = {}
+
+    if start_date:
+        params['start_date'] = normalize_date_str(start_date)
+        filters.append('trade_date >= :start_date')
+    if end_date:
+        params['end_date'] = normalize_date_str(end_date)
+        filters.append('trade_date <= :end_date')
+    if strategies:
+        strategy_filters = []
+        for index, strategy_name in enumerate(strategies):
+            param_name = f'strategy_{index}'
+            params[param_name] = strategy_name
+            strategy_filters.append(f'strategy = :{param_name}')
+        if strategy_filters:
+            filters.append(f"({' OR '.join(strategy_filters)})")
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ''
+    sql = f"""
+        SELECT DISTINCT trade_date, strategy
+        FROM daily_recommendations
+        {where_clause}
+        ORDER BY trade_date, strategy
+    """
+    strategy_df = pd.read_sql(text(sql), engine, params=params)
+    if strategy_df.empty:
+        return set()
+
+    completed: set[tuple[str, str]] = set()
+    for _, row in strategy_df.iterrows():
+        date_str = normalize_date_str(row.get('trade_date'))
+        strategy_name = str(row.get('strategy') or '').strip()
+        if not date_str or not strategy_name:
+            continue
+        completed.add((date_str, strategy_name))
+    return completed
+
+
 def get_actual_latest_date(min_row_count: int = MIN_VALID_MARKET_ROWS):
     """取得市場資料與推薦資料交集中的最新有效日期。"""
     try:
@@ -1392,117 +1438,259 @@ def _calc_date_diff_days(older_date: str, newer_date: str) -> int | None:
         return None
 
 
+def _resolve_requested_date(date_str: str | None = None) -> str | None:
+    """解析使用者請求日期，未指定時使用今日日期。"""
+    requested_date = normalize_date_str(date_str)
+    if requested_date:
+        return requested_date
+    return normalize_date_str(pd.Timestamp.now())
+
+
+def _resolve_market_anchor_date(requested_date: str | None) -> str | None:
+    """取得指定日期當日或之前最近一個有效市場交易日。"""
+    normalized_requested = normalize_date_str(requested_date)
+    if not normalized_requested:
+        return None
+
+    valid_dates = get_valid_market_dates(end_date=normalized_requested)
+    if valid_dates:
+        return normalize_date_str(valid_dates[-1])
+
+    latest = get_latest_trade_date()
+    latest_str = normalize_date_str(latest)
+    if latest_str and latest_str <= normalized_requested:
+        return latest_str
+    return None
+
+
+def _build_recommendation_resolution_meta(
+    requested_date: str | None,
+    market_anchor_date: str | None,
+    recommendation_date: str | None,
+    *,
+    resolution_source: str,
+    fallback_used: bool,
+    has_persisted_snapshot: bool,
+    market_circuit_breaker_active: bool,
+    current_day_recommendations_used: bool,
+    fallback_too_old: bool,
+    fallback_age_days: int | None,
+    last_available_recommendation_date: str | None,
+) -> dict:
+    return {
+        'requested_date': requested_date,
+        'market_anchor_date': market_anchor_date,
+        'recommendation_date': recommendation_date,
+        'resolution_source': resolution_source,
+        'fallback_used': fallback_used,
+        'has_persisted_snapshot': has_persisted_snapshot,
+        'market_circuit_breaker_active': market_circuit_breaker_active,
+        'current_day_recommendations_used': current_day_recommendations_used,
+        'fallback_too_old': fallback_too_old,
+        'fallback_age_days': fallback_age_days,
+        'last_available_recommendation_date': last_available_recommendation_date,
+    }
+
+
+def _classify_recommendation_snapshot(snapshot_rows: pd.DataFrame) -> tuple[pd.DataFrame, bool, bool]:
+    """拆分推薦快照中的候選股與 heartbeat 狀態。"""
+    if snapshot_rows is None or snapshot_rows.empty or 'stock_id' not in snapshot_rows.columns:
+        return pd.DataFrame(), False, False
+
+    prepared = snapshot_rows.copy()
+    stock_ids = prepared['stock_id'].astype(str).str.strip().str.upper()
+    heartbeat_mask = stock_ids == RECOMMENDATION_HEARTBEAT_STOCK_ID
+    has_heartbeat = bool(heartbeat_mask.any())
+    candidates = prepared.loc[~heartbeat_mask].copy().reset_index(drop=True)
+    has_candidates = not candidates.empty
+    return candidates, has_heartbeat, has_candidates
+
+
 def get_recommendations_with_market_fallback(
     date_str: str = None,
     strategy: str = None,
     limit: int | None = None,
     max_fallback_age_days: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
-    """取得推薦資料，熔斷日必要時回推最近安全日。"""
-    requested_date = normalize_date_str(date_str or get_actual_latest_date() or get_latest_trade_date())
-    if not requested_date:
-        return pd.DataFrame(), {
-            'requested_date': None,
-            'recommendation_date': None,
-            'fallback_used': False,
-            'market_circuit_breaker_active': False,
-            'current_day_recommendations_used': False,
-            'fallback_too_old': False,
-            'fallback_age_days': None,
-            'last_available_recommendation_date': None,
-        }
+    """取得指定策略的持久化推薦快照，必要時回推同策略最後一筆資料。"""
+    requested_date = _resolve_requested_date(date_str)
+    market_anchor_date = _resolve_market_anchor_date(requested_date)
+    if not requested_date or not market_anchor_date:
+        return pd.DataFrame(), _build_recommendation_resolution_meta(
+            requested_date=requested_date,
+            market_anchor_date=market_anchor_date,
+            recommendation_date=market_anchor_date,
+            resolution_source='missing',
+            fallback_used=False,
+            has_persisted_snapshot=False,
+            market_circuit_breaker_active=False,
+            current_day_recommendations_used=False,
+            fallback_too_old=False,
+            fallback_age_days=None,
+            last_available_recommendation_date=None,
+        )
 
     if max_fallback_age_days is None:
         max_fallback_age_days = Config.RECOMMENDATION_FALLBACK_MAX_AGE_DAYS
 
-    circuit_breaker_active = get_market_trend(requested_date) != 'BULL'
+    circuit_breaker_active = get_market_trend(market_anchor_date) != 'BULL'
     current_rows = get_daily_recommendations(
-        date_str=requested_date,
+        date_str=market_anchor_date,
         strategy=strategy,
         limit=limit,
+        include_heartbeats=True,
     )
-    meta = {
-        'requested_date': requested_date,
-        'recommendation_date': requested_date,
-        'fallback_used': False,
-        'market_circuit_breaker_active': circuit_breaker_active,
-        'current_day_recommendations_used': False,
-        'fallback_too_old': False,
-        'fallback_age_days': None,
-        'last_available_recommendation_date': None,
-    }
+    current_candidates, current_has_heartbeat, current_has_candidates = _classify_recommendation_snapshot(current_rows)
 
-    if not circuit_breaker_active:
-        return current_rows, meta
+    if current_has_heartbeat:
+        return pd.DataFrame(), _build_recommendation_resolution_meta(
+            requested_date=requested_date,
+            market_anchor_date=market_anchor_date,
+            recommendation_date=market_anchor_date,
+            resolution_source='heartbeat',
+            fallback_used=False,
+            has_persisted_snapshot=True,
+            market_circuit_breaker_active=circuit_breaker_active,
+            current_day_recommendations_used=False,
+            fallback_too_old=False,
+            fallback_age_days=0,
+            last_available_recommendation_date=None,
+        )
 
-    if not current_rows.empty:
-        meta['current_day_recommendations_used'] = True
-        return current_rows, meta
+    if current_has_candidates:
+        return current_candidates, _build_recommendation_resolution_meta(
+            requested_date=requested_date,
+            market_anchor_date=market_anchor_date,
+            recommendation_date=market_anchor_date,
+            resolution_source='persisted',
+            fallback_used=False,
+            has_persisted_snapshot=True,
+            market_circuit_breaker_active=circuit_breaker_active,
+            current_day_recommendations_used=True,
+            fallback_too_old=False,
+            fallback_age_days=0,
+            last_available_recommendation_date=None,
+        )
 
-    for candidate_date in _get_prior_recommendation_dates(requested_date, strategy=strategy):
-        meta['last_available_recommendation_date'] = candidate_date
-        if get_market_trend(candidate_date) != 'BULL':
-            continue
+    for candidate_date in _get_prior_recommendation_dates(market_anchor_date, strategy=strategy):
+        last_available_recommendation_date = candidate_date
 
-        fallback_age_days = _calc_date_diff_days(candidate_date, requested_date)
+        fallback_age_days = _calc_date_diff_days(candidate_date, market_anchor_date)
         if (
             max_fallback_age_days is not None
             and fallback_age_days is not None
             and fallback_age_days > max_fallback_age_days
         ):
-            meta['fallback_too_old'] = True
-            meta['fallback_age_days'] = fallback_age_days
-            return pd.DataFrame(), meta
+            return pd.DataFrame(), _build_recommendation_resolution_meta(
+                requested_date=requested_date,
+                market_anchor_date=market_anchor_date,
+                recommendation_date=market_anchor_date,
+                resolution_source='missing',
+                fallback_used=False,
+                has_persisted_snapshot=False,
+                market_circuit_breaker_active=circuit_breaker_active,
+                current_day_recommendations_used=False,
+                fallback_too_old=True,
+                fallback_age_days=fallback_age_days,
+                last_available_recommendation_date=last_available_recommendation_date,
+            )
 
         fallback_rows = get_daily_recommendations(
             date_str=candidate_date,
             strategy=strategy,
             limit=limit,
+            include_heartbeats=True,
         )
-        if fallback_rows.empty:
+        fallback_candidates, fallback_has_heartbeat, fallback_has_candidates = _classify_recommendation_snapshot(fallback_rows)
+        if not fallback_has_heartbeat and not fallback_has_candidates:
             continue
 
-        meta['fallback_used'] = True
-        meta['recommendation_date'] = candidate_date
-        meta['fallback_age_days'] = fallback_age_days
-        return fallback_rows, meta
+        if fallback_has_heartbeat:
+            return pd.DataFrame(), _build_recommendation_resolution_meta(
+                requested_date=requested_date,
+                market_anchor_date=market_anchor_date,
+                recommendation_date=candidate_date,
+                resolution_source='heartbeat',
+                fallback_used=True,
+                has_persisted_snapshot=True,
+                market_circuit_breaker_active=circuit_breaker_active,
+                current_day_recommendations_used=False,
+                fallback_too_old=False,
+                fallback_age_days=fallback_age_days,
+                last_available_recommendation_date=last_available_recommendation_date,
+            )
 
-    return pd.DataFrame(), meta
+        return fallback_candidates, _build_recommendation_resolution_meta(
+            requested_date=requested_date,
+            market_anchor_date=market_anchor_date,
+            recommendation_date=candidate_date,
+            resolution_source='strategy_fallback',
+            fallback_used=True,
+            has_persisted_snapshot=True,
+            market_circuit_breaker_active=circuit_breaker_active,
+            current_day_recommendations_used=False,
+            fallback_too_old=False,
+            fallback_age_days=fallback_age_days,
+            last_available_recommendation_date=last_available_recommendation_date,
+        )
+
+    return pd.DataFrame(), _build_recommendation_resolution_meta(
+        requested_date=requested_date,
+        market_anchor_date=market_anchor_date,
+        recommendation_date=market_anchor_date,
+        resolution_source='missing',
+        fallback_used=False,
+        has_persisted_snapshot=False,
+        market_circuit_breaker_active=circuit_breaker_active,
+        current_day_recommendations_used=False,
+        fallback_too_old=False,
+        fallback_age_days=None,
+        last_available_recommendation_date=None,
+    )
 
 
 def format_market_fallback_notice(meta: dict, strategy_display: str) -> str:
-    """統一格式化熔斷 / fallback 提示文字。"""
-    if not meta or not meta.get('market_circuit_breaker_active'):
+    """統一格式化推薦解析後的提示文字。"""
+    if not meta:
         return ''
 
     requested_date = meta.get('requested_date') or ''
     recommendation_date = meta.get('recommendation_date') or requested_date
+    market_anchor_date = meta.get('market_anchor_date') or recommendation_date
+    resolution_source = meta.get('resolution_source') or 'missing'
+
+    if resolution_source == 'heartbeat' and not meta.get('fallback_used'):
+        return (
+            f"ℹ️ {market_anchor_date} 的{strategy_display}已完成選股，當日為零候選，無符合條件標的。"
+            f"以下顯示空結果，未回推舊名單。"
+        )
+
+    if resolution_source == 'heartbeat' and meta.get('fallback_used'):
+        return (
+            f"ℹ️ {requested_date} 對應市場基準日 {market_anchor_date} 缺少{strategy_display}快照，"
+            f"已回推至 {recommendation_date} 最近一次完成紀錄；該日結果為零候選。"
+        )
 
     if meta.get('fallback_used'):
         return (
-            f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
-            f"以下改顯示 {recommendation_date} 最近安全日的{strategy_display}推薦，"
-            f"非今日新訊號，請降低部位並嚴設停損。"
+            f"⚠️ {requested_date} 對應市場基準日 {market_anchor_date} 缺少當日{strategy_display}快照。"
+            f"大盤 MA60 風險判斷僅供參考；以下改顯示 {recommendation_date} 最近一次已落庫推薦，非當日新訊號。"
         )
+
+    if resolution_source == 'missing':
+        if meta.get('fallback_too_old'):
+            last_date = meta.get('last_available_recommendation_date') or '未知日期'
+            age_days = meta.get('fallback_age_days')
+            age_text = f"距今 {age_days} 天" if age_days is not None else '時間過久'
+            return (
+                f"⚠️ 最近可用的{strategy_display}落庫日期為 {last_date}，{age_text}，"
+                f"已超過可接受範圍，因此不顯示舊名單。"
+            )
+        return f"⚠️ {requested_date} 尚無可用的{strategy_display}落庫推薦紀錄。"
 
     if meta.get('current_day_recommendations_used'):
         return (
-            f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
-            f"以下顯示當日既有的{strategy_display}推薦紀錄，"
-            f"不建議追價新開倉，請降低部位並嚴設停損。"
+            f"ℹ️ 以下顯示 {market_anchor_date} 的當日{strategy_display}落庫推薦。"
         )
 
-    if meta.get('fallback_too_old'):
-        last_date = meta.get('last_available_recommendation_date') or '未知日期'
-        age_days = meta.get('fallback_age_days')
-        age_text = f"距今 {age_days} 天" if age_days is not None else '時間過久'
-        return (
-            f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
-            f"最近可用推薦日為 {last_date}，{age_text}，已超過可接受範圍，"
-            f"因此不回推舊名單，建議暫時觀望。"
-        )
-
-    return (
-        f"⚠️ 目前大盤仍在 MA60 下方，屬於高風險區間。"
-        f"今日沒有可回推的安全{strategy_display}推薦，建議暫時觀望。"
-    )
+    return ''

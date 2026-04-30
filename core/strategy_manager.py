@@ -45,6 +45,7 @@ class StrategyManager:
     # 預設設定 (V3: 支援 per-strategy overrides + backtest defaults)
     DEFAULT_SETTINGS = {
         'active_strategies': ['v31_hybrid'],
+        'persistence_strategies': [],
         'version': '3.0',
         'last_updated': None,
         'per_strategy_overrides': {},
@@ -110,6 +111,7 @@ class StrategyManager:
                 
                 # 🔄 V2→V3 升級：補充 V3 新增欄位
                 if settings.get('version', '2.0') < '3.0':
+                    settings.setdefault('persistence_strategies', [])
                     settings.setdefault('per_strategy_overrides', {})
                     settings.setdefault('backtest_defaults', {'initial_capital': 1000000, 'period_months': 12})
                     settings['version'] = '3.0'
@@ -156,6 +158,40 @@ class StrategyManager:
         if isinstance(strategies, str):
             strategies = [strategies]
         
+        return strategies
+
+    def get_persistence_strategy_names(self) -> List[str]:
+        """取得每日落庫需覆蓋的策略名稱列表。"""
+        settings = self.get_settings()
+        configured = settings.get('persistence_strategies') or []
+
+        if isinstance(configured, str):
+            configured = [configured]
+
+        strategy_names = configured or list(self.STRATEGY_REGISTRY.keys())
+
+        deduped_names: List[str] = []
+        seen_names: set[str] = set()
+        for name in strategy_names:
+            if name not in self.STRATEGY_REGISTRY:
+                continue
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            deduped_names.append(name)
+
+        if not deduped_names:
+            deduped_names = list(self.STRATEGY_REGISTRY.keys())
+
+        return deduped_names
+
+    def get_persistence_strategies(self) -> List:
+        """取得每日落庫需覆蓋的策略物件列表。"""
+        strategies = []
+        for name in self.get_persistence_strategy_names():
+            strategy = self._get_or_load_strategy(name)
+            if strategy:
+                strategies.append(strategy)
         return strategies
     
     def get_active_strategy_name(self) -> str:

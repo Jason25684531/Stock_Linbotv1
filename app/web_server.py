@@ -326,6 +326,7 @@ def api_daily_signals():
             'v38': 'v38_value_dividend',
         }
 
+        requested_date = app_pkg._current_line_date()
         baseline_date = app_pkg._resolve_ui_baseline_date()
         df, date_str = app_pkg.get_stock_data(date_str=baseline_date) if baseline_date else app_pkg.get_stock_data()
         if df.empty:
@@ -369,33 +370,19 @@ def api_daily_signals():
                 active=active,
                 strategy_key=strategy_key,
                 market_df=df,
-                requested_date=date_str,
+                requested_date=requested_date,
                 limit=top_n,
             )
-
-            if not has_persisted and not candidates.empty:
-                try:
-                    from core.model_utils import load_model as _load_model
-
-                    strat_model, strat_features, _, _ = _load_model(strategy_key)
-                    if strat_model is not None:
-                        features = strat_features or active.features
-                        score_df = candidates.copy()
-                        for feature_name in features:
-                            if feature_name not in score_df.columns:
-                                score_df[feature_name] = 0
-                        probs = strat_model.predict_proba(score_df[features].fillna(0))[:, 1]
-                        candidates = candidates.copy()
-                        candidates['ai_score'] = probs
-                        candidates = candidates.sort_values('ai_score', ascending=False)
-                except Exception as score_error:
-                    print(f'⚠️ /api/daily-signals AI 排名失敗: {score_error}')
 
             if candidates.empty:
                 return jsonify(
                     {
                         'date': fallback_meta.get('recommendation_date') or date_str,
                         'requested_date': fallback_meta.get('requested_date') or date_str,
+                        'market_anchor_date': fallback_meta.get('market_anchor_date') or date_str,
+                        'recommendation_date': fallback_meta.get('recommendation_date') or date_str,
+                        'resolution_source': fallback_meta.get('resolution_source', 'missing'),
+                        'has_persisted_snapshot': fallback_meta.get('has_persisted_snapshot', False),
                         'strategy_key': strategy_key,
                         'strategy_display': strategy_name,
                         'top_n': top_n,
@@ -430,13 +417,6 @@ def api_daily_signals():
         signals = []
         signal_date = fallback_meta.get('recommendation_date') or date_str
         with app_pkg._live_signal_news_timeout_scope():
-            if active_strategy is not None and not has_persisted and not candidates.empty and 'ai_score' in candidates.columns:
-                candidates = app_pkg._apply_news_sentiment_overlay(
-                    candidates,
-                    signal_date,
-                )
-                picks = candidates.head(top_n)
-
             try:
                 stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
             except Exception as news_exc:
@@ -483,6 +463,10 @@ def api_daily_signals():
             {
                 'date': signal_date,
                 'requested_date': fallback_meta.get('requested_date') if fallback_meta else date_str,
+                'market_anchor_date': fallback_meta.get('market_anchor_date') if fallback_meta else date_str,
+                'recommendation_date': fallback_meta.get('recommendation_date') if fallback_meta else signal_date,
+                'resolution_source': fallback_meta.get('resolution_source', 'missing') if fallback_meta else 'missing',
+                'has_persisted_snapshot': fallback_meta.get('has_persisted_snapshot', False) if fallback_meta else False,
                 'strategy_key': strategy_key,
                 'strategy_display': strategy_name,
                 'top_n': top_n,

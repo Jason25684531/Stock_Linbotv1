@@ -16,12 +16,14 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from core.db_helper import (  # noqa: E402
+    get_completed_recommendation_strategy_days,
     get_db_engine,
     get_recommendation_dates,
     get_valid_market_dates,
     normalize_date_str,
 )
 from core.mcp_client import TWSEMCPClient as MCPClient  # noqa: E402
+from core.strategy_manager import StrategyManager  # noqa: E402
 from jobs.run_daily import run_daily_for_date  # noqa: E402
 from jobs.update_database import update_market_date  # noqa: E402
 
@@ -132,6 +134,12 @@ def scan_pipeline_gaps(start_date: str, end_date: str | None = None) -> dict:
     recommendation_dates = sorted(
         set(get_recommendation_dates(resolved_start, resolved_end, include_heartbeats=True))
     )
+    persistence_strategy_names = StrategyManager().get_persistence_strategy_names()
+    completed_strategy_days = get_completed_recommendation_strategy_days(
+        resolved_start,
+        resolved_end,
+        persistence_strategy_names,
+    )
     expected_weekdays, expected_dates, excluded_non_trading_dates, unverified_dates = _resolve_expected_trading_dates(
         resolved_start,
         resolved_end,
@@ -139,7 +147,13 @@ def scan_pipeline_gaps(start_date: str, end_date: str | None = None) -> dict:
     )
 
     missing_market_dates = [date for date in expected_dates if date not in set(market_dates)]
-    missing_recommendation_dates = [date for date in market_dates if date not in set(recommendation_dates)]
+    missing_recommendation_strategy_days = [
+        {'date': date, 'strategy': strategy_name}
+        for date in market_dates
+        for strategy_name in persistence_strategy_names
+        if (date, strategy_name) not in completed_strategy_days
+    ]
+    missing_recommendation_dates = sorted({item['date'] for item in missing_recommendation_strategy_days})
 
     return {
         'start_date': resolved_start,
@@ -148,10 +162,13 @@ def scan_pipeline_gaps(start_date: str, end_date: str | None = None) -> dict:
         'expected_dates': expected_dates,
         'market_dates': market_dates,
         'recommendation_dates': recommendation_dates,
+        'persistence_strategy_names': persistence_strategy_names,
+        'completed_recommendation_strategy_days': sorted(completed_strategy_days),
         'excluded_non_trading_dates': excluded_non_trading_dates,
         'unverified_dates': unverified_dates,
         'missing_market_dates': missing_market_dates,
         'missing_recommendation_dates': missing_recommendation_dates,
+        'missing_recommendation_strategy_days': missing_recommendation_strategy_days,
     }
 
 
@@ -175,6 +192,7 @@ def backfill_pipeline(
     if dry_run:
         print(f"  市場缺口: {initial_gaps['missing_market_dates']}")
         print(f"  推薦缺口: {initial_gaps['missing_recommendation_dates']}")
+        print(f"  推薦策略缺口: {initial_gaps['missing_recommendation_strategy_days']}")
         if initial_gaps['excluded_non_trading_dates']:
             print(f"  已排除休市日: {initial_gaps['excluded_non_trading_dates']}")
         if initial_gaps['unverified_dates']:
@@ -194,7 +212,14 @@ def backfill_pipeline(
             repaired_market_dates.append(date_str)
 
     post_market_gaps = scan_pipeline_gaps(start_date, end_date)
-    for date_str in post_market_gaps['missing_recommendation_dates']:
+    missing_recommendation_dates = []
+    for item in post_market_gaps['missing_recommendation_strategy_days']:
+        date_str = item['date']
+        if date_str in missing_recommendation_dates:
+            continue
+        missing_recommendation_dates.append(date_str)
+
+    for date_str in missing_recommendation_dates:
         run_daily_for_date(date_str)
         rebuilt_recommendation_dates.append(date_str)
 

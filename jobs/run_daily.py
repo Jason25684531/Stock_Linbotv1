@@ -680,11 +680,13 @@ def run_daily_for_date(target_date: str | None = None):
     
     # 1. 初始化策略管理器
     manager = StrategyManager()
-    strategies = manager.get_active_strategies()
-    strategy_names = manager.get_active_strategy_names()
+    strategies = manager.get_persistence_strategies()
+    strategy_names = manager.get_persistence_strategy_names()
+    active_strategy_names = manager.get_active_strategy_names()
     
-    print(f"📊 啟用策略數量: {len(strategies)}")
-    print(f"📋 策略列表: {', '.join(strategy_names)}\n")
+    print(f"📊 落庫策略數量: {len(strategies)}")
+    print(f"📋 落庫策略列表: {', '.join(strategy_names)}")
+    print(f"🎯 目前啟用策略: {', '.join(active_strategy_names)}\n")
     
     # 2. 載入資料
     print("📂 載入股市資料...")
@@ -798,6 +800,7 @@ def run_daily_for_date(target_date: str | None = None):
 
     return {
         'date': date_str,
+        'active_strategy_names': active_strategy_names,
         'strategy_names': strategy_names,
         'strategy_counts': {
             name: (len(candidates) if candidates is not None and not candidates.empty else 0)

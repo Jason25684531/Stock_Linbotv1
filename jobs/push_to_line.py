@@ -31,10 +31,12 @@ from linebot.v3.messaging import (
 )
 from config import Config
 from core.db_helper import (
+    format_market_fallback_notice,
     get_actual_latest_date,
     get_db_engine,
     get_daily_recommendations,
     get_market_trend,
+    get_recommendations_with_market_fallback,
     get_stock_data,
     get_latest_trade_date,
     normalize_date_str,
@@ -59,6 +61,26 @@ STRATEGY_DISPLAY_NAMES = {
 def get_pipeline_baseline_date() -> str | None:
     """取得推播共用的資料基準日。"""
     return normalize_date_str(get_actual_latest_date() or get_latest_trade_date())
+
+
+def _current_push_request_date() -> str:
+    return datetime.now().strftime('%Y-%m-%d')
+
+
+def _resolve_push_strategy_rows(strategy_name: str, requested_date: str, limit: int) -> tuple[pd.DataFrame, dict]:
+    rows, meta = get_recommendations_with_market_fallback(
+        date_str=requested_date,
+        strategy=strategy_name,
+        limit=limit,
+        max_fallback_age_days=Config.RECOMMENDATION_FALLBACK_MAX_AGE_DAYS,
+    )
+    return rows, meta
+
+
+def _build_push_resolution_notes(strategy_notes: list[tuple[str, str]]) -> str:
+    if not strategy_notes:
+        return ''
+    return '；'.join(f'{label}: {note}' for label, note in strategy_notes[:2] if note)
 
 
 def get_market_status(engine, date_str):
@@ -159,7 +181,8 @@ def _build_morning_overview_bubble(date_str: str, market_status: str) -> FlexBub
 
 
 def _build_morning_picks_bubble(picks: list, market_status: str,
-                                date_str: str, picks_title: str) -> FlexBubble:
+                                date_str: str, picks_title: str,
+                                picks_notice: str = '') -> FlexBubble:
     """建構早晨精選五股卡，無資料時維持空狀態卡片。"""
     stock_items = _build_stock_items(picks)
     body_contents = [
@@ -204,6 +227,9 @@ def _build_morning_picks_bubble(picks: list, market_status: str,
                 FlexText(text=f'📅 {date_str}  {market_status or "⚪ 資料不足"}',
                          size='xs', color='#aaaaaa', margin='sm'),
                 FlexText(text=picks_title, size='xs', color='#cccccc', margin='sm'),
+                *([
+                    FlexText(text=picks_notice, size='xxs', color='#f6e9b2', margin='sm', wrap=True),
+                ] if picks_notice else []),
             ]
         ),
         body=FlexBox(
@@ -215,8 +241,8 @@ def _build_morning_picks_bubble(picks: list, market_status: str,
     )
 
 
-def _pick_featured_stocks(engine, date_str: str, strategy_names: list[str] | None = None,
-                          n: int = 5) -> tuple[list, str]:
+def _pick_featured_stocks(engine, requested_date: str, strategy_names: list[str] | None = None,
+                          n: int = 5) -> tuple[list, str, str]:
     """從啟用策略中選出 ai_score 最高的 N 檔股票（多樣化配置）
 
     多樣性規則：ETF (00開頭) 最多 2 檔，其餘為個股，確保分散。
@@ -236,13 +262,13 @@ def _pick_featured_stocks(engine, date_str: str, strategy_names: list[str] | Non
         candidate_names.append(name)
 
     rows = []
+    resolution_notes: list[tuple[str, str]] = []
     for strategy_name in candidate_names:
         display = STRATEGY_DISPLAY_NAMES.get(strategy_name, strategy_name)
-        df = get_daily_recommendations(
-            date_str=date_str,
-            strategy=strategy_name,
-            limit=n * 3,
-        )
+        df, meta = _resolve_push_strategy_rows(strategy_name, requested_date, n * 3)
+        notice = format_market_fallback_notice(meta, display)
+        if notice:
+            resolution_notes.append((display, notice))
         if df.empty:
             continue
         for _, row in df.iterrows():
@@ -254,7 +280,7 @@ def _pick_featured_stocks(engine, date_str: str, strategy_names: list[str] | Non
             ))
 
     if not rows:
-        return [], STRATEGY_DISPLAY_NAMES.get(candidate_names[0], candidate_names[0]) if candidate_names else '精選策略'
+        return [], STRATEGY_DISPLAY_NAMES.get(candidate_names[0], candidate_names[0]) if candidate_names else '精選策略', _build_push_resolution_notes(resolution_notes)
 
     rows.sort(key=lambda item: item[3] if item[3] else 0, reverse=True)
 
@@ -310,12 +336,12 @@ def _pick_featured_stocks(engine, date_str: str, strategy_names: list[str] | Non
     else:
         title = '多策略精選'
 
-    return [(row[0], row[1], row[2], row[3]) for row in picks[:n]], title
+    return [(row[0], row[1], row[2], row[3]) for row in picks[:n]], title, _build_push_resolution_notes(resolution_notes)
 
 
 def _build_morning_flex(news_summary: str, picks: list,
                         market_status: str, date_str: str,
-                        picks_title: str) -> FlexMessage:
+                        picks_title: str, picks_notice: str = '') -> FlexMessage:
     """建構早晨大局觀 Flex Message（今日精選五股）
 
     Args:
@@ -330,7 +356,7 @@ def _build_morning_flex(news_summary: str, picks: list,
         title='🌅 早安總經摘要',
     )
 
-    picks_bubble = _build_morning_picks_bubble(picks, market_status, date_str, picks_title)
+    picks_bubble = _build_morning_picks_bubble(picks, market_status, date_str, picks_title, picks_notice)
     return FlexMessage(
         alt_text=f'🌅 StockAI 早報 {date_str}',
         contents=FlexCarousel(contents=[overview_bubble, news_bubble, picks_bubble]),
@@ -341,7 +367,8 @@ def _build_evening_flex(news_summary: str, picks: list,
                         date_str: str, picks_title: str,
                         market_status: str, market_bias: float,
                         sentiment_summary: str,
-                        strategy_summaries: list[str]) -> FlexMessage:
+                        strategy_summaries: list[str],
+                        picks_notice: str = '') -> FlexMessage:
     """建構晚間整合 Flex Message（市場 + 消息面 + 策略摘要 + 精選五股）
 
     Args:
@@ -430,6 +457,10 @@ def _build_evening_flex(news_summary: str, picks: list,
                          size="lg", color="#e0e0e0"),
                 FlexText(text=picks_title, size="xs",
                          color="#aaaaaa", margin="sm"),
+                *([
+                    FlexText(text=picks_notice, size="xxs",
+                             color="#f6e9b2", margin="sm", wrap=True),
+                ] if picks_notice else []),
             ]
         ),
         body=FlexBox(
@@ -474,8 +505,9 @@ def run_morning():
     print("🌅 早晨大局觀模式啟動...")
 
     engine = get_db_engine()
-    date_str = get_pipeline_baseline_date()
-    if not date_str:
+    requested_date = _current_push_request_date()
+    market_date = get_pipeline_baseline_date()
+    if not market_date:
         print("❌ 資料庫無資料")
         return
 
@@ -490,15 +522,15 @@ def run_morning():
     print(f"  ✓ 新聞摘要完成 ({len(news_summary)} 字)")
 
     # 2. 市場狀態
-    market_status, _ = get_market_status(engine, date_str)
+    market_status, _ = get_market_status(engine, market_date)
 
     manager = StrategyManager()
     active_strategy_names = manager.get_active_strategy_names()
 
     # 3. 依目前啟用策略產生精選五股
-    picks, picks_title = _pick_featured_stocks(
+    picks, picks_title, picks_notice = _pick_featured_stocks(
         engine,
-        date_str,
+        requested_date,
         strategy_names=active_strategy_names,
         n=5,
     )
@@ -511,7 +543,7 @@ def run_morning():
 
     # 4. 建構 Flex Message
     flex = _build_morning_flex(
-        news_summary, picks, market_status, date_str, picks_title
+        news_summary, picks, market_status, requested_date, picks_title, picks_notice
     )
 
     # 5. 推播
@@ -536,6 +568,7 @@ def run_evening():
     print(f"📋 策略列表: {', '.join(strategy_names)}")
 
     # 2. 取得最新日期
+    requested_date = _current_push_request_date()
     date_str = get_pipeline_baseline_date()
     if not date_str:
         print("❌ 資料庫無資料")
@@ -606,83 +639,24 @@ def run_evening():
     for strategy in strategies:
         strategy_label = STRATEGY_DISPLAY_NAMES.get(strategy.name, strategy.display_name)
 
-        with engine.connect() as conn:
-            if strategy.name == 'v35_innovation':
-                result = conn.execute(text("""
-                    SELECT
-                        dr.stock_id,
-                        dr.close_price,
-                        dr.ai_score,
-                        dr.rsi,
-                        dr.volume,
-                        fs.rd_expense,
-                        fs.revenue,
-                        NULL as revenue_yoy
-                    FROM daily_recommendations dr
-                    LEFT JOIN (
-                        SELECT stock_id, rd_expense, revenue
-                        FROM financial_statements fs1
-                        WHERE fs1.year >= 1911
-                          AND (year * 10 + quarter) = (
-                            SELECT MAX(year * 10 + quarter)
-                            FROM financial_statements fs2
-                            WHERE fs2.stock_id = fs1.stock_id
-                              AND fs2.year >= 1911
-                        )
-                    ) fs ON dr.stock_id = fs.stock_id
-                    WHERE dr.trade_date = :date AND dr.strategy = :strategy
-                    ORDER BY dr.ai_score DESC
-                    LIMIT 5
-                """), {"date": date_str, "strategy": strategy.name})
-            elif strategy.name == 'v34_turbo':
-                result = conn.execute(text("""
-                    SELECT
-                        dr.stock_id,
-                        dr.close_price,
-                        dr.ai_score,
-                        dr.rsi,
-                        dr.volume,
-                        NULL as rd_expense,
-                        NULL as revenue,
-                        mr.revenue_yoy
-                    FROM daily_recommendations dr
-                    LEFT JOIN (
-                        SELECT stock_id, revenue_yoy
-                        FROM monthly_revenue mr1
-                        WHERE (year * 100 + month) = (
-                            SELECT MAX(year * 100 + month)
-                            FROM monthly_revenue mr2
-                            WHERE mr2.stock_id = mr1.stock_id
-                        )
-                    ) mr ON dr.stock_id = mr.stock_id
-                    WHERE dr.trade_date = :date AND dr.strategy = :strategy
-                    ORDER BY dr.ai_score DESC
-                    LIMIT 5
-                """), {"date": date_str, "strategy": strategy.name})
-            else:
-                result = conn.execute(text("""
-                    SELECT stock_id, close_price, ai_score, rsi, volume,
-                           NULL as rd_expense, NULL as revenue, NULL as revenue_yoy
-                    FROM daily_recommendations
-                    WHERE trade_date = :date AND strategy = :strategy
-                    ORDER BY ai_score DESC
-                    LIMIT 5
-                """), {"date": date_str, "strategy": strategy.name})
-
-            picks = result.fetchall()
+        picks_df, meta = _resolve_push_strategy_rows(strategy.name, requested_date, 5)
+        strategy_notice = format_market_fallback_notice(meta, strategy_label)
+        picks = list(picks_df.itertuples(index=False, name=None)) if not picks_df.empty else []
 
         if picks:
             has_picks = True
             msg += f"\n== {strategy_label} ==\n"
+            if strategy_notice:
+                msg += f"{strategy_notice}\n"
             summary_parts = []
 
-            for p in picks:
-                stock_id = p[0]
-                price = p[1]
-                ai_score = p[2]
-                rd_expense = p[5] if len(p) > 5 else None
-                revenue = p[6] if len(p) > 6 else None
-                revenue_yoy = p[7] if len(p) > 7 else None
+            for _, row in picks_df.iterrows():
+                stock_id = row.get('stock_id')
+                price = float(row.get('close_price', 0) or 0)
+                ai_score = row.get('ai_score')
+                rd_expense = row.get('rd_expense')
+                revenue = row.get('revenue')
+                revenue_yoy = row.get('revenue_yoy')
 
                 msg += f"🎫 {stock_id} (${price:.2f})"
 
@@ -711,6 +685,8 @@ def run_evening():
             strategy_summary_lines.append(
                 f"{strategy_label}｜{', '.join(summary_parts)}｜目標 {strategy.target_return}% / {strategy.look_ahead_days}天"
             )
+        elif strategy_notice:
+            strategy_summary_lines.append(f"{strategy_label}｜{strategy_notice}")
 
     if not has_picks:
         msg += f"\n🐢 今日無符合條件標的\n"
@@ -736,9 +712,9 @@ def run_evening():
     print(f"  ✓ 新聞摘要完成 ({len(evening_news)} 字)")
 
     # 7. 推播整合 Flex（日報內容 + 新聞 + 啟用策略五股）
-    picks, picks_title = _pick_featured_stocks(
+    picks, picks_title, picks_notice = _pick_featured_stocks(
         engine,
-        date_str,
+        requested_date,
         strategy_names=strategy_names,
         n=5,
     )
@@ -746,12 +722,13 @@ def run_evening():
         flex = _build_evening_flex(
             evening_news,
             picks,
-            date_str,
+            requested_date,
             picks_title,
             status,
             bias,
             '\n'.join(sentiment_lines),
             strategy_summary_lines,
+            picks_notice,
         )
         _broadcast_flex(flex)
         stock_ids = [p[1] for p in picks]

@@ -10,8 +10,8 @@
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復
-> 📅 **最後更新**: 2026-03-09
-> ✅ **系統狀態**: 穩定運行（多策略並行 + 每日自動化 + Flex Message 診斷卡片）
+> 📅 **最後更新**: 2026-04-30
+> ✅ **系統狀態**: 穩定運行（canonical `app/` + `jobs/` 架構、多策略落庫同步、Rich Menu Flex 對話流）
 
 ---
 
@@ -30,16 +30,24 @@
 | 🚀 V30 純技術策略 | 均線突破 + 量能確認 + 大盤熔斷 | 輸入「V30」 |
 | 🎫 個股 AI 診斷 (Flex) | 三維度健康診斷卡片（技術面+基本面+AI分數）| 輸入 4 碼股票代號 |
 | 📊 Web Dashboard | 視覺化回測績效與即時選股 | `http://localhost:1688` |
-| 🎛️ Rich Menu 2×2 | 個股診斷 / 總經與大盤 / 籌碼動向 / 策略盲盒 | LINE Rich Menu |
+| 🎛️ Rich Menu 2×2 | 個股診斷 / 總經摘要 / 日誌反思 / 策略選股 | LINE Rich Menu |
+
+### 🧭 目前 canonical 入口
+
+- `app/`：正式 Web + LINE 應用封裝，`app/web_server.py` 與 `app/line_bot.py` 為主要入口。
+- `jobs/`：正式批次工作入口，涵蓋資料更新、每日選股、回測、推播、回補與排程。
+- `core/`：核心業務邏輯與資料存取，包含策略、DB helper、MCP client、Rich Menu、Flex builder。
+- 根目錄 `app.py` 與 `1_update_database.py` ~ `6_optimize_params.py`：保留相容的 legacy facade，實際實作已下沉到 `app/` 與 `jobs/`。
+- `services/mcp/server.py`：正式 MCP HTTP 服務；`scripts/twse_mcp_server.py` 僅保留 legacy launcher。
 
 ### 📲 Rich Menu 目前架構
 
 | 區塊 | 觸發方式 | 實作位置 | 說明 |
 |------|---------|---------|------|
-| 個股診斷 | `MessageAction(text="診斷 ")` | `core/richmenu.py` + `app/line_bot.py` | 延續既有股票診斷流程 |
-| 總經與大盤 | `action=market_summary` | `app/line_bot.py` + `app/__init__.py::_build_market_summary_messages()` | 透過 `core/mcp_client.py` 讀取市場快照 |
-| 籌碼動向 | `action=chip_trend` | `app/line_bot.py` + `app/__init__.py::_build_chip_trend_messages()` | 透過 MCP 彙總三大法人資料 |
-| 策略盲盒 | `action=random_strategy` | `app/line_bot.py` + `app/__init__.py::_build_random_strategy_messages()` | 從 `strategy_settings.json` 的策略池隨機抽取 |
+| 個股診斷 | `MessageAction(text="診斷 ")` | `core/richmenu.py` + `app/line_bot.py` | 先進入引導式流程，再接收 4 碼股票代號並回傳診斷 Flex |
+| 總經摘要 | `action=market_summary` | `app/line_bot.py` + `app/__init__.py::_build_market_summary_messages()` | 透過共享 Flex summary builder 輸出市場摘要 |
+| 日誌反思 | `action=journal_reflection` | `app/line_bot.py` + `app/__init__.py::_build_journal_reflection_messages()` | 顯示目前啟用策略、績效快照與當日訊號狀態 |
+| 策略選股 | `action=choose_strategy` | `app/line_bot.py` + `app/__init__.py::_build_strategy_picker_messages()` | 先要求使用者明確選策略，再回應該策略的當日推薦 |
 
 Rich Menu 的版型與圖片上傳唯一入口為 `core/richmenu.py`，部署腳本為 `scripts/setup_rich_menu.py`。正式 Web 與 LINE 入口已拆到 `app/web_server.py` 與 `app/line_bot.py`，根目錄 `app.py` 僅保留 legacy facade，供 `python app.py` 與既有部署指令相容轉發。
 
@@ -244,16 +252,16 @@ docker compose ps
 
 | 排程 | 時間 | 批次檔 | 內容 |
 |------|------|--------|------|
-| `Stock_Linbot_Morning` | 每天 08:30 | `morning_run.bat` | 早晨大局觀（新聞摘要 + 精選一股） |
+| `Stock_Linbot_Morning` | 每天 08:30 | `morning_run.bat` | 早報三卡 Carousel（市場概況 / 新聞摘要 / 精選標的） |
 | `Stock_Linbot_Evening` | 每天 19:00 | `evening_run.bat` | 資料更新 → 選股 → 晚間推播 |
 
 ### 手動執行推播
 
 ```powershell
-# 早晨大局觀（Gemini 新聞摘要 + 隨機策略精選 Flex）
+# 早晨大局觀（三卡 Carousel：市場概況 + 新聞摘要 + 精選標的）
 python jobs/push_to_line.py --time morning
 
-# 晚間選股策劃（全策略推薦 + 明日關注 Flex）
+# 晚間選股策劃（全策略摘要 + 明日關注 Carousel）
 python jobs/push_to_line.py --time evening
 
 # 完整晚間流程（資料更新 → 選股 → 推播）
@@ -273,6 +281,19 @@ python scripts\setup_rich_menu.py  # 手動部署最新 Rich Menu 版面
 # Focused MCP / Rich Menu 驗證
 python -m pytest test/test_mcp_integration.py test/test_richmenu_mcp_server_routes.py test/test_richmenu_mcp_integration.py -q
 ```
+
+### 推薦落庫與回補規則
+
+- `jobs/run_daily.py` 現在會對所有使用者可見策略寫入當日 `daily_recommendations` 完成紀錄，不再只覆蓋當前 active strategy。
+- 若某策略當日沒有候選股，系統會寫入一筆 heartbeat（`stock_id = NONE`）；這代表該策略已完成計算且結果為零候選，不是缺資料。
+- Web Dashboard、LINE 手動輸入「推薦」、以及早晚排程推播都會優先讀取資料庫已落庫的策略快照；若當日缺少該策略快照，才會回推到該策略自己的最近一筆落庫日期。
+- `jobs/backfill_pipeline.py` 的推薦缺口判定已改為「交易日 × 策略」矩陣檢查。只要某日少任一必要策略的候選股或 heartbeat，就會被列為缺口並重建該日期。
+
+### `/api/daily-signals` 目前回傳語意
+
+- API 會回傳 canonical recommendation metadata：`requested_date`、`market_anchor_date`、`recommendation_date`、`resolution_source`、`has_persisted_snapshot`、`fallback_used`。
+- 同日 heartbeat 會被視為「已完成但零候選」，因此 `signals` 可能為空，但不是資料缺漏。
+- Web 與 LINE 顯示風格可以不同，但底層 resolved snapshot contract 必須一致。
 
 ### 啟動與關閉（Windows / 虛擬環境）
 
@@ -392,6 +413,12 @@ python -m pytest test/test_richmenu_mcp_integration.py -v
 # 3) 全量單元 / 整合測試（一鍵執行）
 python -m pytest test/ -v --tb=short
 
+# 3.1) 推薦落庫 / fallback / channel sync 核心回歸
+python -m pytest test/test_recommendation_fallback.py -q
+python -m pytest test/test_run_daily_persistence.py -q
+python -m pytest test/test_recommendation_channel_sync.py -q
+python -m pytest test/test_backfill_pipeline.py -q
+
 # 4) 依模組分別測試（選擇性執行）
 python -m pytest test/test_strategy_factory.py -v      # 策略載入 & 篩選 (3 tests)
 python -m pytest test/test_run_backtest_cli.py -v      # 回測 CLI / all / mode 傳遞
@@ -407,6 +434,8 @@ python jobs/run_backtest.py --strategies all --days 365 --mode balanced
 
 # 6) 日常流程冒煙測試
 python jobs/run_daily.py
+python jobs/push_to_line.py --time morning
+python jobs/push_to_line.py --time evening
 
 # 7) 啟動 Web 並手動驗證 API
 python app.py
@@ -416,7 +445,7 @@ python app.py
 # 8) 啟動 MCP 後手動驗證 Rich Menu / LINE Bot
 python services\mcp\server.py
 python scripts\setup_rich_menu.py
-# LINE 端依序點擊：個股診斷 / 總經與大盤 / 籌碼動向 / 策略盲盒
+# LINE 端依序點擊：個股診斷 / 總經摘要 / 日誌反思 / 策略選股
 ```
 
 > 若僅需快速回歸，至少執行步驟 1 + 2 + 5。
@@ -446,7 +475,7 @@ Stock_Linbotv1/
 │   └── 6_optimize_params.py     # → jobs/optimize_params.py
 │
 ├── 🚀 execution/ — 自動化腳本 + Windows 排程
-│   ├── morning_run.bat          # 早晨排程 (08:30): 新聞摘要+精選推播
+│   ├── morning_run.bat          # 早晨排程 (08:30): 三卡 carousel 早報
 │   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
 │   ├── daily_run.bat            # 一鍵自動化 (1→2→5 三步驟，舊版相容)
 │   └── start_web.bat            # 一鍵啟動 Web 服務

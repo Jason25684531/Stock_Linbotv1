@@ -3,11 +3,11 @@ import pandas as pd
 from tool import db_helper
 
 
-def test_get_recommendations_with_market_fallback_uses_latest_safe_day(monkeypatch):
+def test_get_recommendations_with_market_fallback_uses_same_strategy_latest_snapshot(monkeypatch):
     fallback_rows = pd.DataFrame([
         {
             'stock_id': '2330',
-            'trade_date': '2026-03-11',
+            'trade_date': '2026-04-24',
             'strategy': 'v36_chip_momentum',
             'close_price': 950.0,
             'ai_score': 0.82,
@@ -18,29 +18,22 @@ def test_get_recommendations_with_market_fallback_uses_latest_safe_day(monkeypat
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(db_helper, 'get_latest_trade_date', lambda: '2026-03-13')
-    monkeypatch.setattr(
-        db_helper,
-        'get_market_trend',
-        lambda date_str: {
-            '2026-03-13': 'BEAR',
-            '2026-03-12': 'BEAR',
-            '2026-03-11': 'BULL',
-        }[date_str],
-    )
+    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-04-28'])
+    monkeypatch.setattr(db_helper, 'get_latest_trade_date', lambda: '2026-04-28')
+    monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BULL')
 
     def fake_read_sql(sql, engine, params=None):
         sql_text = str(sql)
         if 'SELECT DISTINCT trade_date' in sql_text:
-            return pd.DataFrame({'trade_date': ['2026-03-12', '2026-03-11']})
-        if params['date'] == '2026-03-11':
+            return pd.DataFrame({'trade_date': ['2026-04-24']})
+        if params['date'] == '2026-04-24':
             return fallback_rows.copy()
         return pd.DataFrame(columns=fallback_rows.columns)
 
     monkeypatch.setattr(db_helper.pd, 'read_sql', fake_read_sql)
 
     result, meta = db_helper.get_recommendations_with_market_fallback(
-        date_str='2026-03-13',
+        date_str='2026-04-29',
         strategy='v36_chip_momentum',
         limit=5,
     )
@@ -48,11 +41,12 @@ def test_get_recommendations_with_market_fallback_uses_latest_safe_day(monkeypat
     assert not result.empty
     assert result.iloc[0]['stock_id'] == '2330'
     assert meta['fallback_used'] is True
-    assert meta['market_circuit_breaker_active'] is True
-    assert meta['recommendation_date'] == '2026-03-11'
+    assert meta['market_anchor_date'] == '2026-04-28'
+    assert meta['resolution_source'] == 'strategy_fallback'
+    assert meta['recommendation_date'] == '2026-04-24'
 
 
-def test_get_recommendations_with_market_fallback_keeps_current_day_data(monkeypatch):
+def test_get_recommendations_with_market_fallback_keeps_same_day_persisted_rows(monkeypatch):
     current_rows = pd.DataFrame([
         {
             'stock_id': '6223',
@@ -65,35 +59,15 @@ def test_get_recommendations_with_market_fallback_keeps_current_day_data(monkeyp
             'news_boost_reason': '',
         }
     ])
-    fallback_rows = pd.DataFrame([
-        {
-            'stock_id': '2330',
-            'trade_date': '2026-02-11',
-            'strategy': 'v35_innovation',
-            'close_price': 950.0,
-            'ai_score': 0.82,
-            'rsi': 58.0,
-            'volume': 120000,
-            'news_boost_reason': '',
-        }
-    ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(
-        db_helper,
-        'get_market_trend',
-        lambda date_str: {
-            '2026-03-12': 'BEAR',
-            '2026-02-11': 'BULL',
-        }[date_str],
-    )
+    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-03-12'])
+    monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BEAR')
 
     def fake_read_sql(sql, engine, params=None):
         if params['date'] == '2026-03-12':
             return current_rows.copy()
-        if params['date'] == '2026-02-11':
-            return fallback_rows.copy()
-        return pd.DataFrame({'trade_date': ['2026-02-11']})
+        return pd.DataFrame(columns=current_rows.columns)
 
     monkeypatch.setattr(db_helper.pd, 'read_sql', fake_read_sql)
 
@@ -108,6 +82,7 @@ def test_get_recommendations_with_market_fallback_keeps_current_day_data(monkeyp
     assert meta['fallback_used'] is False
     assert meta['market_circuit_breaker_active'] is True
     assert meta['current_day_recommendations_used'] is True
+    assert meta['resolution_source'] == 'persisted'
     assert meta['recommendation_date'] == '2026-03-12'
 
 
@@ -126,14 +101,8 @@ def test_get_recommendations_with_market_fallback_blocks_stale_data(monkeypatch)
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(
-        db_helper,
-        'get_market_trend',
-        lambda date_str: {
-            '2026-03-12': 'BEAR',
-            '2026-02-11': 'BULL',
-        }[date_str],
-    )
+    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-03-12'])
+    monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BEAR')
 
     def fake_read_sql(sql, engine, params=None):
         sql_text = str(sql)
@@ -159,6 +128,79 @@ def test_get_recommendations_with_market_fallback_blocks_stale_data(monkeypatch)
     assert meta['fallback_too_old'] is True
     assert meta['fallback_age_days'] == 29
     assert meta['last_available_recommendation_date'] == '2026-02-11'
+
+
+def test_get_recommendations_with_market_fallback_returns_same_day_heartbeat(monkeypatch):
+    heartbeat_rows = pd.DataFrame([
+        {
+            'stock_id': 'NONE',
+            'trade_date': '2026-04-28',
+            'strategy': 'v38_value_dividend',
+            'close_price': 0.0,
+            'ai_score': None,
+            'rsi': None,
+            'volume': None,
+            'news_boost_reason': 'NO_CANDIDATES_HEARTBEAT',
+        }
+    ])
+
+    monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
+    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-04-28'])
+    monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BULL')
+    monkeypatch.setattr(db_helper.pd, 'read_sql', lambda sql, engine, params=None: heartbeat_rows.copy())
+
+    result, meta = db_helper.get_recommendations_with_market_fallback(
+        date_str='2026-04-28',
+        strategy='v38_value_dividend',
+        limit=5,
+    )
+
+    assert result.empty
+    assert meta['has_persisted_snapshot'] is True
+    assert meta['resolution_source'] == 'heartbeat'
+    assert meta['recommendation_date'] == '2026-04-28'
+    assert meta['fallback_used'] is False
+
+
+def test_get_recommendations_with_market_fallback_uses_strategy_only_history(monkeypatch):
+    fallback_rows = pd.DataFrame([
+        {
+            'stock_id': '2881',
+            'trade_date': '2026-04-24',
+            'strategy': 'v38_value_dividend',
+            'close_price': 52.0,
+            'ai_score': 0.73,
+            'rsi': 54.0,
+            'volume': 88000,
+            'news_boost_reason': '',
+        }
+    ])
+
+    monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
+    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-04-28'])
+    monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BULL')
+
+    def fake_read_sql(sql, engine, params=None):
+        sql_text = str(sql)
+        if 'SELECT DISTINCT trade_date' in sql_text:
+            assert params['strategy'] == 'v38_value_dividend'
+            return pd.DataFrame({'trade_date': ['2026-04-24']})
+        if params['date'] == '2026-04-24':
+            return fallback_rows.copy()
+        return pd.DataFrame(columns=fallback_rows.columns)
+
+    monkeypatch.setattr(db_helper.pd, 'read_sql', fake_read_sql)
+
+    result, meta = db_helper.get_recommendations_with_market_fallback(
+        date_str='2026-04-29',
+        strategy='v38_value_dividend',
+        limit=5,
+    )
+
+    assert result['stock_id'].tolist() == ['2881']
+    assert meta['fallback_used'] is True
+    assert meta['resolution_source'] == 'strategy_fallback'
+    assert meta['market_anchor_date'] == '2026-04-28'
 
 
 def test_get_actual_latest_date_uses_intersection_and_skips_invalid_days(monkeypatch):
@@ -257,31 +299,35 @@ def test_format_market_fallback_notice_handles_no_safe_day():
     notice = db_helper.format_market_fallback_notice({
         'requested_date': '2026-03-13',
         'recommendation_date': '2026-03-13',
+        'market_anchor_date': '2026-03-12',
+        'resolution_source': 'missing',
         'fallback_used': False,
         'market_circuit_breaker_active': True,
     }, '📊 籌碼動能 (V36)')
 
-    assert '高風險區間' in notice
-    assert '建議暫時觀望' in notice
+    assert '尚無可用的📊 籌碼動能 (V36)落庫推薦紀錄' in notice
 
 
 def test_format_market_fallback_notice_handles_current_day_data():
     notice = db_helper.format_market_fallback_notice({
         'requested_date': '2026-03-12',
         'recommendation_date': '2026-03-12',
+        'market_anchor_date': '2026-03-12',
+        'resolution_source': 'persisted',
         'fallback_used': False,
         'market_circuit_breaker_active': True,
         'current_day_recommendations_used': True,
     }, '🚀 創新成長 (V35)')
 
-    assert '當日既有的🚀 創新成長 (V35)推薦紀錄' in notice
-    assert '降低部位並嚴設停損' in notice
+    assert '2026-03-12 的當日🚀 創新成長 (V35)落庫推薦' in notice
 
 
 def test_format_market_fallback_notice_handles_stale_data():
     notice = db_helper.format_market_fallback_notice({
         'requested_date': '2026-03-12',
         'recommendation_date': '2026-03-12',
+        'market_anchor_date': '2026-03-12',
+        'resolution_source': 'missing',
         'fallback_used': False,
         'market_circuit_breaker_active': True,
         'fallback_too_old': True,
@@ -291,7 +337,7 @@ def test_format_market_fallback_notice_handles_stale_data():
 
     assert '2026-02-11' in notice
     assert '距今 29 天' in notice
-    assert '不回推舊名單' in notice
+    assert '不顯示舊名單' in notice
 
 
 def test_get_sector_news_summary_only_returns_matching_sector(monkeypatch):
