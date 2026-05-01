@@ -85,6 +85,61 @@ def _flow_frame() -> pd.DataFrame:
     )
 
 
+def _history_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                'trade_date': '2026-04-07',
+                'stock_id': '2330',
+                'open_price': 820.0,
+                'high_price': 835.0,
+                'low_price': 818.0,
+                'close_price': 832.0,
+                'volume': 24500000,
+                'ma5': 824.0,
+                'ma20': 798.0,
+                'ma60': 760.0,
+            },
+            {
+                'trade_date': '2026-04-08',
+                'stock_id': '2330',
+                'open_price': 833.0,
+                'high_price': 842.0,
+                'low_price': 830.0,
+                'close_price': 840.0,
+                'volume': 26500000,
+                'ma5': 829.0,
+                'ma20': 801.0,
+                'ma60': 763.0,
+            },
+        ]
+    )
+
+
+def _report_payload() -> dict[str, object]:
+    return {
+        'stock_id': '2330',
+        'trade_date': '2026-04-08',
+        'close_price': 840.0,
+        'open_price': 833.0,
+        'high_price': 842.0,
+        'low_price': 830.0,
+        'ma5': 829.0,
+        'ma20': 801.0,
+        'ma60': 763.0,
+        'rsi': 63.5,
+        'bias': 2.8,
+        'chip_score': 0.74,
+        'ai_score': 0.82,
+        'strategy_name': 'v34_turbo',
+        'revenue_yoy': 21.6,
+        'op_margin': 0.42,
+        'foreign_buy': 1000,
+        'trust_buy': 200,
+        'dealer_buy': -50,
+    }
+
+
 def _assert_error_envelope(
     body: dict[str, object],
     *,
@@ -138,6 +193,123 @@ def test_get_foreign_investment_tool_route_returns_200(client) -> None:
     body = response.get_json()
     assert body['dataset'] == 'foreign_investor_flow'
     assert body['records'][0]['foreign_buy'] == 1000.0
+
+
+def test_twse_stock_trend_tool_route_returns_chart_ready_payload(client) -> None:
+    payload = {
+        'stock_id': '2330',
+        'trade_date': '2026-04-08',
+        'market': 'ALL',
+        'history_limit': 120,
+        'correlation_id': 'cid-trend',
+    }
+    with patch.object(twse_mcp_server, 'get_stock_history', return_value=_history_frame()), patch.object(
+        twse_mcp_server,
+        'get_stock_report',
+        return_value=_report_payload(),
+    ), patch.object(twse_mcp_server, 'get_stock_sector', return_value='半導體'), patch.object(
+        twse_mcp_server,
+        'fetch_foreign_investor_flow',
+        return_value=_flow_frame(),
+    ):
+        response = client.post('/v1/tools/twse_stock_trend', json=payload)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['dataset'] == 'twse_stock_trend'
+    assert body['stock_id'] == '2330'
+    assert body['status'] == 'ok'
+    assert len(body['series']['candles']) == 2
+    assert body['records'][0]['stock_id'] == '2330'
+    assert body['institutional']['foreign_buy'] == 1000
+
+
+def test_twse_stock_trend_tool_route_degrades_when_flow_fails(client) -> None:
+    payload = {
+        'stock_id': '2330',
+        'trade_date': '2026-04-08',
+        'market': 'ALL',
+        'history_limit': 120,
+        'correlation_id': 'cid-trend-degraded',
+    }
+    with patch.object(twse_mcp_server, 'get_stock_history', return_value=_history_frame()), patch.object(
+        twse_mcp_server,
+        'get_stock_report',
+        return_value=_report_payload(),
+    ), patch.object(twse_mcp_server, 'get_stock_sector', return_value='半導體'), patch.object(
+        twse_mcp_server,
+        'fetch_foreign_investor_flow',
+        side_effect=RuntimeError('flow unavailable'),
+    ):
+        response = client.post('/v1/tools/twse_stock_trend', json=payload)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['status'] == 'partial'
+    assert 'institutional' in body['degraded_fields']
+    assert body['records'][0]['stock_id'] == '2330'
+
+
+def test_investment_screening_tool_route_returns_report_sections(client) -> None:
+    payload = {
+        'stock_id': '2330',
+        'trade_date': '2026-04-08',
+        'market': 'ALL',
+        'correlation_id': 'cid-screen',
+    }
+    with patch.object(twse_mcp_server, 'get_stock_report', return_value=_report_payload()), patch.object(
+        twse_mcp_server,
+        'get_stock_sector',
+        return_value='半導體',
+    ), patch.object(twse_mcp_server, 'fetch_foreign_investor_flow', return_value=_flow_frame()):
+        response = client.post('/v1/tools/investment_screening', json=payload)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['dataset'] == 'investment_screening'
+    assert body['screening']['score'] >= 1
+    assert len(body['report_sections']['technical']) == 2
+    assert body['records'][0]['stock_id'] == '2330'
+
+
+def test_market_hotspot_tool_route_returns_breadth_and_hotspots(client) -> None:
+    payload = {
+        'trade_date': '2026-04-08',
+        'market': 'ALL',
+        'correlation_id': 'cid-hotspot',
+    }
+    with patch.object(twse_mcp_server, 'fetch_stock_basic_snapshot', return_value=_snapshot_frame()), patch.object(
+        twse_mcp_server,
+        'fetch_foreign_investor_flow',
+        return_value=_flow_frame(),
+    ):
+        response = client.post('/v1/tools/market_hotspot', json=payload)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['dataset'] == 'market_hotspot'
+    assert body['breadth']['universe_count'] == 1
+    assert body['hotspots']['top_gainers'][0]['stock_id'] == '2330'
+    assert body['records'][0]['stock_id'] == '2330'
+
+
+def test_twse_stock_trend_validation_error_requires_stock_id(client) -> None:
+    response = client.post(
+        '/v1/tools/twse_stock_trend',
+        json={
+            'trade_date': '2026-04-08',
+            'market': 'ALL',
+            'correlation_id': 'cid-trend-invalid',
+        },
+    )
+
+    assert response.status_code == 400
+    _assert_error_envelope(
+        response.get_json(),
+        error_code='INVALID_REQUEST',
+        retryable=False,
+        correlation_id='cid-trend-invalid',
+    )
 
 
 def test_market_statistics_tool_and_legacy_routes_share_payload_shape(client) -> None:

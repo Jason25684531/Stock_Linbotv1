@@ -6,6 +6,8 @@
 2. 設定值讀寫（防 SQL Injection）
 3. 資料查詢輔助函數
 """
+import json
+from datetime import datetime, timedelta
 import pandas as pd
 import re
 import time
@@ -16,18 +18,358 @@ from config import Config
 
 # 🔥 Singleton 引擎 + 連線池（避免 Too many connections）
 _engine_instance = None
+_table_columns_cache: dict[str, set[str]] = {}
 
 # 允許的資料表名稱（防止 SQL Injection）
 _ALLOWED_TABLES = {
     'daily_market_data', 'user_settings', 'user_simulation_trades',
     'monthly_revenue', 'financial_statements', 'daily_recommendations',
     'backtest_trades', 'backtest_equity_curve', 'daily_news_sentiment',
+    'dashboard_aggregation_cache',
 }
 
 MIN_VALID_MARKET_ROWS = 100
 RECOMMENDATION_HEARTBEAT_STOCK_ID = 'NONE'
 COMMON_STOCK_ID_PATTERN = re.compile(r'^\d{4}$')
 COMMON_STOCK_EXCLUDED_PREFIXES = ('03', '08')
+DASHBOARD_AGGREGATION_CACHE_TABLE = 'dashboard_aggregation_cache'
+DASHBOARD_AGGREGATION_CACHE_VERSION = 'v1'
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.utcnow().replace(microsecond=0)
+
+
+def _parse_datetime_value(value) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0)
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+    try:
+        return datetime.fromisoformat(text_value[:19].replace('T', ' '))
+    except ValueError:
+        return None
+
+
+def build_dashboard_aggregation_cache_key(
+    intent_name: str,
+    *,
+    stock_id: str | None = None,
+    market: str = 'ALL',
+    requested_date: str | None = None,
+) -> str:
+    normalized_intent = str(intent_name or '').strip().lower()
+    if not normalized_intent:
+        raise ValueError('intent_name is required')
+    normalized_stock_id = normalize_stock_id_value(stock_id) or '*'
+    normalized_market = str(market or 'ALL').strip().upper() or 'ALL'
+    normalized_requested_date = normalize_date_str(requested_date) or '*'
+    return f'{normalized_intent}:{normalized_market}:{normalized_requested_date}:{normalized_stock_id}'
+
+
+def ensure_dashboard_aggregation_cache_schema(engine=None):
+    """確保 dashboard 聚合快取資料表存在。"""
+    if engine is None:
+        engine = get_db_engine()
+
+    dialect_name = getattr(engine.dialect, 'name', '')
+    if dialect_name == 'sqlite':
+        create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {DASHBOARD_AGGREGATION_CACHE_TABLE} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cache_key TEXT NOT NULL UNIQUE,
+                intent_name TEXT NOT NULL,
+                stock_id TEXT,
+                market TEXT NOT NULL DEFAULT 'ALL',
+                requested_date TEXT,
+                as_of_date TEXT,
+                payload_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ok',
+                fallback_used INTEGER NOT NULL DEFAULT 0,
+                cache_status TEXT NOT NULL DEFAULT 'fresh',
+                payload_version TEXT NOT NULL DEFAULT 'v1',
+                fetched_at TEXT NOT NULL,
+                expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """
+        index_sql = [
+            f"CREATE INDEX IF NOT EXISTS idx_dashboard_cache_intent_date ON {DASHBOARD_AGGREGATION_CACHE_TABLE} (intent_name, requested_date)",
+            f"CREATE INDEX IF NOT EXISTS idx_dashboard_cache_stock_date ON {DASHBOARD_AGGREGATION_CACHE_TABLE} (stock_id, requested_date)",
+        ]
+    else:
+        create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {DASHBOARD_AGGREGATION_CACHE_TABLE} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                cache_key VARCHAR(255) NOT NULL,
+                intent_name VARCHAR(64) NOT NULL,
+                stock_id VARCHAR(16) NULL,
+                market VARCHAR(16) NOT NULL DEFAULT 'ALL',
+                requested_date DATE NULL,
+                as_of_date DATE NULL,
+                payload_json LONGTEXT NOT NULL,
+                status VARCHAR(16) NOT NULL DEFAULT 'ok',
+                fallback_used TINYINT(1) NOT NULL DEFAULT 0,
+                cache_status VARCHAR(16) NOT NULL DEFAULT 'fresh',
+                payload_version VARCHAR(32) NOT NULL DEFAULT 'v1',
+                fetched_at DATETIME NOT NULL,
+                expires_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                UNIQUE KEY uq_dashboard_cache_key (cache_key),
+                KEY idx_dashboard_cache_intent_date (intent_name, requested_date),
+                KEY idx_dashboard_cache_stock_date (stock_id, requested_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+        index_sql = []
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(create_sql))
+            for sql in index_sql:
+                conn.execute(text(sql))
+            conn.commit()
+    except Exception as e:
+        print(f"⚠️ dashboard aggregation cache schema 確認失敗: {e}")
+
+
+def save_dashboard_aggregation_cache(
+    intent_name: str,
+    payload: dict,
+    *,
+    stock_id: str | None = None,
+    market: str = 'ALL',
+    requested_date: str | None = None,
+    ttl_seconds: int = 300,
+    cache_status: str = 'fresh',
+    payload_version: str = DASHBOARD_AGGREGATION_CACHE_VERSION,
+    engine=None,
+) -> bool:
+    """寫入 dashboard 聚合快取。"""
+    if not isinstance(payload, dict) or not payload:
+        return False
+    if engine is None:
+        engine = get_db_engine()
+    ensure_dashboard_aggregation_cache_schema(engine)
+
+    now = _utc_now_naive()
+    ttl_value = int(ttl_seconds)
+    expires_at = now - timedelta(seconds=1) if ttl_value <= 0 else now + timedelta(seconds=ttl_value)
+    normalized_requested_date = normalize_date_str(requested_date or payload.get('requested_date'))
+    normalized_as_of_date = normalize_date_str(payload.get('as_of_date'))
+    normalized_market = str(market or payload.get('market') or 'ALL').strip().upper() or 'ALL'
+    normalized_stock_id = normalize_stock_id_value(stock_id or payload.get('stock_id')) or None
+    normalized_intent = str(intent_name or '').strip().lower()
+    cache_key = build_dashboard_aggregation_cache_key(
+        normalized_intent,
+        stock_id=normalized_stock_id,
+        market=normalized_market,
+        requested_date=normalized_requested_date,
+    )
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    params = {
+        'cache_key': cache_key,
+        'intent_name': normalized_intent,
+        'stock_id': normalized_stock_id,
+        'market': normalized_market,
+        'requested_date': normalized_requested_date,
+        'as_of_date': normalized_as_of_date,
+        'payload_json': payload_json,
+        'status': str(payload.get('status') or 'ok'),
+        'fallback_used': 1 if bool(payload.get('fallback_used')) else 0,
+        'cache_status': str(cache_status or 'fresh'),
+        'payload_version': str(payload_version or DASHBOARD_AGGREGATION_CACHE_VERSION),
+        'fetched_at': now,
+        'expires_at': expires_at,
+        'created_at': now,
+        'updated_at': now,
+    }
+
+    try:
+        with engine.connect() as conn:
+            existing_id = conn.execute(
+                text(f"SELECT id FROM {DASHBOARD_AGGREGATION_CACHE_TABLE} WHERE cache_key = :cache_key"),
+                {'cache_key': cache_key},
+            ).scalar()
+            if existing_id:
+                conn.execute(
+                    text(f"""
+                        UPDATE {DASHBOARD_AGGREGATION_CACHE_TABLE}
+                        SET intent_name = :intent_name,
+                            stock_id = :stock_id,
+                            market = :market,
+                            requested_date = :requested_date,
+                            as_of_date = :as_of_date,
+                            payload_json = :payload_json,
+                            status = :status,
+                            fallback_used = :fallback_used,
+                            cache_status = :cache_status,
+                            payload_version = :payload_version,
+                            fetched_at = :fetched_at,
+                            expires_at = :expires_at,
+                            updated_at = :updated_at
+                        WHERE cache_key = :cache_key
+                    """),
+                    params,
+                )
+            else:
+                conn.execute(
+                    text(f"""
+                        INSERT INTO {DASHBOARD_AGGREGATION_CACHE_TABLE}
+                            (cache_key, intent_name, stock_id, market, requested_date,
+                             as_of_date, payload_json, status, fallback_used, cache_status,
+                             payload_version, fetched_at, expires_at, created_at, updated_at)
+                        VALUES
+                            (:cache_key, :intent_name, :stock_id, :market, :requested_date,
+                             :as_of_date, :payload_json, :status, :fallback_used, :cache_status,
+                             :payload_version, :fetched_at, :expires_at, :created_at, :updated_at)
+                    """),
+                    params,
+                )
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"⚠️ dashboard aggregation cache 寫入失敗 ({cache_key}): {e}")
+        return False
+
+
+def get_dashboard_aggregation_cache(
+    intent_name: str,
+    *,
+    stock_id: str | None = None,
+    market: str = 'ALL',
+    requested_date: str | None = None,
+    allow_stale: bool = True,
+    engine=None,
+) -> dict | None:
+    """讀取 dashboard 聚合快取並回傳 freshness metadata。"""
+    if engine is None:
+        engine = get_db_engine()
+    ensure_dashboard_aggregation_cache_schema(engine)
+
+    normalized_intent = str(intent_name or '').strip().lower()
+    cache_key = build_dashboard_aggregation_cache_key(
+        normalized_intent,
+        stock_id=stock_id,
+        market=market,
+        requested_date=requested_date,
+    )
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(f"SELECT * FROM {DASHBOARD_AGGREGATION_CACHE_TABLE} WHERE cache_key = :cache_key"),
+                {'cache_key': cache_key},
+            ).mappings().fetchone()
+        if not row:
+            return None
+
+        fetched_at = _parse_datetime_value(row.get('fetched_at'))
+        expires_at = _parse_datetime_value(row.get('expires_at'))
+        now = _utc_now_naive()
+        computed_cache_status = 'stale' if expires_at and expires_at <= now else 'fresh'
+        if computed_cache_status == 'stale' and not allow_stale:
+            return None
+
+        try:
+            payload = json.loads(row.get('payload_json') or '{}')
+        except Exception:
+            payload = {}
+
+        return {
+            'cache_key': row.get('cache_key'),
+            'intent_name': row.get('intent_name'),
+            'stock_id': row.get('stock_id'),
+            'market': row.get('market'),
+            'requested_date': normalize_date_str(row.get('requested_date')),
+            'as_of_date': normalize_date_str(row.get('as_of_date')),
+            'status': row.get('status') or payload.get('status') or 'ok',
+            'fallback_used': bool(row.get('fallback_used')),
+            'cache_status': computed_cache_status,
+            'payload_version': row.get('payload_version') or DASHBOARD_AGGREGATION_CACHE_VERSION,
+            'fetched_at': normalize_date_str(fetched_at) if fetched_at else None,
+            'expires_at': normalize_date_str(expires_at) if expires_at else None,
+            'payload': payload,
+        }
+    except Exception as e:
+        print(f"⚠️ dashboard aggregation cache 讀取失敗 ({cache_key}): {e}")
+        return None
+
+
+def resolve_dashboard_aggregation_cache(
+    intent_name: str,
+    *,
+    refresh_fn,
+    stock_id: str | None = None,
+    market: str = 'ALL',
+    requested_date: str | None = None,
+    ttl_seconds: int = 300,
+    allow_stale: bool = True,
+    payload_version: str = DASHBOARD_AGGREGATION_CACHE_VERSION,
+    engine=None,
+) -> dict | None:
+    """優先使用 fresh cache，必要時 refresh，失敗時可回退 stale cache。"""
+    if engine is None:
+        engine = get_db_engine()
+
+    fresh_cache = get_dashboard_aggregation_cache(
+        intent_name,
+        stock_id=stock_id,
+        market=market,
+        requested_date=requested_date,
+        allow_stale=False,
+        engine=engine,
+    )
+    if fresh_cache:
+        payload = dict(fresh_cache['payload'])
+        payload['cache_status'] = 'fresh'
+        payload['payload_version'] = fresh_cache['payload_version']
+        return payload
+
+    try:
+        fresh_payload = refresh_fn()
+        if fresh_payload:
+            save_dashboard_aggregation_cache(
+                intent_name,
+                fresh_payload,
+                stock_id=stock_id,
+                market=market,
+                requested_date=requested_date,
+                ttl_seconds=ttl_seconds,
+                cache_status='fresh',
+                payload_version=payload_version,
+                engine=engine,
+            )
+            resolved = dict(fresh_payload)
+            resolved['cache_status'] = 'fresh'
+            resolved['payload_version'] = payload_version
+            return resolved
+    except Exception as e:
+        stale_cache = get_dashboard_aggregation_cache(
+            intent_name,
+            stock_id=stock_id,
+            market=market,
+            requested_date=requested_date,
+            allow_stale=allow_stale,
+            engine=engine,
+        )
+        if stale_cache:
+            payload = dict(stale_cache['payload'])
+            warnings = payload.get('warnings') or []
+            warnings = [str(item) for item in warnings]
+            warnings.append(f'cache refresh failed: {e}')
+            payload['warnings'] = warnings
+            payload['cache_status'] = 'stale'
+            payload['payload_version'] = stale_cache['payload_version']
+            payload['fallback_used'] = True
+            return payload
+        return None
+
+    return None
 
 
 def normalize_stock_id_value(stock_id) -> str:
@@ -36,6 +378,30 @@ def normalize_stock_id_value(stock_id) -> str:
     if normalized.endswith('.0'):
         normalized = normalized[:-2]
     return normalized
+
+
+def get_table_columns(table_name: str, engine=None, refresh: bool = False) -> set[str]:
+    """取得資料表欄位集合，並做簡單快取。"""
+    normalized_table_name = str(table_name or '').strip()
+    if not normalized_table_name:
+        return set()
+
+    cached = _table_columns_cache.get(normalized_table_name)
+    if cached is not None and not refresh:
+        return set(cached)
+
+    if engine is None:
+        engine = get_db_engine()
+
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(f"SHOW COLUMNS FROM {normalized_table_name}"))
+            columns = {str(row[0]).strip() for row in result if row and row[0]}
+            _table_columns_cache[normalized_table_name] = set(columns)
+            return columns
+    except Exception as e:
+        print(f"⚠️ 讀取資料表欄位失敗 ({normalized_table_name}): {e}")
+        return set(cached or set())
 
 
 def is_common_stock_id(stock_id) -> bool:
@@ -396,6 +762,78 @@ def get_stock_data(stock_id=None, date_str=None):
     except Exception as e:
         print(f"❌ 資料庫查詢失敗: {e}")
         return pd.DataFrame(), None
+
+
+def get_stock_history(stock_id, limit: int = 120, end_date: str | None = None):
+    """讀取單一股票歷史行情與指標序列。"""
+    normalized_stock_id = normalize_stock_id_value(stock_id)
+    if not normalized_stock_id:
+        return pd.DataFrame()
+
+    safe_limit = max(1, min(int(limit), 520))
+    engine = get_db_engine()
+    available_columns = get_table_columns('daily_market_data', engine=engine)
+    required_columns = ['trade_date', 'stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']
+    optional_columns = [
+        'ma5',
+        'ma20',
+        'ma60',
+        'rsi',
+        'bias',
+        'chip_score',
+        'foreign_buy',
+        'trust_buy',
+        'dealer_buy',
+    ]
+    selected_columns = [column for column in required_columns if column in available_columns]
+    selected_columns.extend(column for column in optional_columns if column in available_columns)
+    if 'trade_date' not in selected_columns or 'stock_id' not in selected_columns or 'close_price' not in selected_columns:
+        print(f"⚠️ daily_market_data 缺少必要欄位，無法查詢歷史股價: {sorted(available_columns)}")
+        return pd.DataFrame()
+
+    filters = ['stock_id = :sid']
+    params: dict[str, object] = {'sid': normalized_stock_id}
+
+    if end_date:
+        params['end_date'] = normalize_date_str(end_date)
+        filters.append('trade_date <= :end_date')
+
+    where_clause = ' AND '.join(filters)
+    query_limit = safe_limit * 3
+    sql = f"""
+        SELECT {', '.join(selected_columns)}
+        FROM daily_market_data
+        WHERE {where_clause}
+        ORDER BY trade_date DESC
+        LIMIT {query_limit}
+    """
+
+    try:
+        history_df = pd.read_sql(text(sql), engine, params=params)
+        if history_df.empty:
+            return history_df
+
+        for column in optional_columns:
+            if column not in history_df.columns:
+                history_df[column] = None
+        for column in required_columns:
+            if column not in history_df.columns:
+                history_df[column] = None
+
+        history_df['stock_id'] = history_df['stock_id'].map(normalize_stock_id_value)
+        history_df['trade_date'] = history_df['trade_date'].map(normalize_date_str)
+        history_df['volume'] = pd.to_numeric(history_df['volume'], errors='coerce').fillna(0)
+        history_df = (
+            history_df.sort_values(['trade_date', 'volume'], ascending=[False, False])
+            .drop_duplicates(subset=['trade_date', 'stock_id'], keep='first')
+            .sort_values('trade_date')
+            .tail(safe_limit)
+            .reset_index(drop=True)
+        )
+        return history_df
+    except Exception as e:
+        print(f"❌ 歷史股價查詢失敗 ({normalized_stock_id}): {e}")
+        return pd.DataFrame()
 
 
 def validate_setting(key, value):

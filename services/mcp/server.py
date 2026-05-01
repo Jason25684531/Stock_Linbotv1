@@ -18,7 +18,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from core.db_helper import get_stock_history, get_stock_sector, normalize_date_str  # noqa: E402
 from core.crawlers.quarterly_scraper import QuarterlyScraper  # noqa: E402
+from core.report_helper import get_stock_report  # noqa: E402
 
 MarketCode = Literal['TWSE', 'TPEx', 'ALL']
 ToolRouteHandler = Callable[[dict[str, Any]], tuple[Any, int]]
@@ -241,6 +243,405 @@ def _prepare_flow_frame(frame: pd.DataFrame, trade_date: str) -> pd.DataFrame:
     ]
 
 
+def _coerce_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+    try:
+        return float(str(value).replace(',', ''))
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_optional_int(value: Any) -> int | None:
+    parsed = _coerce_optional_float(value)
+    if parsed is None:
+        return None
+    return int(round(parsed))
+
+
+def _normalize_history_limit(payload: dict[str, Any]) -> int:
+    raw_value = payload.get('history_limit', 120)
+    try:
+        history_limit = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError('history_limit must be an integer') from exc
+    if history_limit < 20 or history_limit > 240:
+        raise ValidationError('history_limit must be between 20 and 240')
+    return history_limit
+
+
+def _parse_aggregation_request(payload: dict[str, Any]) -> tuple[str, MarketCode, str]:
+    correlation_id = _require_correlation_id(payload)
+    market = _normalize_market(payload.get('market') or 'ALL')
+    trade_date = _normalize_trade_date(payload.get('trade_date') or date.today().isoformat())
+    return correlation_id, market, trade_date
+
+
+def _parse_stock_aggregation_request(
+    payload: dict[str, Any],
+) -> tuple[str, MarketCode, str, str, int]:
+    correlation_id, market, trade_date = _parse_aggregation_request(payload)
+    stock_id = _require_stock_id(payload)
+    history_limit = _normalize_history_limit(payload)
+    return correlation_id, market, trade_date, stock_id, history_limit
+
+
+def _resolve_flow_record(
+    *,
+    market: MarketCode,
+    trade_date: str,
+    stock_id: str,
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    degraded_fields: list[str] = []
+    warnings: list[str] = []
+    try:
+        flow_frame = fetch_foreign_investor_flow(market, trade_date)
+        if flow_frame.empty:
+            degraded_fields.append('institutional')
+            warnings.append('institutional data unavailable for requested date')
+            return {}, degraded_fields, warnings
+        filtered = flow_frame[flow_frame['stock_id'].astype(str).str.strip() == stock_id].copy()
+        if filtered.empty:
+            degraded_fields.append('institutional')
+            warnings.append(f'no institutional flow found for stock_id={stock_id}')
+            return {}, degraded_fields, warnings
+        record = filtered.iloc[0].to_dict()
+        return {
+            'foreign_buy': _coerce_optional_int(record.get('foreign_buy')),
+            'trust_buy': _coerce_optional_int(record.get('trust_buy')),
+            'dealer_buy': _coerce_optional_int(record.get('dealer_buy')),
+        }, degraded_fields, warnings
+    except Exception as exc:
+        degraded_fields.append('institutional')
+        warnings.append(f'institutional flow degraded: {exc}')
+        return {}, degraded_fields, warnings
+
+
+def _build_trend_series(history_df: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    candles: list[dict[str, Any]] = []
+    volume_series: list[dict[str, Any]] = []
+    ma5_series: list[dict[str, Any]] = []
+    ma20_series: list[dict[str, Any]] = []
+    ma60_series: list[dict[str, Any]] = []
+
+    for _, row in history_df.iterrows():
+        trade_date = normalize_date_str(row.get('trade_date'))
+        open_price = _coerce_optional_float(row.get('open_price'))
+        high_price = _coerce_optional_float(row.get('high_price'))
+        low_price = _coerce_optional_float(row.get('low_price'))
+        close_price = _coerce_optional_float(row.get('close_price'))
+        volume = _coerce_optional_int(row.get('volume')) or 0
+        if trade_date and None not in (open_price, high_price, low_price, close_price):
+            candles.append(
+                {
+                    'time': trade_date,
+                    'open': open_price,
+                    'high': high_price,
+                    'low': low_price,
+                    'close': close_price,
+                }
+            )
+            volume_series.append(
+                {
+                    'time': trade_date,
+                    'value': volume,
+                    'color': '#f85149' if close_price >= open_price else '#2ea043',
+                }
+            )
+        for source_key, target_list in (
+            ('ma5', ma5_series),
+            ('ma20', ma20_series),
+            ('ma60', ma60_series),
+        ):
+            value = _coerce_optional_float(row.get(source_key))
+            if trade_date and value is not None:
+                target_list.append({'time': trade_date, 'value': value})
+
+    return {
+        'candles': candles,
+        'volume': volume_series,
+        'ma5': ma5_series,
+        'ma20': ma20_series,
+        'ma60': ma60_series,
+    }
+
+
+def _build_twse_stock_trend_payload(
+    *,
+    stock_id: str,
+    requested_date: str,
+    market: MarketCode,
+    history_limit: int,
+) -> dict[str, Any]:
+    history_df = get_stock_history(stock_id, limit=history_limit, end_date=requested_date)
+    if history_df.empty:
+        raise NotFoundError(f'No history found for stock_id={stock_id}')
+
+    latest_row = history_df.iloc[-1]
+    as_of_date = normalize_date_str(latest_row.get('trade_date')) or requested_date
+    fallback_used = as_of_date != requested_date
+    report = get_stock_report(stock_id, as_of_date=as_of_date) or {
+        'stock_id': stock_id,
+        'trade_date': as_of_date,
+    }
+    sector = get_stock_sector(stock_id)
+    institutional, degraded_fields, warnings = _resolve_flow_record(
+        market=market,
+        trade_date=as_of_date,
+        stock_id=stock_id,
+    )
+
+    record = {
+        'stock_id': stock_id,
+        'trade_date': as_of_date,
+        'stock_name': report.get('stock_name'),
+        'sector': sector,
+        'close_price': _coerce_optional_float(report.get('close_price')),
+        'open_price': _coerce_optional_float(report.get('open_price')),
+        'high_price': _coerce_optional_float(report.get('high_price')),
+        'low_price': _coerce_optional_float(report.get('low_price')),
+        'volume': _coerce_optional_int(latest_row.get('volume')),
+        'ma5': _coerce_optional_float(report.get('ma5')),
+        'ma20': _coerce_optional_float(report.get('ma20')),
+        'ma60': _coerce_optional_float(report.get('ma60')),
+        'rsi': _coerce_optional_float(report.get('rsi')),
+        'bias': _coerce_optional_float(report.get('bias')),
+        'chip_score': _coerce_optional_float(report.get('chip_score')),
+        'ai_score': _coerce_optional_float(report.get('ai_score')),
+        'strategy_name': report.get('strategy_name'),
+        'foreign_buy': institutional.get('foreign_buy', _coerce_optional_int(report.get('foreign_buy'))),
+        'trust_buy': institutional.get('trust_buy', _coerce_optional_int(report.get('trust_buy'))),
+        'dealer_buy': institutional.get('dealer_buy', _coerce_optional_int(report.get('dealer_buy'))),
+    }
+
+    return {
+        'dataset': 'twse_stock_trend',
+        'requested_date': requested_date,
+        'as_of_date': as_of_date,
+        'market': market,
+        'stock_id': stock_id,
+        'status': 'partial' if degraded_fields else 'ok',
+        'fallback_used': fallback_used,
+        'source': [
+            'daily_market_data',
+            'daily_recommendations',
+            'financial_statements',
+            'monthly_revenue',
+            'foreign_investor_flow',
+        ],
+        'degraded_fields': degraded_fields,
+        'warnings': warnings,
+        'quote': {
+            'open_price': record['open_price'],
+            'high_price': record['high_price'],
+            'low_price': record['low_price'],
+            'close_price': record['close_price'],
+            'volume': record['volume'],
+        },
+        'indicators': {
+            'ma5': record['ma5'],
+            'ma20': record['ma20'],
+            'ma60': record['ma60'],
+            'rsi': record['rsi'],
+            'bias': record['bias'],
+            'chip_score': record['chip_score'],
+            'ai_score': record['ai_score'],
+        },
+        'institutional': {
+            'foreign_buy': record['foreign_buy'],
+            'trust_buy': record['trust_buy'],
+            'dealer_buy': record['dealer_buy'],
+        },
+        'series': _build_trend_series(history_df),
+        'record': record,
+        'records': [record],
+        'meta': {
+            'record_count': 1,
+            'history_points': len(history_df),
+            'history_limit': history_limit,
+        },
+    }
+
+
+def _build_investment_screening_payload(
+    *,
+    stock_id: str,
+    requested_date: str,
+    market: MarketCode,
+) -> dict[str, Any]:
+    report = get_stock_report(stock_id, as_of_date=requested_date)
+    if not report:
+        raise NotFoundError(f'No screening data found for stock_id={stock_id}')
+
+    as_of_date = normalize_date_str(report.get('trade_date')) or requested_date
+    institutional, degraded_fields, warnings = _resolve_flow_record(
+        market=market,
+        trade_date=as_of_date,
+        stock_id=stock_id,
+    )
+    sector = get_stock_sector(stock_id)
+    ai_score = _coerce_optional_float(report.get('ai_score'))
+    rsi = _coerce_optional_float(report.get('rsi'))
+    revenue_yoy = _coerce_optional_float(report.get('revenue_yoy'))
+    op_margin = _coerce_optional_float(report.get('op_margin'))
+    chip_score = _coerce_optional_float(report.get('chip_score'))
+    technical_pass = bool(report.get('close_price')) and bool(report.get('ma20'))
+    momentum_pass = ai_score is not None and ai_score >= 0.5
+    chip_pass = chip_score is not None and chip_score >= 0
+    fundamental_pass = (revenue_yoy is not None and revenue_yoy >= 0) or (op_margin is not None and op_margin >= 0)
+    screening_score = sum(int(flag) for flag in (technical_pass, momentum_pass, chip_pass, fundamental_pass))
+
+    record = {
+        'stock_id': stock_id,
+        'trade_date': as_of_date,
+        'sector': sector,
+        'close_price': _coerce_optional_float(report.get('close_price')),
+        'rsi': rsi,
+        'ai_score': ai_score,
+        'chip_score': chip_score,
+        'revenue_yoy': revenue_yoy,
+        'op_margin': op_margin,
+        'foreign_buy': institutional.get('foreign_buy', _coerce_optional_int(report.get('foreign_buy'))),
+        'trust_buy': institutional.get('trust_buy', _coerce_optional_int(report.get('trust_buy'))),
+        'dealer_buy': institutional.get('dealer_buy', _coerce_optional_int(report.get('dealer_buy'))),
+        'strategy_name': report.get('strategy_name'),
+        'screening_score': screening_score,
+    }
+
+    return {
+        'dataset': 'investment_screening',
+        'requested_date': requested_date,
+        'as_of_date': as_of_date,
+        'market': market,
+        'stock_id': stock_id,
+        'status': 'partial' if degraded_fields else 'ok',
+        'fallback_used': as_of_date != requested_date,
+        'source': [
+            'daily_market_data',
+            'daily_recommendations',
+            'financial_statements',
+            'monthly_revenue',
+            'foreign_investor_flow',
+        ],
+        'degraded_fields': degraded_fields,
+        'warnings': warnings,
+        'screening': {
+            'technical_pass': technical_pass,
+            'momentum_pass': momentum_pass,
+            'chip_pass': chip_pass,
+            'fundamental_pass': fundamental_pass,
+            'score': screening_score,
+        },
+        'report_sections': {
+            'technical': [
+                f"RSI {rsi:.1f}" if rsi is not None else 'RSI unavailable',
+                f"AI score {ai_score:.2f}" if ai_score is not None else 'AI score unavailable',
+            ],
+            'fundamental': [
+                f"Revenue YoY {revenue_yoy:.1f}%" if revenue_yoy is not None else 'Revenue YoY unavailable',
+                f"Op margin {op_margin:.2f}" if op_margin is not None else 'Op margin unavailable',
+            ],
+            'institutional': [
+                f"Foreign {record['foreign_buy']}" if record['foreign_buy'] is not None else 'Foreign flow unavailable',
+                f"Trust {record['trust_buy']}" if record['trust_buy'] is not None else 'Trust flow unavailable',
+                f"Dealer {record['dealer_buy']}" if record['dealer_buy'] is not None else 'Dealer flow unavailable',
+            ],
+        },
+        'record': record,
+        'records': [record],
+        'meta': {'record_count': 1},
+    }
+
+
+def _build_market_hotspot_payload(
+    *,
+    requested_date: str,
+    market: MarketCode,
+) -> dict[str, Any]:
+    snapshot_frame = fetch_stock_basic_snapshot(market, requested_date, include_etfs=False)
+    if snapshot_frame.empty:
+        raise NotFoundError(f'No market hotspot snapshot found for trade_date={requested_date}')
+
+    flow_frame = fetch_foreign_investor_flow(market, requested_date)
+    prepared_snapshot = _prepare_snapshot_frame(snapshot_frame, requested_date, include_etfs=False)
+    prepared_snapshot['pct_change'] = prepared_snapshot.apply(
+        lambda row: ((row['close_price'] - row['open_price']) / row['open_price'] * 100)
+        if row['open_price'] not in (0, None)
+        else 0,
+        axis=1,
+    )
+
+    advancing = int((prepared_snapshot['close_price'] > prepared_snapshot['open_price']).sum())
+    declining = int((prepared_snapshot['close_price'] < prepared_snapshot['open_price']).sum())
+    unchanged = int((prepared_snapshot['close_price'] == prepared_snapshot['open_price']).sum())
+
+    top_gainers = prepared_snapshot.sort_values('pct_change', ascending=False).head(5).copy()
+    gainers_records = [
+        {
+            'stock_id': str(row['stock_id']).strip(),
+            'trade_date': requested_date,
+            'stock_name': row.get('stock_name'),
+            'close_price': _coerce_optional_float(row.get('close_price')),
+            'pct_change': _coerce_optional_float(row.get('pct_change')),
+            'volume': _coerce_optional_int(row.get('volume')),
+        }
+        for _, row in top_gainers.iterrows()
+    ]
+
+    flow_records: list[dict[str, Any]] = []
+    if not flow_frame.empty:
+        prepared_flow = _prepare_flow_frame(flow_frame, requested_date)
+        merged = prepared_flow.merge(
+            prepared_snapshot[['stock_id', 'stock_name']],
+            on='stock_id',
+            how='left',
+        )
+        top_inflows = merged.sort_values('foreign_buy', ascending=False).head(5)
+        flow_records = [
+            {
+                'stock_id': str(row['stock_id']).strip(),
+                'trade_date': requested_date,
+                'stock_name': row.get('stock_name'),
+                'foreign_buy': _coerce_optional_int(row.get('foreign_buy')),
+                'trust_buy': _coerce_optional_int(row.get('trust_buy')),
+                'dealer_buy': _coerce_optional_int(row.get('dealer_buy')),
+            }
+            for _, row in top_inflows.iterrows()
+        ]
+
+    return {
+        'dataset': 'market_hotspot',
+        'requested_date': requested_date,
+        'as_of_date': requested_date,
+        'market': market,
+        'status': 'ok',
+        'fallback_used': False,
+        'source': ['stock_basic_snapshot', 'foreign_investor_flow'],
+        'degraded_fields': [] if flow_records else ['institutional'],
+        'warnings': [] if flow_records else ['institutional flow unavailable for hotspot ranking'],
+        'breadth': {
+            'advancing': advancing,
+            'declining': declining,
+            'unchanged': unchanged,
+            'universe_count': len(prepared_snapshot),
+        },
+        'hotspots': {
+            'top_gainers': gainers_records,
+            'top_foreign_inflows': flow_records,
+        },
+        'records': gainers_records,
+        'meta': {
+            'record_count': len(gainers_records),
+            'universe_count': len(prepared_snapshot),
+        },
+    }
+
+
 def _build_snapshot_success_payload(
     *,
     frame: pd.DataFrame,
@@ -375,10 +776,73 @@ def _handle_foreign_investment_payload(payload: dict[str, Any]) -> tuple[Any, in
     )
 
 
+def _handle_twse_stock_trend_payload(payload: dict[str, Any]) -> tuple[Any, int]:
+    correlation_id, market, trade_date, stock_id, history_limit = _parse_stock_aggregation_request(payload)
+    response_payload = _build_twse_stock_trend_payload(
+        stock_id=stock_id,
+        requested_date=trade_date,
+        market=market,
+        history_limit=history_limit,
+    )
+    _log_tool_dispatch(
+        tool_name='twse_stock_trend',
+        correlation_id=correlation_id,
+        event='success',
+        extra={
+            'dataset': 'twse_stock_trend',
+            'stock_id': stock_id,
+            'record_count': len(response_payload['records']),
+        },
+    )
+    return _success_response(response_payload)
+
+
+def _handle_investment_screening_payload(payload: dict[str, Any]) -> tuple[Any, int]:
+    correlation_id, market, trade_date, stock_id, _ = _parse_stock_aggregation_request(payload)
+    response_payload = _build_investment_screening_payload(
+        stock_id=stock_id,
+        requested_date=trade_date,
+        market=market,
+    )
+    _log_tool_dispatch(
+        tool_name='investment_screening',
+        correlation_id=correlation_id,
+        event='success',
+        extra={
+            'dataset': 'investment_screening',
+            'stock_id': stock_id,
+            'record_count': len(response_payload['records']),
+        },
+    )
+    return _success_response(response_payload)
+
+
+def _handle_market_hotspot_payload(payload: dict[str, Any]) -> tuple[Any, int]:
+    correlation_id, market, trade_date = _parse_aggregation_request(payload)
+    response_payload = _build_market_hotspot_payload(
+        requested_date=trade_date,
+        market=market,
+    )
+    _log_tool_dispatch(
+        tool_name='market_hotspot',
+        correlation_id=correlation_id,
+        event='success',
+        extra={
+            'dataset': 'market_hotspot',
+            'record_count': len(response_payload['records']),
+            'market': market,
+        },
+    )
+    return _success_response(response_payload)
+
+
 TOOL_ROUTE_HANDLERS: dict[str, ToolRouteHandler] = {
     'get_company_basic_info': _handle_company_basic_info_payload,
     'get_market_statistics': _handle_market_statistics_payload,
     'get_foreign_investment': _handle_foreign_investment_payload,
+    'twse_stock_trend': _handle_twse_stock_trend_payload,
+    'investment_screening': _handle_investment_screening_payload,
+    'market_hotspot': _handle_market_hotspot_payload,
 }
 
 

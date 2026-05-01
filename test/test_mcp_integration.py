@@ -137,6 +137,99 @@ def test_company_basic_info_http_500_returns_none() -> None:
     assert result is None
 
 
+def test_twse_stock_trend_hits_canonical_tool_route() -> None:
+    client = TWSEMCPClient(base_url='http://localhost:8000')
+    raw_payload = {
+        'dataset': 'twse_stock_trend',
+        'requested_date': '2026-04-08',
+        'as_of_date': '2026-04-08',
+        'market': 'ALL',
+        'stock_id': '2330',
+        'status': 'ok',
+        'fallback_used': False,
+        'series': {'candles': [{'time': '2026-04-08', 'open': 100.0, 'high': 105.0, 'low': 99.0, 'close': 104.0}]},
+        'record': {
+            'stock_id': '2330',
+            'trade_date': '2026-04-08',
+            'close_price': 104.0,
+        },
+        'records': [
+            {
+                'stock_id': '2330',
+                'trade_date': '2026-04-08',
+                'close_price': 104.0,
+            }
+        ],
+    }
+
+    with patch.object(
+        TWSEMCPClient,
+        '_post_json',
+        new=AsyncMock(return_value=raw_payload),
+    ) as mock_post_json:
+        result = client.get_twse_stock_trend_sync(
+            stock_id='2330',
+            trade_date='2026-04-08',
+        )
+
+    assert result is not None
+    assert result['dataset'] == 'twse_stock_trend'
+    assert result['records'][0]['stock_id'] == '2330'
+    mock_post_json.assert_awaited_once()
+    assert mock_post_json.await_args.kwargs['endpoint'] == '/v1/tools/twse_stock_trend'
+
+
+def test_market_hotspot_hits_canonical_tool_route() -> None:
+    client = TWSEMCPClient(base_url='http://localhost:8000')
+    raw_payload = {
+        'dataset': 'market_hotspot',
+        'requested_date': '2026-04-08',
+        'as_of_date': '2026-04-08',
+        'market': 'ALL',
+        'status': 'ok',
+        'breadth': {'advancing': 1, 'declining': 1, 'unchanged': 0},
+        'records': [
+            {
+                'stock_id': '2330',
+                'trade_date': '2026-04-08',
+                'close_price': 104.0,
+            }
+        ],
+    }
+
+    with patch.object(
+        TWSEMCPClient,
+        '_post_json',
+        new=AsyncMock(return_value=raw_payload),
+    ) as mock_post_json:
+        result = client.get_market_hotspot_sync('2026-04-08')
+
+    assert result is not None
+    assert result['dataset'] == 'market_hotspot'
+    assert result['records'][0]['stock_id'] == '2330'
+    mock_post_json.assert_awaited_once()
+    assert mock_post_json.await_args.kwargs['endpoint'] == '/v1/tools/market_hotspot'
+
+
+def test_investment_screening_http_500_returns_none() -> None:
+    client = TWSEMCPClient(base_url='http://localhost:8000')
+    with patch.object(
+        TWSEMCPClient,
+        '_post_json',
+        new=AsyncMock(
+            side_effect=_http_500_error(
+                'http://localhost:8000/v1/tools/investment_screening'
+            )
+        ),
+    ):
+        result = client.get_investment_screening_sync(
+            stock_id='2330',
+            trade_date='2026-04-08',
+        )
+
+    assert result is None
+
+
 def test_market_statistics_http_504_uses_longer_backoff_and_returns_none() -> None:
     client = TWSEMCPClient(
         base_url='http://localhost:8000',

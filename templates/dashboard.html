@@ -15,6 +15,61 @@
     
     <!-- Dashboard Content -->
     <div x-show="!loading" style="display: none;">
+        <div class="chart-container mb-8">
+            <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold flex items-center">
+                        <span class="text-2xl mr-2">🧭</span>
+                        Beta 分析工作區
+                    </h2>
+                    <p class="text-sm text-gray-400 mt-1">切換回測、個股健檢與大盤總經視圖，驗證資料與版面是否符合預期。</p>
+                </div>
+                <div class="flex flex-col lg:flex-row gap-3 lg:items-center w-full xl:w-auto">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" @click="switchViewMode('backtest')"
+                                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+                                :class="viewMode === 'backtest' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400'">
+                            策略回測
+                        </button>
+                        <button type="button" @click="switchViewMode('health_check')"
+                                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+                                :class="viewMode === 'health_check' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400'">
+                            個股戰情室 Beta
+                        </button>
+                        <button type="button" @click="switchViewMode('macro')"
+                                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+                                :class="viewMode === 'macro' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400'">
+                            大盤總經 Beta
+                        </button>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                        <input type="text"
+                               x-model.trim="healthCheckQuery"
+                               @keyup.enter="executeWorkspaceAction()"
+                               :disabled="viewMode !== 'health_check' || workspaceLoading"
+                               placeholder="輸入股號或名稱 (ex: 2330)"
+                               class="min-w-[240px] bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-200 placeholder:text-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="button" @click="executeWorkspaceAction()"
+                                :disabled="(viewMode !== 'health_check' && viewMode !== 'macro') || workspaceLoading"
+                                class="px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                :class="workspaceLoading ? 'bg-gray-700 text-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'">
+                            <span x-text="workspaceLoading ? '分析中...' : '執行分析'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                <span class="px-3 py-1 rounded-full border"
+                      :class="viewMode === 'backtest' ? 'border-blue-500 text-blue-300' : 'border-gray-700 text-gray-400'">回測</span>
+                <span class="px-3 py-1 rounded-full border"
+                      :class="viewMode === 'health_check' ? 'border-red-500 text-red-300' : 'border-gray-700 text-gray-400'">個股健檢</span>
+                <span class="px-3 py-1 rounded-full border"
+                      :class="viewMode === 'macro' ? 'border-emerald-500 text-emerald-300' : 'border-gray-700 text-gray-400'">大盤總經</span>
+                <span x-show="viewMode === 'health_check'">輸入股票代號後，可切換時框、觀察結構價位與副圖，並驗證 provenance / proxy 標示。</span>
+                <span x-show="viewMode === 'macro'">大盤總經模式不需要股票搜尋，會直接顯示市場與法人概況。</span>
+            </div>
+        </div>
+
         <!-- Strategy Control Center -->
         <div class="chart-container mb-8">
             <div class="flex items-center justify-between mb-4">
@@ -157,18 +212,435 @@
             </div>
         </div>
         
-        <!-- Equity Curve Chart -->
+        <!-- Dynamic Workspace -->
         <div class="chart-container">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-bold">資產曲線 Equity Curve</h2>
-                <div class="flex items-center space-x-2 text-sm text-gray-400">
-                    <span class="w-3 h-3 bg-green-500 rounded-full"></span>
-                    <span>資產價值</span>
+            <template x-if="viewMode === 'backtest'">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold">資產曲線 Equity Curve</h2>
+                        <div class="flex items-center space-x-2 text-sm text-gray-400">
+                            <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                            <span>資產價值</span>
+                        </div>
+                    </div>
+                    <div class="relative" style="height: 400px;">
+                        <canvas id="equityChart"></canvas>
+                    </div>
                 </div>
-            </div>
-            <div class="relative" style="height: 400px;">
-                <canvas id="equityChart"></canvas>
-            </div>
+            </template>
+
+            <template x-if="viewMode === 'health_check'">
+                <div>
+                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-5">
+                        <div>
+                            <h2 class="text-xl font-bold flex items-center">
+                                <span class="text-2xl mr-2">🧪</span>
+                                個股戰情室 Beta
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1" x-text="['ok', 'partial', 'degraded'].includes(healthCheck.status) ? `${healthCheck.symbol}｜${healthCheck.view_state?.period_label || '日線'}｜分析日 ${healthCheck.as_of_date}${healthCheck.fallback_used ? '（已回退）' : ''}` : '請輸入股票代號後啟動戰情室分析。'"></p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            <span class="px-3 py-1 rounded-full border" :class="healthCheck.fallback_used ? 'border-amber-500 text-amber-300' : 'border-green-500 text-green-300'" x-text="healthCheck.fallback_used ? '資料回退中' : '資料為最新基準'"></span>
+                            <span class="px-3 py-1 rounded-full border" :class="llmStatusClass(healthCheck.llm_report?.status)" x-text="llmStatusLabel(healthCheck.llm_report?.status)"></span>
+                            <span class="px-3 py-1 rounded-full border" :class="sourceModeClass(healthCheck.war_room?.chip_flow?.source_mode)" x-text="`Flow ${sourceModeLabel(healthCheck.war_room?.chip_flow?.source_mode)}`"></span>
+                        </div>
+                    </div>
+
+                    <div x-show="workspaceLoading" class="flex items-center justify-center py-16 text-gray-400">
+                        <div class="text-center">
+                            <div class="spinner mx-auto mb-4"></div>
+                            <p>正在分析個股資料...</p>
+                        </div>
+                    </div>
+
+                    <div x-show="!workspaceLoading && workspaceError" class="mb-4 rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm text-red-200" x-text="workspaceError"></div>
+
+                    <template x-if="!workspaceLoading && healthCheck.status === 'empty'">
+                        <div class="rounded-2xl border border-gray-700 bg-gray-900/40 p-6 text-gray-300">
+                            <div class="text-lg font-bold text-white">查無可用個股資料</div>
+                            <div class="mt-2 text-sm text-gray-400" x-text="healthCheck.message || '請確認股號是否正確，或等待下一個交易日資料更新。'"></div>
+                        </div>
+                    </template>
+
+                    <template x-if="!workspaceLoading && ['ok', 'partial', 'degraded'].includes(healthCheck.status)">
+                        <div class="space-y-6">
+                            <div class="rounded-3xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_rgba(7,12,24,0.96)_48%,_rgba(2,6,23,1)_100%)] p-4 sm:p-5 shadow-[0_0_40px_rgba(16,185,129,0.08)]">
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                                    <div class="space-y-3">
+                                        <div>
+                                            <div class="text-[11px] uppercase tracking-[0.32em] text-emerald-300">War Room Provenance</div>
+                                            <div class="mt-2 text-2xl font-bold text-white" x-text="`${healthCheck.symbol}${healthCheck.sector ? ' · ' + healthCheck.sector : ''}`"></div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2 text-xs text-gray-300">
+                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`來源 ${formatSourceList(healthCheck.source)}`"></span>
+                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`請求日 ${healthCheck.requested_date || '-'}`"></span>
+                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`分析日 ${healthCheck.as_of_date || '-'}`"></span>
+                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`${healthCheck.view_state?.period_label || '日線'} / ${healthCheck.war_room?.timeframe?.resolved_bars || 0} bars`"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-3">
+                                        <div class="flex flex-wrap gap-2 justify-start xl:justify-end">
+                                            <template x-for="periodOption in (healthCheck.view_state?.available_periods || [])" :key="periodOption.key">
+                                                <button type="button"
+                                                        @click="setHealthCheckPeriod(periodOption.key)"
+                                                        class="px-3 py-2 rounded-full border text-xs font-semibold transition-colors"
+                                                        :class="periodOption.selected ? 'border-emerald-400 bg-emerald-400/15 text-emerald-200' : 'border-gray-700 bg-black/20 text-gray-300 hover:border-emerald-500/60'"
+                                                        x-text="periodOption.label"></button>
+                                            </template>
+                                        </div>
+                                        <div class="text-xs text-gray-400 xl:text-right">切換時間框架會重新請求同一股票的戰情室 payload。</div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500 mb-2">Main Overlays</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <template x-for="overlay in (healthCheck.view_state?.overlays?.available || [])" :key="overlay.key">
+                                                <button type="button"
+                                                        @click="toggleHealthCheckOverlay(overlay.key)"
+                                                        class="px-3 py-2 rounded-full border text-xs font-medium transition-colors"
+                                                        :class="overlay.selected ? 'border-blue-400 bg-blue-400/15 text-blue-200' : 'border-gray-700 bg-black/20 text-gray-300 hover:border-blue-500/60'"
+                                                        x-text="overlay.label"></button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500 mb-2">Indicator Panes</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <template x-for="pane in (healthCheck.view_state?.panes?.available || [])" :key="pane.key">
+                                                <button type="button"
+                                                        @click="toggleHealthCheckPane(pane.key)"
+                                                        class="px-3 py-2 rounded-full border text-xs font-medium transition-colors"
+                                                        :class="pane.selected ? 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-200' : 'border-gray-700 bg-black/20 text-gray-300 hover:border-fuchsia-500/60'"
+                                                        x-text="pane.label"></button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="button"
+                                        @click="toggleMobileWarRoomDetails()"
+                                        class="mt-4 w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-sm font-semibold text-gray-200 transition-colors hover:border-emerald-500/40 hover:text-emerald-200 lg:hidden">
+                                    <span x-text="showMobileWarRoomDetails ? '收合副圖與情報區' : '展開副圖與情報區'"></span>
+                                </button>
+
+                                <div x-show="healthCheck.warnings?.length" class="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" style="display: none;">
+                                    <div class="font-semibold text-amber-200 mb-2">Warnings</div>
+                                    <div class="space-y-1 text-xs">
+                                        <template x-for="warning in (healthCheck.warnings || [])" :key="warning">
+                                            <div x-text="warning"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                                <div class="xl:col-span-8 space-y-4">
+                                    <div class="grid grid-cols-2 2xl:grid-cols-4 gap-3">
+                                        <template x-if="!(healthCheck.war_room?.quant_status || []).length">
+                                            <div class="col-span-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-4 text-sm text-gray-400">尚未取得量化狀態卡片。</div>
+                                        </template>
+                                        <template x-for="card in (healthCheck.war_room?.quant_status || [])" :key="card.key">
+                                            <div class="rounded-2xl border px-4 py-4" :class="toneSurfaceClass(card.tone)">
+                                                <div class="text-[11px] uppercase tracking-[0.24em] text-gray-400" x-text="card.label"></div>
+                                                <div class="mt-3 text-xl font-bold" :class="toneTextClass(card.tone)" x-text="card.value"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-4 sm:p-5">
+                                        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+                                            <div>
+                                                <div class="text-[11px] uppercase tracking-[0.32em] text-cyan-300">Price Structure</div>
+                                                <div class="mt-2 text-3xl font-bold text-white" x-text="formatCurrency(healthCheck.quote?.close_price)"></div>
+                                                <div class="mt-2 text-sm text-gray-400" x-text="`量能 ${formatCompactNumber(healthCheck.quote?.volume)} · ${healthCheck.view_state?.period_label || '日線'}`"></div>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-3 text-sm lg:min-w-[280px]">
+                                                <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                    <div class="text-gray-400 text-xs">距離支撐</div>
+                                                    <div class="mt-2 text-lg font-bold text-emerald-300" x-text="healthCheck.war_room?.price_map?.distance_to_support_pct != null ? healthCheck.war_room.price_map.distance_to_support_pct.toFixed(2) + '%' : 'N/A'"></div>
+                                                </div>
+                                                <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                    <div class="text-gray-400 text-xs">距離壓力</div>
+                                                    <div class="mt-2 text-lg font-bold text-rose-300" x-text="healthCheck.war_room?.price_map?.distance_to_resistance_pct != null ? healthCheck.war_room.price_map.distance_to_resistance_pct.toFixed(2) + '%' : 'N/A'"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-4 flex flex-wrap gap-2">
+                                            <template x-for="overlay in (healthCheck.view_state?.overlays?.available || [])" :key="overlay.key">
+                                                <button type="button"
+                                                        @click="toggleHealthCheckOverlay(overlay.key)"
+                                                        class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors"
+                                                        :class="overlay.selected ? 'border-gray-600 bg-black/20 text-gray-200' : 'border-gray-800 bg-black/10 text-gray-500 opacity-60 hover:border-gray-600 hover:text-gray-300'">
+                                                    <span class="h-2.5 w-2.5 rounded-full" :style="`background:${overlayColor(overlay.key)}`"></span>
+                                                    <span x-text="overlay.label"></span>
+                                                </button>
+                                            </template>
+                                            <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs" :class="sourceModeClass(healthCheck.war_room?.structure?.source_mode)">
+                                                <span x-text="`Structure ${sourceModeLabel(healthCheck.war_room?.structure?.source_mode)}`"></span>
+                                            </span>
+                                        </div>
+
+                                        <div id="healthCheckChart" class="rounded-2xl border border-gray-800 bg-[#070c18] p-3 min-h-[360px]"></div>
+                                    </div>
+                                </div>
+
+                                <div class="xl:col-span-4 space-y-4" x-show="showMobileWarRoomDetails || !isWarRoomCompact()" style="display: none;">
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
+                                        <div class="flex items-center justify-between gap-3 mb-3">
+                                            <div>
+                                                <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500">Tactical Summary</div>
+                                                <div class="mt-1 text-lg font-bold text-white" x-text="healthCheck.war_room?.tactical_summary?.headline || '暫無摘要'"></div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-xs text-gray-400">Confidence</div>
+                                                <div class="text-2xl font-bold text-emerald-300" x-text="healthCheck.war_room?.tactical_summary?.confidence != null ? formatPercentFrom100(healthCheck.war_room.tactical_summary.confidence) : 'N/A'"></div>
+                                            </div>
+                                        </div>
+                                        <div class="rounded-2xl border px-3 py-3 text-sm leading-6" :class="toneSurfaceClass(healthCheck.war_room?.tactical_summary?.tone)">
+                                            <div class="text-gray-200" x-text="healthCheck.war_room?.tactical_summary?.message || '尚未取得戰術摘要。'"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
+                                        <div class="flex items-center justify-between gap-3 mb-3">
+                                            <div class="text-lg font-bold text-gray-100">Chip / Flow</div>
+                                            <span class="px-2 py-1 rounded-full border text-[11px]" :class="sourceModeClass(healthCheck.war_room?.chip_flow?.source_mode)" x-text="sourceModeLabel(healthCheck.war_room?.chip_flow?.source_mode)"></span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-3 text-sm">
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs">Chip Score</div>
+                                                <div class="mt-2 text-lg font-bold text-white" x-text="healthCheck.war_room?.chip_flow?.chip_score != null ? healthCheck.war_room.chip_flow.chip_score.toFixed(3) : 'N/A'"></div>
+                                            </div>
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs">Net Flow</div>
+                                                <div class="mt-2 text-lg font-bold text-white" x-text="healthCheck.war_room?.chip_flow?.net_flow != null ? formatSignedNumber(healthCheck.war_room.chip_flow.net_flow) : 'N/A'"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs">外資</div>
+                                                <div class="mt-2 text-sm font-bold" :class="signedToneClass(healthCheck.war_room?.chip_flow?.foreign_buy)" x-text="formatSignedNumber(healthCheck.war_room?.chip_flow?.foreign_buy)"></div>
+                                            </div>
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs">投信</div>
+                                                <div class="mt-2 text-sm font-bold" :class="signedToneClass(healthCheck.war_room?.chip_flow?.trust_buy)" x-text="formatSignedNumber(healthCheck.war_room?.chip_flow?.trust_buy)"></div>
+                                            </div>
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs">自營商</div>
+                                                <div class="mt-2 text-sm font-bold" :class="signedToneClass(healthCheck.war_room?.chip_flow?.dealer_buy)" x-text="formatSignedNumber(healthCheck.war_room?.chip_flow?.dealer_buy)"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 rounded-2xl border border-gray-800 bg-black/20 px-3 py-3 text-sm leading-6 text-gray-300" x-text="healthCheck.war_room?.chip_flow?.message || '尚未取得籌碼摘要。'"></div>
+                                    </div>
+
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
+                                        <div class="text-lg font-bold text-gray-100 mb-3">Price Map</div>
+                                        <div class="space-y-3 text-sm">
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs mb-2">支撐 / 壓力</div>
+                                                <div class="flex flex-wrap gap-2">
+                                                    <template x-for="level in (healthCheck.war_room?.price_map?.supports || [])" :key="level.label + level.value">
+                                                        <span class="rounded-full border px-3 py-1 text-xs" :class="structureLevelClass(level.kind)" x-text="`${level.label} ${formatCurrency(level.value)}`"></span>
+                                                    </template>
+                                                    <template x-for="level in (healthCheck.war_room?.price_map?.resistances || [])" :key="level.label + level.value">
+                                                        <span class="rounded-full border px-3 py-1 text-xs" :class="structureLevelClass(level.kind)" x-text="`${level.label} ${formatCurrency(level.value)}`"></span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
+                                                <div class="text-gray-400 text-xs mb-2">均線定位</div>
+                                                <div class="space-y-2">
+                                                    <template x-for="ma in (healthCheck.war_room?.price_map?.ma_levels || [])" :key="ma.key">
+                                                        <div class="flex items-center justify-between gap-3">
+                                                            <span class="text-gray-300" x-text="ma.label"></span>
+                                                            <span class="font-semibold text-white" x-text="formatCurrency(ma.value)"></span>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
+                                        <div class="text-lg font-bold text-gray-100 mb-3">Fundamentals</div>
+                                        <div class="space-y-3 text-sm">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <span class="text-gray-400">Strategy</span>
+                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.strategy_name || 'N/A'"></span>
+                                            </div>
+                                            <div class="flex items-center justify-between gap-3">
+                                                <span class="text-gray-400">Revenue YoY</span>
+                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.revenue_yoy != null ? formatPercent(healthCheck.war_room.fundamentals.revenue_yoy) : 'N/A'"></span>
+                                            </div>
+                                            <div class="flex items-center justify-between gap-3">
+                                                <span class="text-gray-400">Op Margin</span>
+                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.op_margin != null ? formatFixed(healthCheck.war_room.fundamentals.op_margin, 2) : 'N/A'"></span>
+                                            </div>
+                                            <div class="flex items-center justify-between gap-3">
+                                                <span class="text-gray-400">EPS</span>
+                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.eps != null ? formatFixed(healthCheck.war_room.fundamentals.eps, 2) : 'N/A'"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
+                                        <div class="text-lg font-bold text-gray-100 mb-3">News + Diagnosis</div>
+                                        <div class="rounded-2xl border border-gray-800 bg-black/20 px-3 py-3 text-sm text-gray-200 leading-6">
+                                            <div class="font-semibold text-cyan-300 mb-2" x-text="healthCheck.war_room?.news?.title || healthCheck.news?.title || '消息面' "></div>
+                                            <div class="space-y-1" x-show="(healthCheck.war_room?.news?.items || healthCheck.news?.items || []).length" style="display: none;">
+                                                <template x-for="item in (healthCheck.war_room?.news?.items || healthCheck.news?.items || [])" :key="item">
+                                                    <div x-text="item"></div>
+                                                </template>
+                                            </div>
+                                            <div x-show="!(healthCheck.war_room?.news?.items || healthCheck.news?.items || []).length" class="text-gray-400">暫無最新消息摘要。</div>
+                                        </div>
+                                        <div class="mt-3 rounded-2xl border border-gray-800 bg-black/20 p-4">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <h3 class="text-base font-bold text-blue-300">🤖 健檢結論</h3>
+                                                <span class="px-2 py-1 rounded-full border text-xs" :class="llmStatusClass(healthCheck.llm_report?.status)" x-text="llmStatusLabel(healthCheck.llm_report?.status)"></span>
+                                            </div>
+                                            <div class="space-y-4 text-sm leading-6 text-gray-200">
+                                                <div>
+                                                    <div class="font-bold text-red-300">【趨勢分析】</div>
+                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.trend || healthCheck.rule_report?.trend || '暫無分析。'"></div>
+                                                </div>
+                                                <div>
+                                                    <div class="font-bold text-cyan-300">【籌碼追蹤】</div>
+                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.chips || healthCheck.rule_report?.chips || '暫無分析。'"></div>
+                                                </div>
+                                                <div>
+                                                    <div class="font-bold text-amber-300">【總經與產業連動】</div>
+                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.macro || healthCheck.rule_report?.macro || '暫無分析。'"></div>
+                                                </div>
+                                                <div x-show="healthCheck.llm_report?.risk" style="display: none;">
+                                                    <div class="font-bold text-yellow-300">【風險提醒】</div>
+                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.risk"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div x-show="showMobileWarRoomDetails || !isWarRoomCompact()" class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: none;">
+                                <template x-for="script in (healthCheck.rule_report?.action_scripts || [])" :key="script.key">
+                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 overflow-hidden">
+                                        <div class="h-1.5" :class="scriptBarClass(script.signal)"></div>
+                                        <div class="p-4">
+                                            <div class="text-lg font-bold" :class="scriptTitleClass(script.signal)" x-text="script.title"></div>
+                                            <div class="mt-4 space-y-3 text-sm">
+                                                <div class="flex items-center justify-between gap-3">
+                                                    <span class="text-gray-400">建議進場價</span>
+                                                    <span class="font-bold text-white" x-text="script.entry_range"></span>
+                                                </div>
+                                                <div class="flex items-center justify-between gap-3">
+                                                    <span class="text-gray-400">嚴格停損價</span>
+                                                    <span class="font-bold text-white" x-text="script.stop_loss"></span>
+                                                </div>
+                                                <div class="flex items-start justify-between gap-3">
+                                                    <span class="text-gray-400">預期目標價</span>
+                                                    <span class="font-bold text-white text-right" x-text="(script.targets || []).join(' / ')"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <template x-if="viewMode === 'macro'">
+                <div>
+                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-5">
+                        <div>
+                            <h2 class="text-xl font-bold flex items-center">
+                                <span class="text-2xl mr-2">🌏</span>
+                                大盤總經 Beta
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1" x-text="macroData.as_of_date ? `市場資料日 ${macroData.as_of_date}` : '切換至此模式後會直接載入市場總覽。'"></p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full border text-xs" :class="macroStatusClass(macroData.status)" x-text="macroStatusLabel(macroData.status)"></span>
+                    </div>
+
+                    <div x-show="workspaceLoading" class="flex items-center justify-center py-16 text-gray-400">
+                        <div class="text-center">
+                            <div class="spinner mx-auto mb-4"></div>
+                            <p>正在載入大盤總經資料...</p>
+                        </div>
+                    </div>
+
+                    <div x-show="!workspaceLoading && workspaceError" class="mb-4 rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm text-red-200" x-text="workspaceError"></div>
+
+                    <template x-if="!workspaceLoading && macroData.status">
+                        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                            <div class="xl:col-span-7 space-y-4">
+                                <div class="rounded-2xl border border-gray-700 bg-gray-950/40 p-5">
+                                    <div class="text-lg font-bold text-gray-100 mb-4">市場廣度</div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-xs text-gray-400">上漲家數</div>
+                                            <div class="text-2xl font-bold text-red-400" x-text="formatCompactNumber(macroData.market_snapshot?.rising)"></div>
+                                        </div>
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-xs text-gray-400">下跌家數</div>
+                                            <div class="text-2xl font-bold text-green-400" x-text="formatCompactNumber(macroData.market_snapshot?.falling)"></div>
+                                        </div>
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-xs text-gray-400">平盤家數</div>
+                                            <div class="text-2xl font-bold text-amber-300" x-text="formatCompactNumber(macroData.market_snapshot?.flat)"></div>
+                                        </div>
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-xs text-gray-400">成交量(十億)</div>
+                                            <div class="text-2xl font-bold text-blue-300" x-text="formatFixed(macroData.market_snapshot?.total_volume_b, 1)"></div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300" x-text="macroData.market_snapshot?.summary || macroData.market_snapshot?.message || '暫無市場摘要。'"></div>
+                                </div>
+
+                                <div class="rounded-2xl border border-gray-700 bg-gray-950/40 p-5">
+                                    <div class="text-lg font-bold text-gray-100 mb-4">法人與籌碼概況</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-gray-400 text-xs">外資</div>
+                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.foreign_net)"></div>
+                                        </div>
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-gray-400 text-xs">投信</div>
+                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.trust_net)"></div>
+                                        </div>
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-gray-400 text-xs">自營商</div>
+                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.dealer_net)"></div>
+                                        </div>
+                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
+                                            <div class="text-gray-400 text-xs">三大法人合計</div>
+                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.total_net)"></div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300" x-text="macroData.chip_snapshot?.summary || macroData.chip_snapshot?.message || '暫無法人摘要。'"></div>
+                                </div>
+                            </div>
+
+                            <div class="xl:col-span-5">
+                                <div class="rounded-2xl border border-gray-700 bg-gray-950/40 p-5 h-full">
+                                    <div class="text-lg font-bold text-blue-300 mb-4">📰 大盤觀察</div>
+                                    <div class="rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300 leading-7 whitespace-pre-line" x-text="macroData.news_summary || macroData.message || '暫無總經摘要。'"></div>
+                                    <div class="mt-4 rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300">
+                                        <div class="font-bold text-gray-100 mb-2">系統狀態</div>
+                                        <div x-text="macroData.message || '大盤總經資料可用。'"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
         </div>
         
         <!-- News Sentiment Panel -->
@@ -685,10 +1157,887 @@ function dashboardData() {
             user_win_rate: 0,
             ai_win_rate: 0
         },
+        viewMode: 'backtest',
+        workspaceLoading: false,
+        workspaceError: '',
+        healthCheckQuery: '2330',
+        healthCheck: {
+            status: 'empty',
+            symbol: '',
+            requested_date: '',
+            as_of_date: '',
+            fallback_used: false,
+            period: 'daily',
+            source: [],
+            warnings: [],
+            degraded_fields: [],
+            quote: {},
+            indicators: {},
+            series: {
+                candles: [],
+                volume: [],
+                ma5: [],
+                ma20: [],
+                ma60: []
+            },
+            view_state: {
+                period: 'daily',
+                period_label: '日線',
+                available_periods: [],
+                overlays: {
+                    selected: ['ma5', 'ma20', 'ma60', 'support', 'resistance'],
+                    available: []
+                },
+                panes: {
+                    selected: ['macd', 'rsi', 'kd', 'flow'],
+                    available: []
+                }
+            },
+            war_room: {
+                timeframe: {},
+                structure: {
+                    supports: [],
+                    resistances: []
+                },
+                price_map: {
+                    supports: [],
+                    resistances: [],
+                    ma_levels: []
+                },
+                panes: {},
+                quant_status: [],
+                tactical_summary: {},
+                chip_flow: {},
+                fundamentals: {},
+                news: {},
+                provenance: {}
+            },
+            news: {},
+            rule_report: {
+                signal_lights: [],
+                action_scripts: []
+            },
+            llm_report: {
+                status: 'fallback'
+            },
+            message: ''
+        },
+        macroData: {
+            status: '',
+            as_of_date: '',
+            market_snapshot: {},
+            chip_snapshot: {},
+            news_summary: '',
+            message: ''
+        },
         chart: null,
+        healthCharts: [],
+        showMobileWarRoomDetails: false,
+
+        defaultHealthCheckViewState() {
+            return {
+                period: 'daily',
+                period_label: '日線',
+                available_periods: [
+                    { key: 'daily', label: '日線', selected: true },
+                    { key: 'weekly', label: '週線', selected: false },
+                    { key: 'monthly', label: '月線', selected: false }
+                ],
+                overlays: {
+                    selected: ['ma5', 'ma20', 'ma60', 'support', 'resistance'],
+                    available: [
+                        { key: 'ma5', label: 'MA5', selected: true },
+                        { key: 'ma20', label: 'MA20', selected: true },
+                        { key: 'ma60', label: 'MA60', selected: true },
+                        { key: 'support', label: '支撐', selected: true },
+                        { key: 'resistance', label: '壓力', selected: true }
+                    ]
+                },
+                panes: {
+                    selected: ['macd', 'rsi', 'kd', 'flow'],
+                    available: [
+                        { key: 'macd', label: 'MACD', selected: true },
+                        { key: 'rsi', label: 'RSI', selected: true },
+                        { key: 'kd', label: 'KD', selected: true },
+                        { key: 'flow', label: 'Flow', selected: true }
+                    ]
+                }
+            };
+        },
+
+        normalizeHealthCheckViewState(viewState = {}) {
+            const defaults = this.defaultHealthCheckViewState();
+            const period = ['daily', 'weekly', 'monthly'].includes(viewState?.period) ? viewState.period : defaults.period;
+            const overlaySelected = Array.isArray(viewState?.overlays?.selected) && viewState.overlays.selected.length
+                ? viewState.overlays.selected
+                : defaults.overlays.selected;
+            const paneSelected = Array.isArray(viewState?.panes?.selected) && viewState.panes.selected.length
+                ? viewState.panes.selected
+                : defaults.panes.selected;
+
+            return {
+                period,
+                period_label: ({ daily: '日線', weekly: '週線', monthly: '月線' })[period] || '日線',
+                available_periods: defaults.available_periods.map((option) => ({
+                    ...option,
+                    selected: option.key === period
+                })),
+                overlays: {
+                    selected: [...overlaySelected],
+                    available: defaults.overlays.available.map((option) => ({
+                        ...option,
+                        selected: overlaySelected.includes(option.key)
+                    }))
+                },
+                panes: {
+                    selected: [...paneSelected],
+                    available: defaults.panes.available.map((option) => ({
+                        ...option,
+                        selected: paneSelected.includes(option.key)
+                    }))
+                }
+            };
+        },
+
+        emptyHealthCheckState(symbol = '') {
+            const viewState = this.defaultHealthCheckViewState();
+            return {
+                status: 'empty',
+                symbol,
+                requested_date: '',
+                as_of_date: '',
+                fallback_used: false,
+                period: viewState.period,
+                source: [],
+                warnings: [],
+                degraded_fields: [],
+                quote: {},
+                indicators: {},
+                series: {
+                    candles: [],
+                    volume: [],
+                    ma5: [],
+                    ma20: [],
+                    ma60: []
+                },
+                view_state: viewState,
+                war_room: {
+                    timeframe: {},
+                    structure: { supports: [], resistances: [] },
+                    price_map: { supports: [], resistances: [], ma_levels: [] },
+                    panes: {},
+                    quant_status: [],
+                    tactical_summary: {},
+                    chip_flow: {},
+                    fundamentals: {},
+                    news: {},
+                    provenance: {}
+                },
+                news: {},
+                rule_report: {
+                    signal_lights: [],
+                    action_scripts: []
+                },
+                llm_report: {
+                    status: 'fallback'
+                },
+                message: ''
+            };
+        },
+
+        normalizeHealthCheckPayload(payload = {}, symbol = '') {
+            const base = this.emptyHealthCheckState(symbol || payload?.symbol || '');
+            const next = {
+                ...base,
+                ...(payload || {}),
+                quote: { ...base.quote, ...(payload?.quote || {}) },
+                indicators: { ...base.indicators, ...(payload?.indicators || {}) },
+                series: { ...base.series, ...(payload?.series || {}) },
+                rule_report: { ...base.rule_report, ...(payload?.rule_report || {}) },
+                llm_report: { ...base.llm_report, ...(payload?.llm_report || {}) },
+                view_state: this.normalizeHealthCheckViewState(payload?.view_state || base.view_state),
+                war_room: {
+                    ...base.war_room,
+                    ...(payload?.war_room || {}),
+                    timeframe: { ...base.war_room.timeframe, ...(payload?.war_room?.timeframe || {}) },
+                    structure: { ...base.war_room.structure, ...(payload?.war_room?.structure || {}) },
+                    price_map: { ...base.war_room.price_map, ...(payload?.war_room?.price_map || {}) },
+                    panes: payload?.war_room?.panes || {},
+                    quant_status: Array.isArray(payload?.war_room?.quant_status) ? payload.war_room.quant_status : [],
+                    tactical_summary: { ...base.war_room.tactical_summary, ...(payload?.war_room?.tactical_summary || {}) },
+                    chip_flow: { ...base.war_room.chip_flow, ...(payload?.war_room?.chip_flow || {}) },
+                    fundamentals: { ...base.war_room.fundamentals, ...(payload?.war_room?.fundamentals || {}) },
+                    news: { ...base.war_room.news, ...(payload?.war_room?.news || {}) },
+                    provenance: { ...base.war_room.provenance, ...(payload?.war_room?.provenance || {}) }
+                }
+            };
+            next.warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+            next.degraded_fields = Array.isArray(payload?.degraded_fields) ? payload.degraded_fields : [];
+            next.period = next.view_state.period;
+            return next;
+        },
+
+        getHealthCheckViewState() {
+            return this.normalizeHealthCheckViewState(this.healthCheck?.view_state || {});
+        },
+
+        getHealthCheckPeriod() {
+            return this.getHealthCheckViewState().period || 'daily';
+        },
+
+        getSelectedHealthCheckOverlays() {
+            return this.getHealthCheckViewState().overlays?.selected || [];
+        },
+
+        getSelectedHealthCheckPanes() {
+            return this.getHealthCheckViewState().panes?.selected || [];
+        },
+
+        selectedHealthCheckOverlayOptions() {
+            const selected = this.getSelectedHealthCheckOverlays();
+            return (this.getHealthCheckViewState().overlays?.available || []).filter((option) => selected.includes(option.key));
+        },
+
+        isWarRoomCompact() {
+            return window.matchMedia('(max-width: 1023px)').matches;
+        },
+
+        async setHealthCheckPeriod(period) {
+            if (this.workspaceLoading || period === this.getHealthCheckPeriod()) {
+                return;
+            }
+            this.healthCheck = {
+                ...this.healthCheck,
+                view_state: this.normalizeHealthCheckViewState({
+                    ...this.getHealthCheckViewState(),
+                    period
+                })
+            };
+            await this.loadHealthCheck();
+        },
+
+        async toggleHealthCheckOverlay(key) {
+            if (this.workspaceLoading) {
+                return;
+            }
+            const current = [...this.getSelectedHealthCheckOverlays()];
+            const nextSelected = current.includes(key)
+                ? current.filter((item) => item !== key)
+                : [...current, key];
+            const hasMainPriceContext = nextSelected.some((item) => ['ma5', 'ma20', 'ma60', 'support', 'resistance'].includes(item));
+            if (!hasMainPriceContext) {
+                return;
+            }
+            this.healthCheck = {
+                ...this.healthCheck,
+                view_state: this.normalizeHealthCheckViewState({
+                    ...this.getHealthCheckViewState(),
+                    overlays: { selected: nextSelected }
+                })
+            };
+            await this.loadHealthCheck();
+        },
+
+        async toggleHealthCheckPane(key) {
+            if (this.workspaceLoading) {
+                return;
+            }
+            const current = [...this.getSelectedHealthCheckPanes()];
+            const nextSelected = current.includes(key)
+                ? current.filter((item) => item !== key)
+                : [...current, key];
+            if (!nextSelected.length) {
+                return;
+            }
+            this.healthCheck = {
+                ...this.healthCheck,
+                view_state: this.normalizeHealthCheckViewState({
+                    ...this.getHealthCheckViewState(),
+                    panes: { selected: nextSelected }
+                })
+            };
+            await this.loadHealthCheck();
+        },
+
+        toggleMobileWarRoomDetails() {
+            this.showMobileWarRoomDetails = !this.showMobileWarRoomDetails;
+            this.$nextTick(() => {
+                this.renderHealthChart();
+            });
+        },
+
+        overlayColor(key) {
+            const palette = {
+                ma5: '#facc15',
+                ma20: '#38bdf8',
+                ma60: '#c084fc',
+                support: '#22c55e',
+                resistance: '#fb7185'
+            };
+            return palette[key] || '#94a3b8';
+        },
+
+        sourceModeClass(mode) {
+            if (mode === 'direct') return 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10';
+            if (mode === 'proxy') return 'border-amber-500/50 text-amber-300 bg-amber-500/10';
+            return 'border-gray-600 text-gray-300 bg-gray-800/40';
+        },
+
+        sourceModeLabel(mode) {
+            if (mode === 'direct') return 'Direct';
+            if (mode === 'proxy') return 'Proxy';
+            return 'Unavailable';
+        },
+
+        toneSurfaceClass(tone) {
+            if (tone === 'bullish') return 'border-emerald-500/30 bg-emerald-500/10';
+            if (tone === 'bearish') return 'border-rose-500/30 bg-rose-500/10';
+            return 'border-gray-700 bg-black/20';
+        },
+
+        toneTextClass(tone) {
+            if (tone === 'bullish') return 'text-emerald-300';
+            if (tone === 'bearish') return 'text-rose-300';
+            return 'text-gray-100';
+        },
+
+        structureLevelClass(kind) {
+            return kind === 'support'
+                ? 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
+                : 'border-rose-500/40 text-rose-200 bg-rose-500/10';
+        },
 
         hasNewsReasons(items) {
             return Array.isArray(items) && items.length > 0;
+        },
+
+        destroyHealthChart() {
+            if (Array.isArray(this.healthCharts)) {
+                this.healthCharts.forEach((chart) => {
+                    if (chart && typeof chart.remove === 'function') {
+                        chart.remove();
+                    }
+                });
+            }
+            this.healthCharts = [];
+            const container = document.getElementById('healthCheckChart');
+            if (container) {
+                container.innerHTML = '';
+            }
+        },
+
+        switchViewMode(mode) {
+            if (this.viewMode === mode) {
+                return;
+            }
+            this.viewMode = mode;
+            this.workspaceError = '';
+            if (mode !== 'backtest' && this.chart) {
+                this.chart.destroy();
+                this.chart = null;
+            }
+            if (mode !== 'health_check') {
+                this.destroyHealthChart();
+            }
+
+            if (mode === 'backtest') {
+                this.$nextTick(() => {
+                    this.renderChart();
+                });
+                return;
+            }
+            if (mode === 'health_check' && !this.healthCheck.as_of_date) {
+                this.loadHealthCheck();
+                return;
+            }
+            if (mode === 'health_check') {
+                this.$nextTick(() => {
+                    this.renderHealthChart();
+                });
+                return;
+            }
+            if (mode === 'macro' && !this.macroData.status) {
+                this.loadMacro();
+            }
+        },
+
+        async executeWorkspaceAction() {
+            if (this.viewMode === 'health_check') {
+                await this.loadHealthCheck();
+                return;
+            }
+            if (this.viewMode === 'macro') {
+                await this.loadMacro();
+            }
+        },
+
+        async loadHealthCheck() {
+            const symbol = (this.healthCheckQuery || '').trim();
+            if (!symbol) {
+                this.workspaceError = '請先輸入股票代號。';
+                return;
+            }
+
+            this.workspaceLoading = true;
+            this.workspaceError = '';
+            try {
+                const query = new URLSearchParams({
+                    symbol,
+                    period: this.getHealthCheckPeriod(),
+                    _ts: Date.now()
+                });
+                const selectedOverlays = this.getSelectedHealthCheckOverlays();
+                const selectedPanes = this.getSelectedHealthCheckPanes();
+                if (selectedOverlays.length) {
+                    query.set('overlays', selectedOverlays.join(','));
+                }
+                if (selectedPanes.length) {
+                    query.set('panes', selectedPanes.join(','));
+                }
+                const response = await fetch('/api/dashboard/health-check?' + query.toString());
+                const data = await response.json();
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || '個股健檢資料讀取失敗');
+                }
+                this.healthCheck = this.normalizeHealthCheckPayload(data, symbol);
+                this.$nextTick(() => {
+                    this.renderHealthChart();
+                });
+            } catch (error) {
+                console.error('載入個股健檢失敗:', error);
+                this.healthCheck = this.emptyHealthCheckState(symbol);
+                this.healthCheck.message = error.message;
+                this.workspaceError = error.message;
+                this.destroyHealthChart();
+            } finally {
+                this.workspaceLoading = false;
+            }
+        },
+
+        async loadMacro() {
+            this.workspaceLoading = true;
+            this.workspaceError = '';
+            try {
+                const response = await fetch('/api/dashboard/macro?_ts=' + Date.now());
+                const data = await response.json();
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || '大盤總經資料讀取失敗');
+                }
+                this.macroData = data;
+            } catch (error) {
+                console.error('載入大盤總經失敗:', error);
+                this.macroData = {
+                    status: 'degraded',
+                    as_of_date: '',
+                    market_snapshot: {},
+                    chip_snapshot: {},
+                    news_summary: '',
+                    message: error.message
+                };
+                this.workspaceError = error.message;
+            } finally {
+                this.workspaceLoading = false;
+            }
+        },
+
+        buildHealthChartSchema() {
+            const paneMap = this.healthCheck?.war_room?.panes || {};
+            const orderedPanes = this.getSelectedHealthCheckPanes()
+                .map((key) => ({ key, ...(paneMap[key] || {}) }))
+                .filter((pane) => pane.key);
+            const visiblePanes = this.isWarRoomCompact() && !this.showMobileWarRoomDetails
+                ? orderedPanes.slice(0, 1)
+                : orderedPanes;
+            return {
+                main: {
+                    candles: this.healthCheck.series?.candles || [],
+                    volume: this.healthCheck.series?.volume || [],
+                    ma5: this.healthCheck.series?.ma5 || [],
+                    ma20: this.healthCheck.series?.ma20 || [],
+                    ma60: this.healthCheck.series?.ma60 || [],
+                    overlays: this.getSelectedHealthCheckOverlays(),
+                    structure: this.healthCheck.war_room?.structure || {}
+                },
+                panes: visiblePanes
+            };
+        },
+
+        createLightweightSeries(chart, type, options = {}) {
+            if (!chart || typeof LightweightCharts === 'undefined') {
+                throw new Error('LightweightCharts chart instance unavailable');
+            }
+
+            const legacyMap = {
+                candlestick: 'addCandlestickSeries',
+                line: 'addLineSeries',
+                histogram: 'addHistogramSeries'
+            };
+            const legacyMethod = legacyMap[type];
+            if (legacyMethod && typeof chart[legacyMethod] === 'function') {
+                return chart[legacyMethod](options);
+            }
+
+            if (typeof chart.addSeries === 'function') {
+                const v5Map = {
+                    candlestick: LightweightCharts.CandlestickSeries,
+                    line: LightweightCharts.LineSeries,
+                    histogram: LightweightCharts.HistogramSeries
+                };
+                const seriesType = v5Map[type];
+                if (seriesType) {
+                    return chart.addSeries(seriesType, options);
+                }
+            }
+
+            throw new Error(`Unsupported lightweight-charts series type: ${type}`);
+        },
+
+        normalizeLightweightSeriesData(items) {
+            if (!Array.isArray(items)) {
+                return [];
+            }
+            const byTime = new Map();
+            items.forEach((item) => {
+                if (!item || item.time === undefined || item.time === null) {
+                    return;
+                }
+                byTime.set(String(item.time), item);
+            });
+            return Array.from(byTime.values()).sort((left, right) => String(left.time).localeCompare(String(right.time)));
+        },
+
+        setLightweightSeriesData(series, items) {
+            series.setData(this.normalizeLightweightSeriesData(items));
+        },
+
+        renderHealthPaneSeries(chart, pane) {
+            const paneKey = pane.key;
+            const paneSeries = pane.series || {};
+            if (paneKey === 'macd') {
+                const histSeries = this.createLightweightSeries(chart, 'histogram', {
+                    priceLineVisible: false,
+                    lastValueVisible: false
+                });
+                this.setLightweightSeriesData(histSeries, paneSeries.histogram || []);
+                const macdSeries = this.createLightweightSeries(chart, 'line', { color: '#38bdf8', lineWidth: 2, priceLineVisible: false });
+                const signalSeries = this.createLightweightSeries(chart, 'line', { color: '#f97316', lineWidth: 2, priceLineVisible: false });
+                this.setLightweightSeriesData(macdSeries, paneSeries.macd || []);
+                this.setLightweightSeriesData(signalSeries, paneSeries.signal || []);
+                return;
+            }
+            if (paneKey === 'rsi') {
+                const rsiSeries = this.createLightweightSeries(chart, 'line', { color: '#facc15', lineWidth: 2, priceLineVisible: false });
+                const overboughtSeries = this.createLightweightSeries(chart, 'line', { color: '#fb7185', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+                const oversoldSeries = this.createLightweightSeries(chart, 'line', { color: '#22c55e', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+                this.setLightweightSeriesData(rsiSeries, paneSeries.rsi || []);
+                this.setLightweightSeriesData(overboughtSeries, paneSeries.overbought || []);
+                this.setLightweightSeriesData(oversoldSeries, paneSeries.oversold || []);
+                return;
+            }
+            if (paneKey === 'kd') {
+                const kSeries = this.createLightweightSeries(chart, 'line', { color: '#22d3ee', lineWidth: 2, priceLineVisible: false });
+                const dSeries = this.createLightweightSeries(chart, 'line', { color: '#c084fc', lineWidth: 2, priceLineVisible: false });
+                this.setLightweightSeriesData(kSeries, paneSeries.k || []);
+                this.setLightweightSeriesData(dSeries, paneSeries.d || []);
+                return;
+            }
+            if (paneKey === 'flow') {
+                if (Array.isArray(paneSeries.total) && paneSeries.total.length) {
+                    const totalSeries = this.createLightweightSeries(chart, 'line', { color: '#f97316', lineWidth: 2, priceLineVisible: false });
+                    this.setLightweightSeriesData(totalSeries, paneSeries.total || []);
+                }
+                ['foreign_buy', 'trust_buy', 'dealer_buy'].forEach((seriesKey, index) => {
+                    const seriesData = paneSeries[seriesKey] || [];
+                    if (!seriesData.length) {
+                        return;
+                    }
+                    const colors = ['#38bdf8', '#22c55e', '#f472b6'];
+                    const lineSeries = this.createLightweightSeries(chart, 'line', { color: colors[index], lineWidth: 1.5, priceLineVisible: false });
+                    this.setLightweightSeriesData(lineSeries, seriesData);
+                });
+                if (Array.isArray(paneSeries.chip_score) && paneSeries.chip_score.length) {
+                    const chipSeries = this.createLightweightSeries(chart, 'line', { color: '#facc15', lineWidth: 2, priceLineVisible: false });
+                    this.setLightweightSeriesData(chipSeries, paneSeries.chip_score || []);
+                }
+            }
+        },
+
+        renderHealthChart() {
+            this.destroyHealthChart();
+            if (this.viewMode !== 'health_check' || !['ok', 'partial', 'degraded'].includes(this.healthCheck.status)) {
+                return;
+            }
+
+            const container = document.getElementById('healthCheckChart');
+            if (!container || typeof LightweightCharts === 'undefined') {
+                return;
+            }
+
+            const schema = this.buildHealthChartSchema();
+            if (!schema.main.candles.length) {
+                container.innerHTML = '<div class="rounded-xl border border-dashed border-gray-700 px-4 py-8 text-center text-sm text-gray-400">目前沒有可繪製的 K 線資料。</div>';
+                return;
+            }
+
+            const width = Math.max(container.clientWidth || 0, 320);
+            const stack = document.createElement('div');
+            stack.className = 'flex flex-col gap-3';
+            container.appendChild(stack);
+
+            const mainWrapper = document.createElement('div');
+            mainWrapper.className = 'overflow-hidden rounded-xl border border-gray-800';
+            stack.appendChild(mainWrapper);
+
+            const mainChart = LightweightCharts.createChart(mainWrapper, {
+                width,
+                height: this.isWarRoomCompact() ? 320 : 420,
+                layout: {
+                    background: { color: '#070c18' },
+                    textColor: '#9ba3b4'
+                },
+                grid: {
+                    vertLines: { color: 'rgba(45, 55, 72, 0.22)' },
+                    horzLines: { color: 'rgba(45, 55, 72, 0.22)' }
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal
+                },
+                rightPriceScale: {
+                    borderColor: 'rgba(45, 55, 72, 0.5)'
+                },
+                timeScale: {
+                    borderColor: 'rgba(45, 55, 72, 0.5)'
+                }
+            });
+            this.healthCharts.push(mainChart);
+
+            const candleSeries = this.createLightweightSeries(mainChart, 'candlestick', {
+                upColor: '#2ea043',
+                downColor: '#f85149',
+                borderVisible: false,
+                wickUpColor: '#2ea043',
+                wickDownColor: '#f85149'
+            });
+            this.setLightweightSeriesData(candleSeries, schema.main.candles || []);
+
+            const overlayMap = {
+                ma5: schema.main.ma5 || [],
+                ma20: schema.main.ma20 || [],
+                ma60: schema.main.ma60 || []
+            };
+            ['ma5', 'ma20', 'ma60'].forEach((key) => {
+                if (!schema.main.overlays.includes(key)) {
+                    return;
+                }
+                const lineSeries = this.createLightweightSeries(mainChart, 'line', {
+                    color: this.overlayColor(key),
+                    lineWidth: key === 'ma20' ? 2.5 : 2,
+                    priceLineVisible: false,
+                    lastValueVisible: false
+                });
+                this.setLightweightSeriesData(lineSeries, overlayMap[key]);
+            });
+
+            const lineStyle = LightweightCharts.LineStyle ? LightweightCharts.LineStyle.Dashed : 2;
+            if (schema.main.overlays.includes('support')) {
+                (schema.main.structure?.supports || []).forEach((level) => {
+                    candleSeries.createPriceLine({
+                        price: Number(level.value),
+                        color: this.overlayColor('support'),
+                        lineWidth: 1,
+                        lineStyle,
+                        axisLabelVisible: true,
+                        title: level.label || 'Support'
+                    });
+                });
+            }
+            if (schema.main.overlays.includes('resistance')) {
+                (schema.main.structure?.resistances || []).forEach((level) => {
+                    candleSeries.createPriceLine({
+                        price: Number(level.value),
+                        color: this.overlayColor('resistance'),
+                        lineWidth: 1,
+                        lineStyle,
+                        axisLabelVisible: true,
+                        title: level.label || 'Resistance'
+                    });
+                });
+            }
+
+            const volumeSeries = this.createLightweightSeries(mainChart, 'histogram', {
+                color: '#58a6ff',
+                priceFormat: { type: 'volume' },
+                priceScaleId: 'volume'
+            });
+            mainChart.priceScale('volume').applyOptions({
+                scaleMargins: { top: 0.78, bottom: 0 }
+            });
+            this.setLightweightSeriesData(volumeSeries, schema.main.volume || []);
+
+            const paneCharts = [];
+            schema.panes.forEach((pane) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'rounded-xl border border-gray-800 bg-black/20 p-3';
+
+                const header = document.createElement('div');
+                header.className = 'mb-3 flex items-center justify-between gap-3';
+                header.innerHTML = `
+                    <div>
+                        <div class="text-sm font-bold text-gray-100">${pane.label || pane.key.toUpperCase()}</div>
+                        <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500">${pane.key}</div>
+                    </div>
+                    <span class="rounded-full border px-2 py-1 text-[11px] ${this.sourceModeClass(pane.source_mode)}">${this.sourceModeLabel(pane.source_mode)}</span>
+                `;
+                wrapper.appendChild(header);
+
+                const hasPaneData = Object.values(pane.series || {}).some((items) => Array.isArray(items) && items.length);
+                if (pane.status === 'unavailable' || !hasPaneData) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'rounded-lg border border-dashed border-gray-700 px-4 py-6 text-sm text-gray-400';
+                    placeholder.textContent = pane.message || '目前沒有可顯示的副圖資料。';
+                    wrapper.appendChild(placeholder);
+                    stack.appendChild(wrapper);
+                    return;
+                }
+
+                const paneHolder = document.createElement('div');
+                paneHolder.className = 'overflow-hidden rounded-lg';
+                wrapper.appendChild(paneHolder);
+                stack.appendChild(wrapper);
+
+                const paneChart = LightweightCharts.createChart(paneHolder, {
+                    width,
+                    height: pane.key === 'flow' ? 150 : 130,
+                    layout: {
+                        background: { color: '#070c18' },
+                        textColor: '#9ba3b4'
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(45, 55, 72, 0.16)' },
+                        horzLines: { color: 'rgba(45, 55, 72, 0.16)' }
+                    },
+                    handleScroll: false,
+                    handleScale: false,
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal
+                    },
+                    rightPriceScale: {
+                        borderColor: 'rgba(45, 55, 72, 0.5)'
+                    },
+                    timeScale: {
+                        borderColor: 'rgba(45, 55, 72, 0.5)'
+                    }
+                });
+                this.renderHealthPaneSeries(paneChart, pane);
+                paneChart.timeScale().fitContent();
+                paneCharts.push(paneChart);
+                this.healthCharts.push(paneChart);
+            });
+
+            if (typeof mainChart.timeScale().subscribeVisibleLogicalRangeChange === 'function' && paneCharts.length) {
+                mainChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+                    paneCharts.forEach((paneChart) => {
+                        paneChart.timeScale().setVisibleLogicalRange(range);
+                    });
+                });
+            }
+
+            mainChart.timeScale().fitContent();
+        },
+
+        signalDotClass(signal) {
+            if (signal === 'green') return 'bg-green-500';
+            if (signal === 'red') return 'bg-red-500';
+            return 'bg-amber-400';
+        },
+
+        scriptBarClass(signal) {
+            if (signal === 'red') return 'bg-red-500';
+            if (signal === 'green') return 'bg-green-500';
+            return 'bg-amber-400';
+        },
+
+        scriptTitleClass(signal) {
+            if (signal === 'red') return 'text-red-300';
+            if (signal === 'green') return 'text-green-300';
+            return 'text-amber-300';
+        },
+
+        llmStatusClass(status) {
+            if (status === 'ok') return 'border-green-500 text-green-300';
+            if (status === 'fallback') return 'border-amber-500 text-amber-300';
+            return 'border-gray-600 text-gray-300';
+        },
+
+        llmStatusLabel(status) {
+            if (status === 'ok') return 'Gemini 已啟用';
+            if (status === 'fallback') return '規則版 fallback';
+            return 'LLM 不可用';
+        },
+
+        macroStatusClass(status) {
+            return status === 'ok' ? 'border-green-500 text-green-300' : 'border-amber-500 text-amber-300';
+        },
+
+        macroStatusLabel(status) {
+            return status === 'ok' ? '資料完整' : '降級模式';
+        },
+
+        formatSourceList(value) {
+            if (Array.isArray(value)) {
+                return value.join(' / ');
+            }
+            return value || 'N/A';
+        },
+
+        formatCurrency(value) {
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'N/A';
+            }
+            return '$' + Number(value).toFixed(2);
+        },
+
+        formatCompactNumber(value) {
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'N/A';
+            }
+            const numeric = Number(value);
+            if (Math.abs(numeric) >= 1000000) {
+                return (numeric / 1000000).toFixed(1) + 'M';
+            }
+            if (Math.abs(numeric) >= 1000) {
+                return (numeric / 1000).toFixed(1) + 'K';
+            }
+            return numeric.toLocaleString('zh-TW');
+        },
+
+        formatSignedNumber(value) {
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'N/A';
+            }
+            const numeric = Number(value);
+            return (numeric >= 0 ? '+' : '') + numeric.toLocaleString('zh-TW');
+        },
+
+        signedToneClass(value) {
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'text-gray-300';
+            }
+            return Number(value) >= 0 ? 'text-emerald-300' : 'text-rose-300';
+        },
+
+        formatFixed(value, digits) {
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'N/A';
+            }
+            return Number(value).toFixed(digits);
+        },
+
+        formatPercentFrom100(value) {
+            if (value === undefined || value === null || isNaN(value)) {
+                return 'N/A';
+            }
+            return Number(value).toFixed(0) + '%';
         },
         
         async init() {
@@ -842,8 +2191,17 @@ function dashboardData() {
                 this.chart.destroy();
                 this.chart = null;
             }
+
+            if (this.viewMode !== 'backtest') {
+                return;
+            }
+
+            const canvas = document.getElementById('equityChart');
+            if (!canvas) {
+                return;
+            }
             
-            const ctx = document.getElementById('equityChart').getContext('2d');
+            const ctx = canvas.getContext('2d');
             
             // 🔧 修復 2：驗證數據存在（避免 undefined 錯誤）
             if (!this.performance.roi || this.performance.roi.length === 0) {

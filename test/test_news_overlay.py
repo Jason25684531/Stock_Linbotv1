@@ -4,6 +4,8 @@ import pandas as pd
 def test_apply_news_sentiment_overlay_reorders_candidates(monkeypatch):
     import app as app_module
 
+    monkeypatch.setattr(app_module.Config, "is_news_boost_enabled", classmethod(lambda cls: True))
+
     candidates = pd.DataFrame(
         [
             {"stock_id": "2330", "ai_score": 0.70, "close_price": 950.0},

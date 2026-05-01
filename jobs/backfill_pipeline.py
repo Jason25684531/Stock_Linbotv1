@@ -25,7 +25,7 @@ from core.db_helper import (  # noqa: E402
 from core.mcp_client import TWSEMCPClient as MCPClient  # noqa: E402
 from core.strategy_manager import StrategyManager  # noqa: E402
 from jobs.run_daily import run_daily_for_date  # noqa: E402
-from jobs.update_database import update_market_date  # noqa: E402
+from jobs.update_database import prewarm_dashboard_aggregation_cache, update_market_date  # noqa: E402
 
 
 DEFAULT_START_DATE = '2026-03-27'
@@ -176,6 +176,7 @@ def backfill_pipeline(
     start_date: str = DEFAULT_START_DATE,
     end_date: str | None = None,
     dry_run: bool = False,
+    prewarm_stock_ids: list[str] | None = None,
 ) -> dict:
     """補齊市場表與推薦表缺口。"""
     engine = get_db_engine()
@@ -223,6 +224,16 @@ def backfill_pipeline(
         run_daily_for_date(date_str)
         rebuilt_recommendation_dates.append(date_str)
 
+    prewarm_summaries: list[dict] = []
+    candidate_prewarm_dates = sorted(set(repaired_market_dates + rebuilt_recommendation_dates))
+    for date_str in candidate_prewarm_dates:
+        prewarm_summaries.append(
+            prewarm_dashboard_aggregation_cache(
+                trade_date=date_str,
+                tracked_stock_ids=prewarm_stock_ids,
+            )
+        )
+
     final_gaps = scan_pipeline_gaps(start_date, end_date)
     return {
         'dry_run': False,
@@ -232,6 +243,7 @@ def backfill_pipeline(
         'initial_recommendation_dates': initial_gaps['recommendation_dates'],
         'repaired_market_dates': repaired_market_dates,
         'rebuilt_recommendation_dates': rebuilt_recommendation_dates,
+        'prewarm_summaries': prewarm_summaries,
         'remaining_market_dates': final_gaps['missing_market_dates'],
         'remaining_recommendation_dates': final_gaps['missing_recommendation_dates'],
     }
@@ -242,6 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--start-date', default=DEFAULT_START_DATE, help='缺口掃描起始日 (YYYY-MM-DD)。')
     parser.add_argument('--end-date', help='缺口掃描結束日 (YYYY-MM-DD)。')
     parser.add_argument('--dry-run', action='store_true', help='只顯示缺口，不執行補齊。')
+    parser.add_argument('--prewarm-stock', action='append', default=[], help='指定補齊後要預熱的個股代號，可重複使用。')
     return parser
 
 
@@ -252,6 +265,7 @@ def main(argv=None) -> int:
         start_date=args.start_date,
         end_date=args.end_date,
         dry_run=args.dry_run,
+        prewarm_stock_ids=args.prewarm_stock,
     )
     print(summary)
     return 0

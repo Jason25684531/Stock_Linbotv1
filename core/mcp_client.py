@@ -39,6 +39,9 @@ DatasetName: TypeAlias = Literal[
     "stock_basic_snapshot",
     "foreign_investor_flow",
     "historical_financial_statements",
+    "twse_stock_trend",
+    "investment_screening",
+    "market_hotspot",
 ]
 DateValue: TypeAlias = date | datetime | str
 JSONDict: TypeAlias = dict[str, Any]
@@ -53,6 +56,9 @@ _TOOL_ROUTE_ENDPOINTS: dict[str, str] = {
     "company_basic_info": "/v1/tools/get_company_basic_info",
     "market_statistics": "/v1/tools/get_market_statistics",
     "foreign_investment": "/v1/tools/get_foreign_investment",
+    "twse_stock_trend": "/v1/tools/twse_stock_trend",
+    "investment_screening": "/v1/tools/investment_screening",
+    "market_hotspot": "/v1/tools/market_hotspot",
 }
 
 _COMPANY_BASIC_INFO_ALIASES: dict[str, str] = {
@@ -530,6 +536,151 @@ def _normalize_financial_statements_payload(
     }
 
 
+def _coerce_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            result.append(text)
+    return result
+
+
+def _normalize_twse_stock_trend_payload(
+    payload: Mapping[str, Any],
+    *,
+    stock_id: str,
+    trade_date: str,
+    market: MarketCode,
+) -> JSONDict:
+    direct_record = _extract_single_record(payload)
+    record = dict(direct_record) if direct_record else {}
+    records = _extract_records(payload)
+    if not record and records:
+        record = dict(records[0])
+
+    record["stock_id"] = str(record.get("stock_id") or stock_id).strip()
+    record["trade_date"] = _coerce_iso_date(
+        record.get("trade_date") or record.get("as_of_date"),
+        trade_date,
+    )
+
+    normalized_records = [record] if record else []
+    meta = payload.get("meta")
+    return {
+        "dataset": "twse_stock_trend",
+        "requested_date": _coerce_iso_date(
+            _extract_first_value(payload, ("requested_date", "trade_date", "as_of_date")),
+            trade_date,
+        ),
+        "as_of_date": _coerce_iso_date(
+            _extract_first_value(payload, ("as_of_date", "trade_date", "date")),
+            trade_date,
+        ),
+        "market": str(
+            _extract_first_value(payload, ("market", "exchange", "market_type"))
+            or market
+        ),
+        "stock_id": record.get("stock_id", stock_id),
+        "status": str(payload.get("status") or "ok"),
+        "fallback_used": bool(payload.get("fallback_used", False)),
+        "source": _coerce_string_list(payload.get("source")),
+        "degraded_fields": _coerce_string_list(payload.get("degraded_fields")),
+        "warnings": _coerce_string_list(payload.get("warnings")),
+        "quote": dict(payload.get("quote") or {}),
+        "indicators": dict(payload.get("indicators") or {}),
+        "institutional": dict(payload.get("institutional") or {}),
+        "series": dict(payload.get("series") or {}),
+        "record": record,
+        "records": normalized_records,
+        "meta": dict(meta) if isinstance(meta, Mapping) else {"record_count": len(normalized_records)},
+    }
+
+
+def _normalize_investment_screening_payload(
+    payload: Mapping[str, Any],
+    *,
+    stock_id: str,
+    trade_date: str,
+    market: MarketCode,
+) -> JSONDict:
+    direct_record = _extract_single_record(payload)
+    record = dict(direct_record) if direct_record else {}
+    records = _extract_records(payload)
+    if not record and records:
+        record = dict(records[0])
+
+    record["stock_id"] = str(record.get("stock_id") or stock_id).strip()
+    record["trade_date"] = _coerce_iso_date(
+        record.get("trade_date") or record.get("as_of_date"),
+        trade_date,
+    )
+
+    normalized_records = [record] if record else []
+    meta = payload.get("meta")
+    return {
+        "dataset": "investment_screening",
+        "requested_date": _coerce_iso_date(
+            _extract_first_value(payload, ("requested_date", "trade_date", "as_of_date")),
+            trade_date,
+        ),
+        "as_of_date": _coerce_iso_date(
+            _extract_first_value(payload, ("as_of_date", "trade_date", "date")),
+            trade_date,
+        ),
+        "market": str(
+            _extract_first_value(payload, ("market", "exchange", "market_type"))
+            or market
+        ),
+        "stock_id": record.get("stock_id", stock_id),
+        "status": str(payload.get("status") or "ok"),
+        "fallback_used": bool(payload.get("fallback_used", False)),
+        "source": _coerce_string_list(payload.get("source")),
+        "degraded_fields": _coerce_string_list(payload.get("degraded_fields")),
+        "warnings": _coerce_string_list(payload.get("warnings")),
+        "screening": dict(payload.get("screening") or {}),
+        "report_sections": dict(payload.get("report_sections") or {}),
+        "record": record,
+        "records": normalized_records,
+        "meta": dict(meta) if isinstance(meta, Mapping) else {"record_count": len(normalized_records)},
+    }
+
+
+def _normalize_market_hotspot_payload(
+    payload: Mapping[str, Any],
+    *,
+    trade_date: str,
+    market: MarketCode,
+) -> JSONDict:
+    records = [dict(record) for record in _extract_records(payload)]
+    meta = payload.get("meta")
+    return {
+        "dataset": "market_hotspot",
+        "requested_date": _coerce_iso_date(
+            _extract_first_value(payload, ("requested_date", "trade_date", "as_of_date")),
+            trade_date,
+        ),
+        "as_of_date": _coerce_iso_date(
+            _extract_first_value(payload, ("as_of_date", "trade_date", "date")),
+            trade_date,
+        ),
+        "market": str(
+            _extract_first_value(payload, ("market", "exchange", "market_type"))
+            or market
+        ),
+        "status": str(payload.get("status") or "ok"),
+        "fallback_used": bool(payload.get("fallback_used", False)),
+        "source": _coerce_string_list(payload.get("source")),
+        "degraded_fields": _coerce_string_list(payload.get("degraded_fields")),
+        "warnings": _coerce_string_list(payload.get("warnings")),
+        "breadth": dict(payload.get("breadth") or {}),
+        "hotspots": dict(payload.get("hotspots") or {}),
+        "records": records,
+        "meta": dict(meta) if isinstance(meta, Mapping) else {"record_count": len(records)},
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class MCPFetchJob:
     """Describes one dataset request used by the fetch_many helper."""
@@ -601,6 +752,7 @@ class MCPClient:
         self.max_backoff_seconds = max(0.0, float(resolved_max_backoff))
         self._logger = logger or _LOGGER
         self._client: httpx.AsyncClient | None = None
+        self._unsupported_tool_endpoints: set[str] = set()
 
     async def __aenter__(self) -> "MCPClient":
         await self._ensure_client()
@@ -961,6 +1113,16 @@ class MCPClient:
         payload: Mapping[str, Any],
         correlation_id: str,
     ) -> JSONDict:
+        if endpoint in self._unsupported_tool_endpoints:
+            raise MCPServiceError(
+                "MCP tool route is unavailable in the current service deployment",
+                endpoint=endpoint,
+                correlation_id=correlation_id,
+                retryable=False,
+                status_code=404,
+                details={"cached_unsupported": True},
+            )
+
         client = await self._ensure_client()
         last_error: MCPClientError | None = None
 
@@ -1152,6 +1314,8 @@ class MCPClient:
                 "retryable": retryable,
             },
         )
+        if response.status_code == 404 and error_code == "UNKNOWN_TOOL":
+            self._unsupported_tool_endpoints.add(endpoint)
         return MCPServiceError(
             message,
             endpoint=endpoint,
@@ -1498,6 +1662,144 @@ class TWSEMCPClient(MCPClient):
             )
             return None
 
+    async def get_twse_stock_trend(
+        self,
+        stock_id: str,
+        *,
+        trade_date: DateValue | None = None,
+        market: MarketCode | str = "ALL",
+        history_limit: int = 120,
+        correlation_id: str | None = None,
+    ) -> JSONDict | None:
+        normalized_stock_id = str(stock_id).strip()
+        if not normalized_stock_id:
+            return None
+
+        normalized_trade_date = _normalize_trade_date(
+            trade_date or date.today().isoformat()
+        )
+        context = MCPRequestContext(
+            market=market,
+            correlation_id=correlation_id or _generate_correlation_id("trend"),
+        )
+        try:
+            return await self._request_tool_payload(
+                endpoint=_TOOL_ROUTE_ENDPOINTS["twse_stock_trend"],
+                payload={
+                    "stock_id": normalized_stock_id,
+                    "trade_date": normalized_trade_date,
+                    "market": context.market,
+                    "history_limit": history_limit,
+                    "correlation_id": context.correlation_id,
+                },
+                correlation_id=context.correlation_id,
+                dataset="twse_stock_trend",
+                required_fields=("dataset", "as_of_date", "market", "records"),
+                required_record_fields=("stock_id", "trade_date"),
+                normalize=lambda raw_payload: _normalize_twse_stock_trend_payload(
+                    raw_payload,
+                    stock_id=normalized_stock_id,
+                    trade_date=normalized_trade_date,
+                    market=context.market,
+                ),
+            )
+        except (MCPClientError, httpx.HTTPError) as exc:
+            self._log_soft_failure(
+                action="get_twse_stock_trend",
+                correlation_id=context.correlation_id,
+                exc=exc,
+            )
+            return None
+
+    async def get_investment_screening(
+        self,
+        stock_id: str,
+        *,
+        trade_date: DateValue | None = None,
+        market: MarketCode | str = "ALL",
+        history_limit: int = 120,
+        correlation_id: str | None = None,
+    ) -> JSONDict | None:
+        normalized_stock_id = str(stock_id).strip()
+        if not normalized_stock_id:
+            return None
+
+        normalized_trade_date = _normalize_trade_date(
+            trade_date or date.today().isoformat()
+        )
+        context = MCPRequestContext(
+            market=market,
+            correlation_id=correlation_id or _generate_correlation_id("screen"),
+        )
+        try:
+            return await self._request_tool_payload(
+                endpoint=_TOOL_ROUTE_ENDPOINTS["investment_screening"],
+                payload={
+                    "stock_id": normalized_stock_id,
+                    "trade_date": normalized_trade_date,
+                    "market": context.market,
+                    "history_limit": history_limit,
+                    "correlation_id": context.correlation_id,
+                },
+                correlation_id=context.correlation_id,
+                dataset="investment_screening",
+                required_fields=("dataset", "as_of_date", "market", "records"),
+                required_record_fields=("stock_id", "trade_date"),
+                normalize=lambda raw_payload: _normalize_investment_screening_payload(
+                    raw_payload,
+                    stock_id=normalized_stock_id,
+                    trade_date=normalized_trade_date,
+                    market=context.market,
+                ),
+            )
+        except (MCPClientError, httpx.HTTPError) as exc:
+            self._log_soft_failure(
+                action="get_investment_screening",
+                correlation_id=context.correlation_id,
+                exc=exc,
+            )
+            return None
+
+    async def get_market_hotspot(
+        self,
+        trade_date: DateValue | None = None,
+        *,
+        market: MarketCode | str = "ALL",
+        correlation_id: str | None = None,
+    ) -> JSONDict | None:
+        normalized_trade_date = _normalize_trade_date(
+            trade_date or date.today().isoformat()
+        )
+        context = MCPRequestContext(
+            market=market,
+            correlation_id=correlation_id or _generate_correlation_id("hotspot"),
+        )
+        try:
+            return await self._request_tool_payload(
+                endpoint=_TOOL_ROUTE_ENDPOINTS["market_hotspot"],
+                payload={
+                    "trade_date": normalized_trade_date,
+                    "market": context.market,
+                    "correlation_id": context.correlation_id,
+                },
+                correlation_id=context.correlation_id,
+                dataset="market_hotspot",
+                required_fields=("dataset", "as_of_date", "market", "records"),
+                required_record_fields=("stock_id", "trade_date"),
+                normalize=lambda raw_payload: _normalize_market_hotspot_payload(
+                    raw_payload,
+                    trade_date=normalized_trade_date,
+                    market=context.market,
+                ),
+            )
+        except (MCPClientError, httpx.HTTPError) as exc:
+            self._log_soft_failure(
+                action="get_market_hotspot",
+                correlation_id=context.correlation_id,
+                exc=exc,
+            )
+            return None
+
     def get_company_basic_info_sync(
         self,
         stock_id: str,
@@ -1568,6 +1870,65 @@ class TWSEMCPClient(MCPClient):
             lambda: self.get_historical_financial_statements(
                 year,
                 quarter,
+                market=market,
+                correlation_id=resolved_correlation_id,
+            ),
+            correlation_id=resolved_correlation_id,
+        )
+
+    def get_twse_stock_trend_sync(
+        self,
+        stock_id: str,
+        *,
+        trade_date: DateValue | None = None,
+        market: MarketCode | str = "ALL",
+        history_limit: int = 120,
+        correlation_id: str | None = None,
+    ) -> JSONDict | None:
+        resolved_correlation_id = correlation_id or _generate_correlation_id("trend")
+        return self._run_sync(
+            lambda: self.get_twse_stock_trend(
+                stock_id,
+                trade_date=trade_date,
+                market=market,
+                history_limit=history_limit,
+                correlation_id=resolved_correlation_id,
+            ),
+            correlation_id=resolved_correlation_id,
+        )
+
+    def get_investment_screening_sync(
+        self,
+        stock_id: str,
+        *,
+        trade_date: DateValue | None = None,
+        market: MarketCode | str = "ALL",
+        history_limit: int = 120,
+        correlation_id: str | None = None,
+    ) -> JSONDict | None:
+        resolved_correlation_id = correlation_id or _generate_correlation_id("screen")
+        return self._run_sync(
+            lambda: self.get_investment_screening(
+                stock_id,
+                trade_date=trade_date,
+                market=market,
+                history_limit=history_limit,
+                correlation_id=resolved_correlation_id,
+            ),
+            correlation_id=resolved_correlation_id,
+        )
+
+    def get_market_hotspot_sync(
+        self,
+        trade_date: DateValue | None = None,
+        *,
+        market: MarketCode | str = "ALL",
+        correlation_id: str | None = None,
+    ) -> JSONDict | None:
+        resolved_correlation_id = correlation_id or _generate_correlation_id("hotspot")
+        return self._run_sync(
+            lambda: self.get_market_hotspot(
+                trade_date,
                 market=market,
                 correlation_id=resolved_correlation_id,
             ),

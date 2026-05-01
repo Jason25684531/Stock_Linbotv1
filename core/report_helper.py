@@ -15,10 +15,10 @@
 
 from typing import Optional, Dict, Any
 from sqlalchemy import text
-from core.db_helper import get_db_engine
+from core.db_helper import get_db_engine, get_table_columns
 
 
-def get_stock_report(stock_id: str) -> Optional[Dict[str, Any]]:
+def get_stock_report(stock_id: str, as_of_date: str | None = None) -> Optional[Dict[str, Any]]:
     """取得個股 AI 健康診斷報告
 
     查詢三大面向：
@@ -55,25 +55,59 @@ def get_stock_report(stock_id: str) -> Optional[Dict[str, Any]]:
             # ============================================
             # 1. 技術面：最新價格 + MA + RSI
             # ============================================
-            row = conn.execute(
-                text("""
-                    SELECT close_price, ma20, ma60, rsi, volume,
-                           trade_date
-                    FROM daily_market_data
-                    WHERE stock_id = :sid
-                    ORDER BY trade_date DESC
-                    LIMIT 1
-                """),
-                {'sid': stock_id}
-            ).mappings().fetchone()
+            available_columns = get_table_columns('daily_market_data', engine=engine)
+            base_market_columns = ['close_price', 'trade_date']
+            optional_market_columns = [
+                'ma5',
+                'ma20',
+                'ma60',
+                'rsi',
+                'volume',
+                'open_price',
+                'high_price',
+                'low_price',
+                'bias',
+                'chip_score',
+                'foreign_buy',
+                'trust_buy',
+                'dealer_buy',
+            ]
+            selected_market_columns = [column for column in base_market_columns if column in available_columns]
+            selected_market_columns.extend(
+                column for column in optional_market_columns if column in available_columns
+            )
+            if 'close_price' not in selected_market_columns or 'trade_date' not in selected_market_columns:
+                return None
+
+            market_sql = """
+                SELECT {columns}
+                FROM daily_market_data
+                WHERE stock_id = :sid
+            """.format(columns=', '.join(selected_market_columns))
+            market_params = {'sid': stock_id}
+            if as_of_date:
+                market_sql += " AND trade_date <= :as_of_date"
+                market_params['as_of_date'] = as_of_date
+            market_sql += " ORDER BY trade_date DESC LIMIT 1"
+
+            row = conn.execute(text(market_sql), market_params).mappings().fetchone()
 
             if row is None:
                 return None  # 完全查無此股
 
             report['close_price'] = float(row['close_price']) if row['close_price'] else None
+            report['ma5'] = float(row['ma5']) if row.get('ma5') else None
             report['ma20'] = float(row['ma20']) if row.get('ma20') else None
             report['ma60'] = float(row['ma60']) if row.get('ma60') else None
             report['rsi'] = float(row['rsi']) if row.get('rsi') else None
+            report['open_price'] = float(row['open_price']) if row.get('open_price') else None
+            report['high_price'] = float(row['high_price']) if row.get('high_price') else None
+            report['low_price'] = float(row['low_price']) if row.get('low_price') else None
+            report['bias'] = float(row['bias']) if row.get('bias') is not None else None
+            report['chip_score'] = float(row['chip_score']) if row.get('chip_score') is not None else None
+            report['foreign_buy'] = int(row['foreign_buy']) if row.get('foreign_buy') is not None else None
+            report['trust_buy'] = int(row['trust_buy']) if row.get('trust_buy') is not None else None
+            report['dealer_buy'] = int(row['dealer_buy']) if row.get('dealer_buy') is not None else None
             report['trade_date'] = str(row['trade_date'])
 
             # 判斷 MA 趨勢
@@ -94,20 +128,23 @@ def get_stock_report(stock_id: str) -> Optional[Dict[str, Any]]:
             # 2. AI 面：最新 AI Score
             # ============================================
             try:
-                ai_row = conn.execute(
-                    text("""
-                        SELECT ai_score, strategy
-                        FROM daily_recommendations
-                        WHERE stock_id = :sid
-                        ORDER BY trade_date DESC
-                        LIMIT 1
-                    """),
-                    {'sid': stock_id}
-                ).mappings().fetchone()
+                ai_sql = """
+                    SELECT ai_score, strategy, trade_date
+                    FROM daily_recommendations
+                    WHERE stock_id = :sid
+                """
+                ai_params = {'sid': stock_id}
+                if as_of_date:
+                    ai_sql += " AND trade_date <= :as_of_date"
+                    ai_params['as_of_date'] = as_of_date
+                ai_sql += " ORDER BY trade_date DESC LIMIT 1"
+
+                ai_row = conn.execute(text(ai_sql), ai_params).mappings().fetchone()
 
                 if ai_row:
                     report['ai_score'] = float(ai_row['ai_score']) if ai_row.get('ai_score') else None
                     report['strategy_name'] = ai_row.get('strategy', 'V31')
+                    report['ai_trade_date'] = str(ai_row.get('trade_date') or '')
             except Exception:
                 # daily_recommendations 表可能不存在
                 pass

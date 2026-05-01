@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 import traceback
 
@@ -14,6 +15,29 @@ from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from . import app
 
 app_pkg = sys.modules[__package__]
+
+
+def _parse_csv_query_values(*keys: str) -> list[str] | None:
+    values: list[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        for raw_value in request.args.getlist(key):
+            for candidate in str(raw_value or '').split(','):
+                normalized = str(candidate or '').strip().lower()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                values.append(normalized)
+    return values or None
+
+
+def _dashboard_json_response(payload: dict[str, object], status_code: int = 200):
+    sanitized = app_pkg._sanitize_dashboard_json(payload)
+    return app.response_class(
+        json.dumps(sanitized, ensure_ascii=False, allow_nan=False),
+        status=status_code,
+        mimetype='application/json',
+    )
 
 
 @app.route(Config.APP_HEALTH_PATH)
@@ -488,6 +512,39 @@ def api_news_sentiment():
     date_str = request.args.get('date')
     data = app_pkg.get_news_sentiment(date_str)
     return jsonify(data)
+
+
+@app.route('/api/dashboard/health-check')
+def api_dashboard_health_check():
+    """回傳 dashboard beta 個股健檢 payload。"""
+    stock_id = str(request.args.get('symbol') or request.args.get('stock_id') or '').strip()
+    if not stock_id:
+        return jsonify({'error': '缺少股票代號 symbol'}), 400
+
+    try:
+        payload = app_pkg._build_dashboard_health_check_payload(
+            stock_id=stock_id,
+            requested_date=request.args.get('date'),
+            period=request.args.get('period'),
+            overlays=_parse_csv_query_values('overlay', 'overlays'),
+            panes=_parse_csv_query_values('pane', 'panes', 'panel', 'panels'),
+        )
+        status_code = 200 if payload.get('status') != 'error' else 500
+        return _dashboard_json_response(payload, status_code)
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/api/dashboard/macro')
+def api_dashboard_macro():
+    """回傳 dashboard beta 大盤總經 payload。"""
+    try:
+        payload = app_pkg._build_dashboard_macro_payload(request.args.get('date'))
+        return _dashboard_json_response(payload)
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify({'error': str(exc)}), 500
 
 
 @app.route('/backtest', methods=['GET', 'POST'])

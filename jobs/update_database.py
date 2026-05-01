@@ -11,6 +11,7 @@
 使用方式：`python jobs/update_database.py`
 """
 import sys
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +25,13 @@ import time
 import random
 from datetime import datetime, timedelta
 from config import Config
-from core.db_helper import MIN_VALID_MARKET_ROWS, get_db_engine, get_latest_trade_date
+from core.db_helper import (
+    MIN_VALID_MARKET_ROWS,
+    get_db_engine,
+    get_latest_trade_date,
+    normalize_date_str,
+    save_dashboard_aggregation_cache,
+)
 from core.mcp_client import (
     ForeignInvestorFlowRequest,
     MCPFetchJob,
@@ -48,6 +55,12 @@ HEADERS = {
     'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
     'X-Requested-With': 'XMLHttpRequest',
 }
+
+DEFAULT_DASHBOARD_PREWARM_STOCKS = [
+    stock_id.strip()
+    for stock_id in os.getenv('DASHBOARD_PREWARM_STOCKS', '2330,2317,2454').split(',')
+    if stock_id.strip()
+]
 
 # ============================================
 # 🛠️ 核心功能：抓取全市場資料
@@ -719,6 +732,75 @@ def update_market_date(
     return process_and_save(final_df, date_str, engine)
 
 
+def prewarm_dashboard_aggregation_cache(
+    trade_date: str | None = None,
+    tracked_stock_ids: list[str] | None = None,
+    mcp_client: MCPClient | None = None,
+) -> dict:
+    """預熱 dashboard MCP 聚合快取。"""
+    resolved_trade_date = normalize_date_str(trade_date) or normalize_date_str(get_latest_trade_date())
+    stock_ids = [str(stock_id).strip() for stock_id in (tracked_stock_ids or DEFAULT_DASHBOARD_PREWARM_STOCKS) if str(stock_id).strip()]
+    summary = {
+        'trade_date': resolved_trade_date,
+        'market_hotspot_cached': False,
+        'tracked_stock_ids': stock_ids,
+        'stock_trend_cached': [],
+        'investment_screening_cached': [],
+    }
+    if not resolved_trade_date:
+        return summary
+
+    client = mcp_client or MCPClient()
+
+    try:
+        hotspot_payload = client.get_market_hotspot_sync(resolved_trade_date)
+        if hotspot_payload:
+            summary['market_hotspot_cached'] = save_dashboard_aggregation_cache(
+                'market_hotspot',
+                hotspot_payload,
+                market='ALL',
+                requested_date=resolved_trade_date,
+                ttl_seconds=300,
+            )
+    except Exception as exc:
+        print(f"⚠️ 預熱 market_hotspot 失敗 ({resolved_trade_date}): {exc}")
+
+    for stock_id in stock_ids:
+        try:
+            trend_payload = client.get_twse_stock_trend_sync(stock_id, trade_date=resolved_trade_date)
+            if trend_payload:
+                saved = save_dashboard_aggregation_cache(
+                    'twse_stock_trend',
+                    trend_payload,
+                    stock_id=stock_id,
+                    market='ALL',
+                    requested_date=resolved_trade_date,
+                    ttl_seconds=300,
+                )
+                summary['stock_trend_cached'].append({'stock_id': stock_id, 'cached': saved})
+        except Exception as exc:
+            print(f"⚠️ 預熱 twse_stock_trend 失敗 ({stock_id}, {resolved_trade_date}): {exc}")
+            summary['stock_trend_cached'].append({'stock_id': stock_id, 'cached': False})
+
+        try:
+            screening_payload = client.get_investment_screening_sync(stock_id, trade_date=resolved_trade_date)
+            if screening_payload:
+                saved = save_dashboard_aggregation_cache(
+                    'investment_screening',
+                    screening_payload,
+                    stock_id=stock_id,
+                    market='ALL',
+                    requested_date=resolved_trade_date,
+                    ttl_seconds=300,
+                )
+                summary['investment_screening_cached'].append({'stock_id': stock_id, 'cached': saved})
+        except Exception as exc:
+            print(f"⚠️ 預熱 investment_screening 失敗 ({stock_id}, {resolved_trade_date}): {exc}")
+            summary['investment_screening_cached'].append({'stock_id': stock_id, 'cached': False})
+
+    return summary
+
+
 def run_monthly_revenue_update():
     """
     步驟二：更新月營收資料
@@ -894,6 +976,11 @@ def main() -> int:
 
     # 步驟 3: 季度財報
     financial_ok = run_financial_update()
+
+    latest_trade_date = normalize_date_str(get_latest_trade_date())
+    if latest_trade_date:
+        prewarm_summary = prewarm_dashboard_aggregation_cache(latest_trade_date)
+        print(f"🧊 Dashboard 聚合快取預熱: {prewarm_summary}")
 
     # 總結報告
     elapsed = (datetime.now() - start_time).total_seconds()

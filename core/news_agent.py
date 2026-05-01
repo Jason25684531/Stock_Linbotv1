@@ -355,7 +355,7 @@ class MCPMarketSnapshotTool(BaseTool):
         payload = MCPClient().get_market_statistics_sync(
             trade_date or _default_trade_date(),
             market=market,
-            include_etfs=include_etfs,
+            include_etfs=include_etfs, 
         )
         if payload is None:
             return _tool_unavailable_response(
