@@ -6,7 +6,7 @@ It talks to ``Config.MCP_BASE_URL`` and exposes sync/async helpers for:
 - foreign investor flow
 - historical financial statements
 
-The same client is shared by ``1_update_database.py``, financial updaters,
+The same client is shared by ``jobs/update_database.py``, financial updaters,
 and the MCP-backed context tools in ``core/news_agent.py``.
 """
 

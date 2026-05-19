@@ -131,7 +131,7 @@ if __name__ == "__main__":
     if all_passed:
         print("\n🎉 所有測試通過！策略工廠重構成功！")
         print("\n下一步:")
-        print("  1. 執行 python 2_rundaily.py 測試完整流程")
+        print("  1. 執行 python jobs/run_daily.py 測試完整流程")
         print("  2. 開始實作 V33 Low Vol 策略")
         print("  3. 開始實作 V34 Twin-Turbo 策略")
     else:

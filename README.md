@@ -37,7 +37,7 @@
 - `app/`：正式 Web + LINE 應用封裝，`app/web_server.py` 與 `app/line_bot.py` 為主要入口。
 - `jobs/`：正式批次工作入口，涵蓋資料更新、每日選股、回測、推播、回補與排程。
 - `core/`：核心業務邏輯與資料存取，包含策略、DB helper、MCP client、Rich Menu、Flex builder。
-- 根目錄 `app.py` 與 `1_update_database.py` ~ `6_optimize_params.py`：保留相容的 legacy facade，實際實作已下沉到 `app/` 與 `jobs/`。
+- 根目錄 `app.py` 與少量 legacy facade：目前僅保留 `4_run_backtest.py`、`5_push_to_line.py` 等相容 wrapper，實際實作已下沉到 `app/` 與 `jobs/`。
 - `services/mcp/server.py`：正式 MCP HTTP 服務；`scripts/twse_mcp_server.py` 僅保留 legacy launcher。
 
 ### 📲 Rich Menu 目前架構
@@ -82,7 +82,7 @@ Rich Menu 的版型與圖片上傳唯一入口為 `core/richmenu.py`，部署腳
 - `stock_bot` 內的 CLI 腳本與 `core/news_agent.py` 不再直接呼叫 TWSE、TPEx、MOPS covered endpoint。
 - 所有 covered dataset 先經 `core/mcp_client.py`，再由 `services/mcp/server.py` 統一對外抓取並提供 `/health`、legacy dataset endpoint，以及 canonical `/v1/tools/*` POST route；`scripts/twse_mcp_server.py` 僅保留相容 launcher。
 - `core/mcp_client.py` 另提供 `TWSEMCPClient` 安全 facade：直接命中 `/v1/tools/get_company_basic_info`、`/v1/tools/get_market_statistics`、`/v1/tools/get_foreign_investment`，並在互動式查詢遭遇 HTTP 500 或服務錯誤時安全回傳 `None`。
-- `jobs/update_database.py` 目前以 MCP 取得市場快照、外資買賣超與季度財報；`core/crawlers/chip_data_scraper.py` 只保留為融資融券 enrich；根目錄 `1_update_database.py` 為 legacy launcher。
+- `jobs/update_database.py` 目前以 MCP 取得市場快照、外資買賣超與季度財報；`core/crawlers/chip_data_scraper.py` 只保留為融資融券 enrich。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -467,17 +467,14 @@ Stock_Linbotv1/
 │   └── backfill_pipeline.py     # 掃描並補齊市場/推薦資料缺口
 │
 ├── 🧭 Legacy launchers（相容保留）
-│   ├── 1_update_database.py     # → jobs/update_database.py
-│   ├── 2_rundaily.py            # → jobs/run_daily.py
-│   ├── 3_train_model.py         # → jobs/train_model.py
 │   ├── 4_run_backtest.py        # → jobs/run_backtest.py
 │   ├── 5_push_to_line.py        # → jobs/push_to_line.py
-│   └── 6_optimize_params.py     # → jobs/optimize_params.py
+│   └── app.py                   # legacy facade -> app package
 │
 ├── 🚀 execution/ — 自動化腳本 + Windows 排程
 │   ├── morning_run.bat          # 早晨排程 (08:30): 三卡 carousel 早報
 │   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
-│   ├── daily_run.bat            # 一鍵自動化 (1→2→5 三步驟，舊版相容)
+│   ├── daily_run.bat            # 一鍵自動化 (呼叫 jobs/scheduler.py daily 的相容 wrapper)
 │   └── start_web.bat            # 一鍵啟動 Web 服務
 │
 ├── 📡 MCP / Rich Menu 腳本
@@ -745,9 +742,10 @@ Latest displayed market prices are selected by market `trade_date`, not by local
 
 ### Legacy compatibility and local compose notes
 
-- Numeric launchers such as `1_update_database.py` through `6_optimize_params.py` are compatibility-only wrappers.
+- Deprecated numeric wrappers `1_update_database.py`、`2_rundaily.py`、`3_train_model.py`、`6_optimize_params.py` 已在 cleanup review 後移除。
+- Remaining root-level compatibility wrappers are `4_run_backtest.py` and `5_push_to_line.py`.
 - Batch wrappers under `execution/` are retained for compatibility and operator convenience, but daily operations should be documented and reasoned about through `jobs/scheduler.py`.
-- Legacy paths should not be removed until cleanup evidence passes.
+- Remaining legacy compatibility paths should not be removed until cleanup evidence passes.
 - Fresh MySQL compose volumes create the app user through `MYSQL_USER` and `MYSQL_PASSWORD`.
 - Existing local MySQL volumes created before the non-root `DB_URL` contract may not contain the `trader` user and can require a one-time grant or a local volume reset.
 - Existing local MySQL volumes can therefore miss the trader user until a one-time grant or volume reset is applied.

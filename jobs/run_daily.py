@@ -54,7 +54,7 @@ def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
     run_date = normalize_date_str(os.getenv('STOCK_PIPELINE_RUN_DATE')) or datetime.now().strftime('%Y-%m-%d')
     return pipeline_name, step_name, run_date
 
-# 模型存放目錄（與 3_train_model.py 一致）
+# 模型存放目錄（與 jobs/train_model.py 一致）
 
 
 def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:

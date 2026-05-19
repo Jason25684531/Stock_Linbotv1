@@ -64,3 +64,31 @@ Before any later deletion, verify all of the following for the candidate path:
 - no test dependency
 - no OpenSpec reference
 - no user-facing workflow dependency
+
+## Cleanup Deletion Review
+
+### Final Classification
+
+| Candidate path | Previous classification | Final classification | Evidence summary | Decision | Reason |
+| --- | --- | --- | --- | --- | --- |
+| `1_update_database.py` | legacy compatibility | removed | no active imports after `test/test_phase2_chip_data.py` moved to `jobs.update_database`; no active README/operator docs references after README, dashboard, and LINE guide updates; no compose or scheduler references | remove now | thin wrapper only; supported path is `jobs/update_database.py` and `jobs/scheduler.py` |
+| `2_rundaily.py` | legacy compatibility | removed | no active imports; diagnostic and operator guidance updated to `jobs/run_daily.py`; no compose or scheduler references | remove now | thin wrapper only; supported path is `jobs/run_daily.py` and the official scheduler flow |
+| `3_train_model.py` | legacy compatibility | removed | no active imports, compose references, scheduler references, or supported docs references remain | remove now | training remains available through `jobs/train_model.py`; daily scheduler contract unchanged |
+| `4_run_backtest.py` | legacy compatibility | legacy compatibility | still imported by `app/__init__.py` for backtest surfaces and still referenced by active runtime docs | defer | active runtime dependency remains |
+| `5_push_to_line.py` | legacy compatibility | legacy compatibility | still used by `execution/morning_run.bat` and `execution/evening_run.bat`; still part of active operator guidance | defer | Windows compatibility wrappers still depend on it |
+| `6_optimize_params.py` | legacy compatibility | removed | no active imports, compose references, scheduler references, or supported docs references remain | remove now | optimization remains available through `jobs/optimize_params.py`; outside official daily path |
+| `execution/daily_run.bat` | legacy compatibility | legacy compatibility | still documented for Windows operators; wraps `jobs/scheduler.py daily` without introducing a second scheduler path | defer | compatibility wrapper remains useful |
+| `execution/morning_run.bat` | legacy compatibility | legacy compatibility | still used for Windows morning push workflow and still calls `5_push_to_line.py` | defer | operator convenience path remains |
+| `execution/evening_run.bat` | legacy compatibility | legacy compatibility | still used for Windows evening workflow and still references compatibility push flow | defer | needs a separate cleanup pass if wrapper behavior changes |
+| `execution/run_manual.bat` | legacy compatibility | legacy compatibility | still provides a local operator menu; no equivalent replacement document yet | defer | user-facing workflow still exists |
+
+### Decision Summary
+
+- `remove now`: `1_update_database.py`, `2_rundaily.py`, `3_train_model.py`, `6_optimize_params.py`
+- `defer`: `4_run_backtest.py`, `5_push_to_line.py`, `execution/daily_run.bat`, `execution/morning_run.bat`, `execution/evening_run.bat`, `execution/run_manual.bat`
+
+### Fallback / Recovery Guidance
+
+- If a removed numeric wrapper is unexpectedly still needed, restore it from version control and keep it as a thin `import_module('jobs.<name>')` compatibility shim while the missing workflow is documented.
+- For operator recovery, prefer the supported commands first: `python jobs/scheduler.py daily`, `python jobs/update_database.py`, `python jobs/run_daily.py`, `python jobs/train_model.py`, and `python jobs/optimize_params.py`.
+- Do not recreate a removed wrapper unless fresh evidence shows a real supported workflow still needs it.

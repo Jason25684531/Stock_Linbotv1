@@ -247,7 +247,7 @@ def calculate_ratio_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     計算比例特徵（籌碼面標準化）
     
-    🔄 V33 Refactor: 從 3_train_model.py 移至此模組供共用
+    🔄 V33 Refactor: 從 jobs/train_model.py 相依邏輯抽出供共用
     
     Args:
         df: DataFrame，包含股票資料

@@ -193,7 +193,7 @@ Content-Type: application/json
 |-----|---------|---------|
 | Line Bot 無回應 | ngrok 未啟動 | 重啟 ngrok 並更新 Webhook URL |
 | 輸入「策略」報錯 | 參數讀取失敗 | ✅ 已修復（v0.2.12）- 確保 take_profit 有預設值 |
-| 回傳「今日無資料」 | 資料庫未更新 | 執行 `python 1_update_database.py` |
+| 回傳「今日無資料」 | 資料庫未更新 | 執行 `python jobs/update_database.py` |
 | AI 診斷回傳 None | 財報表無資料 | 執行 `python 7_update_financials.py` |
 | 策略切換無反應 | 策略未註冊 | 檢查 `strategy_settings.json` |
 
@@ -204,9 +204,9 @@ Content-Type: application/json
 ### 每日更新流程
 
 ```powershell
-python 1_update_database.py    # 更新股價
+python jobs/update_database.py # 更新股價
 python 7_update_financials.py  # 更新財報（每季執行即可）
-python 2_rundaily.py           # 計算技術指標
+python jobs/run_daily.py       # 計算技術指標
 python app.py                  # 啟動 facade，轉發到 app package
 ```
 

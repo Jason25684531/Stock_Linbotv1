@@ -307,7 +307,7 @@ def fetch_margin_balance(date_str: str) -> pd.DataFrame:
     抓取全市場（上市 + 上櫃）融資融券餘額
 
     合併 TWSE 與 TPEx 的融資融券資料，
-    供 1_update_database.py 合併至 daily_market_data。
+    供 jobs/update_database.py 合併至 daily_market_data。
 
     Args:
         date_str: 日期 (YYYY-MM-DD)

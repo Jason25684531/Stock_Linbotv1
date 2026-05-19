@@ -146,13 +146,13 @@ class TestChipDataScraper:
 # ============================================
 
 class TestPipelineCompatibility:
-    """測試 1_update_database.py 新欄位相容性"""
+    """測試 jobs.update_database 新欄位相容性"""
 
     def test_process_and_save_new_columns(self):
         """process_and_save 可處理含 dealer_buy/margin_balance 的 DataFrame"""
         # 驗證 clean_number 與新欄位不衝突
         from importlib import import_module
-        mod = import_module('1_update_database')
+        mod = import_module('jobs.update_database')
         clean_number = mod.clean_number
 
         df = pd.DataFrame({
@@ -182,7 +182,7 @@ class TestPipelineCompatibility:
     def test_process_and_save_missing_columns(self):
         """process_and_save 缺少新欄位時仍正常（backward compat）"""
         from importlib import import_module
-        mod = import_module('1_update_database')
+        mod = import_module('jobs.update_database')
         clean_number = mod.clean_number
 
         # 模擬舊版資料（不含 dealer_buy 等欄位）

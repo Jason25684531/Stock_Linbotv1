@@ -34,7 +34,7 @@ Application
   app/                 Web / LINE canonical package
   app.py               legacy facade -> app.main()
   jobs/                canonical batch jobs
-  1_update_database.py ~ 6_optimize_params.py   legacy wrappers
+  4_run_backtest.py + 5_push_to_line.py   remaining legacy wrappers
 
 Domain / Core
   core/db_helper.py            唯一資料庫存取入口
@@ -67,12 +67,8 @@ Presentation
 
 以下檔案仍保留，但只作為相容入口：
 - `app.py`
-- `1_update_database.py`
-- `2_rundaily.py`
-- `3_train_model.py`
 - `4_run_backtest.py`
 - `5_push_to_line.py`
-- `6_optimize_params.py`
 
 新功能或重構應優先落在 `app/`、`jobs/`、`core/`。
 

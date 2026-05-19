@@ -143,7 +143,7 @@ def load_and_prepare_data(engine) -> pd.DataFrame:
         return pd.DataFrame()
 
     if df.empty:
-        print("❌ 資料庫是空的！請先跑 1_update_database.py")
+        print("❌ 資料庫是空的！請先跑 jobs/update_database.py")
         return pd.DataFrame()
 
     print(f"📦 原始數據: {len(df):,} 筆")

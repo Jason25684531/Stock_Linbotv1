@@ -38,7 +38,7 @@ def main():
         indicator_count = result.fetchone()[0]
         
         if indicator_count == 0:
-            print(f"  ⚠️ 指標未計算! 請執行: python 2_rundaily.py")
+            print(f"  ⚠️ 指標未計算! 請執行: python jobs/run_daily.py")
         else:
             print(f"  ✅ 指標已計算 ({indicator_count} 檔有 MA60)")
         
@@ -63,7 +63,7 @@ def main():
         print(f"  NATR: {stats[4]} ({stats[4]/stats[0]*100:.1f}%)")
         
         if stats[1] == 0:
-            print(f"  ❌ 技術指標未計算! 請執行: python 2_rundaily.py")
+            print(f"  ❌ 技術指標未計算! 請執行: python jobs/run_daily.py")
         
         # 3. Check strategy conditions
         query = text("""
@@ -117,7 +117,7 @@ def main():
         # 5. Recommendations
         print(f"\n【5. 建議】")
         if stats[1] == 0:
-            print(f"  🔧 執行: python 2_rundaily.py")
+            print(f"  🔧 執行: python jobs/run_daily.py")
         elif cond[7] == 0:
             print(f"  💡 V33 條件太嚴格，建議:")
             print(f"     - 放寬 NATR < 5% (原 4%)")
@@ -127,7 +127,7 @@ def main():
             print(f"  💡 V34 條件太嚴格，建議降低到 YoY > 20%")
         
         print(f"\n  📝 檢查活躍策略: strategy_settings.json")
-        print(f"  🚀 測試運行: python 2_rundaily.py")
+        print(f"  🚀 測試運行: python jobs/run_daily.py")
         
     print("\n" + "=" * 60)
 

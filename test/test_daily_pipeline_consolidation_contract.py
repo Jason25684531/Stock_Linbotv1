@@ -40,6 +40,11 @@ def test_cleanup_inventory_exists_with_classification_and_evidence_fields():
     assert 'jobs/run_daily_backtest_validation.py' in inventory_text
     assert 'unknown / needs verification' in inventory_text.lower()
     assert 'deprecation marker' in inventory_text.lower()
+    assert 'final classification' in inventory_text.lower()
+    assert 'decision' in inventory_text.lower()
+    assert 'remove now' in inventory_text.lower()
+    assert 'defer' in inventory_text.lower()
+    assert 'fallback / recovery guidance' in inventory_text.lower()
 
 
 def test_readme_documents_official_daily_flow_and_price_provenance():
@@ -60,16 +65,22 @@ def test_readme_documents_official_daily_flow_and_price_provenance():
     assert 'source_date' in readme_text
     assert 'data_source' in readme_text
     assert 'is_stale' in readme_text
+    assert 'python 1_update_database.py' not in readme_text
+    assert 'python 2_rundaily.py' not in readme_text
+    assert 'python 3_train_model.py' not in readme_text
+    assert 'python 6_optimize_params.py' not in readme_text
 
 
 def test_legacy_compatibility_launchers_point_to_official_scheduler():
-    launcher_paths = [
+    removed_launcher_paths = [
         '1_update_database.py',
         '2_rundaily.py',
         '3_train_model.py',
+        '6_optimize_params.py',
+    ]
+    remaining_launcher_paths = [
         '4_run_backtest.py',
         '5_push_to_line.py',
-        '6_optimize_params.py',
     ]
     batch_paths = [
         'execution/daily_run.bat',
@@ -78,7 +89,10 @@ def test_legacy_compatibility_launchers_point_to_official_scheduler():
         'execution/run_manual.bat',
     ]
 
-    for relative_path in launcher_paths:
+    for relative_path in removed_launcher_paths:
+        assert not (REPO_ROOT / relative_path).exists()
+
+    for relative_path in remaining_launcher_paths:
         text = (REPO_ROOT / relative_path).read_text(encoding='utf-8')
         assert 'compatibility-only' in text.lower()
         assert 'jobs/scheduler.py' in text
@@ -89,3 +103,25 @@ def test_legacy_compatibility_launchers_point_to_official_scheduler():
         assert 'Compatibility-only' in text
         assert 'jobs\\scheduler.py' in text
         assert 'Do not remove' in text
+
+
+def test_removed_numeric_wrappers_are_not_active_supported_commands():
+    removed_commands = [
+        'python 1_update_database.py',
+        'python 2_rundaily.py',
+        'python 3_train_model.py',
+        'python 6_optimize_params.py',
+    ]
+    active_guidance_paths = [
+        'README.md',
+        'doc/LINE_BOT_GUIDE.md',
+        'templates/dashboard.html',
+        'scripts/diagnose_strategies.py',
+        'jobs/train_model.py',
+        'openspec/project.md',
+    ]
+
+    for relative_path in active_guidance_paths:
+        text = (REPO_ROOT / relative_path).read_text(encoding='utf-8')
+        for removed_command in removed_commands:
+            assert removed_command not in text, f'{removed_command} still referenced in {relative_path}'
