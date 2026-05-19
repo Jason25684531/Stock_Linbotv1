@@ -449,6 +449,34 @@ def api_daily_signals():
 
             for _, row in picks.iterrows():
                 close_price = float(row['close_price'])
+                market_anchor_date = app_pkg.normalize_date_str(
+                    fallback_meta.get('market_anchor_date') if fallback_meta else date_str
+                )
+                price_trade_date = app_pkg.normalize_date_str(
+                    row.get('price_trade_date')
+                    or row.get('market_trade_date')
+                    or signal_date
+                )
+                recommendation_trade_date = app_pkg.normalize_date_str(
+                    row.get('recommendation_trade_date')
+                    or fallback_meta.get('recommendation_date')
+                    or signal_date
+                )
+                recommendation_close_price = app_pkg.safe_float(
+                    row.get('recommendation_close_price')
+                )
+                if recommendation_close_price is None:
+                    recommendation_close_price = close_price
+                price_is_stale = bool(
+                    price_trade_date
+                    and market_anchor_date
+                    and price_trade_date < market_anchor_date
+                )
+                recommendation_is_stale = bool(
+                    recommendation_trade_date
+                    and market_anchor_date
+                    and recommendation_trade_date < market_anchor_date
+                )
                 stop_loss_rate = float(getattr(active_strategy, 'stop_loss', Config.V30_STOP_LOSS)) if active_strategy else Config.V30_STOP_LOSS
                 take_profit_rate = float(getattr(active_strategy, 'take_profit', Config.V30_TAKE_PROFIT)) if active_strategy else Config.V30_TAKE_PROFIT
                 try:
@@ -460,6 +488,16 @@ def api_daily_signals():
                 signal = {
                     'stock_id': row['stock_id'],
                     'close_price': close_price,
+                    'price_trade_date': price_trade_date,
+                    'price_source_date': price_trade_date,
+                    'price_basis': str(row.get('price_basis') or 'raw_close'),
+                    'price_data_source': str(row.get('price_data_source') or 'daily_recommendations'),
+                    'price_is_stale': price_is_stale,
+                    'recommendation_close_price': recommendation_close_price,
+                    'recommendation_trade_date': recommendation_trade_date,
+                    'recommendation_price_basis': str(row.get('recommendation_price_basis') or 'raw_close'),
+                    'recommendation_data_source': str(row.get('recommendation_data_source') or 'daily_recommendations'),
+                    'recommendation_is_stale': recommendation_is_stale,
                     'strategy': strategy_name,
                     'strategy_key': strategy_key,
                     'ai_score': app_pkg.safe_float(row.get('ai_score')) if 'ai_score' in row else None,

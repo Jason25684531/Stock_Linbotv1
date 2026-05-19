@@ -1,4 +1,8 @@
-"""Compatibility launcher for jobs.push_to_line."""
+"""Compatibility-only legacy launcher for jobs.push_to_line.
+
+Official daily scheduler path: jobs/scheduler.py.
+Do not remove this wrapper until cleanup evidence passes.
+"""
 
 from __future__ import annotations
 

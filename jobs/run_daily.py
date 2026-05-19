@@ -26,6 +26,8 @@ from core.db_helper import (
     get_latest_trade_date,
     get_stock_data,
     normalize_date_str,
+    record_pipeline_step_finish,
+    record_pipeline_step_start,
 )
 from core.strategy_manager import StrategyManager
 from core.calc_indicators import (
@@ -45,6 +47,12 @@ _news_boost_cache: dict = {
 }
 # 個股層級新聞快取（key: stock_id, value: {"score": int, "reason": str}）
 _stock_news_cache: dict = {}
+
+
+def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
+    pipeline_name = str(os.getenv('STOCK_PIPELINE_NAME') or '').strip() or 'manual'
+    run_date = normalize_date_str(os.getenv('STOCK_PIPELINE_RUN_DATE')) or datetime.now().strftime('%Y-%m-%d')
+    return pipeline_name, step_name, run_date
 
 # 模型存放目錄（與 3_train_model.py 一致）
 
@@ -816,10 +824,40 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None):
+    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('run_daily')
+    record_pipeline_step_start(
+        pipeline_name=pipeline_name,
+        step_name=step_name,
+        run_date=run_date,
+    )
     parser = build_parser()
     args = parser.parse_args(argv)
-    run_daily_for_date(args.date)
-    return 0
+    try:
+        summary = run_daily_for_date(args.date)
+        trade_date = normalize_date_str((summary or {}).get('date') if isinstance(summary, dict) else args.date)
+        strategy_counts = (summary or {}).get('strategy_counts', {}) if isinstance(summary, dict) else {}
+        rows_inserted = sum(int(value or 0) for value in strategy_counts.values()) if isinstance(strategy_counts, dict) else None
+        record_pipeline_step_finish(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+            status='success',
+            source_date=trade_date,
+            trade_date=trade_date,
+            rows_inserted=rows_inserted,
+        )
+        return 0
+    except Exception as exc:
+        record_pipeline_step_finish(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+            status='failed',
+            source_date=normalize_date_str(args.date),
+            trade_date=normalize_date_str(args.date),
+            error_summary=str(exc),
+        )
+        raise
 
 if __name__ == "__main__":
     raise SystemExit(main())

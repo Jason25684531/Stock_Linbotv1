@@ -691,6 +691,66 @@ app.py
 - `DB_URL` is the app runtime DSN; database initialization credentials in compose remain separate from the application connection contract
 - `/api/dashboard/health-check` 是 dashboard payload API，不是容器 health endpoint
 - `/api/dashboard/health-check` is a dashboard payload API, not the container health endpoint
+
+## Phase 3 Runtime Alignment
+
+- Official daily command: `python jobs/scheduler.py daily`
+- Official daily flow: `jobs/update_database.py` -> `jobs/run_daily.py` -> `jobs/run_daily_backtest_validation.py` -> `jobs/push_to_line.py`
+- `jobs/scheduler.py` is the only official daily scheduler entrypoint.
+- `daily_recommendations` remains the recommendation persistence contract.
+- `pipeline_runs` remains the operational run-state surface.
+- `/health` remains the compose container readiness endpoint.
+- `/api/dashboard/health-check` remains a dashboard payload API and is not the container health endpoint.
+
+### `pipeline_runs` observability
+
+- Step status is persisted for the official daily path.
+- `trade_date` and `source_date` are recorded when available.
+- `rows_inserted` and `rows_updated` are recorded when practical.
+- `error_summary` is recorded for failed or non-configured steps.
+- Dashboard aggregation prewarm currently remains part of `update_database`; it is not yet emitted as a separate `pipeline_runs` step.
+
+### `/api/daily-signals` price provenance
+
+- `price_trade_date`
+- `price_source_date`
+- `price_basis`
+- `price_data_source`
+- `price_is_stale`
+- `recommendation_close_price`
+- `recommendation_trade_date`
+- `recommendation_price_basis`
+- `recommendation_is_stale`
+
+### Dashboard quote provenance
+
+- `trade_date`
+- `source_date`
+- `price_basis`
+- `data_source`
+- `is_stale`
+
+Latest displayed market prices are selected by market `trade_date`, not by local `created_at` ordering alone. Stale or fallback prices are marked instead of being silently presented as fresh current prices.
+
+### Lightweight daily backtest validation
+
+- `jobs/run_daily_backtest_validation.py` is optional and configurable.
+- It runs after recommendation persistence and before the Line push step.
+- It is configured by `ENABLE_DAILY_BACKTEST_VALIDATION`, `DAILY_BACKTEST_WINDOW_DAYS`, `DAILY_BACKTEST_STRATEGIES`, `DAILY_BACKTEST_UNIVERSE`, and `DAILY_BACKTEST_INITIAL_CAPITAL`.
+- Validation status is persisted in `pipeline_runs`.
+- Disabled validation records `not_configured`.
+- This step is scheduler-safe and bounded.
+- It is not full historical research backtesting.
+- It is not parameter optimization.
+
+### Legacy compatibility and local compose notes
+
+- Numeric launchers such as `1_update_database.py` through `6_optimize_params.py` are compatibility-only wrappers.
+- Batch wrappers under `execution/` are retained for compatibility and operator convenience, but daily operations should be documented and reasoned about through `jobs/scheduler.py`.
+- Legacy paths should not be removed until cleanup evidence passes.
+- Fresh MySQL compose volumes create the app user through `MYSQL_USER` and `MYSQL_PASSWORD`.
+- Existing local MySQL volumes created before the non-root `DB_URL` contract may not contain the `trader` user and can require a one-time grant or a local volume reset.
+- Existing local MySQL volumes can therefore miss the trader user until a one-time grant or volume reset is applied.
 **最新變更**:
 - ✅ **早晚雙模式推播**：`--time morning` 早晨大局觀 / `--time evening` 晚間選股策劃
 - ✅ **Gemini 新聞摘要**：鉅亨網 RSS → Gemini 濃縮為 3 個台股影響 Bullet Points

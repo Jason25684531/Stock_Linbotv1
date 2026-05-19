@@ -33,12 +33,7 @@ mysql_data/
 .idea/
 specs/
 openspec/*
-!openspec/config.yaml
-!openspec/project.md
-!openspec/changes/
 openspec/changes/*
-!openspec/changes/stabilize-daily-recommendation-pipeline/
-!openspec/changes/stabilize-daily-recommendation-pipeline/**
 .amazonq/
 .specify/
 .pytest_cache/

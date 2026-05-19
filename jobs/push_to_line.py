@@ -6,6 +6,7 @@ Line 推播主程式（早晚雙模式）
     python jobs/push_to_line.py --time morning   # 早晨大局觀（新聞摘要 + 隨機策略精選）
     python jobs/push_to_line.py --time evening   # 晚間選股策劃（全策略推薦）
 """
+import os
 import sys
 from pathlib import Path
 
@@ -40,6 +41,8 @@ from core.db_helper import (
     get_stock_data,
     get_latest_trade_date,
     normalize_date_str,
+    record_pipeline_step_finish,
+    record_pipeline_step_start,
 )
 from core.line_message_builder import build_news_summary_bubble
 from core.strategy_manager import StrategyManager
@@ -112,6 +115,12 @@ SCHEDULED_PUSH_BUBBLE_SIZE = 'mega'
 MORNING_NEWS_FALLBACK = '目前暫無今晨摘要，先以前一交易日盤後資訊持續追蹤。'
 MORNING_PICKS_EMPTY_STATE = '今日尚無新的精選標的，先觀察既有市場訊號。'
 MORNING_BASELINE_NOTE = '若今日新資料尚未落地，內容引用最近交易日快照。'
+
+
+def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
+    pipeline_name = str(os.getenv('STOCK_PIPELINE_NAME') or '').strip() or 'manual'
+    run_date = normalize_date_str(os.getenv('STOCK_PIPELINE_RUN_DATE')) or datetime.now().strftime('%Y-%m-%d')
+    return pipeline_name, step_name, run_date
 
 
 def _normalize_news_summary(news_summary: str | None, fallback_text: str) -> str:
@@ -774,22 +783,51 @@ def _broadcast_flex(flex_msg: FlexMessage):
 # ==========================================
 
 def main():
-    parser = argparse.ArgumentParser(description="StockAI Line 推播")
+    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('push_to_line')
+    record_pipeline_step_start(
+        pipeline_name=pipeline_name,
+        step_name=step_name,
+        run_date=run_date,
+    )
+    parser = argparse.ArgumentParser(description="StockAI Line push")
     parser.add_argument(
         '--time', choices=['morning', 'evening'], default='evening',
-        help='推播模式: morning=早晨大局觀, evening=晚間選股策劃 (預設: evening)'
+        help='push mode: morning or evening'
     )
     args = parser.parse_args()
 
-    print(f"🚀 StockAI 推播啟動 (模式: {args.time})")
-    print(f"📅 執行時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"StockAI push start (mode: {args.time})")
+    print(f"Run timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    if args.time == 'morning':
-        run_morning()
-    else:
-        run_evening()
+    try:
+        if args.time == 'morning':
+            run_morning()
+        else:
+            run_evening()
 
-    print("🎉 推播流程完成！")
+        trade_date = get_pipeline_baseline_date()
+        status = 'success' if trade_date else 'failed'
+        record_pipeline_step_finish(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+            status=status,
+            source_date=run_date,
+            trade_date=trade_date,
+            error_summary=None if trade_date else 'no pipeline baseline date available for push payload',
+        )
+        print('Line push completed.')
+    except Exception as exc:
+        record_pipeline_step_finish(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+            status='failed',
+            source_date=run_date,
+            trade_date=get_pipeline_baseline_date(),
+            error_summary=str(exc),
+        )
+        raise
 
 
 if __name__ == "__main__":

@@ -1,4 +1,7 @@
 @echo off
+REM Compatibility-only batch wrapper.
+REM Official daily scheduler path: jobs\scheduler.py
+REM Do not remove until cleanup evidence passes.
 chcp 65001 >nul
 cd /d D:\01_Project\Stocke\Stock_Linbotv1
 set PYTHON=D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe

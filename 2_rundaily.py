@@ -1,4 +1,8 @@
-"""Compatibility launcher for jobs.run_daily."""
+"""Compatibility-only legacy launcher for jobs.run_daily.
+
+Official daily scheduler path: jobs/scheduler.py.
+Do not remove this wrapper until cleanup evidence passes.
+"""
 
 from __future__ import annotations
 

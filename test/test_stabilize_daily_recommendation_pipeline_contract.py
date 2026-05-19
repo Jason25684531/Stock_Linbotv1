@@ -25,6 +25,11 @@ def test_env_example_documents_non_root_db_url_and_model_path_contract():
     assert "DB_URL=mysql+pymysql://trader:" in env_example
     assert "MODEL_PATH=ML_Data/pkl/stock_ai_model.pkl" in env_example
     assert "APP_HEALTH_PATH=/health" in env_example
+    assert "ENABLE_DAILY_BACKTEST_VALIDATION=false" in env_example
+    assert "DAILY_BACKTEST_WINDOW_DAYS=60" in env_example
+    assert "DAILY_BACKTEST_STRATEGIES=v34_turbo" in env_example
+    assert "DAILY_BACKTEST_UNIVERSE=2330,2317,2454" in env_example
+    assert "DAILY_BACKTEST_INITIAL_CAPITAL=1000000" in env_example
 
 
 def test_docker_compose_uses_non_root_app_db_url_and_python_stdlib_healthchecks():
@@ -43,13 +48,20 @@ def test_readme_documents_runtime_contract_and_healthcheck_boundary():
     assert "jobs/scheduler.py" in readme
     assert "jobs/update_database.py" in readme
     assert "jobs/run_daily.py" in readme
+    assert "jobs/run_daily_backtest_validation.py" in readme
     assert "jobs/push_to_line.py" in readme
     assert "daily_recommendations" in readme
+    assert "pipeline_runs" in readme
     assert "MODEL_PATH=ML_Data/pkl/stock_ai_model.pkl" in readme
     assert "DB_URL=mysql+pymysql://trader:" in readme
     assert "/health" in readme
     assert "/api/dashboard/health-check" in readme
     assert "not the container health endpoint" in readme
+    assert "ENABLE_DAILY_BACKTEST_VALIDATION" in readme
+    assert "DAILY_BACKTEST_WINDOW_DAYS" in readme
+    assert "not full historical research backtesting" in readme
+    assert "not parameter optimization" in readme
+    assert "trader user" in readme
 
 
 def test_openspec_change_artifacts_exist_with_fixed_delta_spec_paths():

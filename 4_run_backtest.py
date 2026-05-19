@@ -1,4 +1,8 @@
-"""Compatibility launcher for jobs.run_backtest."""
+"""Compatibility-only legacy launcher for jobs.run_backtest.
+
+Official daily scheduler path for daily operations: jobs/scheduler.py.
+Do not remove this wrapper until cleanup evidence passes.
+"""
 
 from __future__ import annotations
 

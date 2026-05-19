@@ -25,7 +25,7 @@ _ALLOWED_TABLES = {
     'daily_market_data', 'user_settings', 'user_simulation_trades',
     'monthly_revenue', 'financial_statements', 'daily_recommendations',
     'backtest_trades', 'backtest_equity_curve', 'daily_news_sentiment',
-    'dashboard_aggregation_cache',
+    'dashboard_aggregation_cache', 'pipeline_runs',
 }
 
 MIN_VALID_MARKET_ROWS = 100
@@ -34,6 +34,7 @@ COMMON_STOCK_ID_PATTERN = re.compile(r'^\d{4}$')
 COMMON_STOCK_EXCLUDED_PREFIXES = ('03', '08')
 DASHBOARD_AGGREGATION_CACHE_TABLE = 'dashboard_aggregation_cache'
 DASHBOARD_AGGREGATION_CACHE_VERSION = 'v1'
+PIPELINE_RUNS_TABLE = 'pipeline_runs'
 
 
 def _utc_now_naive() -> datetime:
@@ -52,6 +53,364 @@ def _parse_datetime_value(value) -> datetime | None:
         return datetime.fromisoformat(text_value[:19].replace('T', ' '))
     except ValueError:
         return None
+
+
+def ensure_pipeline_run_state_schema(engine=None):
+    """Ensure minimal persisted run-state storage for scheduled pipeline steps."""
+    if engine is None:
+        engine = get_db_engine()
+
+    dialect_name = getattr(engine.dialect, 'name', '')
+    if dialect_name == 'sqlite':
+        create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {PIPELINE_RUNS_TABLE} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pipeline_name TEXT NOT NULL,
+                step_name TEXT NOT NULL,
+                run_date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'running',
+                source_date TEXT,
+                trade_date TEXT,
+                rows_inserted INTEGER,
+                rows_updated INTEGER,
+                error_summary TEXT,
+                started_at TEXT,
+                finished_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (pipeline_name, step_name, run_date)
+            )
+        """
+        index_sql = [
+            f"CREATE INDEX IF NOT EXISTS idx_pipeline_runs_run_date ON {PIPELINE_RUNS_TABLE} (run_date)",
+            f"CREATE INDEX IF NOT EXISTS idx_pipeline_runs_pipeline_step ON {PIPELINE_RUNS_TABLE} (pipeline_name, step_name)",
+        ]
+    else:
+        create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {PIPELINE_RUNS_TABLE} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                pipeline_name VARCHAR(64) NOT NULL,
+                step_name VARCHAR(128) NOT NULL,
+                run_date DATE NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'running',
+                source_date DATE NULL,
+                trade_date DATE NULL,
+                rows_inserted INT NULL,
+                rows_updated INT NULL,
+                error_summary VARCHAR(1000) NULL,
+                started_at DATETIME NULL,
+                finished_at DATETIME NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                UNIQUE KEY uq_pipeline_runs_step (pipeline_name, step_name, run_date),
+                KEY idx_pipeline_runs_run_date (run_date),
+                KEY idx_pipeline_runs_pipeline_step (pipeline_name, step_name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+        index_sql = []
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(create_sql))
+            for sql in index_sql:
+                conn.execute(text(sql))
+            conn.commit()
+    except Exception as e:
+        print(f"⚠️ pipeline run-state schema ensure failed: {e}")
+
+
+def _normalize_pipeline_status(status: str | None) -> str:
+    normalized = str(status or '').strip().lower()
+    return normalized or 'running'
+
+
+def _truncate_error_summary(error_summary, max_length: int = 1000) -> str | None:
+    if error_summary is None:
+        return None
+    normalized = str(error_summary).strip()
+    if not normalized:
+        return None
+    return normalized[:max_length]
+
+
+def record_pipeline_step_start(
+    *,
+    pipeline_name: str,
+    step_name: str,
+    run_date: str | None = None,
+    engine=None,
+) -> bool:
+    """Persist start state for a pipeline step."""
+    if engine is None:
+        engine = get_db_engine()
+    ensure_pipeline_run_state_schema(engine)
+
+    normalized_pipeline_name = str(pipeline_name or '').strip() or 'manual'
+    normalized_step_name = str(step_name or '').strip()
+    normalized_run_date = normalize_date_str(run_date) or normalize_date_str(_utc_now_naive())
+    if not normalized_step_name or not normalized_run_date:
+        return False
+
+    now = _utc_now_naive()
+    params = {
+        'pipeline_name': normalized_pipeline_name,
+        'step_name': normalized_step_name,
+        'run_date': normalized_run_date,
+        'status': 'running',
+        'started_at': now,
+        'finished_at': None,
+        'rows_inserted': None,
+        'rows_updated': None,
+        'error_summary': None,
+        'updated_at': now,
+        'created_at': now,
+    }
+
+    try:
+        with engine.connect() as conn:
+            existing = conn.execute(
+                text(
+                    f"""
+                    SELECT id, started_at, created_at
+                    FROM {PIPELINE_RUNS_TABLE}
+                    WHERE pipeline_name = :pipeline_name
+                      AND step_name = :step_name
+                      AND run_date = :run_date
+                    """
+                ),
+                {
+                    'pipeline_name': normalized_pipeline_name,
+                    'step_name': normalized_step_name,
+                    'run_date': normalized_run_date,
+                },
+            ).mappings().fetchone()
+            if existing:
+                params['started_at'] = _parse_datetime_value(existing.get('started_at')) or now
+                params['created_at'] = _parse_datetime_value(existing.get('created_at')) or now
+                conn.execute(
+                    text(
+                        f"""
+                        UPDATE {PIPELINE_RUNS_TABLE}
+                        SET status = :status,
+                            started_at = :started_at,
+                            finished_at = :finished_at,
+                            rows_inserted = :rows_inserted,
+                            rows_updated = :rows_updated,
+                            error_summary = :error_summary,
+                            updated_at = :updated_at
+                        WHERE pipeline_name = :pipeline_name
+                          AND step_name = :step_name
+                          AND run_date = :run_date
+                        """
+                    ),
+                    params,
+                )
+            else:
+                conn.execute(
+                    text(
+                        f"""
+                        INSERT INTO {PIPELINE_RUNS_TABLE}
+                            (pipeline_name, step_name, run_date, status, source_date, trade_date,
+                             rows_inserted, rows_updated, error_summary, started_at, finished_at,
+                             created_at, updated_at)
+                        VALUES
+                            (:pipeline_name, :step_name, :run_date, :status, NULL, NULL,
+                             :rows_inserted, :rows_updated, :error_summary, :started_at, :finished_at,
+                             :created_at, :updated_at)
+                        """
+                    ),
+                    params,
+                )
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"⚠️ pipeline step start record failed ({normalized_pipeline_name}/{normalized_step_name}): {e}")
+        return False
+
+
+def record_pipeline_step_finish(
+    *,
+    pipeline_name: str,
+    step_name: str,
+    run_date: str | None = None,
+    status: str,
+    source_date: str | None = None,
+    trade_date: str | None = None,
+    rows_inserted: int | None = None,
+    rows_updated: int | None = None,
+    error_summary: str | None = None,
+    engine=None,
+) -> bool:
+    """Persist finish state for a pipeline step."""
+    if engine is None:
+        engine = get_db_engine()
+    ensure_pipeline_run_state_schema(engine)
+
+    normalized_pipeline_name = str(pipeline_name or '').strip() or 'manual'
+    normalized_step_name = str(step_name or '').strip()
+    normalized_run_date = normalize_date_str(run_date) or normalize_date_str(_utc_now_naive())
+    normalized_status = _normalize_pipeline_status(status)
+    normalized_source_date = normalize_date_str(source_date)
+    normalized_trade_date = normalize_date_str(trade_date)
+    normalized_error_summary = _truncate_error_summary(error_summary)
+    if not normalized_step_name or not normalized_run_date:
+        return False
+
+    now = _utc_now_naive()
+    params = {
+        'pipeline_name': normalized_pipeline_name,
+        'step_name': normalized_step_name,
+        'run_date': normalized_run_date,
+        'status': normalized_status,
+        'source_date': normalized_source_date,
+        'trade_date': normalized_trade_date,
+        'rows_inserted': int(rows_inserted) if rows_inserted is not None else None,
+        'rows_updated': int(rows_updated) if rows_updated is not None else None,
+        'error_summary': normalized_error_summary,
+        'started_at': now,
+        'finished_at': now,
+        'created_at': now,
+        'updated_at': now,
+    }
+
+    try:
+        with engine.connect() as conn:
+            existing = conn.execute(
+                text(
+                    f"""
+                    SELECT id, started_at, created_at
+                    FROM {PIPELINE_RUNS_TABLE}
+                    WHERE pipeline_name = :pipeline_name
+                      AND step_name = :step_name
+                      AND run_date = :run_date
+                    """
+                ),
+                {
+                    'pipeline_name': normalized_pipeline_name,
+                    'step_name': normalized_step_name,
+                    'run_date': normalized_run_date,
+                },
+            ).mappings().fetchone()
+            if existing:
+                params['started_at'] = _parse_datetime_value(existing.get('started_at')) or now
+                params['created_at'] = _parse_datetime_value(existing.get('created_at')) or now
+                conn.execute(
+                    text(
+                        f"""
+                        UPDATE {PIPELINE_RUNS_TABLE}
+                        SET status = :status,
+                            source_date = :source_date,
+                            trade_date = :trade_date,
+                            rows_inserted = :rows_inserted,
+                            rows_updated = :rows_updated,
+                            error_summary = :error_summary,
+                            started_at = :started_at,
+                            finished_at = :finished_at,
+                            updated_at = :updated_at
+                        WHERE pipeline_name = :pipeline_name
+                          AND step_name = :step_name
+                          AND run_date = :run_date
+                        """
+                    ),
+                    params,
+                )
+            else:
+                conn.execute(
+                    text(
+                        f"""
+                        INSERT INTO {PIPELINE_RUNS_TABLE}
+                            (pipeline_name, step_name, run_date, status, source_date, trade_date,
+                             rows_inserted, rows_updated, error_summary, started_at, finished_at,
+                             created_at, updated_at)
+                        VALUES
+                            (:pipeline_name, :step_name, :run_date, :status, :source_date, :trade_date,
+                             :rows_inserted, :rows_updated, :error_summary, :started_at, :finished_at,
+                             :created_at, :updated_at)
+                        """
+                    ),
+                    params,
+                )
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"⚠️ pipeline step finish record failed ({normalized_pipeline_name}/{normalized_step_name}): {e}")
+        return False
+
+
+def get_pipeline_step_record(
+    *,
+    pipeline_name: str,
+    step_name: str,
+    run_date: str | None = None,
+    engine=None,
+) -> dict | None:
+    """Load persisted state for a specific pipeline step."""
+    if engine is None:
+        engine = get_db_engine()
+    ensure_pipeline_run_state_schema(engine)
+
+    normalized_pipeline_name = str(pipeline_name or '').strip() or 'manual'
+    normalized_step_name = str(step_name or '').strip()
+    normalized_run_date = normalize_date_str(run_date)
+    if not normalized_step_name or not normalized_run_date:
+        return None
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    f"""
+                    SELECT *
+                    FROM {PIPELINE_RUNS_TABLE}
+                    WHERE pipeline_name = :pipeline_name
+                      AND step_name = :step_name
+                      AND run_date = :run_date
+                    """
+                ),
+                {
+                    'pipeline_name': normalized_pipeline_name,
+                    'step_name': normalized_step_name,
+                    'run_date': normalized_run_date,
+                },
+            ).mappings().fetchone()
+        if not row:
+            return None
+
+        return {
+            'pipeline_name': row.get('pipeline_name'),
+            'step_name': row.get('step_name'),
+            'run_date': normalize_date_str(row.get('run_date')),
+            'status': row.get('status'),
+            'source_date': normalize_date_str(row.get('source_date')),
+            'trade_date': normalize_date_str(row.get('trade_date')),
+            'rows_inserted': int(row.get('rows_inserted')) if row.get('rows_inserted') is not None else None,
+            'rows_updated': int(row.get('rows_updated')) if row.get('rows_updated') is not None else None,
+            'error_summary': row.get('error_summary'),
+            'started_at': _parse_datetime_value(row.get('started_at')),
+            'finished_at': _parse_datetime_value(row.get('finished_at')),
+            'created_at': _parse_datetime_value(row.get('created_at')),
+            'updated_at': _parse_datetime_value(row.get('updated_at')),
+        }
+    except Exception as e:
+        print(f"⚠️ pipeline step lookup failed ({normalized_pipeline_name}/{normalized_step_name}): {e}")
+        return None
+
+
+def did_pipeline_step_run_on_date(
+    *,
+    pipeline_name: str,
+    step_name: str,
+    run_date: str | None = None,
+    engine=None,
+) -> bool:
+    """Answer whether a specific pipeline step recorded observable state on a date."""
+    record = get_pipeline_step_record(
+        pipeline_name=pipeline_name,
+        step_name=step_name,
+        run_date=run_date,
+        engine=engine,
+    )
+    return bool(record and str(record.get('status') or '').strip())
 
 
 def build_dashboard_aggregation_cache_key(
@@ -1821,12 +2180,29 @@ def merge_recommendations_with_market_data(
 
     merged = recommendations.copy()
     merged['stock_id'] = merged['stock_id'].astype(str)
+    if 'trade_date' in merged.columns and 'recommendation_trade_date' not in merged.columns:
+        merged['recommendation_trade_date'] = merged['trade_date'].map(normalize_date_str)
+    if 'close_price' in merged.columns and 'recommendation_close_price' not in merged.columns:
+        merged['recommendation_close_price'] = merged['close_price']
+    if 'rsi' in merged.columns and 'recommendation_rsi' not in merged.columns:
+        merged['recommendation_rsi'] = merged['rsi']
+    if 'volume' in merged.columns and 'recommendation_volume' not in merged.columns:
+        merged['recommendation_volume'] = merged['volume']
+    merged['recommendation_price_basis'] = 'raw_close'
+    merged['recommendation_data_source'] = 'daily_recommendations'
 
     if market_df is None or market_df.empty:
+        merged['market_trade_date'] = None
+        merged['market_close_price'] = None
+        merged['price_trade_date'] = merged.get('recommendation_trade_date')
+        merged['price_basis'] = 'raw_close'
+        merged['price_data_source'] = 'daily_recommendations'
         return merged
 
     market_copy = market_df.copy()
     market_copy['stock_id'] = market_copy['stock_id'].astype(str)
+    if 'trade_date' in market_copy.columns:
+        market_copy['trade_date'] = market_copy['trade_date'].map(normalize_date_str)
 
     merged = merged.merge(
         market_copy,
@@ -1835,10 +2211,39 @@ def merge_recommendations_with_market_data(
         suffixes=('', '_market')
     )
 
-    for field in ['close_price', 'rsi', 'volume']:
+    merged['market_trade_date'] = (
+        merged['trade_date_market'].map(normalize_date_str)
+        if 'trade_date_market' in merged.columns
+        else None
+    )
+    merged['market_close_price'] = (
+        merged['close_price_market']
+        if 'close_price_market' in merged.columns
+        else None
+    )
+
+    for field in ['rsi', 'volume']:
         market_field = f'{field}_market'
         if market_field in merged.columns:
             merged[field] = merged[market_field].fillna(merged[field])
+
+    if 'close_price_market' in merged.columns:
+        has_market_close = merged['close_price_market'].notna()
+        merged['close_price'] = merged['close_price_market'].fillna(merged['recommendation_close_price'])
+        merged['price_trade_date'] = merged['market_trade_date'].where(
+            has_market_close,
+            merged.get('recommendation_trade_date'),
+        )
+        merged['price_basis'] = has_market_close.map(
+            lambda flag: 'latest_actual_close' if bool(flag) else 'raw_close'
+        )
+        merged['price_data_source'] = has_market_close.map(
+            lambda flag: 'daily_market_data' if bool(flag) else 'daily_recommendations'
+        )
+    else:
+        merged['price_trade_date'] = merged.get('recommendation_trade_date')
+        merged['price_basis'] = 'raw_close'
+        merged['price_data_source'] = 'daily_recommendations'
 
     return merged
 

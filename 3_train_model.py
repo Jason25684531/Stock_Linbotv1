@@ -1,4 +1,8 @@
-"""Compatibility launcher for jobs.train_model."""
+"""Compatibility-only legacy launcher for jobs.train_model.
+
+Official daily scheduler path for daily operations: jobs/scheduler.py.
+Do not remove this wrapper until cleanup evidence passes.
+"""
 
 from __future__ import annotations
 

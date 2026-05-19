@@ -2106,6 +2106,11 @@ def _build_dashboard_health_check_payload_local(
         'low_price': safe_float(latest_row.get('low_price')),
         'close_price': safe_float(latest_row.get('close_price')),
         'volume': safe_int(latest_row.get('volume')),
+        'trade_date': as_of_date,
+        'source_date': as_of_date,
+        'price_basis': 'latest_actual_close',
+        'data_source': 'daily_market_data',
+        'is_stale': fallback_used,
     }
     indicators = {
         'ma5': safe_float(latest_row.get('ma5')),

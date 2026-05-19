@@ -30,6 +30,8 @@ from core.db_helper import (
     get_db_engine,
     get_latest_trade_date,
     normalize_date_str,
+    record_pipeline_step_finish,
+    record_pipeline_step_start,
     save_dashboard_aggregation_cache,
 )
 from core.mcp_client import (
@@ -61,6 +63,12 @@ DEFAULT_DASHBOARD_PREWARM_STOCKS = [
     for stock_id in os.getenv('DASHBOARD_PREWARM_STOCKS', '2330,2317,2454').split(',')
     if stock_id.strip()
 ]
+
+
+def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
+    pipeline_name = str(os.getenv('STOCK_PIPELINE_NAME') or '').strip() or 'manual'
+    run_date = normalize_date_str(os.getenv('STOCK_PIPELINE_RUN_DATE')) or datetime.now().strftime('%Y-%m-%d')
+    return pipeline_name, step_name, run_date
 
 # ============================================
 # 🛠️ 核心功能：抓取全市場資料
@@ -956,39 +964,62 @@ def print_summary_report(price_count, revenue_ok, financial_ok, elapsed):
 
 
 def main() -> int:
+    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('update_database')
+    record_pipeline_step_start(
+        pipeline_name=pipeline_name,
+        step_name=step_name,
+        run_date=run_date,
+    )
     run_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     print(f"\n{'='*60}")
-    print("🚀 Stock Linbot V35 - 每日資料庫統一更新")
-    print(f"📅 執行時間: {run_timestamp}")
+    print("Stock Linbot V35 - daily data update")
+    print(f"Run timestamp: {run_timestamp}")
     print(f"{'='*60}")
 
     start_time = datetime.now()
+    latest_trade_date = None
+    price_count = 0
 
-    print("\n🔗 連線資料庫...")
-    engine = get_db_engine()
+    try:
+        print("\nInitializing database engine...")
+        engine = get_db_engine()
 
-    # 步驟 1: 股價行情
-    price_count = run_price_update(engine)
+        price_count = run_price_update(engine)
+        revenue_ok = run_monthly_revenue_update()
+        financial_ok = run_financial_update()
 
-    # 步驟 2: 月營收
-    revenue_ok = run_monthly_revenue_update()
+        latest_trade_date = normalize_date_str(get_latest_trade_date())
+        if latest_trade_date:
+            prewarm_summary = prewarm_dashboard_aggregation_cache(latest_trade_date)
+            print(f"Dashboard aggregation prewarm summary: {prewarm_summary}")
 
-    # 步驟 3: 季度財報
-    financial_ok = run_financial_update()
+        elapsed = (datetime.now() - start_time).total_seconds()
+        print_summary_report(price_count, revenue_ok, financial_ok, elapsed)
 
-    latest_trade_date = normalize_date_str(get_latest_trade_date())
-    if latest_trade_date:
-        prewarm_summary = prewarm_dashboard_aggregation_cache(latest_trade_date)
-        print(f"🧊 Dashboard 聚合快取預熱: {prewarm_summary}")
-
-    # 總結報告
-    elapsed = (datetime.now() - start_time).total_seconds()
-    print_summary_report(price_count, revenue_ok, financial_ok, elapsed)
-
-    print("🎉 每日更新流程完成！")
-
-    return 0
+        record_pipeline_step_finish(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+            status='success',
+            source_date=latest_trade_date,
+            trade_date=latest_trade_date,
+            rows_inserted=price_count,
+        )
+        print("Daily data update completed.")
+        return 0
+    except Exception as exc:
+        record_pipeline_step_finish(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+            status='failed',
+            source_date=latest_trade_date,
+            trade_date=latest_trade_date,
+            rows_inserted=price_count if price_count > 0 else None,
+            error_summary=str(exc),
+        )
+        raise
 
 
 if __name__ == "__main__":
