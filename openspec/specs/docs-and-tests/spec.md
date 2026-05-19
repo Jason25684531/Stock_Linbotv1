@@ -1,5 +1,8 @@
-## ADDED Requirements
+# docs-and-tests Specification
 
+## Purpose
+TBD - created by archiving change remove-deprecated-daily-compatibility-flows. Update Purpose after archive.
+## Requirements
 ### Requirement: Documentation shall align to the supported path before and after removal
 
 Operator-facing docs SHALL point to the supported scheduler path and SHALL NOT depend on removed compatibility launchers after cleanup.
@@ -26,3 +29,4 @@ Historical or deprecation-only notes in OpenSpec or docs SHALL NOT by themselves
 - **WHEN** maintainers review OpenSpec or docs references for a deletion candidate
 - **THEN** historical references may remain if they are clearly non-operational
 - **AND** active runtime guidance, active test expectations, or active support docs SHALL be removed before deletion proceeds
+

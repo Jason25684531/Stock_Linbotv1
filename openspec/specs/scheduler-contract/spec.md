@@ -1,5 +1,8 @@
-## ADDED Requirements
+# scheduler-contract Specification
 
+## Purpose
+TBD - created by archiving change remove-deprecated-daily-compatibility-flows. Update Purpose after archive.
+## Requirements
 ### Requirement: `jobs/scheduler.py` shall remain the only official daily entrypoint during cleanup
 
 The repository SHALL preserve `jobs/scheduler.py` as the only official scheduled entrypoint while deprecated compatibility flows are reviewed and removed.
@@ -26,3 +29,4 @@ Repair tooling, manual backfill paths, and research backtest tools SHALL be clas
 - **WHEN** maintainers review backfill, research, or compatibility tooling during cleanup
 - **THEN** those paths SHALL remain documented according to their actual role
 - **AND** none of them SHALL be promoted into a parallel official daily scheduler path
+

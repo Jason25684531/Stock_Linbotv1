@@ -1,5 +1,8 @@
-## ADDED Requirements
+# cleanup-removal Specification
 
+## Purpose
+TBD - created by archiving change remove-deprecated-daily-compatibility-flows. Update Purpose after archive.
+## Requirements
 ### Requirement: Cleanup deletion shall use inventory-backed candidate selection
 
 The cleanup removal workflow SHALL use `docs/cleanup_inventory.md` as the primary evidence source for selecting deprecated daily compatibility launchers and wrappers for review.
@@ -35,3 +38,4 @@ Cleanup removal SHALL NOT be used to change scheduler logic, daily validation be
 - **WHEN** maintainers review a cleanup deletion batch
 - **THEN** the diff SHALL be limited to verified removals, related docs, and related tests
 - **AND** runtime behavior changes SHALL be rejected as out of scope
+
