@@ -218,7 +218,7 @@ copy .env.example .env
 # 根目錄 config.py 目前僅保留向後相容的 re-export shim
 
 # 必要設定：
-# - DB_URL=mysql+pymysql://user:password@localhost:3306/stock_ai_db
+# - DB_URL=mysql+pymysql://trader:trader_password@localhost:3306/stock_ai_db
 # - MCP_BASE_URL=http://localhost:8080
 # - MCP_DEFAULT_MARKET=ALL
 # - LINE_TOKEN=你的_Line_Channel_Access_Token
@@ -679,6 +679,18 @@ app.py
 
 **版本**: V38 (2026-03-09)
 **授權**: MIT License
+
+## Runtime Contract
+
+- Official scheduler entrypoint: `jobs/scheduler.py`
+- Canonical daily pipeline: `jobs/update_database.py` -> `jobs/run_daily.py` -> `daily_recommendations` -> `/api/daily-signals` and Line push
+- App runtime DSN example: `DB_URL=mysql+pymysql://trader:trader_password@localhost:3306/stock_ai_db`
+- Model path contract: `MODEL_PATH=ML_Data/pkl/stock_ai_model.pkl`
+- Container readiness endpoint: `/health`
+- Compose healthchecks use Python stdlib `urllib.request`, not `curl` or `wget`
+- `DB_URL` is the app runtime DSN; database initialization credentials in compose remain separate from the application connection contract
+- `/api/dashboard/health-check` 是 dashboard payload API，不是容器 health endpoint
+- `/api/dashboard/health-check` is a dashboard payload API, not the container health endpoint
 **最新變更**:
 - ✅ **早晚雙模式推播**：`--time morning` 早晨大局觀 / `--time evening` 晚間選股策劃
 - ✅ **Gemini 新聞摘要**：鉅亨網 RSS → Gemini 濃縮為 3 個台股影響 Bullet Points

@@ -1,4 +1,11 @@
-"""Centralized scheduler for canonical job entrypoints."""
+"""Centralized scheduler for canonical job entrypoints.
+
+This module is the official scheduled entrypoint for the daily recommendation
+pipeline:
+
+jobs/update_database.py -> jobs/run_daily.py -> daily_recommendations ->
+/api/daily-signals and Line push
+"""
 
 from __future__ import annotations
 

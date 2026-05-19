@@ -25,7 +25,7 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DB_URL",
-        "mysql+pymysql://root:my_secret_password@localhost:3306/stock_ai_db",
+        "mysql+pymysql://trader:trader_password@localhost:3306/stock_ai_db",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 

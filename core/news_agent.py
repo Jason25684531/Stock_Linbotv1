@@ -22,9 +22,20 @@ import time
 from typing import ClassVar
 from urllib.parse import quote_plus
 
-from google import genai
-from google.genai import types
-from langchain_core.tools import BaseTool
+try:
+    from google import genai
+    from google.genai import types
+except ModuleNotFoundError:
+    genai = None
+    types = None
+try:
+    from langchain_core.tools import BaseTool
+except ModuleNotFoundError:
+    class BaseTool:  # type: ignore[override]
+        """Fallback stub when langchain_core is unavailable."""
+
+        def invoke(self, input_data):
+            return self._run(**input_data)
 from pydantic import BaseModel, Field
 
 from config import Config
@@ -239,6 +250,8 @@ def _is_timeout_error(exc: Exception) -> bool:
 
 
 def _build_stock_news_client(timeout_seconds: float | None = None):
+    if genai is None or types is None:
+        raise RuntimeError("google-genai SDK is not installed")
     normalized_timeout = _normalize_timeout_seconds(timeout_seconds)
     http_options = None
     if normalized_timeout is not None and normalized_timeout > 0:
@@ -700,6 +713,9 @@ def _summarize_with_gemini(news_text: str) -> str:
     if not Config.GEMINI_API_KEY:
         return "⚠️ 未設定 GEMINI_KEY，無法生成 AI 摘要"
 
+    if genai is None or types is None:
+        return "?? google-genai SDK ?葉?批?嚗蝣箸?AI ??"
+
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     mcp_context = build_mcp_prompt_context()
 
@@ -813,6 +829,10 @@ def get_news_sector_boost() -> dict:
 
     if not Config.GEMINI_API_KEY:
         print("⚠️ 未設定 GEMINI_KEY，跳過新聞族群分析")
+        return default
+
+    if genai is None or types is None:
+        print("google-genai SDK unavailable; skip sector boost")
         return default
 
     try:
@@ -955,6 +975,9 @@ def get_stock_news_mentions(stock_ids: list, deadline_monotonic: float | None = 
         信心度 < 0.7 的結果不回傳（避免誤判）
     """
     if not Config.GEMINI_API_KEY or not stock_ids:
+        return {}
+
+    if genai is None or types is None:
         return {}
 
     guard_state = get_stock_news_guard_snapshot()
