@@ -21,6 +21,60 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import Config
 
 # ============================================
+# Multi-factor Z-Score matrix constants
+# ============================================
+
+MULTI_FACTOR_COLUMNS = [
+    'rsi',
+    'bias',
+    'macd_hist',
+    'kd_k',
+    'bb_width',
+    'volume_ratio',
+    'natr',
+    'std_20',
+    'foreign_ratio',
+    'trust_ratio',
+    'dealer_ratio',
+    'foreign_consec_days',
+    'trust_consec_days',
+    'dealer_consec_days',
+    'institutional_net_buy',
+    'institutional_consec_buy_days',
+    'chip_score',
+    'large_holder_ratio',
+    'large_holder_ratio_change',
+    'news_sentiment_score',
+    'revenue_yoy',
+    'rd_ratio',
+    'op_profit_margin',
+    'eps',
+]
+
+Z_SCORE_FEATURE_COLUMNS = [f'{column}_z' for column in MULTI_FACTOR_COLUMNS]
+
+LARGE_HOLDER_RATIO_ALIASES = [
+    'large_holder_ratio',
+    'large_holder_holding_ratio',
+    'holder_400_ratio',
+    'holder_400_holding_ratio',
+    'holding_400_ratio',
+    'major_holder_ratio',
+    'major_holder_holding_ratio',
+    'big_holder_ratio',
+]
+
+LARGE_HOLDER_CHANGE_ALIASES = [
+    'large_holder_ratio_change',
+    'large_holder_holding_ratio_change',
+    'holder_400_ratio_change',
+    'holder_400_holding_ratio_change',
+    'holding_400_ratio_change',
+    'major_holder_ratio_change',
+    'big_holder_ratio_change',
+]
+
+# ============================================
 # ⚙️ 設定區
 # ============================================
 # 注意：請使用 tool.db_helper.get_db_engine() 取得資料庫連接
@@ -291,6 +345,172 @@ def calculate_ratio_features(df: pd.DataFrame) -> pd.DataFrame:
 # 📊 籌碼面進階指標 (Phase 2)
 # ============================================
 
+def encode_news_sentiment(sentiment) -> int:
+    """Map daily news sentiment to a neutral-safe numeric factor."""
+    if sentiment is None:
+        return 0
+
+    if isinstance(sentiment, dict):
+        sentiment = sentiment.get('sentiment')
+
+    text = str(sentiment).strip().lower()
+    if not text:
+        return 0
+
+    bullish_values = {
+        'bullish', 'positive', 'beneficial', 'upbeat', '1', '+1',
+        '偏多', '利多', '看多',
+    }
+    neutral_values = {'neutral', 'flat', 'mixed', '0', '中性', '普通'}
+    bearish_values = {
+        'bearish', 'negative', 'risk', '-1',
+        '偏空', '利空', '看空',
+    }
+
+    if text in bullish_values:
+        return 1
+    if text in bearish_values:
+        return -1
+    if text in neutral_values:
+        return 0
+    return 0
+
+
+def _numeric_series(df: pd.DataFrame, column: str, default: float = 0.0) -> pd.Series:
+    if column not in df.columns:
+        return pd.Series(default, index=df.index, dtype='float64')
+    values = pd.to_numeric(df[column], errors='coerce')
+    values = values.replace([np.inf, -np.inf], np.nan)
+    return values.fillna(default).astype('float64')
+
+
+def _first_numeric_alias(df: pd.DataFrame, aliases: list[str]) -> pd.Series:
+    for column in aliases:
+        if column in df.columns:
+            return _numeric_series(df, column)
+    return pd.Series(0.0, index=df.index, dtype='float64')
+
+
+def calculate_cross_sectional_zscore(
+    df: pd.DataFrame,
+    columns: list[str],
+    date_col: str = 'trade_date',
+) -> pd.DataFrame:
+    """Add same-date cross-sectional Z-Score columns with neutral fallback."""
+    result = df.copy()
+    if result.empty:
+        for column in columns:
+            result[f'{column}_z'] = pd.Series(dtype='float64')
+        return result
+
+    group_key = date_col if date_col in result.columns else None
+
+    for column in columns:
+        z_col = f'{column}_z'
+        numeric = (
+            pd.to_numeric(result[column], errors='coerce')
+            if column in result.columns
+            else pd.Series(np.nan, index=result.index)
+        )
+        numeric = numeric.replace([np.inf, -np.inf], np.nan)
+        result[column] = numeric
+        result[z_col] = 0.0
+
+        grouped = result.groupby(group_key, dropna=False).groups if group_key else {None: result.index}
+        for _, index in grouped.items():
+            values = numeric.loc[index]
+            valid = values.dropna()
+            if valid.empty:
+                continue
+            std = float(valid.std(ddof=0))
+            if not np.isfinite(std) or std == 0:
+                continue
+            mean = float(valid.mean())
+            result.loc[index, z_col] = ((values - mean) / std).fillna(0.0)
+
+        result[z_col] = (
+            pd.to_numeric(result[z_col], errors='coerce')
+            .replace([np.inf, -np.inf], np.nan)
+            .fillna(0.0)
+        )
+        result[column] = result[column].fillna(0.0)
+
+    return result
+
+
+def build_multi_factor_matrix(
+    df: pd.DataFrame,
+    trade_date=None,
+    news_sentiment=None,
+) -> pd.DataFrame:
+    """Build raw multi-factor inputs and canonical Z-Score model features."""
+    result = df.copy()
+    if result.empty:
+        for column in MULTI_FACTOR_COLUMNS:
+            result[column] = pd.Series(dtype='float64')
+        return calculate_cross_sectional_zscore(result, MULTI_FACTOR_COLUMNS)
+
+    if 'trade_date' not in result.columns and trade_date is not None:
+        result['trade_date'] = trade_date
+
+    result['volume'] = _numeric_series(result, 'volume', default=1.0).replace(0, 1)
+    if 'volume_ratio' not in result.columns and 'stock_id' in result.columns:
+        result = calculate_ratio_features(result)
+    elif 'volume_ratio' not in result.columns:
+        result['volume_ratio'] = 1.0
+
+    for column in ['foreign_buy', 'trust_buy', 'dealer_buy']:
+        result[column] = _numeric_series(result, column)
+
+    vol_safe = _numeric_series(result, 'volume', default=1.0).replace(0, 1)
+    result['foreign_ratio'] = (
+        _numeric_series(result, 'foreign_ratio')
+        if 'foreign_ratio' in result.columns
+        else (result['foreign_buy'] / vol_safe).clip(-0.5, 0.5)
+    )
+    result['trust_ratio'] = (
+        _numeric_series(result, 'trust_ratio')
+        if 'trust_ratio' in result.columns
+        else (result['trust_buy'] / vol_safe).clip(-0.5, 0.5)
+    )
+    result['dealer_ratio'] = (
+        _numeric_series(result, 'dealer_ratio')
+        if 'dealer_ratio' in result.columns
+        else (result['dealer_buy'] / vol_safe).clip(-0.5, 0.5)
+    )
+
+    for buy_col, consec_col in [
+        ('foreign_buy', 'foreign_consec_days'),
+        ('trust_buy', 'trust_consec_days'),
+        ('dealer_buy', 'dealer_consec_days'),
+    ]:
+        if consec_col not in result.columns:
+            if 'stock_id' in result.columns and 'trade_date' in result.columns:
+                ordered = result.sort_values(['stock_id', 'trade_date'])
+                result.loc[ordered.index, consec_col] = (
+                    ordered.groupby('stock_id')[buy_col].transform(calculate_consec_days)
+                )
+            else:
+                result[consec_col] = (result[buy_col] > 0).astype(int)
+        result[consec_col] = _numeric_series(result, consec_col)
+
+    result['institutional_net_buy'] = result['foreign_buy'] + result['trust_buy'] + result['dealer_buy']
+    result['institutional_consec_buy_days'] = (
+        result['foreign_consec_days'] + result['trust_consec_days'] + result['dealer_consec_days']
+    )
+    result.loc[result['institutional_net_buy'] <= 0, 'institutional_consec_buy_days'] = 0
+    result['large_holder_ratio'] = _first_numeric_alias(result, LARGE_HOLDER_RATIO_ALIASES)
+    result['large_holder_ratio_change'] = _first_numeric_alias(result, LARGE_HOLDER_CHANGE_ALIASES)
+    result['news_sentiment_score'] = float(encode_news_sentiment(news_sentiment))
+
+    for column in MULTI_FACTOR_COLUMNS:
+        if column not in result.columns:
+            result[column] = 0.0
+        result[column] = _numeric_series(result, column)
+
+    return calculate_cross_sectional_zscore(result, MULTI_FACTOR_COLUMNS)
+
+
 def calculate_dealer_ratio(df: pd.DataFrame) -> pd.Series:
     """
     計算自營商買超佔成交量比例
@@ -459,7 +679,7 @@ def fix_database_indicators():
     
     # 進階指標 (使用共用模組的函數)
     df['macd_hist'] = df.groupby('stock_id')['close_price'].transform(calculate_macd)
-    df['kd_k'] = df.groupby('stock_id').apply(calculate_kd, include_groups=False).reset_index(level=0, drop=True)
+    df['kd_k'] = df.groupby('stock_id').apply(calculate_kd).reset_index(level=0, drop=True)
     df['bb_width'] = df.groupby('stock_id')['close_price'].transform(calculate_bb_width)
     
     # RSI (使用共用模組)
@@ -468,7 +688,7 @@ def fix_database_indicators():
     # 🆕 V33 Phase 1: NATR 與 STD_20
     print("📊 計算 V33 新指標 (NATR, STD_20)...")
     df['natr'] = df.groupby('stock_id').apply(
-        lambda x: calculate_natr(x), include_groups=False
+        lambda x: calculate_natr(x)
     ).reset_index(level=0, drop=True)
     
     df['std_20'] = df.groupby('stock_id')['close_price'].transform(calculate_std_20)

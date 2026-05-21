@@ -37,6 +37,7 @@ from core.calc_indicators import (
     calculate_std_20, calculate_bias,
     calculate_consec_days, calculate_margin_change_pct,
     calculate_chip_score,
+    build_multi_factor_matrix,
 )
 from core.model_utils import load_model
 from config import Config
@@ -115,17 +116,17 @@ def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
 
     print("  ✓ 計算 KD / BB / ATR / NATR / STD_20...")
     df['kd_k'] = df.groupby('stock_id').apply(
-        lambda g: calculate_kd(g), include_groups=False
+        lambda g: calculate_kd(g)
     ).reset_index(level=0, drop=True)
 
     df['bb_width'] = df.groupby('stock_id')['close_price'].transform(calculate_bb_width)
 
     df['atr'] = df.groupby('stock_id').apply(
-        lambda g: calculate_atr(g), include_groups=False
+        lambda g: calculate_atr(g)
     ).reset_index(level=0, drop=True)
 
     df['natr'] = df.groupby('stock_id').apply(
-        lambda g: calculate_natr(g), include_groups=False
+        lambda g: calculate_natr(g)
     ).reset_index(level=0, drop=True)
 
     df['std_20'] = df.groupby('stock_id')['close_price'].transform(calculate_std_20)
@@ -501,6 +502,19 @@ def load_strategy_model(strategy_name: str):
     return None, None
 
 
+def resolve_matrix_news_sentiment(date_str: str) -> str:
+    """Resolve daily sentiment for factor matrix with neutral fallback."""
+    cached = (_news_boost_cache or {}).get('sentiment')
+    if cached:
+        return cached
+    try:
+        from core.db_helper import get_news_sentiment
+        return (get_news_sentiment(date_str) or {}).get('sentiment', 'neutral')
+    except Exception as exc:
+        print(f"[AI] news sentiment unavailable for Z-Score matrix, using neutral: {exc}")
+        return 'neutral'
+
+
 def _persist_strategy_recommendations(
     candidates: pd.DataFrame,
     strategy_name: str,
@@ -590,14 +604,21 @@ def run_strategy(strategy, df, date_str, engine):
     # AI 預測
     if model:
         # 使用模型記錄的特徵（優先）或策略定義的特徵
-        features = model_features if model_features else strategy.features
+        features = list(model_features or getattr(strategy, 'features', []) or [])
+        missing_features = []
         for f in features:
             if f not in candidates.columns:
                 candidates[f] = 0
+                missing_features.append(f)
+        if missing_features:
+            print(f"[AI] model feature backfill for {strategy.name}: {missing_features}")
         
-        X = candidates[features].fillna(0)
-        candidates['ai_score'] = model.predict_proba(X)[:, 1]
-        candidates = candidates.sort_values('ai_score', ascending=False)
+        try:
+            X = candidates[features].apply(pd.to_numeric, errors='coerce').fillna(0)
+            candidates['ai_score'] = model.predict_proba(X)[:, 1]
+            candidates = candidates.sort_values('ai_score', ascending=False)
+        except Exception as e:
+            print(f"[AI] {strategy.name}: scoring failed, persisting degraded candidates: {e}")
         print(f"✅ AI 評分完成（特徵數: {len(features)}）")
 
     # 新聞情緒雙向加減分
@@ -789,6 +810,10 @@ def run_daily_for_date(target_date: str | None = None):
             print(f"⚠️ 個股新聞偵測失敗（不影響選股）: {e}")
 
     # 8. 遍歷所有策略執行選股（每策略動態載入專屬模型）
+    matrix_sentiment = resolve_matrix_news_sentiment(date_str)
+    df = build_multi_factor_matrix(df, trade_date=date_str, news_sentiment=matrix_sentiment)
+    print(f"[AI] Z-Score matrix ready for daily inference: {len(df)} rows")
+
     all_results = {}
     for strategy in strategies:
         candidates = run_strategy(strategy, df, date_str, engine)

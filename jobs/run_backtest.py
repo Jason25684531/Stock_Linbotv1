@@ -24,6 +24,7 @@ import pandas as pd
 from sqlalchemy import text
 import joblib
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -504,6 +505,19 @@ class BacktestEngine:
                 WHERE stock_id = :sid AND trade_date = :dt
             """)
             return conn.execute(query, {'sid': stock_id, 'dt': date_str}).mappings().fetchone()
+
+    def _apply_execution_slippage(self, price: float, side: str) -> float:
+        """Apply adverse execution-only slippage without mutating market data."""
+        max_slippage = float(getattr(Config, 'SLIPPAGE_MAX_PIPS', Config.SLIPPAGE_RATE))
+        if max_slippage < 0:
+            raise ValueError('Config.SLIPPAGE_MAX_PIPS must be non-negative')
+
+        slippage = random.uniform(0, max_slippage)
+        if side == 'buy':
+            return price * (1 + slippage)
+        if side == 'sell':
+            return price * (1 - slippage)
+        raise ValueError("side must be 'buy' or 'sell'")
     
     def check_and_execute_exit(self, sid: str, date_str: str, trend: str):
         """共用出場檢查邏輯（委派策略物件或 fallback）
@@ -735,11 +749,10 @@ class BacktestEngine:
         if budget < price * 1000:
             return
         
+        actual_buy_price = self._apply_execution_slippage(price, 'buy')
         shares = int(budget / price)
-        
-        # V32: 滑價模擬（買入時價格上滑 0.2%）
-        slippage_price = price * (1 + Config.SLIPPAGE_RATE)
-        cost = shares * slippage_price
+
+        cost = shares * actual_buy_price
         fee = max(int(cost * FEE_RATE), MIN_FEE)
         
         if self.capital < cost + fee:
@@ -750,15 +763,15 @@ class BacktestEngine:
         
         self.positions[stock_id] = {
             'shares': shares,
-            'cost': slippage_price,  # V32: 記錄滑價後的實際成本
+            'cost': actual_buy_price,
             'total_cost': cost + fee,
             'days': 0,
             'stop_loss': stop_loss,
-            'highest': slippage_price,
+            'highest': actual_buy_price,
             'buy_date': date_str
         }
-        
-        print(f"🟢 {date_str} 買入 {stock_id} ({shares}股) @ {slippage_price:.2f} (滑價+{Config.SLIPPAGE_RATE*100:.1f}%) | 停損: {stop_loss:.2f}")
+
+        print(f"🟢 {date_str} 買入 {stock_id} ({shares}股) @ {actual_buy_price:.2f} (滑價上限 {Config.SLIPPAGE_MAX_PIPS*100:.2f}%) | 停損: {stop_loss:.2f}")
     
     def sell(self, stock_id, price, date_str, reason):
         """賣出"""
@@ -767,9 +780,8 @@ class BacktestEngine:
         
         info = self.positions[stock_id]
         
-        # V32: 滑價模擬（賣出時價格下滑 0.2%）
-        slippage_price = price * (1 - Config.SLIPPAGE_RATE)
-        revenue = info['shares'] * slippage_price
+        actual_sell_price = self._apply_execution_slippage(price, 'sell')
+        revenue = info['shares'] * actual_sell_price
         fee = max(int(revenue * FEE_RATE), MIN_FEE)
         tax = int(revenue * TAX_RATE)
         net = revenue - fee - tax
@@ -787,7 +799,7 @@ class BacktestEngine:
             'buy_date': info['buy_date'],
             'sell_date': date_str,
             'buy_price': info['cost'],
-            'sell_price': slippage_price,  # V32: 記錄滑價後的實際賣價
+            'sell_price': actual_sell_price,
             'profit_pct': profit_pct,
             'reason': reason,
             'days': info['days']
@@ -961,7 +973,7 @@ class BacktestEngine:
         print("-" * 60)
         print(f"📉 最大回撤 (MDD): {max_drawdown*100:.2f}%")
         print(f"📊 夏普比率 (Sharpe): {sharpe_ratio:.3f}")
-        print(f"💸 滑價成本: {Config.SLIPPAGE_RATE*100:.1f}% (買高賣低)")
+        print(f"💸 滑價上限: {Config.SLIPPAGE_MAX_PIPS*100:.2f}% (買高賣低隨機成交)")
         print("=" * 60)
         
         # 輸出交易明細到 CSV

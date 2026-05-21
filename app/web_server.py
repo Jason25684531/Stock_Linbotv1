@@ -10,8 +10,10 @@ import traceback
 import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import text
 
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
+from core import db_helper
 from . import app
 
 app_pkg = sys.modules[__package__]
@@ -574,6 +576,75 @@ def api_dashboard_health_check():
         return jsonify({'error': str(exc)}), 500
 
 
+def _build_stock_analysis_payload(health_payload: dict[str, object], stock_id: str) -> dict[str, object]:
+    series = health_payload.get('series') if isinstance(health_payload.get('series'), dict) else {}
+    rule_report = health_payload.get('rule_report') if isinstance(health_payload.get('rule_report'), dict) else {}
+    war_room = health_payload.get('war_room') if isinstance(health_payload.get('war_room'), dict) else {}
+
+    payload = {
+        'status': health_payload.get('status', 'empty'),
+        'as_of_date': health_payload.get('as_of_date'),
+        'stock_id': health_payload.get('symbol') or health_payload.get('stock_id') or stock_id,
+        'source': health_payload.get('source') or ['daily_market_data'],
+        'warnings': health_payload.get('warnings') or [],
+        'quote': health_payload.get('quote') or {},
+        'kline_ma': {
+            'candles': series.get('candles') or [],
+            'volume': series.get('volume') or [],
+            'ma5': series.get('ma5') or [],
+            'ma20': series.get('ma20') or [],
+            'ma60': series.get('ma60') or [],
+        },
+        'technical': health_payload.get('indicators') or {},
+        'chip': {
+            'institutional': health_payload.get('institutional') or {},
+            'summary': rule_report.get('chips'),
+            'chip_flow': war_room.get('chip_flow') or {},
+        },
+        'action_script': rule_report.get('action_scripts') or [],
+        'diagnosis': {
+            'summary': rule_report.get('summary'),
+            'trend': rule_report.get('trend'),
+            'chips': rule_report.get('chips'),
+            'confidence': rule_report.get('confidence'),
+        },
+        'metadata': {
+            'fallback_used': health_payload.get('fallback_used', False),
+            'message': health_payload.get('message'),
+            'price_map': war_room.get('price_map') or {},
+        },
+    }
+    if payload['status'] == 'ok' and (not payload['quote'] or not payload['kline_ma']['candles']):
+        payload['status'] = 'degraded'
+        payload['warnings'] = [
+            *payload['warnings'],
+            'stock analysis payload is missing quote or k-line series',
+        ]
+    return payload
+
+
+@app.route('/api/stock-analysis')
+def api_stock_analysis():
+    """Stable dashboard adapter for single-stock health analysis."""
+    stock_id = str(request.args.get('id') or request.args.get('stock_id') or request.args.get('symbol') or '').strip()
+    if not stock_id:
+        return jsonify({'status': 'error', 'error': 'missing required stock id query parameter: id'}), 400
+
+    try:
+        health_payload = app_pkg._build_dashboard_health_check_payload(
+            stock_id=stock_id,
+            requested_date=request.args.get('date'),
+            period=request.args.get('period'),
+            overlays=_parse_csv_query_values('overlay', 'overlays'),
+            panes=_parse_csv_query_values('pane', 'panes', 'panel', 'panels'),
+        )
+        status_code = 500 if health_payload.get('status') == 'error' else 200
+        return _dashboard_json_response(_build_stock_analysis_payload(health_payload, stock_id), status_code)
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'error': str(exc)}), 500
+
+
 @app.route('/api/dashboard/macro')
 def api_dashboard_macro():
     """回傳 dashboard beta 大盤總經 payload。"""
@@ -583,6 +654,384 @@ def api_dashboard_macro():
     except Exception as exc:
         traceback.print_exc()
         return jsonify({'error': str(exc)}), 500
+
+
+def _market_envelope(status: str, as_of_date: str | None, source: list[str], data: dict, warnings: list[str] | None = None):
+    payload = {
+        'status': status,
+        'as_of_date': as_of_date,
+        'source': source,
+        'warnings': warnings or [],
+        'data': data,
+    }
+    return _dashboard_json_response(payload)
+
+
+def _load_market_frame() -> tuple[pd.DataFrame, str | None, list[str]]:
+    warnings: list[str] = []
+    requested_date = app_pkg.normalize_date_str(request.args.get('date')) or app_pkg._resolve_ui_baseline_date() or app_pkg._current_line_date()
+    try:
+        df, date_str = app_pkg.get_stock_data(date_str=requested_date)
+    except Exception as exc:
+        warnings.append(f'market data load failed: {exc}')
+        return pd.DataFrame(), requested_date, warnings
+
+    if not isinstance(df, pd.DataFrame):
+        return pd.DataFrame(), app_pkg.normalize_date_str(date_str) or requested_date, ['market data returned no frame']
+
+    resolved_date = app_pkg.normalize_date_str(date_str) or requested_date
+    if not df.empty and 'trade_date' in df.columns:
+        latest_date = app_pkg.normalize_date_str(df['trade_date'].max())
+        if latest_date:
+            resolved_date = latest_date
+    return df.copy(), resolved_date, warnings
+
+
+def _latest_market_rows(df: pd.DataFrame, as_of_date: str | None) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    frame = df.copy()
+    if 'trade_date' in frame.columns and as_of_date:
+        dated = frame[frame['trade_date'].astype(str).str[:10] == as_of_date]
+        if not dated.empty:
+            frame = dated
+    if 'stock_id' in frame.columns and 'trade_date' in frame.columns:
+        frame = frame.sort_values(['stock_id', 'trade_date']).groupby('stock_id', as_index=False).tail(1)
+    return frame.copy()
+
+
+def _record_from_row(row, fields: list[str]) -> dict[str, object]:
+    record: dict[str, object] = {}
+    for field in fields:
+        value = row.get(field)
+        if field in {'stock_id', 'stock_name', 'strategy', 'strategy_key', 'strategy_display', 'recommendation_date'}:
+            record[field] = None if value is None or pd.isna(value) else str(value)
+        elif field.endswith('_buy') or field in {'volume', 'margin_balance', 'short_balance'}:
+            record[field] = app_pkg.safe_int(value)
+        else:
+            record[field] = app_pkg.safe_float(value)
+    return record
+
+
+def _recommendation_factor_fields(row) -> dict[str, object]:
+    excluded = {
+        'stock_id', 'stock_name', 'close_price', 'ai_score', 'strategy', 'strategy_key',
+        'strategy_display', 'recommendation_date', 'fallback_used', 'chip_score',
+    }
+    factors: dict[str, object] = {}
+    for field, value in row.items():
+        key = str(field)
+        normalized = key.lower()
+        if normalized in excluded:
+            continue
+        if 'z_score' not in normalized and not normalized.endswith('_z'):
+            continue
+        if value is None or pd.isna(value):
+            factors[key] = None
+            continue
+        numeric = app_pkg.safe_float(value)
+        factors[key] = numeric if numeric is not None else str(value)
+    return factors
+
+
+def _top_records(frame: pd.DataFrame, column: str, *, ascending: bool = False, limit: int = 10, fields: list[str] | None = None) -> list[dict[str, object]]:
+    if frame.empty or column not in frame.columns:
+        return []
+    fields = fields or ['stock_id', column]
+    ranked = frame.copy()
+    ranked[column] = pd.to_numeric(ranked[column], errors='coerce')
+    ranked = ranked.dropna(subset=[column]).sort_values(column, ascending=ascending).head(limit)
+    return [_record_from_row(row, fields) for _, row in ranked.iterrows()]
+
+
+def _build_market_light(latest: pd.DataFrame) -> dict[str, object]:
+    if latest.empty or 'close_price' not in latest.columns or 'open_price' not in latest.columns:
+        return {'state': 'unavailable', 'label': 'Unavailable', 'score': None}
+    close = pd.to_numeric(latest['close_price'], errors='coerce')
+    open_price = pd.to_numeric(latest['open_price'], errors='coerce')
+    up_count = int((close > open_price).sum())
+    down_count = int((close < open_price).sum())
+    total = max(up_count + down_count + int((close == open_price).sum()), 1)
+    score = round(up_count / total * 100, 1)
+    if score >= 55:
+        state, label = 'bullish', '多方'
+    elif score <= 45:
+        state, label = 'bearish', '空方'
+    else:
+        state, label = 'neutral', '中性'
+    return {'state': state, 'label': label, 'score': score}
+
+
+def _build_institutional_totals(latest: pd.DataFrame) -> dict[str, int]:
+    totals = {}
+    for column in ('foreign_buy', 'trust_buy', 'dealer_buy'):
+        if column in latest.columns:
+            totals[column] = int(pd.to_numeric(latest[column], errors='coerce').fillna(0).sum())
+        else:
+            totals[column] = 0
+    totals['total_net'] = totals['foreign_buy'] + totals['trust_buy'] + totals['dealer_buy']
+    return totals
+
+
+def _build_institutional_sync(totals: dict[str, int]) -> dict[str, object]:
+    values = [totals.get('foreign_buy', 0), totals.get('trust_buy', 0), totals.get('dealer_buy', 0)]
+    positive = sum(1 for value in values if value > 0)
+    negative = sum(1 for value in values if value < 0)
+    if positive >= 2:
+        state = 'aligned_buy'
+        label = '法人同步偏多'
+    elif negative >= 2:
+        state = 'aligned_sell'
+        label = '法人同步偏空'
+    else:
+        state = 'mixed'
+        label = '法人分歧'
+    return {'state': state, 'label': label, 'net_total': totals.get('total_net', 0)}
+
+
+@app.route('/api/market/summary')
+def api_market_summary():
+    df, as_of_date, warnings = _load_market_frame()
+    latest = _latest_market_rows(df, as_of_date)
+    totals = _build_institutional_totals(latest)
+    heartbeat_payload, _ = _build_system_status_payload()
+    status = 'ok' if not latest.empty and heartbeat_payload['status'] == 'ok' else 'degraded'
+    return _market_envelope(
+        status,
+        as_of_date,
+        ['daily_market_data', 'pipeline_runs'],
+        {
+            'market_light': _build_market_light(latest),
+            'institutional_sync': _build_institutional_sync(totals),
+            'system_heartbeat': heartbeat_payload['data']['heartbeat'],
+        },
+        warnings + heartbeat_payload['warnings'],
+    )
+
+
+@app.route('/api/market/recommendations')
+def api_market_recommendations():
+    try:
+        top_n = max(1, min(int(request.args.get('top_n', 10)), 20))
+    except (TypeError, ValueError):
+        top_n = 10
+    strategy = (request.args.get('strategy') or '').strip() or None
+    as_of_date = app_pkg.normalize_date_str(request.args.get('date')) or app_pkg._resolve_ui_baseline_date() or app_pkg._current_line_date()
+    warnings: list[str] = []
+    try:
+        rows = app_pkg.get_daily_recommendations(date_str=as_of_date, strategy=strategy, limit=top_n)
+    except Exception as exc:
+        warnings.append(f'recommendations load failed: {exc}')
+        rows = pd.DataFrame()
+    if not isinstance(rows, pd.DataFrame):
+        rows = pd.DataFrame(rows or [])
+    if rows.empty:
+        return _market_envelope('empty', as_of_date, ['daily_recommendations'], {'recommendations': []}, warnings)
+    fields = [
+        'stock_id', 'stock_name', 'close_price', 'ai_score', 'strategy', 'strategy_key',
+        'strategy_display', 'chip_score', 'rsi', 'volume', 'foreign_buy',
+    ]
+    ranked = rows.sort_values('ai_score', ascending=False).head(top_n) if 'ai_score' in rows.columns else rows.head(top_n)
+    recommendations = []
+    for _, row in ranked.iterrows():
+        record = _record_from_row(row, [field for field in fields if field in ranked.columns])
+        record.setdefault('recommendation_date', as_of_date)
+        record['factor_fields'] = _recommendation_factor_fields(row)
+        record['fallback_used'] = bool(row.get('fallback_used', False)) if 'fallback_used' in ranked.columns else False
+        recommendations.append(record)
+    return _market_envelope('ok', as_of_date, ['daily_recommendations'], {'recommendations': recommendations}, warnings)
+
+
+@app.route('/api/market/snapshot')
+def api_market_snapshot():
+    df, as_of_date, warnings = _load_market_frame()
+    latest = _latest_market_rows(df, as_of_date)
+    if latest.empty:
+        return _market_envelope('empty', as_of_date, ['daily_market_data'], {'breadth': {}, 'market_light': _build_market_light(latest)}, warnings)
+    close = pd.to_numeric(latest.get('close_price'), errors='coerce')
+    open_price = pd.to_numeric(latest.get('open_price'), errors='coerce')
+    up_count = int((close > open_price).sum())
+    down_count = int((close < open_price).sum())
+    neutral_count = int((close == open_price).sum())
+    total = max(up_count + down_count + neutral_count, 1)
+    return _market_envelope(
+        'ok',
+        as_of_date,
+        ['daily_market_data'],
+        {
+            'market_light': _build_market_light(latest),
+            'breadth': {
+                'up_count': up_count,
+                'down_count': down_count,
+                'neutral_count': neutral_count,
+                'up_ratio': round(up_count / total * 100, 1),
+                'down_ratio': round(down_count / total * 100, 1),
+            },
+        },
+        warnings,
+    )
+
+
+@app.route('/api/market/institutional')
+def api_market_institutional():
+    df, as_of_date, warnings = _load_market_frame()
+    latest = _latest_market_rows(df, as_of_date)
+    if latest.empty:
+        return _market_envelope('empty', as_of_date, ['daily_market_data'], {'totals': _build_institutional_totals(latest)}, warnings)
+    data = {'totals': _build_institutional_totals(latest), 'top': {}, 'synchronized_buys': []}
+    for column in ('foreign_buy', 'trust_buy', 'dealer_buy'):
+        data['top'][column] = {
+            'buy': _top_records(latest, column, ascending=False, fields=['stock_id', column]),
+            'sell': _top_records(latest, column, ascending=True, fields=['stock_id', column]),
+        }
+    available_flow = [column for column in ('foreign_buy', 'trust_buy', 'dealer_buy') if column in latest.columns]
+    if available_flow:
+        sync = latest.copy()
+        for column in available_flow:
+            sync[column] = pd.to_numeric(sync[column], errors='coerce').fillna(0)
+        sync['sync_count'] = sync[available_flow].gt(0).sum(axis=1)
+        sync['total_net'] = sync[available_flow].sum(axis=1)
+        sync = sync[(sync['sync_count'] >= 2) & (sync['total_net'] > 0)].sort_values('total_net', ascending=False).head(10)
+        data['synchronized_buys'] = [_record_from_row(row, ['stock_id', 'foreign_buy', 'trust_buy', 'dealer_buy', 'total_net']) for _, row in sync.iterrows()]
+    return _market_envelope('ok' if len(available_flow) == 3 else 'degraded', as_of_date, ['daily_market_data'], data, warnings)
+
+
+@app.route('/api/market/technical')
+def api_market_technical():
+    df, as_of_date, warnings = _load_market_frame()
+    latest = _latest_market_rows(df, as_of_date)
+    if latest.empty:
+        return _market_envelope('empty', as_of_date, ['daily_market_data'], {}, warnings)
+    weekly = latest.copy()
+    if 'stock_id' in df.columns and 'trade_date' in df.columns and 'close_price' in df.columns:
+        history = df.copy()
+        history['close_price'] = pd.to_numeric(history['close_price'], errors='coerce')
+        previous = history.sort_values(['stock_id', 'trade_date']).groupby('stock_id', as_index=False).first()[['stock_id', 'close_price']]
+        previous = previous.rename(columns={'close_price': 'previous_close'})
+        weekly = latest.merge(previous, on='stock_id', how='left')
+        weekly['weekly_gain_pct'] = ((pd.to_numeric(weekly['close_price'], errors='coerce') - weekly['previous_close']) / weekly['previous_close'] * 100).replace([float('inf'), -float('inf')], pd.NA)
+    else:
+        weekly['weekly_gain_pct'] = pd.NA
+    breakout = latest.copy()
+    breakout['volume'] = pd.to_numeric(breakout.get('volume'), errors='coerce')
+    breakout['close_price'] = pd.to_numeric(breakout.get('close_price'), errors='coerce')
+    breakout['open_price'] = pd.to_numeric(breakout.get('open_price'), errors='coerce')
+    breakout = breakout[(breakout['close_price'] > breakout['open_price']) & (breakout['volume'] >= breakout['volume'].median())]
+    rsi_frame = latest.copy()
+    rsi_frame['rsi'] = pd.to_numeric(rsi_frame.get('rsi'), errors='coerce')
+    data = {
+        'weekly_gain_top10': _top_records(weekly, 'weekly_gain_pct', fields=['stock_id', 'weekly_gain_pct', 'close_price']),
+        'volume_price_breakouts': [_record_from_row(row, ['stock_id', 'close_price', 'volume']) for _, row in breakout.sort_values('volume', ascending=False).head(10).iterrows()],
+        'rsi_overbought': [_record_from_row(row, ['stock_id', 'rsi', 'close_price']) for _, row in rsi_frame[rsi_frame['rsi'] >= 70].sort_values('rsi', ascending=False).head(10).iterrows()],
+        'rsi_oversold': [_record_from_row(row, ['stock_id', 'rsi', 'close_price']) for _, row in rsi_frame[rsi_frame['rsi'] <= 30].sort_values('rsi', ascending=True).head(10).iterrows()],
+    }
+    return _market_envelope('ok', as_of_date, ['daily_market_data'], data, warnings)
+
+
+@app.route('/api/market/margin')
+def api_market_margin():
+    df, as_of_date, warnings = _load_market_frame()
+    latest = _latest_market_rows(df, as_of_date)
+    if latest.empty or not {'margin_balance', 'short_balance'}.intersection(latest.columns):
+        return _market_envelope('empty', as_of_date, ['daily_market_data'], {}, warnings)
+    margin = latest.copy()
+    if 'stock_id' in df.columns and 'trade_date' in df.columns:
+        history = df.sort_values(['stock_id', 'trade_date']).copy()
+        prev = history.groupby('stock_id', as_index=False).first()[['stock_id'] + [c for c in ['margin_balance', 'short_balance'] if c in history.columns]]
+        prev = prev.rename(columns={'margin_balance': 'previous_margin_balance', 'short_balance': 'previous_short_balance'})
+        margin = margin.merge(prev, on='stock_id', how='left')
+    for column in ('margin_balance', 'short_balance', 'previous_margin_balance', 'previous_short_balance'):
+        if column in margin.columns:
+            margin[column] = pd.to_numeric(margin[column], errors='coerce')
+    margin['margin_change'] = margin.get('margin_balance', 0) - margin.get('previous_margin_balance', 0)
+    margin['short_change'] = margin.get('short_balance', 0) - margin.get('previous_short_balance', 0)
+    margin['short_margin_ratio'] = (margin.get('short_balance', 0) / margin.get('margin_balance', 1)).replace([float('inf'), -float('inf')], pd.NA)
+    data = {
+        'margin_increase': _top_records(margin, 'margin_change', fields=['stock_id', 'margin_balance', 'margin_change']),
+        'margin_decrease': _top_records(margin, 'margin_change', ascending=True, fields=['stock_id', 'margin_balance', 'margin_change']),
+        'short_increase': _top_records(margin, 'short_change', fields=['stock_id', 'short_balance', 'short_change']),
+        'short_decrease': _top_records(margin, 'short_change', ascending=True, fields=['stock_id', 'short_balance', 'short_change']),
+        'high_short_margin_risk': _top_records(margin, 'short_margin_ratio', fields=['stock_id', 'short_balance', 'margin_balance', 'short_margin_ratio']),
+    }
+    return _market_envelope('ok', as_of_date, ['daily_market_data'], data, warnings)
+
+
+def _format_pipeline_status(status: str | None) -> str:
+    normalized = str(status or '').strip().lower()
+    return {
+        'success': 'Success',
+        'failed': 'Failed',
+        'failure': 'Failed',
+        'running': 'Running',
+        'not_run': 'Not Run',
+        'not run': 'Not Run',
+    }.get(normalized, 'Unknown')
+
+
+def _build_system_status_payload() -> tuple[dict[str, object], int]:
+    step_map = [('1_update', 'update_database'), ('2_run', 'run_daily'), ('5_push', 'push_to_line')]
+    warnings: list[str] = []
+    rows_by_step: dict[str, dict[str, object]] = {}
+    try:
+        engine = db_helper.get_db_engine()
+        db_helper.ensure_pipeline_run_state_schema(engine)
+        with engine.connect() as conn:
+            for _, step_name in step_map:
+                row = conn.execute(
+                    text(
+                        f"""
+                        SELECT *
+                        FROM {db_helper.PIPELINE_RUNS_TABLE}
+                        WHERE step_name = :step_name
+                        ORDER BY run_date DESC, updated_at DESC, id DESC
+                        LIMIT 1
+                        """
+                    ),
+                    {'step_name': step_name},
+                ).mappings().fetchone()
+                if row:
+                    rows_by_step[step_name] = dict(row)
+    except Exception as exc:
+        warnings.append(f'pipeline status load failed: {exc}')
+    steps = []
+    for alias, step_name in step_map:
+        row = rows_by_step.get(step_name) or {}
+        steps.append(
+            {
+                'alias': alias,
+                'step_name': step_name,
+                'status': _format_pipeline_status(row.get('status')),
+                'run_date': app_pkg.normalize_date_str(row.get('run_date')),
+                'trade_date': app_pkg.normalize_date_str(row.get('trade_date')),
+                'started_at': str(row.get('started_at')) if row.get('started_at') is not None else None,
+                'finished_at': str(row.get('finished_at')) if row.get('finished_at') is not None else None,
+                'rows_inserted': app_pkg.safe_int(row.get('rows_inserted')),
+                'rows_updated': app_pkg.safe_int(row.get('rows_updated')),
+                'error_summary': row.get('error_summary'),
+            }
+        )
+    has_failed = any(step['status'] == 'Failed' for step in steps)
+    has_missing = any(step['status'] == 'Unknown' for step in steps)
+    status = 'degraded' if has_failed or has_missing or warnings else 'ok'
+    latest_run_date = next((step['run_date'] for step in steps if step.get('run_date')), None)
+    heartbeat_state = 'failed' if has_failed else ('not_run' if has_missing else 'success')
+    payload = {
+        'status': status,
+        'as_of_date': latest_run_date or app_pkg._current_line_date(),
+        'source': ['pipeline_runs'],
+        'warnings': warnings,
+        'data': {
+            'heartbeat': {'state': heartbeat_state, 'latest_run_date': latest_run_date},
+            'steps': steps,
+        },
+    }
+    return payload, 200
+
+
+@app.route('/api/market/system-status')
+def api_market_system_status():
+    payload, status_code = _build_system_status_payload()
+    return _dashboard_json_response(payload, status_code)
 
 
 @app.route('/backtest', methods=['GET', 'POST'])

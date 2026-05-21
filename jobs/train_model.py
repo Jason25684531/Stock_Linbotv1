@@ -29,6 +29,8 @@ from core.calc_indicators import (
     calculate_ratio_features,
     calculate_consec_days, calculate_margin_change_pct,
     calculate_chip_score,
+    build_multi_factor_matrix,
+    Z_SCORE_FEATURE_COLUMNS,
 )
 from core.strategy_manager import StrategyManager
 
@@ -37,6 +39,13 @@ TRAIN_RATIO = Config.TRAIN_RATIO
 
 # 模型存放目錄
 MODEL_DIR = os.path.dirname(Config.MODEL_PATH) or 'ML_Data/pkl'
+
+
+def resolve_model_feature_columns(strategy, data: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """Return canonical Z-Score model features and missing columns."""
+    selected = list(Z_SCORE_FEATURE_COLUMNS)
+    missing = [feature for feature in selected if feature not in data.columns]
+    return selected, missing
 
 
 def calculate_future_target(df, look_ahead_days, target_return):
@@ -180,6 +189,9 @@ def load_and_prepare_data(engine) -> pd.DataFrame:
     if 'chip_score' not in df.columns or df['chip_score'].eq(0).all():
         df['chip_score'] = calculate_chip_score(df)
 
+    df = build_multi_factor_matrix(df)
+    print(f"[AI] Z-Score matrix ready for training: {len(Z_SCORE_FEATURE_COLUMNS)} features")
+
     print(f"📊 籌碼欄位狀態: chip_score 非零 {(df['chip_score'] != 0).sum():,} 筆"
           f" | foreign_consec 非零 {(df['foreign_consec_days'] != 0).sum():,} 筆")
     
@@ -197,14 +209,14 @@ def train_single_strategy(strategy, base_df: pd.DataFrame) -> dict:
         訓練結果摘要 dict，失敗時返回含 error 的 dict
     """
     strategy_name = strategy.name
-    features = strategy.features
+    legacy_features = list(getattr(strategy, 'features', []) or [])
     look_ahead_days = strategy.look_ahead_days
     target_return = strategy.target_return
     
     print(f"\n{'='*60}")
     print(f"🧠 訓練策略: {strategy.display_name} ({strategy_name})")
     print(f"   預測天數: {look_ahead_days} 天 | 目標報酬: {target_return*100:.1f}%")
-    print(f"   特徵數量: {len(features)} 個")
+    print(f"   特徵數量: {len(Z_SCORE_FEATURE_COLUMNS)} 個 (Z-Score)")
     print(f"{'='*60}")
     
     # 1. 計算此策略專用的目標變數
@@ -219,11 +231,15 @@ def train_single_strategy(strategy, base_df: pd.DataFrame) -> dict:
     # 2. 時間序列拆分
     train_df, test_df = time_series_split(data, train_ratio=TRAIN_RATIO)
     
-    # 3. 準備特徵（只使用當前策略定義的特徵）
-    available_features = [f for f in features if f in data.columns]
-    missing_features = [f for f in features if f not in data.columns]
+    # 3. 準備特徵（使用 canonical Z-Score 矩陣）
+    available_features, missing_features = resolve_model_feature_columns(strategy, data)
     if missing_features:
-        print(f"⚠️ 缺少特徵（已跳過）: {missing_features}")
+        print(f"[AI] Missing Z-Score features backfilled as 0: {missing_features}")
+        for feature in missing_features:
+            train_df[feature] = 0.0
+            test_df[feature] = 0.0
+    if legacy_features:
+        print(f"[AI] Legacy strategy features retained for filters only: {legacy_features}")
     
     print(f"📋 使用特徵: {available_features}")
     

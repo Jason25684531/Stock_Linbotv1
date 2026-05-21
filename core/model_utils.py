@@ -9,7 +9,7 @@ import joblib
 from config import Config
 
 
-DEFAULT_STRATEGY_ALIASES = {"v31", "v31_hybrid"}
+DEFAULT_STRATEGY_ALIASES = {"v31"}
 
 
 def normalize_strategy_name(strategy_name: Optional[str]) -> Optional[str]:

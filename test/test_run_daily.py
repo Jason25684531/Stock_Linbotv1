@@ -57,3 +57,31 @@ def test_run_strategy_writes_heartbeat_when_candidates_empty():
     assert insert_calls[0]['stock_id'] == 'NONE'
     assert insert_calls[0]['strategy'] == 'v38_value_dividend'
     assert insert_calls[0]['date'] == '2026-04-15'
+
+
+def test_compute_indicators_from_history_supports_current_pandas_groupby_apply(monkeypatch):
+    rows = []
+    for stock_id, base in [('2330', 100.0), ('2317', 80.0)]:
+        for day in range(1, 16):
+            rows.append(
+                {
+                    'stock_id': stock_id,
+                    'trade_date': f'2026-05-{day:02d}',
+                    'open_price': base + day,
+                    'high_price': base + day + 1,
+                    'low_price': base + day - 1,
+                    'close_price': base + day,
+                    'volume': 1000 + day,
+                    'foreign_buy': 1,
+                    'trust_buy': 0,
+                    'dealer_buy': 0,
+                }
+            )
+
+    monkeypatch.setattr(run_daily.pd, 'read_sql', lambda sql, engine, params=None: pd.DataFrame(rows))
+    monkeypatch.setattr(run_daily, '_write_indicators_to_db', lambda df, engine: None)
+
+    result = run_daily.compute_indicators_from_history('2026-05-15', object())
+
+    assert not result.empty
+    assert {'kd_k', 'atr', 'natr'}.issubset(result.columns)

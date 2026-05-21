@@ -96,7 +96,9 @@ class Config:
 
     FEE_RATE = 0.001425
     TAX_RATE = 0.003
-    SLIPPAGE_RATE = 0.002
+    # Ratio, not exchange tick pips: 0.001 means at most 0.1% adverse slippage.
+    SLIPPAGE_MAX_PIPS = 0.001
+    SLIPPAGE_RATE = SLIPPAGE_MAX_PIPS
     RISK_FREE_RATE = 0.01
     TRAIN_RATIO = 0.8
     BACKTEST_MIN_PRICE = 10

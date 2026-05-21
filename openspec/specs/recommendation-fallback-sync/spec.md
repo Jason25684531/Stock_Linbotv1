@@ -1,8 +1,6 @@
 ## Purpose
 Define the canonical persisted recommendation resolution and completeness contract shared by Web, LINE, scheduled pushes, and repair tooling.
-
 ## Requirements
-
 ### Requirement: Recommendation queries shall resolve persisted strategy snapshots first
 The system SHALL resolve user-facing recommendations from persisted `daily_recommendations` snapshots before considering any older fallback date, using the requested strategy as the primary lookup key.
 
@@ -30,7 +28,7 @@ The system SHALL backtrack to the latest older persisted snapshot for the same s
 - **THEN** the resolver SHALL NOT substitute strategy `A`'s date as if it were complete for strategy `B`
 
 ### Requirement: Daily persistence shall complete every user-visible strategy-day
-The daily recommendation pipeline SHALL persist a completed snapshot for every strategy in the user-visible persistence set for each valid market date.
+The daily recommendation pipeline SHALL persist a completed snapshot for every strategy in the user-visible persistence set for each valid market date, even when optional factor sources are missing or degraded.
 
 #### Scenario: Pipeline finishes a trading day with mixed candidate outcomes
 - **WHEN** the daily pipeline runs for a valid market date across the user-visible persistence set
@@ -41,6 +39,16 @@ The daily recommendation pipeline SHALL persist a completed snapshot for every s
 - **WHEN** the product changes which strategy is marked active for default display
 - **THEN** the persistence coverage for other user-visible strategies remains unchanged
 - **THEN** historical completeness continues to be measured against the full persistence set, not only the active strategy
+
+#### Scenario: Optional factor data is missing during scoring
+- **WHEN** a persistence strategy reaches AI scoring and one or more configured factor columns are missing, NaN, non-numeric, or zero-variance
+- **THEN** the pipeline SHALL substitute neutral `0` Z-Score values for those model inputs
+- **THEN** the strategy SHALL still persist candidate rows or one heartbeat row for that strategy-date
+
+#### Scenario: News or large-holder enrichment fails
+- **WHEN** news sentiment, stock-specific news mentions, or 400-share large-holder enrichment fails during the daily pipeline
+- **THEN** the pipeline SHALL treat the missing enrichment as neutral model input
+- **THEN** the failure SHALL NOT leave any user-visible persistence strategy without a completed `daily_recommendations` snapshot
 
 ### Requirement: Heartbeats shall represent authoritative zero-candidate completion
 Heartbeat rows SHALL be treated as authoritative evidence that a strategy completed on a given market date and found zero candidates.
@@ -80,3 +88,4 @@ Backfill and diagnostic tooling SHALL detect recommendation gaps using a matrix 
 - **WHEN** backfill reruns a missing strategy-day for a valid market date
 - **THEN** the repaired output writes either candidate rows or a heartbeat row for that strategy-date
 - **THEN** subsequent gap scans mark that strategy-date as complete
+
