@@ -1431,6 +1431,9 @@ def supplement_financial_data(df):
         補充財務欄位後的 DataFrame
     """
     if df.empty:
+        for col in ['revenue_yoy', 'op_profit_margin', 'eps']:
+            if col not in df.columns:
+                df[col] = 0
         return df
     
     engine = get_db_engine()
@@ -1463,11 +1466,17 @@ def supplement_financial_data(df):
                     df['revenue_yoy'] = 0
             
             # 補充 op_profit_margin / eps（季度財報）
-            needs_financial = (
+            needs_op_margin = (
                 'op_profit_margin' not in df.columns 
                 or df['op_profit_margin'].isna().all() 
                 or (df['op_profit_margin'] == 0).all()
             )
+            needs_eps = (
+                'eps' not in df.columns
+                or df['eps'].isna().all()
+                or (df['eps'] == 0).all()
+            )
+            needs_financial = needs_op_margin or needs_eps
             if needs_financial:
                 fin_query = text("""
                     SELECT fs1.stock_id, 
@@ -1485,12 +1494,14 @@ def supplement_financial_data(df):
                 if not fin_df.empty:
                     op_map = fin_df.set_index('stock_id')['op_profit_margin'].to_dict()
                     eps_map = fin_df.set_index('stock_id')['eps'].to_dict()
-                    df['op_profit_margin'] = df['stock_id'].map(op_map).fillna(0)
-                    if 'eps' not in df.columns or df['eps'].isna().all():
+                    if needs_op_margin:
+                        df['op_profit_margin'] = df['stock_id'].map(op_map).fillna(0)
+                    if needs_eps:
                         df['eps'] = df['stock_id'].map(eps_map).fillna(0)
                 else:
-                    df['op_profit_margin'] = 0
-                    if 'eps' not in df.columns:
+                    if needs_op_margin:
+                        df['op_profit_margin'] = 0
+                    if needs_eps:
                         df['eps'] = 0
     except Exception as e:
         print(f"⚠️ supplement_financial_data 失敗: {e}")
@@ -1498,6 +1509,14 @@ def supplement_financial_data(df):
             df['revenue_yoy'] = 0
         if 'op_profit_margin' not in df.columns:
             df['op_profit_margin'] = 0
+        if 'eps' not in df.columns:
+            df['eps'] = 0
+
+    for col in ['revenue_yoy', 'op_profit_margin', 'eps']:
+        if col not in df.columns:
+            df[col] = 0
+        else:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     return df
 

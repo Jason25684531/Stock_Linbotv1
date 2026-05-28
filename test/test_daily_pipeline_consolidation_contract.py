@@ -105,6 +105,16 @@ def test_legacy_compatibility_launchers_point_to_official_scheduler():
         assert 'Do not remove' in text
 
 
+def test_evening_batch_wrapper_uses_canonical_evening_scheduler():
+    batch_text = (REPO_ROOT / 'execution' / 'evening_run.bat').read_text(encoding='utf-8')
+
+    assert '1_update_database.py' not in batch_text
+    assert '2_rundaily.py' not in batch_text
+    assert 'jobs\\scheduler.py' in batch_text
+    assert 'evening' in batch_text
+    assert '--stop-on-error' in batch_text
+
+
 def test_removed_numeric_wrappers_are_not_active_supported_commands():
     removed_commands = [
         'python 1_update_database.py',

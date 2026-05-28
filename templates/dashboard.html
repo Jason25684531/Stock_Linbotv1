@@ -4,2315 +4,305 @@
 {% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
-<div x-data="dashboardData()" x-init="init()">
-    <!-- Loading State -->
-    <div x-show="loading" class="flex items-center justify-center py-20">
-        <div class="text-center">
-            <div class="spinner mx-auto mb-4"></div>
-            <p class="text-gray-400">載入回測數據中...</p>
-        </div>
-    </div>
-    
-    <!-- Dashboard Content -->
-    <div x-show="!loading" style="display: none;">
-        <div class="chart-container mb-8">
-            <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-                <div>
-                    <h2 class="text-xl font-bold flex items-center">
-                        <span class="text-2xl mr-2">🧭</span>
-                        Beta 分析工作區
-                    </h2>
-                    <p class="text-sm text-gray-400 mt-1">切換回測、個股健檢與大盤總經視圖，驗證資料與版面是否符合預期。</p>
-                </div>
-                <div class="flex flex-col lg:flex-row gap-3 lg:items-center w-full xl:w-auto">
-                    <div class="flex flex-wrap gap-2">
-                        <button type="button" @click="switchViewMode('backtest')"
-                                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-                                :class="viewMode === 'backtest' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400'">
-                            策略回測
-                        </button>
-                        <button type="button" @click="switchViewMode('health_check')"
-                                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-                                :class="viewMode === 'health_check' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400'">
-                            個股戰情室 Beta
-                        </button>
-                        <button type="button" @click="switchViewMode('macro')"
-                                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-                                :class="viewMode === 'macro' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400'">
-                            大盤總經 Beta
-                        </button>
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-                        <input type="text"
-                               x-model.trim="healthCheckQuery"
-                               @keyup.enter="executeWorkspaceAction()"
-                               :disabled="viewMode !== 'health_check' || workspaceLoading"
-                               placeholder="輸入股號或名稱 (ex: 2330)"
-                               class="min-w-[240px] bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-200 placeholder:text-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <button type="button" @click="executeWorkspaceAction()"
-                                :disabled="(viewMode !== 'health_check' && viewMode !== 'macro') || workspaceLoading"
-                                class="px-4 py-2 rounded-lg text-sm font-bold transition-colors"
-                                :class="workspaceLoading ? 'bg-gray-700 text-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'">
-                            <span x-text="workspaceLoading ? '分析中...' : '執行分析'"></span>
-                        </button>
-                    </div>
-                </div>
+<div x-data="stockSnapshotDashboard()" x-init="init()" class="space-y-6">
+    <section class="chart-container">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-white">Dashboard</h1>
+                <p class="mt-2 text-sm text-gray-400">策略、個股健檢與市場快照集中在同一個 lazy loading 工作區。</p>
             </div>
-            <div class="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                <span class="px-3 py-1 rounded-full border"
-                      :class="viewMode === 'backtest' ? 'border-blue-500 text-blue-300' : 'border-gray-700 text-gray-400'">回測</span>
-                <span class="px-3 py-1 rounded-full border"
-                      :class="viewMode === 'health_check' ? 'border-red-500 text-red-300' : 'border-gray-700 text-gray-400'">個股健檢</span>
-                <span class="px-3 py-1 rounded-full border"
-                      :class="viewMode === 'macro' ? 'border-emerald-500 text-emerald-300' : 'border-gray-700 text-gray-400'">大盤總經</span>
-                <span x-show="viewMode === 'health_check'">輸入股票代號後，可切換時框、觀察結構價位與副圖，並驗證 provenance / proxy 標示。</span>
-                <span x-show="viewMode === 'macro'">大盤總經模式不需要股票搜尋，會直接顯示市場與法人概況。</span>
-            </div>
-        </div>
-
-        <!-- Strategy Control Center -->
-        <div class="chart-container mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-xl font-bold flex items-center">
-                        <span class="text-2xl mr-2">🎯</span>
-                        策略指揮中心 Strategy Control
-                    </h2>
-                    <p class="text-sm text-gray-400 mt-1">可同時選擇多個策略，分散風險</p>
-                    <p class="text-xs text-blue-300 mt-1">目前模式：
-                        <span class="font-semibold">
-                            {% if current_mode == 'aggressive' %}積極
-                            {% elif current_mode == 'balanced' %}平衡
-                            {% elif current_mode == 'loose' %}寬鬆
-                            {% elif current_mode == 'conservative' %}穩健（舊模式）
-                            {% else %}{{ current_mode }}{% endif %}
-                        </span>
-                    </p>
+            <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">資料日期</div>
+                    <div class="mt-1 font-semibold text-gray-100" x-text="summary.as_of_date || 'N/A'"></div>
                 </div>
-                <div>
-                    <a href="/backtest" class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-105" style="display: inline-flex; align-items: center; font-size: 1.1rem;">
-                        <span class="text-2xl mr-3">🚀</span>
-                        <span>執行回測分析</span>
-                    </a>
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">市場燈號</div>
+                    <div class="mt-1 font-semibold text-gray-100" x-text="summary.data?.market_light?.state || summary.status || 'loading'"></div>
                 </div>
-            </div>
-
-            <div class="mb-5 p-4 bg-gray-900/40 border border-gray-700 rounded-lg">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div>
-                        <div class="text-sm font-semibold text-gray-200">V34/V35 篩選模式快速切換</div>
-                        <div class="text-xs text-gray-400 mt-1">同時套用到 LineBot 與網頁選股（積極 / 平衡 / 寬鬆）</div>
-                    </div>
-                    <div class="flex gap-2">
-                        <form method="POST" action="/update_mode">
-                            <input type="hidden" name="mode" value="aggressive">
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'aggressive' %}bg-red-600 border-red-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-red-400{% endif %}">積極</button>
-                        </form>
-                        <form method="POST" action="/update_mode">
-                            <input type="hidden" name="mode" value="balanced">
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'balanced' %}bg-blue-600 border-blue-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400{% endif %}">平衡</button>
-                        </form>
-                        <form method="POST" action="/update_mode">
-                            <input type="hidden" name="mode" value="loose">
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'loose' %}bg-emerald-600 border-emerald-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-emerald-400{% endif %}">寬鬆</button>
-                        </form>
-                    </div>
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">系統狀態</div>
+                    <div class="mt-1 font-semibold text-gray-100" x-text="systemStatus.status || 'pending'"></div>
                 </div>
-            </div>
-            
-            <form method="POST" action="/update_strategy" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-3">選擇啟用的策略 (可複選)</label>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {% for strategy in strategy_options %}
-                        <label class="flex items-center p-4 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors {% if strategy in active_strategies %}border-blue-500 bg-blue-900/20{% endif %}">
-                            <input type="checkbox" name="strategies" value="{{ strategy }}" 
-                                   class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                                   {% if strategy in active_strategies %}checked{% endif %}>
-                            <div class="ml-3">
-                                <div class="text-white font-medium">
-                                    {% if strategy == 'v31_hybrid' %}V31 混合策略
-                                    {% elif strategy == 'v33_low_vol' %}V33 低波動
-                                    {% elif strategy == 'v34_turbo' %}V34 雙渦輪
-                                    {% elif strategy == 'v35_innovation' %}V35 經營效益
-                                    {% elif strategy == 'v36_chip_momentum' %}V36 籌碼動能
-                                    {% elif strategy == 'v37_mean_reversion' %}V37 均值回歸
-                                    {% elif strategy == 'v38_value_dividend' %}V38 高殖利率
-                                    {% else %}{{ strategy }}{% endif %}
-                                </div>
-                                <div class="text-xs text-gray-400">
-                                    {% if strategy == 'v31_hybrid' %}均衡型 - 技術+AI
-                                    {% elif strategy == 'v33_low_vol' %}穩健型 - 低波動
-                                    {% elif strategy == 'v34_turbo' %}進攻型 - 高動能
-                                    {% elif strategy == 'v35_innovation' %}成長型 - 經營效益
-                                    {% elif strategy == 'v36_chip_momentum' %}追蹤型 - 法人籌碼
-                                    {% elif strategy == 'v37_mean_reversion' %}反轉型 - 區間震盪
-                                    {% elif strategy == 'v38_value_dividend' %}價值型 - 類定存股
-                                    {% else %}自訂策略{% endif %}
-                                </div>
-                            </div>
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-                <div class="flex justify-end">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
-                        ✅ 儲存策略設定
-                    </button>
-                </div>
-            </form>
-            
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                    <div class="mt-4 p-4 rounded-lg {% if category == 'success' %}bg-green-900/30 border border-green-700 text-green-300{% else %}bg-red-900/30 border border-red-700 text-red-300{% endif %}">
-                        {{ message }}
-                    </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-        </div>
-        
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Total ROI Card -->
-            <div class="metric-card">
-                <div class="metric-label">總報酬率 ROI</div>
-                <div class="metric-value" :class="summary.total_roi >= 0 ? 'positive' : 'negative'" x-text="formatPercent(summary.total_roi)"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    <span x-text="summary.trade_count"></span> 筆交易
-                </div>
-            </div>
-            
-            <!-- Win Rate Card -->
-            <div class="metric-card">
-                <div class="metric-label">勝率 Win Rate</div>
-                <div class="metric-value" :class="summary.win_rate >= 50 ? 'positive' : 'negative'" x-text="formatPercent(summary.win_rate)"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    平均持有 <span x-text="summary.avg_hold_days"></span> 天
-                </div>
-            </div>
-            
-            <!-- MDD Card -->
-            <div class="metric-card">
-                <div class="metric-label">最大回撤 MDD</div>
-                <div class="metric-value negative" x-text="formatPercent(summary.mdd)"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    高波動警示
-                </div>
-            </div>
-            
-            <!-- Sharpe Ratio Card -->
-            <div class="metric-card">
-                <div class="metric-label">夏普比率 Sharpe</div>
-                <div class="metric-value" :class="summary.sharpe >= 1 ? 'positive' : 'text-amber-400'" x-text="summary.sharpe != null ? summary.sharpe.toFixed(3) : 'N/A'"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    風險調整報酬
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">目前策略</div>
+                    <div class="mt-1 font-semibold text-gray-100">{{ current_strategy }}</div>
                 </div>
             </div>
         </div>
-        
-        <!-- Dynamic Workspace -->
-        <div class="chart-container">
-            <template x-if="viewMode === 'backtest'">
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-bold">資產曲線 Equity Curve</h2>
-                        <div class="flex items-center space-x-2 text-sm text-gray-400">
-                            <span class="w-3 h-3 bg-green-500 rounded-full"></span>
-                            <span>資產價值</span>
-                        </div>
-                    </div>
-                    <div class="relative" style="height: 400px;">
-                        <canvas id="equityChart"></canvas>
-                    </div>
-                </div>
-            </template>
+    </section>
 
-            <template x-if="viewMode === 'health_check'">
-                <div>
-                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-5">
-                        <div>
-                            <h2 class="text-xl font-bold flex items-center">
-                                <span class="text-2xl mr-2">🧪</span>
-                                個股戰情室 Beta
-                            </h2>
-                            <p class="text-sm text-gray-400 mt-1" x-text="['ok', 'partial', 'degraded'].includes(healthCheck.status) ? `${healthCheck.symbol}｜${healthCheck.view_state?.period_label || '日線'}｜分析日 ${healthCheck.as_of_date}${healthCheck.fallback_used ? '（已回退）' : ''}` : '請輸入股票代號後啟動戰情室分析。'"></p>
-                        </div>
-                        <div class="flex flex-wrap gap-2 text-xs">
-                            <span class="px-3 py-1 rounded-full border" :class="healthCheck.fallback_used ? 'border-amber-500 text-amber-300' : 'border-green-500 text-green-300'" x-text="healthCheck.fallback_used ? '資料回退中' : '資料為最新基準'"></span>
-                            <span class="px-3 py-1 rounded-full border" :class="llmStatusClass(healthCheck.llm_report?.status)" x-text="llmStatusLabel(healthCheck.llm_report?.status)"></span>
-                            <span class="px-3 py-1 rounded-full border" :class="sourceModeClass(healthCheck.war_room?.chip_flow?.source_mode)" x-text="`Flow ${sourceModeLabel(healthCheck.war_room?.chip_flow?.source_mode)}`"></span>
-                        </div>
-                    </div>
-
-                    <div x-show="workspaceLoading" class="flex items-center justify-center py-16 text-gray-400">
-                        <div class="text-center">
-                            <div class="spinner mx-auto mb-4"></div>
-                            <p>正在分析個股資料...</p>
-                        </div>
-                    </div>
-
-                    <div x-show="!workspaceLoading && workspaceError" class="mb-4 rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm text-red-200" x-text="workspaceError"></div>
-
-                    <template x-if="!workspaceLoading && healthCheck.status === 'empty'">
-                        <div class="rounded-2xl border border-gray-700 bg-gray-900/40 p-6 text-gray-300">
-                            <div class="text-lg font-bold text-white">查無可用個股資料</div>
-                            <div class="mt-2 text-sm text-gray-400" x-text="healthCheck.message || '請確認股號是否正確，或等待下一個交易日資料更新。'"></div>
-                        </div>
-                    </template>
-
-                    <template x-if="!workspaceLoading && ['ok', 'partial', 'degraded'].includes(healthCheck.status)">
-                        <div class="space-y-6">
-                            <div class="rounded-3xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_rgba(7,12,24,0.96)_48%,_rgba(2,6,23,1)_100%)] p-4 sm:p-5 shadow-[0_0_40px_rgba(16,185,129,0.08)]">
-                                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                                    <div class="space-y-3">
-                                        <div>
-                                            <div class="text-[11px] uppercase tracking-[0.32em] text-emerald-300">War Room Provenance</div>
-                                            <div class="mt-2 text-2xl font-bold text-white" x-text="`${healthCheck.symbol}${healthCheck.sector ? ' · ' + healthCheck.sector : ''}`"></div>
-                                        </div>
-                                        <div class="flex flex-wrap gap-2 text-xs text-gray-300">
-                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`來源 ${formatSourceList(healthCheck.source)}`"></span>
-                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`請求日 ${healthCheck.requested_date || '-'}`"></span>
-                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`分析日 ${healthCheck.as_of_date || '-'}`"></span>
-                                            <span class="rounded-full border border-gray-700 bg-black/20 px-3 py-1" x-text="`${healthCheck.view_state?.period_label || '日線'} / ${healthCheck.war_room?.timeframe?.resolved_bars || 0} bars`"></span>
-                                        </div>
-                                    </div>
-
-                                    <div class="space-y-3">
-                                        <div class="flex flex-wrap gap-2 justify-start xl:justify-end">
-                                            <template x-for="periodOption in (healthCheck.view_state?.available_periods || [])" :key="periodOption.key">
-                                                <button type="button"
-                                                        @click="setHealthCheckPeriod(periodOption.key)"
-                                                        class="px-3 py-2 rounded-full border text-xs font-semibold transition-colors"
-                                                        :class="periodOption.selected ? 'border-emerald-400 bg-emerald-400/15 text-emerald-200' : 'border-gray-700 bg-black/20 text-gray-300 hover:border-emerald-500/60'"
-                                                        x-text="periodOption.label"></button>
-                                            </template>
-                                        </div>
-                                        <div class="text-xs text-gray-400 xl:text-right">切換時間框架會重新請求同一股票的戰情室 payload。</div>
-                                    </div>
-                                </div>
-
-                                <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                    <div>
-                                        <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500 mb-2">Main Overlays</div>
-                                        <div class="flex flex-wrap gap-2">
-                                            <template x-for="overlay in (healthCheck.view_state?.overlays?.available || [])" :key="overlay.key">
-                                                <button type="button"
-                                                        @click="toggleHealthCheckOverlay(overlay.key)"
-                                                        class="px-3 py-2 rounded-full border text-xs font-medium transition-colors"
-                                                        :class="overlay.selected ? 'border-blue-400 bg-blue-400/15 text-blue-200' : 'border-gray-700 bg-black/20 text-gray-300 hover:border-blue-500/60'"
-                                                        x-text="overlay.label"></button>
-                                            </template>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500 mb-2">Indicator Panes</div>
-                                        <div class="flex flex-wrap gap-2">
-                                            <template x-for="pane in (healthCheck.view_state?.panes?.available || [])" :key="pane.key">
-                                                <button type="button"
-                                                        @click="toggleHealthCheckPane(pane.key)"
-                                                        class="px-3 py-2 rounded-full border text-xs font-medium transition-colors"
-                                                        :class="pane.selected ? 'border-fuchsia-400 bg-fuchsia-400/15 text-fuchsia-200' : 'border-gray-700 bg-black/20 text-gray-300 hover:border-fuchsia-500/60'"
-                                                        x-text="pane.label"></button>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button type="button"
-                                        @click="toggleMobileWarRoomDetails()"
-                                        class="mt-4 w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-sm font-semibold text-gray-200 transition-colors hover:border-emerald-500/40 hover:text-emerald-200 lg:hidden">
-                                    <span x-text="showMobileWarRoomDetails ? '收合副圖與情報區' : '展開副圖與情報區'"></span>
-                                </button>
-
-                                <div x-show="healthCheck.warnings?.length" class="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" style="display: none;">
-                                    <div class="font-semibold text-amber-200 mb-2">Warnings</div>
-                                    <div class="space-y-1 text-xs">
-                                        <template x-for="warning in (healthCheck.warnings || [])" :key="warning">
-                                            <div x-text="warning"></div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                                <div class="xl:col-span-8 space-y-4">
-                                    <div class="grid grid-cols-2 2xl:grid-cols-4 gap-3">
-                                        <template x-if="!(healthCheck.war_room?.quant_status || []).length">
-                                            <div class="col-span-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-4 text-sm text-gray-400">尚未取得量化狀態卡片。</div>
-                                        </template>
-                                        <template x-for="card in (healthCheck.war_room?.quant_status || [])" :key="card.key">
-                                            <div class="rounded-2xl border px-4 py-4" :class="toneSurfaceClass(card.tone)">
-                                                <div class="text-[11px] uppercase tracking-[0.24em] text-gray-400" x-text="card.label"></div>
-                                                <div class="mt-3 text-xl font-bold" :class="toneTextClass(card.tone)" x-text="card.value"></div>
-                                            </div>
-                                        </template>
-                                    </div>
-
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-4 sm:p-5">
-                                        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
-                                            <div>
-                                                <div class="text-[11px] uppercase tracking-[0.32em] text-cyan-300">Price Structure</div>
-                                                <div class="mt-2 text-3xl font-bold text-white" x-text="formatCurrency(healthCheck.quote?.close_price)"></div>
-                                                <div class="mt-2 text-sm text-gray-400" x-text="`量能 ${formatCompactNumber(healthCheck.quote?.volume)} · ${healthCheck.view_state?.period_label || '日線'}`"></div>
-                                            </div>
-                                            <div class="grid grid-cols-2 gap-3 text-sm lg:min-w-[280px]">
-                                                <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                    <div class="text-gray-400 text-xs">距離支撐</div>
-                                                    <div class="mt-2 text-lg font-bold text-emerald-300" x-text="healthCheck.war_room?.price_map?.distance_to_support_pct != null ? healthCheck.war_room.price_map.distance_to_support_pct.toFixed(2) + '%' : 'N/A'"></div>
-                                                </div>
-                                                <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                    <div class="text-gray-400 text-xs">距離壓力</div>
-                                                    <div class="mt-2 text-lg font-bold text-rose-300" x-text="healthCheck.war_room?.price_map?.distance_to_resistance_pct != null ? healthCheck.war_room.price_map.distance_to_resistance_pct.toFixed(2) + '%' : 'N/A'"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="mb-4 flex flex-wrap gap-2">
-                                            <template x-for="overlay in (healthCheck.view_state?.overlays?.available || [])" :key="overlay.key">
-                                                <button type="button"
-                                                        @click="toggleHealthCheckOverlay(overlay.key)"
-                                                        class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors"
-                                                        :class="overlay.selected ? 'border-gray-600 bg-black/20 text-gray-200' : 'border-gray-800 bg-black/10 text-gray-500 opacity-60 hover:border-gray-600 hover:text-gray-300'">
-                                                    <span class="h-2.5 w-2.5 rounded-full" :style="`background:${overlayColor(overlay.key)}`"></span>
-                                                    <span x-text="overlay.label"></span>
-                                                </button>
-                                            </template>
-                                            <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs" :class="sourceModeClass(healthCheck.war_room?.structure?.source_mode)">
-                                                <span x-text="`Structure ${sourceModeLabel(healthCheck.war_room?.structure?.source_mode)}`"></span>
-                                            </span>
-                                        </div>
-
-                                        <div id="healthCheckChart" class="rounded-2xl border border-gray-800 bg-[#070c18] p-3 min-h-[360px]"></div>
-                                    </div>
-                                </div>
-
-                                <div class="xl:col-span-4 space-y-4" x-show="showMobileWarRoomDetails || !isWarRoomCompact()" style="display: none;">
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
-                                        <div class="flex items-center justify-between gap-3 mb-3">
-                                            <div>
-                                                <div class="text-[11px] uppercase tracking-[0.28em] text-gray-500">Tactical Summary</div>
-                                                <div class="mt-1 text-lg font-bold text-white" x-text="healthCheck.war_room?.tactical_summary?.headline || '暫無摘要'"></div>
-                                            </div>
-                                            <div class="text-right">
-                                                <div class="text-xs text-gray-400">Confidence</div>
-                                                <div class="text-2xl font-bold text-emerald-300" x-text="healthCheck.war_room?.tactical_summary?.confidence != null ? formatPercentFrom100(healthCheck.war_room.tactical_summary.confidence) : 'N/A'"></div>
-                                            </div>
-                                        </div>
-                                        <div class="rounded-2xl border px-3 py-3 text-sm leading-6" :class="toneSurfaceClass(healthCheck.war_room?.tactical_summary?.tone)">
-                                            <div class="text-gray-200" x-text="healthCheck.war_room?.tactical_summary?.message || '尚未取得戰術摘要。'"></div>
-                                        </div>
-                                    </div>
-
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
-                                        <div class="flex items-center justify-between gap-3 mb-3">
-                                            <div class="text-lg font-bold text-gray-100">Chip / Flow</div>
-                                            <span class="px-2 py-1 rounded-full border text-[11px]" :class="sourceModeClass(healthCheck.war_room?.chip_flow?.source_mode)" x-text="sourceModeLabel(healthCheck.war_room?.chip_flow?.source_mode)"></span>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-3 text-sm">
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs">Chip Score</div>
-                                                <div class="mt-2 text-lg font-bold text-white" x-text="healthCheck.war_room?.chip_flow?.chip_score != null ? healthCheck.war_room.chip_flow.chip_score.toFixed(3) : 'N/A'"></div>
-                                            </div>
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs">Net Flow</div>
-                                                <div class="mt-2 text-lg font-bold text-white" x-text="healthCheck.war_room?.chip_flow?.net_flow != null ? formatSignedNumber(healthCheck.war_room.chip_flow.net_flow) : 'N/A'"></div>
-                                            </div>
-                                        </div>
-                                        <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs">外資</div>
-                                                <div class="mt-2 text-sm font-bold" :class="signedToneClass(healthCheck.war_room?.chip_flow?.foreign_buy)" x-text="formatSignedNumber(healthCheck.war_room?.chip_flow?.foreign_buy)"></div>
-                                            </div>
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs">投信</div>
-                                                <div class="mt-2 text-sm font-bold" :class="signedToneClass(healthCheck.war_room?.chip_flow?.trust_buy)" x-text="formatSignedNumber(healthCheck.war_room?.chip_flow?.trust_buy)"></div>
-                                            </div>
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs">自營商</div>
-                                                <div class="mt-2 text-sm font-bold" :class="signedToneClass(healthCheck.war_room?.chip_flow?.dealer_buy)" x-text="formatSignedNumber(healthCheck.war_room?.chip_flow?.dealer_buy)"></div>
-                                            </div>
-                                        </div>
-                                        <div class="mt-3 rounded-2xl border border-gray-800 bg-black/20 px-3 py-3 text-sm leading-6 text-gray-300" x-text="healthCheck.war_room?.chip_flow?.message || '尚未取得籌碼摘要。'"></div>
-                                    </div>
-
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
-                                        <div class="text-lg font-bold text-gray-100 mb-3">Price Map</div>
-                                        <div class="space-y-3 text-sm">
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs mb-2">支撐 / 壓力</div>
-                                                <div class="flex flex-wrap gap-2">
-                                                    <template x-for="level in (healthCheck.war_room?.price_map?.supports || [])" :key="level.label + level.value">
-                                                        <span class="rounded-full border px-3 py-1 text-xs" :class="structureLevelClass(level.kind)" x-text="`${level.label} ${formatCurrency(level.value)}`"></span>
-                                                    </template>
-                                                    <template x-for="level in (healthCheck.war_room?.price_map?.resistances || [])" :key="level.label + level.value">
-                                                        <span class="rounded-full border px-3 py-1 text-xs" :class="structureLevelClass(level.kind)" x-text="`${level.label} ${formatCurrency(level.value)}`"></span>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                            <div class="rounded-2xl border border-gray-700 bg-black/20 px-3 py-3">
-                                                <div class="text-gray-400 text-xs mb-2">均線定位</div>
-                                                <div class="space-y-2">
-                                                    <template x-for="ma in (healthCheck.war_room?.price_map?.ma_levels || [])" :key="ma.key">
-                                                        <div class="flex items-center justify-between gap-3">
-                                                            <span class="text-gray-300" x-text="ma.label"></span>
-                                                            <span class="font-semibold text-white" x-text="formatCurrency(ma.value)"></span>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
-                                        <div class="text-lg font-bold text-gray-100 mb-3">Fundamentals</div>
-                                        <div class="space-y-3 text-sm">
-                                            <div class="flex items-center justify-between gap-3">
-                                                <span class="text-gray-400">Strategy</span>
-                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.strategy_name || 'N/A'"></span>
-                                            </div>
-                                            <div class="flex items-center justify-between gap-3">
-                                                <span class="text-gray-400">Revenue YoY</span>
-                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.revenue_yoy != null ? formatPercent(healthCheck.war_room.fundamentals.revenue_yoy) : 'N/A'"></span>
-                                            </div>
-                                            <div class="flex items-center justify-between gap-3">
-                                                <span class="text-gray-400">Op Margin</span>
-                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.op_margin != null ? formatFixed(healthCheck.war_room.fundamentals.op_margin, 2) : 'N/A'"></span>
-                                            </div>
-                                            <div class="flex items-center justify-between gap-3">
-                                                <span class="text-gray-400">EPS</span>
-                                                <span class="font-semibold text-white" x-text="healthCheck.war_room?.fundamentals?.eps != null ? formatFixed(healthCheck.war_room.fundamentals.eps, 2) : 'N/A'"></span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 p-5">
-                                        <div class="text-lg font-bold text-gray-100 mb-3">News + Diagnosis</div>
-                                        <div class="rounded-2xl border border-gray-800 bg-black/20 px-3 py-3 text-sm text-gray-200 leading-6">
-                                            <div class="font-semibold text-cyan-300 mb-2" x-text="healthCheck.war_room?.news?.title || healthCheck.news?.title || '消息面' "></div>
-                                            <div class="space-y-1" x-show="(healthCheck.war_room?.news?.items || healthCheck.news?.items || []).length" style="display: none;">
-                                                <template x-for="item in (healthCheck.war_room?.news?.items || healthCheck.news?.items || [])" :key="item">
-                                                    <div x-text="item"></div>
-                                                </template>
-                                            </div>
-                                            <div x-show="!(healthCheck.war_room?.news?.items || healthCheck.news?.items || []).length" class="text-gray-400">暫無最新消息摘要。</div>
-                                        </div>
-                                        <div class="mt-3 rounded-2xl border border-gray-800 bg-black/20 p-4">
-                                            <div class="flex items-center justify-between mb-3">
-                                                <h3 class="text-base font-bold text-blue-300">🤖 健檢結論</h3>
-                                                <span class="px-2 py-1 rounded-full border text-xs" :class="llmStatusClass(healthCheck.llm_report?.status)" x-text="llmStatusLabel(healthCheck.llm_report?.status)"></span>
-                                            </div>
-                                            <div class="space-y-4 text-sm leading-6 text-gray-200">
-                                                <div>
-                                                    <div class="font-bold text-red-300">【趨勢分析】</div>
-                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.trend || healthCheck.rule_report?.trend || '暫無分析。'"></div>
-                                                </div>
-                                                <div>
-                                                    <div class="font-bold text-cyan-300">【籌碼追蹤】</div>
-                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.chips || healthCheck.rule_report?.chips || '暫無分析。'"></div>
-                                                </div>
-                                                <div>
-                                                    <div class="font-bold text-amber-300">【總經與產業連動】</div>
-                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.macro || healthCheck.rule_report?.macro || '暫無分析。'"></div>
-                                                </div>
-                                                <div x-show="healthCheck.llm_report?.risk" style="display: none;">
-                                                    <div class="font-bold text-yellow-300">【風險提醒】</div>
-                                                    <div class="text-gray-300" x-text="healthCheck.llm_report?.risk"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div x-show="showMobileWarRoomDetails || !isWarRoomCompact()" class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: none;">
-                                <template x-for="script in (healthCheck.rule_report?.action_scripts || [])" :key="script.key">
-                                    <div class="rounded-3xl border border-gray-700 bg-gray-950/50 overflow-hidden">
-                                        <div class="h-1.5" :class="scriptBarClass(script.signal)"></div>
-                                        <div class="p-4">
-                                            <div class="text-lg font-bold" :class="scriptTitleClass(script.signal)" x-text="script.title"></div>
-                                            <div class="mt-4 space-y-3 text-sm">
-                                                <div class="flex items-center justify-between gap-3">
-                                                    <span class="text-gray-400">建議進場價</span>
-                                                    <span class="font-bold text-white" x-text="script.entry_range"></span>
-                                                </div>
-                                                <div class="flex items-center justify-between gap-3">
-                                                    <span class="text-gray-400">嚴格停損價</span>
-                                                    <span class="font-bold text-white" x-text="script.stop_loss"></span>
-                                                </div>
-                                                <div class="flex items-start justify-between gap-3">
-                                                    <span class="text-gray-400">預期目標價</span>
-                                                    <span class="font-bold text-white text-right" x-text="(script.targets || []).join(' / ')"></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </template>
-
-            <template x-if="viewMode === 'macro'">
-                <div>
-                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-5">
-                        <div>
-                            <h2 class="text-xl font-bold flex items-center">
-                                <span class="text-2xl mr-2">🌏</span>
-                                大盤總經 Beta
-                            </h2>
-                            <p class="text-sm text-gray-400 mt-1" x-text="macroData.as_of_date ? `市場資料日 ${macroData.as_of_date}` : '切換至此模式後會直接載入市場總覽。'"></p>
-                        </div>
-                        <span class="px-3 py-1 rounded-full border text-xs" :class="macroStatusClass(macroData.status)" x-text="macroStatusLabel(macroData.status)"></span>
-                    </div>
-
-                    <div x-show="workspaceLoading" class="flex items-center justify-center py-16 text-gray-400">
-                        <div class="text-center">
-                            <div class="spinner mx-auto mb-4"></div>
-                            <p>正在載入大盤總經資料...</p>
-                        </div>
-                    </div>
-
-                    <div x-show="!workspaceLoading && workspaceError" class="mb-4 rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm text-red-200" x-text="workspaceError"></div>
-
-                    <template x-if="!workspaceLoading && macroData.status">
-                        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                            <div class="xl:col-span-7 space-y-4">
-                                <div class="rounded-2xl border border-gray-700 bg-gray-950/40 p-5">
-                                    <div class="text-lg font-bold text-gray-100 mb-4">市場廣度</div>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-xs text-gray-400">上漲家數</div>
-                                            <div class="text-2xl font-bold text-red-400" x-text="formatCompactNumber(macroData.market_snapshot?.rising)"></div>
-                                        </div>
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-xs text-gray-400">下跌家數</div>
-                                            <div class="text-2xl font-bold text-green-400" x-text="formatCompactNumber(macroData.market_snapshot?.falling)"></div>
-                                        </div>
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-xs text-gray-400">平盤家數</div>
-                                            <div class="text-2xl font-bold text-amber-300" x-text="formatCompactNumber(macroData.market_snapshot?.flat)"></div>
-                                        </div>
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-xs text-gray-400">成交量(十億)</div>
-                                            <div class="text-2xl font-bold text-blue-300" x-text="formatFixed(macroData.market_snapshot?.total_volume_b, 1)"></div>
-                                        </div>
-                                    </div>
-                                    <div class="mt-4 rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300" x-text="macroData.market_snapshot?.summary || macroData.market_snapshot?.message || '暫無市場摘要。'"></div>
-                                </div>
-
-                                <div class="rounded-2xl border border-gray-700 bg-gray-950/40 p-5">
-                                    <div class="text-lg font-bold text-gray-100 mb-4">法人與籌碼概況</div>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-gray-400 text-xs">外資</div>
-                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.foreign_net)"></div>
-                                        </div>
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-gray-400 text-xs">投信</div>
-                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.trust_net)"></div>
-                                        </div>
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-gray-400 text-xs">自營商</div>
-                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.dealer_net)"></div>
-                                        </div>
-                                        <div class="rounded-xl border border-gray-700 bg-black/20 p-4">
-                                            <div class="text-gray-400 text-xs">三大法人合計</div>
-                                            <div class="text-xl font-bold text-white" x-text="formatSignedNumber(macroData.chip_snapshot?.total_net)"></div>
-                                        </div>
-                                    </div>
-                                    <div class="mt-4 rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300" x-text="macroData.chip_snapshot?.summary || macroData.chip_snapshot?.message || '暫無法人摘要。'"></div>
-                                </div>
-                            </div>
-
-                            <div class="xl:col-span-5">
-                                <div class="rounded-2xl border border-gray-700 bg-gray-950/40 p-5 h-full">
-                                    <div class="text-lg font-bold text-blue-300 mb-4">📰 大盤觀察</div>
-                                    <div class="rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300 leading-7 whitespace-pre-line" x-text="macroData.news_summary || macroData.message || '暫無總經摘要。'"></div>
-                                    <div class="mt-4 rounded-xl border border-gray-800 bg-black/20 p-4 text-sm text-gray-300">
-                                        <div class="font-bold text-gray-100 mb-2">系統狀態</div>
-                                        <div x-text="macroData.message || '大盤總經資料可用。'"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
+    <section class="chart-container">
+        <div class="flex flex-wrap gap-2 border-b border-gray-700 pb-4">
+            <template x-for="tab in tabs" :key="tab.key">
+                <button type="button"
+                        @click="activeTab = tab.key; ensureTabData(tab.key)"
+                        class="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
+                        :class="activeTab === tab.key ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-gray-700 bg-gray-900 text-gray-300 hover:border-blue-500/70'"
+                        x-text="tab.label"></button>
             </template>
         </div>
-        
-        <!-- News Sentiment Panel -->
-        <div class="mt-8"
-             x-data="{
-               newsLoaded: false,
-               newsSentiment: '載入中...',
-               newsBull: [],
-               newsBear: [],
-               newsBullReasons: [],
-               newsBearReasons: [],
-                             newsBullThemes: {},
-                             newsBearThemes: {},
-               newsDate: '',
-               sentimentColor() {
-                 if (this.newsSentiment === '偏多') return 'text-green-400 border-green-500';
-                 if (this.newsSentiment === '偏空') return 'text-red-400 border-red-500';
-                 return 'text-yellow-300 border-yellow-500';
-               },
-                             themeEntries(themeMap) {
-                                 return Object.entries(themeMap || {});
-                             },
-               async loadNews() {
-                 try {
-                   const res = await fetch('/api/news_sentiment');
-                   const d = await res.json();
-                   this.newsSentiment = d.sentiment || '中性';
-                   this.newsBull = d.bull_sectors || [];
-                   this.newsBear = d.bear_sectors || [];
-                                     this.newsBullReasons = d.bull_reasons || [];
-                                     this.newsBearReasons = d.bear_reasons || [];
-                                     this.newsBullThemes = d.bull_theme_map || {};
-                                     this.newsBearThemes = d.bear_theme_map || {};
-                   this.newsDate = d.trade_date || '';
-                 } catch(e) { this.newsSentiment = '無資料'; }
-                 this.newsLoaded = true;
-               }
-             }"
-             x-init="loadNews()">
-            <div class="chart-container">
-                <h2 class="text-xl font-bold flex items-center mb-4">
-                    <span class="text-2xl mr-2">📰</span>
-                    消息面情緒
-                    <span class="text-xs font-normal text-gray-400 ml-3" x-text="newsDate ? '日期: ' + newsDate : ''"></span>
-                </h2>
-                <div class="flex flex-wrap items-center gap-3">
-                    <span class="px-4 py-1 rounded-full border text-sm font-bold" :class="sentimentColor()" x-text="newsSentiment"></span>
-                    <template x-if="newsBull.length > 0">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-xs text-gray-400">利多族群:</span>
-                            <template x-for="s in newsBull" :key="s">
-                                <span class="px-2 py-0.5 text-xs rounded bg-green-900 text-green-300 border border-green-700" x-text="s"></span>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="newsBear.length > 0">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-xs text-gray-400">利空族群:</span>
-                            <template x-for="s in newsBear" :key="s">
-                                <span class="px-2 py-0.5 text-xs rounded bg-red-900 text-red-300 border border-red-700" x-text="s"></span>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="!newsLoaded">
-                        <span class="text-xs text-gray-500 animate-pulse">載入中...</span>
-                    </template>
-                </div>
-                <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
-                    <template x-if="newsBullReasons.length > 0">
-                        <div class="rounded-2xl border border-green-500/40 bg-gradient-to-br from-green-950/75 via-emerald-950/50 to-green-900/25 p-5 shadow-[0_0_30px_rgba(34,197,94,0.12)]">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="text-base font-bold text-green-300">📈 利多重點</div>
-                                <div class="px-3 py-1 rounded-full text-xs font-bold border border-green-500/40 bg-green-500/10 text-green-200" x-text="newsBullReasons.length + ' 則'"></div>
-                            </div>
-                            <div class="mb-3 space-y-2" x-show="themeEntries(newsBullThemes).length > 0">
-                                <template x-for="entry in themeEntries(newsBullThemes)" :key="'bull-theme-' + entry[0]">
-                                    <div class="rounded-xl border border-green-700/30 bg-green-900/15 px-3 py-2 text-sm text-green-100">
-                                        <span class="font-bold text-green-300" x-text="entry[0] + ': '"></span>
-                                        <span x-text="entry[1]"></span>
-                                    </div>
-                                </template>
-                            </div>
-                            <ul class="space-y-2 text-sm text-gray-100 leading-6">
-                                <template x-for="item in newsBullReasons" :key="'bull-' + item">
-                                    <li class="flex items-start gap-3 rounded-xl border border-green-800/40 bg-black/15 px-3 py-2">
-                                        <span class="text-green-300 mt-0.5 text-base">•</span>
-                                        <span x-text="item"></span>
-                                    </li>
-                                </template>
-                            </ul>
-                        </div>
-                    </template>
-                    <template x-if="newsBearReasons.length > 0">
-                        <div class="rounded-2xl border border-red-500/40 bg-gradient-to-br from-red-950/75 via-rose-950/50 to-red-900/25 p-5 shadow-[0_0_30px_rgba(239,68,68,0.12)]">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="text-base font-bold text-red-300">📉 利空重點</div>
-                                <div class="px-3 py-1 rounded-full text-xs font-bold border border-red-500/40 bg-red-500/10 text-red-200" x-text="newsBearReasons.length + ' 則'"></div>
-                            </div>
-                            <div class="mb-3 space-y-2" x-show="themeEntries(newsBearThemes).length > 0">
-                                <template x-for="entry in themeEntries(newsBearThemes)" :key="'bear-theme-' + entry[0]">
-                                    <div class="rounded-xl border border-red-700/30 bg-red-900/15 px-3 py-2 text-sm text-red-100">
-                                        <span class="font-bold text-red-300" x-text="entry[0] + ': '"></span>
-                                        <span x-text="entry[1]"></span>
-                                    </div>
-                                </template>
-                            </div>
-                            <ul class="space-y-2 text-sm text-gray-100 leading-6">
-                                <template x-for="item in newsBearReasons" :key="'bear-' + item">
-                                    <li class="flex items-start gap-3 rounded-xl border border-red-800/40 bg-black/15 px-3 py-2">
-                                        <span class="text-red-300 mt-0.5 text-base">•</span>
-                                        <span x-text="item"></span>
-                                    </li>
-                                </template>
-                            </ul>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
 
-        <!-- Live Signals Section -->
-        <div class="mt-8">
-            <div class="chart-container">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4 gap-3">
-                    <div>
-                        <h2 class="text-xl font-bold flex items-center">
-                            <span class="text-2xl mr-2">⚡</span>
-                            即時選股訊號 Live Signals
-                        </h2>
-                        <p class="text-sm text-gray-400 mt-1" x-show="liveDate" x-text="'更新日期: ' + liveDate"></p>
-                        <p class="text-xs text-blue-300 mt-1" x-show="liveStrategyDisplay" x-text="'目前策略: ' + liveStrategyDisplay"></p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <label class="text-sm text-gray-400">TopN</label>
-                        <select x-model.number="liveTopN" @change="loadLiveSignals()"
-                                :disabled="isFetching"
-                                :class="isFetching ? 'opacity-50 cursor-not-allowed' : ''"
-                                class="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option :value="3">3</option>
-                            <option :value="5">5</option>
-                            <option :value="8">8</option>
-                            <option :value="10">10</option>
-                        </select>
-                        <button type="button" @click="loadLiveSignals()"
-                                :disabled="signalsLoading"
-                                :class="signalsLoading ? 'opacity-50 cursor-not-allowed' : ''"
-                                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors">
-                            重新載入
-                        </button>
-                        <div class="text-sm text-gray-400 ml-1">
-                            <span x-text="signalsLoading ? '讀取中...' : `${liveSignals.length} 檔股票`"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap gap-2 mb-4">
-                    <template x-for="opt in liveStrategyOptions" :key="opt.value">
-                        <button type="button" 
-                                @click="console.log('🖱️ 點擊策略:', opt.label, opt.value); selectedLiveStrategy = opt.value; _liveStrategyUserSelected = true; loadLiveSignals()"
-                                :disabled="isFetching"
-                                class="px-3 py-1.5 text-xs rounded-lg border transition-colors"
-                                :class="selectedLiveStrategy === opt.value
-                                    ? (isFetching
-                                        ? 'bg-blue-600 border-blue-500 text-white font-bold opacity-50 cursor-not-allowed'
-                                        : 'bg-blue-600 border-blue-500 text-white font-bold')
-                                    : (isFetching
-                                        ? 'bg-gray-800 border-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
-                                        : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-500')"
-                                x-text="opt.label"></button>
-                    </template>
-                </div>
-
-                <div x-show="signalsLoading" class="mb-4 flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
-                    <svg class="h-4 w-4 animate-spin text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <circle class="opacity-30" cx="12" cy="12" r="10" stroke-width="4"></circle>
-                        <path class="opacity-90" stroke-linecap="round" stroke-width="4" d="M22 12a10 10 0 00-10-10"></path>
-                    </svg>
-                    <div>
-                        <div class="font-medium text-blue-100">正在切換策略並載入即時訊號...</div>
-                        <div class="mt-1 text-xs text-blue-200/90">若 AI 消息面逾時，系統會自動略過新聞區塊並先顯示選股卡片。</div>
-                    </div>
-                </div>
-                
-                <div x-show="!signalsLoading && liveSignals.length === 0" class="text-center py-12 text-gray-400">
-                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                    </svg>
-                    <p>今日無符合條件的股票</p>
-                    <p class="text-xs mt-2">請執行 jobs/update_database.py 更新資料</p>
-                </div>
-                
-                <div x-show="!signalsLoading && liveSignals.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <template x-for="signal in liveSignals" :key="(signal.strategy_key || selectedLiveStrategy || 'na') + '-' + signal.stock_id">
-                        <div class="metric-card border-l-4 border-blue-500">
-                            <div class="flex items-start justify-between">
+        <div class="mt-5">
+            <template x-for="tab in tabs" :key="tab.key + '-pane'">
+                <div>
+                    <section x-show="activeTab === 'strategy'" style="display: none;">
+                        <div x-show="tab.key === 'strategy'">
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
-                                    <div class="text-2xl font-bold text-blue-400" x-text="signal.stock_id"></div>
-                                    <div class="text-sm text-gray-400 mt-1" x-text="signal.strategy"></div>
+                                    <h2 class="text-xl font-bold text-white">策略選股</h2>
+                                    <p class="mt-2 text-sm text-gray-400">維持既有策略選擇 contract，不在 render 時讀取回測資料。</p>
                                 </div>
-                                <div class="text-right">
-                                    <div class="text-xl font-bold" x-text="'$' + signal.close_price.toFixed(2)"></div>
-                                    <div class="text-xs text-gray-400">收盤價</div>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 p-2.5 bg-gray-900/50 border border-gray-700 rounded-lg">
-                                <div class="grid grid-cols-3 gap-2 text-xs">
-                                    <div>
-                                        <div class="text-gray-400">建議買入</div>
-                                        <div class="font-bold text-cyan-300" x-text="'$' + signal.suggested_buy_price.toFixed(2)"></div>
+                                <form method="POST" action="/update_strategy" class="w-full max-w-2xl space-y-3">
+                                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        {% for strategy in strategy_options %}
+                                        <label class="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-3">
+                                            <input type="checkbox"
+                                                   name="strategies"
+                                                   value="{{ strategy }}"
+                                                   class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500"
+                                                   {% if strategy in active_strategies %}checked{% endif %}>
+                                            <span class="text-sm font-medium text-gray-100">{{ strategy }}</span>
+                                        </label>
+                                        {% endfor %}
                                     </div>
-                                    <div>
-                                        <div class="text-gray-400">建議賣出</div>
-                                        <div class="font-bold text-green-300" x-text="'$' + signal.suggested_sell_price.toFixed(2)"></div>
-                                    </div>
-                                    <div>
-                                        <div class="text-gray-400">停損參考</div>
-                                        <div class="font-bold text-red-300" x-text="'$' + signal.suggested_stop_loss_price.toFixed(2)"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <template x-if="hasNewsReasons(signal.news_reason_items)">
-                                <div class="mt-3 rounded-xl px-3 py-3 text-xs"
-                                     :class="signal.news_is_bearish
-                                        ? 'border border-red-700/60 bg-red-950/35 text-red-100'
-                                        : 'border border-green-700/60 bg-green-950/25 text-green-100'">
-                                    <div class="font-bold mb-2"
-                                         :class="signal.news_is_bearish ? 'text-red-300' : 'text-green-300'"
-                                         x-text="signal.news_signal_title"></div>
-                                    <ul class="space-y-1.5 pl-1">
-                                        <template x-for="item in signal.news_reason_items" :key="signal.stock_id + '-' + item">
-                                            <li class="flex items-start gap-2 leading-5">
-                                                <span :class="signal.news_is_bearish ? 'text-red-300' : 'text-green-300'">•</span>
-                                                <span x-text="item"></span>
-                                            </li>
-                                        </template>
-                                    </ul>
-                                </div>
-                            </template>
-                            
-                            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-                                <div x-show="signal.ai_score !== null">
-                                    <div class="text-gray-400">AI Score</div>
-                                    <div class="font-bold" 
-                                         :class="signal.ai_score >= 0.7 ? 'text-green-400' : signal.ai_score >= 0.5 ? 'text-amber-400' : 'text-gray-400'"
-                                         x-text="(signal.ai_score * 100).toFixed(1) + '%'"></div>
-                                </div>
-                                <div x-show="signal.rsi !== null">
-                                    <div class="text-gray-400">RSI</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.rsi != null ? signal.rsi.toFixed(1) : '-'"></div>
-                                </div>
-                                <div x-show="signal.volume !== null">
-                                    <div class="text-gray-400">成交量</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.volume != null ? (signal.volume / 1000).toFixed(0) + 'K' : '-'"></div>
-                                </div>
-                                <div x-show="signal.ma20 !== null">
-                                    <div class="text-gray-400">MA20</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.ma20 != null ? signal.ma20.toFixed(2) : '-'"></div>
-                                </div>
-                                <div x-show="signal.ma60 !== null">
-                                    <div class="text-gray-400">MA60</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.ma60 != null ? signal.ma60.toFixed(2) : '-'"></div>
-                                </div>
-                                <div x-show="signal.op_profit_margin !== null">
-                                    <div class="text-gray-400">營業利益率</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.op_profit_margin != null ? (signal.op_profit_margin * 100).toFixed(1) + '%' : '-'"></div>
-                                </div>
-                                <div x-show="signal.revenue_yoy !== null">
-                                    <div class="text-gray-400">營收YoY</div>
-                                    <div class="font-bold" :class="signal.revenue_yoy != null && signal.revenue_yoy >= 0 ? 'text-green-400' : 'text-red-400'" x-text="signal.revenue_yoy != null ? signal.revenue_yoy.toFixed(1) + '%' : '-'"></div>
-                                </div>
-                            </div>
-
-                            <div class="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between text-xs">
-                                <span class="text-gray-400">更多資訊</span>
-                                <a :href="signal.detail_url" target="_blank" class="text-blue-300 hover:text-blue-200 font-medium">Goodinfo 詳細資料 ↗</a>
+                                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
+                                        更新策略
+                                    </button>
+                                </form>
                             </div>
                         </div>
-                    </template>
+                    </section>
+
+                    <section x-show="activeTab === 'stockHealth'" style="display: none;">
+                        <div x-show="tab.key === 'stockHealth'">
+                            <div class="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+                                <div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
+                                    <h2 class="text-xl font-bold text-white">個股健檢</h2>
+                                    <p class="mt-2 text-sm text-gray-400">輸入股票代號後才呼叫個股分析 API。</p>
+                                    <div class="mt-4 flex gap-2">
+                                        <input type="text"
+                                               x-model.trim="stockAnalysisQuery"
+                                               @keyup.enter="analyzeStock()"
+                                               placeholder="2330"
+                                               class="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none">
+                                        <button type="button"
+                                                @click="analyzeStock()"
+                                                :disabled="stockAnalysisLoading"
+                                                class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
+                                            查詢
+                                        </button>
+                                    </div>
+                                    <div x-show="stockAnalysisError" class="mt-3 rounded-lg border border-red-700 bg-red-950/40 px-3 py-2 text-sm text-red-200" x-text="stockAnalysisError"></div>
+                                </div>
+                                <div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <h3 class="text-lg font-bold text-white">分析結果</h3>
+                                        <span class="rounded-full border border-gray-700 px-3 py-1 text-xs text-gray-300" x-text="stockAnalysis.status || 'idle'"></span>
+                                    </div>
+                                    <div x-show="stockAnalysisLoading" class="mt-6 text-sm text-gray-400">載入中...</div>
+                                    <template x-if="!stockAnalysisLoading && stockAnalysis.stock_id">
+                                        <div class="mt-4 grid gap-3 md:grid-cols-3">
+                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
+                                                <div class="text-xs text-gray-500">股票</div>
+                                                <div class="mt-1 font-semibold text-white" x-text="stockAnalysis.stock_id"></div>
+                                            </div>
+                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
+                                                <div class="text-xs text-gray-500">日期</div>
+                                                <div class="mt-1 font-semibold text-white" x-text="stockAnalysis.as_of_date || 'N/A'"></div>
+                                            </div>
+                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
+                                                <div class="text-xs text-gray-500">收盤</div>
+                                                <div class="mt-1 font-semibold text-white" x-text="formatNumber(stockAnalysis.quote?.close_price)"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <pre class="mt-4 max-h-72 overflow-auto rounded-lg border border-gray-800 bg-black/30 p-3 text-xs text-gray-300" x-text="formatPayload(stockAnalysis)"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Recent Trades Table -->
-        <div class="mt-8" x-data="{ strategyFilter: 'all' }">
-            <div class="chart-container">
-                <div class="flex items-center justify-between mb-4">
+            </template>
+
+            <section x-show="activeTab === 'recommendations'" style="display: none;">
+                <div class="flex items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-xl font-bold">📋 近期交易 Recent Trades</h2>
-                        <p class="text-sm text-gray-400 mt-1">
-                            顯示最後一次回測的交易明細（來源：ML_Data/backtest_result.csv）
-                        </p>
+                        <h2 class="text-xl font-bold text-white">每日推薦</h2>
+                        <p class="mt-2 text-sm text-gray-400">切換到此 tab 後才呼叫 /api/market/recommendations。</p>
                     </div>
-                    <div class="text-right flex items-center gap-3">
-                        <!-- 策略篩選 -->
-                        <select x-model="strategyFilter" 
-                                class="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="all">🎯 全部策略</option>
-                            <option value="v31_hybrid">V31 混合</option>
-                            <option value="v33_low_vol">V33 低波動</option>
-                            <option value="v34_turbo">V34 雙渦輪</option>
-                            <option value="v35_innovation">V35 經營效益</option>
-                            <option value="v36_chip_momentum">V36 籌碼動能</option>
-                            <option value="v37_mean_reversion">V37 均值回歸</option>
-                            <option value="v38_value_dividend">V38 高殖利率</option>
-                        </select>
-                        <div>
-                            <div class="text-sm text-gray-400">
-                                篩選後 <span x-text="trades.filter(t => strategyFilter === 'all' || t.strategy === strategyFilter).length" class="text-white font-bold"></span> 筆
-                            </div>
-                            <a href="/backtest" class="inline-block mt-1 text-xs text-blue-400 hover:text-blue-300">
-                                <i class="fas fa-sync-alt mr-1"></i>執行新回測
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="table-header">
-                                <th class="px-4 py-3 text-left">策略</th>
-                                <th class="px-4 py-3 text-left">股票代號</th>
-                                <th class="px-4 py-3 text-left">買入日期</th>
-                                <th class="px-4 py-3 text-left">賣出日期</th>
-                                <th class="px-4 py-3 text-right">買入價</th>
-                                <th class="px-4 py-3 text-right">賣出價</th>
-                                <th class="px-4 py-3 text-right">報酬率</th>
-                                <th class="px-4 py-3 text-center">原因</th>
-                                <th class="px-4 py-3 text-center">持有天數</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="trade in trades.filter(t => strategyFilter === 'all' || t.strategy === strategyFilter).slice(0, 30)" :key="trade.stock_id + trade.buy_date + (trade.strategy || 'unknown')">
-                                <tr class="table-row">
-                                    <td class="px-4 py-3">
-                                        <span class="px-2 py-1 rounded text-xs font-medium"
-                                              :class="{
-                                                  'badge-v31': trade.strategy === 'v31_hybrid',
-                                                  'badge-v33': trade.strategy === 'v33_low_vol',
-                                                  'badge-v34': trade.strategy === 'v34_turbo',
-                                                  'badge-v35': trade.strategy === 'v35_innovation',
-                                                  'badge-v36': trade.strategy === 'v36_chip_momentum',
-                                                  'badge-v37': trade.strategy === 'v37_mean_reversion',
-                                                  'badge-v38': trade.strategy === 'v38_value_dividend',
-                                                  'bg-gray-700 text-gray-300': !trade.strategy || trade.strategy === 'unknown'
-                                              }"
-                                              x-text="{
-                                                  'v31_hybrid':'V31',
-                                                  'v33_low_vol':'V33',
-                                                  'v34_turbo':'V34',
-                                                  'v35_innovation':'V35',
-                                                  'v36_chip_momentum':'V36',
-                                                  'v37_mean_reversion':'V37',
-                                                  'v38_value_dividend':'V38'
-                                              }[trade.strategy] || (trade.strategy || '未知')"></span>
-                                    </td>
-                                    <td class="px-4 py-3 font-bold" x-text="trade.stock_id"></td>
-                                    <td class="px-4 py-3 text-gray-400" x-text="trade.buy_date"></td>
-                                    <td class="px-4 py-3 text-gray-400" x-text="trade.sell_date"></td>
-                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.buy_price != null ? trade.buy_price.toFixed(2) : '-'"></td>
-                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.sell_price != null ? trade.sell_price.toFixed(2) : '-'"></td>
-                                    <td class="px-4 py-3 text-right font-bold" 
-                                        :class="trade.profit_pct >= 0 ? 'positive' : 'negative'"
-                                        x-text="formatPercent(trade.profit_pct)"></td>
-                                    <td class="px-4 py-3 text-center">
-                                        <span class="px-2 py-1 rounded text-xs"
-                                              :class="{
-                                                  'bg-red-900 text-red-300': trade.reason === '停損',
-                                                  'bg-green-900 text-green-300': trade.reason === '停利',
-                                                  'bg-gray-700 text-gray-300': trade.reason === '時間到' || trade.reason === '趨勢轉空'
-                                              }"
-                                              x-text="trade.reason"></span>
-                                    </td>
-                                    <td class="px-4 py-3 text-center text-gray-400" x-text="trade.days + '天'"></td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <!-- ⚔️ V33 Phase 3: Battle Arena -->
-        <div class="mt-8">
-            <div class="chart-container">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 class="text-xl font-bold flex items-center">
-                            <span class="text-3xl mr-3">⚔️</span>
-                            Battle Arena - 人機對決
-                        </h2>
-                        <p class="text-sm text-gray-400 mt-1">模擬交易績效比較</p>
-                    </div>
-                </div>
-                
-                <!-- PK Stats Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <!-- User Stats Card -->
-                    <div class="metric-card border-l-4 border-blue-500">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-lg font-bold text-blue-400">👤 使用者</div>
-                            <div class="text-3xl">🏆</div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-sm text-gray-400">平均報酬率</div>
-                                <div class="text-2xl font-bold" 
-                                     :class="pkBattle.user_roi >= 0 ? 'text-green-400' : 'text-red-400'"
-                                     x-text="formatPercent(pkBattle.user_roi)"></div>
-                            </div>
-                            <div>
-                                <div class="text-sm text-gray-400">勝率</div>
-                                <div class="text-2xl font-bold text-gray-300" 
-                                     x-text="formatPercent(pkBattle.user_win_rate)"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- AI Stats Card -->
-                    <div class="metric-card border-l-4 border-purple-500">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-lg font-bold text-purple-400">🤖 AI 策略</div>
-                            <div class="text-3xl">🎯</div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-sm text-gray-400">平均報酬率</div>
-                                <div class="text-2xl font-bold" 
-                                     :class="pkBattle.ai_roi >= 0 ? 'text-green-400' : 'text-red-400'"
-                                     x-text="formatPercent(pkBattle.ai_roi)"></div>
-                            </div>
-                            <div>
-                                <div class="text-sm text-gray-400">勝率</div>
-                                <div class="text-2xl font-bold text-gray-300" 
-                                     x-text="formatPercent(pkBattle.ai_win_rate)"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Battle Result -->
-                <div class="text-center py-8 border-t border-gray-700">
-                    <template x-if="pkBattle.user_roi > pkBattle.ai_roi">
-                        <div>
-                            <div class="text-5xl mb-4">🎉</div>
-                            <div class="text-2xl font-bold text-green-400">恭喜！你擊敗了 AI</div>
-                            <div class="text-sm text-gray-400 mt-2">
-                                你的報酬率領先 <span class="font-bold" x-text="(pkBattle.user_roi - pkBattle.ai_roi).toFixed(2) + '%'"></span>
-                            </div>
-                        </div>
-                    </template>
-                    <template x-if="pkBattle.user_roi <= pkBattle.ai_roi">
-                        <div>
-                            <div class="text-5xl mb-4">💪</div>
-                            <div class="text-2xl font-bold text-amber-400">繼續加油！</div>
-                            <div class="text-sm text-gray-400 mt-2">
-                                AI 目前領先 <span class="font-bold" x-text="(pkBattle.ai_roi - pkBattle.user_roi).toFixed(2) + '%'"></span>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                
-                <!-- Mock Trade Button -->
-                <div class="mt-6 text-center">
-                    <button @click="alert('模擬交易功能開發中...')" 
-                            class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-bold transition-all transform hover:scale-105">
-                        📝 記錄新的模擬交易
+                    <button type="button" @click="refreshActiveTab()" class="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-blue-500">
+                        重新整理
                     </button>
                 </div>
-            </div>
+                <div class="mt-4" x-html="renderTabPayload('recommendations')"></div>
+            </section>
+
+            <section x-show="activeTab === 'snapshot'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">市場快照</h2>
+                <div class="mt-4" x-html="renderTabPayload('snapshot')"></div>
+            </section>
+
+            <section x-show="activeTab === 'institutional'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">法人籌碼</h2>
+                <div class="mt-4" x-html="renderTabPayload('institutional')"></div>
+            </section>
+
+            <section x-show="activeTab === 'technical'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">技術強度</h2>
+                <div class="mt-4" x-html="renderTabPayload('technical')"></div>
+            </section>
+
+            <section x-show="activeTab === 'margin'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">融資融券</h2>
+                <div class="mt-4" x-html="renderTabPayload('margin')"></div>
+            </section>
+
+            <section x-show="activeTab === 'systemStatus'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">系統狀態</h2>
+                <div class="mt-4" x-html="renderTabPayload('systemStatus')"></div>
+            </section>
         </div>
-    </div>
+    </section>
 </div>
 
 <script>
-function dashboardData() {
-    return {
-        loading: true,
-        summary: {
-            total_roi: 0,
-            win_rate: 0,
-            mdd: 0,
-            sharpe: 0,
-            trade_count: 0,
-            avg_hold_days: 0
-        },
-        performance: {
-            dates: [],
-            equity: [],
-            roi: []
-        },
-        trades: [],
-        liveSignals: [],
-        liveDate: null,
-        liveStrategyDisplay: '',
-        signalsLoading: false,
-        isFetching: false,
-        liveTopN: 5,
-        _liveStrategyUserSelected: false,
-        selectedLiveStrategy: '{{ current_strategy }}',
-        liveStrategyOptions: [
-            {% for strategy in strategy_options %}
-            {
-                value: '{{ strategy }}',
-                label: '{% if strategy == "v31_hybrid" %}V31 混合{% elif strategy == "v33_low_vol" %}V33 低波動{% elif strategy == "v34_turbo" %}V34 雙渦輪{% elif strategy == "v35_innovation" %}V35 經營效益{% elif strategy == "v36_chip_momentum" %}V36 籌碼動能{% elif strategy == "v37_mean_reversion" %}V37 均值回歸{% elif strategy == "v38_value_dividend" %}V38 高殖利率{% else %}{{ strategy }}{% endif %}'
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
+document.addEventListener('alpine:init', () => {
+    Alpine.data('stockSnapshotDashboard', () => ({
+        activeTab: 'strategy',
+        tabs: [
+            { key: 'strategy', label: '策略選股' },
+            { key: 'stockHealth', label: '個股健檢' },
+            { key: 'recommendations', label: '每日推薦', endpoint: '/api/market/recommendations' },
+            { key: 'snapshot', label: '市場快照', endpoint: '/api/market/snapshot' },
+            { key: 'institutional', label: '法人籌碼', endpoint: '/api/market/institutional' },
+            { key: 'technical', label: '技術強度', endpoint: '/api/market/technical' },
+            { key: 'margin', label: '融資融券', endpoint: '/api/market/margin' },
+            { key: 'systemStatus', label: '系統狀態', endpoint: '/api/market/system-status' }
         ],
-        pkBattle: {
-            user_roi: 0,
-            ai_roi: 0,
-            user_win_rate: 0,
-            ai_win_rate: 0
-        },
-        viewMode: 'backtest',
-        workspaceLoading: false,
-        workspaceError: '',
-        healthCheckQuery: '2330',
-        healthCheck: {
-            status: 'empty',
-            symbol: '',
-            requested_date: '',
-            as_of_date: '',
-            fallback_used: false,
-            period: 'daily',
-            source: [],
-            warnings: [],
-            degraded_fields: [],
-            quote: {},
-            indicators: {},
-            series: {
-                candles: [],
-                volume: [],
-                ma5: [],
-                ma20: [],
-                ma60: []
-            },
-            view_state: {
-                period: 'daily',
-                period_label: '日線',
-                available_periods: [],
-                overlays: {
-                    selected: ['ma5', 'ma20', 'ma60', 'support', 'resistance'],
-                    available: []
-                },
-                panes: {
-                    selected: ['macd', 'rsi', 'kd', 'flow'],
-                    available: []
-                }
-            },
-            war_room: {
-                timeframe: {},
-                structure: {
-                    supports: [],
-                    resistances: []
-                },
-                price_map: {
-                    supports: [],
-                    resistances: [],
-                    ma_levels: []
-                },
-                panes: {},
-                quant_status: [],
-                tactical_summary: {},
-                chip_flow: {},
-                fundamentals: {},
-                news: {},
-                provenance: {}
-            },
-            news: {},
-            rule_report: {
-                signal_lights: [],
-                action_scripts: []
-            },
-            llm_report: {
-                status: 'fallback'
-            },
-            message: ''
-        },
-        macroData: {
-            status: '',
-            as_of_date: '',
-            market_snapshot: {},
-            chip_snapshot: {},
-            news_summary: '',
-            message: ''
-        },
-        chart: null,
-        healthCharts: [],
-        showMobileWarRoomDetails: false,
+        summary: { status: 'loading', data: {} },
+        systemStatus: { status: 'pending', data: {} },
+        tabState: {},
+        stockAnalysisQuery: '2330',
+        stockAnalysisLoading: false,
+        stockAnalysisError: '',
+        stockAnalysis: {},
 
-        defaultHealthCheckViewState() {
-            return {
-                period: 'daily',
-                period_label: '日線',
-                available_periods: [
-                    { key: 'daily', label: '日線', selected: true },
-                    { key: 'weekly', label: '週線', selected: false },
-                    { key: 'monthly', label: '月線', selected: false }
-                ],
-                overlays: {
-                    selected: ['ma5', 'ma20', 'ma60', 'support', 'resistance'],
-                    available: [
-                        { key: 'ma5', label: 'MA5', selected: true },
-                        { key: 'ma20', label: 'MA20', selected: true },
-                        { key: 'ma60', label: 'MA60', selected: true },
-                        { key: 'support', label: '支撐', selected: true },
-                        { key: 'resistance', label: '壓力', selected: true }
-                    ]
-                },
-                panes: {
-                    selected: ['macd', 'rsi', 'kd', 'flow'],
-                    available: [
-                        { key: 'macd', label: 'MACD', selected: true },
-                        { key: 'rsi', label: 'RSI', selected: true },
-                        { key: 'kd', label: 'KD', selected: true },
-                        { key: 'flow', label: 'Flow', selected: true }
-                    ]
-                }
-            };
-        },
-
-        normalizeHealthCheckViewState(viewState = {}) {
-            const defaults = this.defaultHealthCheckViewState();
-            const period = ['daily', 'weekly', 'monthly'].includes(viewState?.period) ? viewState.period : defaults.period;
-            const overlaySelected = Array.isArray(viewState?.overlays?.selected) && viewState.overlays.selected.length
-                ? viewState.overlays.selected
-                : defaults.overlays.selected;
-            const paneSelected = Array.isArray(viewState?.panes?.selected) && viewState.panes.selected.length
-                ? viewState.panes.selected
-                : defaults.panes.selected;
-
-            return {
-                period,
-                period_label: ({ daily: '日線', weekly: '週線', monthly: '月線' })[period] || '日線',
-                available_periods: defaults.available_periods.map((option) => ({
-                    ...option,
-                    selected: option.key === period
-                })),
-                overlays: {
-                    selected: [...overlaySelected],
-                    available: defaults.overlays.available.map((option) => ({
-                        ...option,
-                        selected: overlaySelected.includes(option.key)
-                    }))
-                },
-                panes: {
-                    selected: [...paneSelected],
-                    available: defaults.panes.available.map((option) => ({
-                        ...option,
-                        selected: paneSelected.includes(option.key)
-                    }))
-                }
-            };
-        },
-
-        emptyHealthCheckState(symbol = '') {
-            const viewState = this.defaultHealthCheckViewState();
-            return {
-                status: 'empty',
-                symbol,
-                requested_date: '',
-                as_of_date: '',
-                fallback_used: false,
-                period: viewState.period,
-                source: [],
-                warnings: [],
-                degraded_fields: [],
-                quote: {},
-                indicators: {},
-                series: {
-                    candles: [],
-                    volume: [],
-                    ma5: [],
-                    ma20: [],
-                    ma60: []
-                },
-                view_state: viewState,
-                war_room: {
-                    timeframe: {},
-                    structure: { supports: [], resistances: [] },
-                    price_map: { supports: [], resistances: [], ma_levels: [] },
-                    panes: {},
-                    quant_status: [],
-                    tactical_summary: {},
-                    chip_flow: {},
-                    fundamentals: {},
-                    news: {},
-                    provenance: {}
-                },
-                news: {},
-                rule_report: {
-                    signal_lights: [],
-                    action_scripts: []
-                },
-                llm_report: {
-                    status: 'fallback'
-                },
-                message: ''
-            };
-        },
-
-        normalizeHealthCheckPayload(payload = {}, symbol = '') {
-            const base = this.emptyHealthCheckState(symbol || payload?.symbol || '');
-            const next = {
-                ...base,
-                ...(payload || {}),
-                quote: { ...base.quote, ...(payload?.quote || {}) },
-                indicators: { ...base.indicators, ...(payload?.indicators || {}) },
-                series: { ...base.series, ...(payload?.series || {}) },
-                rule_report: { ...base.rule_report, ...(payload?.rule_report || {}) },
-                llm_report: { ...base.llm_report, ...(payload?.llm_report || {}) },
-                view_state: this.normalizeHealthCheckViewState(payload?.view_state || base.view_state),
-                war_room: {
-                    ...base.war_room,
-                    ...(payload?.war_room || {}),
-                    timeframe: { ...base.war_room.timeframe, ...(payload?.war_room?.timeframe || {}) },
-                    structure: { ...base.war_room.structure, ...(payload?.war_room?.structure || {}) },
-                    price_map: { ...base.war_room.price_map, ...(payload?.war_room?.price_map || {}) },
-                    panes: payload?.war_room?.panes || {},
-                    quant_status: Array.isArray(payload?.war_room?.quant_status) ? payload.war_room.quant_status : [],
-                    tactical_summary: { ...base.war_room.tactical_summary, ...(payload?.war_room?.tactical_summary || {}) },
-                    chip_flow: { ...base.war_room.chip_flow, ...(payload?.war_room?.chip_flow || {}) },
-                    fundamentals: { ...base.war_room.fundamentals, ...(payload?.war_room?.fundamentals || {}) },
-                    news: { ...base.war_room.news, ...(payload?.war_room?.news || {}) },
-                    provenance: { ...base.war_room.provenance, ...(payload?.war_room?.provenance || {}) }
-                }
-            };
-            next.warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
-            next.degraded_fields = Array.isArray(payload?.degraded_fields) ? payload.degraded_fields : [];
-            next.period = next.view_state.period;
-            return next;
-        },
-
-        getHealthCheckViewState() {
-            return this.normalizeHealthCheckViewState(this.healthCheck?.view_state || {});
-        },
-
-        getHealthCheckPeriod() {
-            return this.getHealthCheckViewState().period || 'daily';
-        },
-
-        getSelectedHealthCheckOverlays() {
-            return this.getHealthCheckViewState().overlays?.selected || [];
-        },
-
-        getSelectedHealthCheckPanes() {
-            return this.getHealthCheckViewState().panes?.selected || [];
-        },
-
-        selectedHealthCheckOverlayOptions() {
-            const selected = this.getSelectedHealthCheckOverlays();
-            return (this.getHealthCheckViewState().overlays?.available || []).filter((option) => selected.includes(option.key));
-        },
-
-        isWarRoomCompact() {
-            return window.matchMedia('(max-width: 1023px)').matches;
-        },
-
-        async setHealthCheckPeriod(period) {
-            if (this.workspaceLoading || period === this.getHealthCheckPeriod()) {
-                return;
-            }
-            this.healthCheck = {
-                ...this.healthCheck,
-                view_state: this.normalizeHealthCheckViewState({
-                    ...this.getHealthCheckViewState(),
-                    period
-                })
-            };
-            await this.loadHealthCheck();
-        },
-
-        async toggleHealthCheckOverlay(key) {
-            if (this.workspaceLoading) {
-                return;
-            }
-            const current = [...this.getSelectedHealthCheckOverlays()];
-            const nextSelected = current.includes(key)
-                ? current.filter((item) => item !== key)
-                : [...current, key];
-            const hasMainPriceContext = nextSelected.some((item) => ['ma5', 'ma20', 'ma60', 'support', 'resistance'].includes(item));
-            if (!hasMainPriceContext) {
-                return;
-            }
-            this.healthCheck = {
-                ...this.healthCheck,
-                view_state: this.normalizeHealthCheckViewState({
-                    ...this.getHealthCheckViewState(),
-                    overlays: { selected: nextSelected }
-                })
-            };
-            await this.loadHealthCheck();
-        },
-
-        async toggleHealthCheckPane(key) {
-            if (this.workspaceLoading) {
-                return;
-            }
-            const current = [...this.getSelectedHealthCheckPanes()];
-            const nextSelected = current.includes(key)
-                ? current.filter((item) => item !== key)
-                : [...current, key];
-            if (!nextSelected.length) {
-                return;
-            }
-            this.healthCheck = {
-                ...this.healthCheck,
-                view_state: this.normalizeHealthCheckViewState({
-                    ...this.getHealthCheckViewState(),
-                    panes: { selected: nextSelected }
-                })
-            };
-            await this.loadHealthCheck();
-        },
-
-        toggleMobileWarRoomDetails() {
-            this.showMobileWarRoomDetails = !this.showMobileWarRoomDetails;
-            this.$nextTick(() => {
-                this.renderHealthChart();
-            });
-        },
-
-        overlayColor(key) {
-            const palette = {
-                ma5: '#facc15',
-                ma20: '#38bdf8',
-                ma60: '#c084fc',
-                support: '#22c55e',
-                resistance: '#fb7185'
-            };
-            return palette[key] || '#94a3b8';
-        },
-
-        sourceModeClass(mode) {
-            if (mode === 'direct') return 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10';
-            if (mode === 'proxy') return 'border-amber-500/50 text-amber-300 bg-amber-500/10';
-            return 'border-gray-600 text-gray-300 bg-gray-800/40';
-        },
-
-        sourceModeLabel(mode) {
-            if (mode === 'direct') return 'Direct';
-            if (mode === 'proxy') return 'Proxy';
-            return 'Unavailable';
-        },
-
-        toneSurfaceClass(tone) {
-            if (tone === 'bullish') return 'border-emerald-500/30 bg-emerald-500/10';
-            if (tone === 'bearish') return 'border-rose-500/30 bg-rose-500/10';
-            return 'border-gray-700 bg-black/20';
-        },
-
-        toneTextClass(tone) {
-            if (tone === 'bullish') return 'text-emerald-300';
-            if (tone === 'bearish') return 'text-rose-300';
-            return 'text-gray-100';
-        },
-
-        structureLevelClass(kind) {
-            return kind === 'support'
-                ? 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
-                : 'border-rose-500/40 text-rose-200 bg-rose-500/10';
-        },
-
-        hasNewsReasons(items) {
-            return Array.isArray(items) && items.length > 0;
-        },
-
-        destroyHealthChart() {
-            if (Array.isArray(this.healthCharts)) {
-                this.healthCharts.forEach((chart) => {
-                    if (chart && typeof chart.remove === 'function') {
-                        chart.remove();
-                    }
-                });
-            }
-            this.healthCharts = [];
-            const container = document.getElementById('healthCheckChart');
-            if (container) {
-                container.innerHTML = '';
-            }
-        },
-
-        switchViewMode(mode) {
-            if (this.viewMode === mode) {
-                return;
-            }
-            this.viewMode = mode;
-            this.workspaceError = '';
-            if (mode !== 'backtest' && this.chart) {
-                this.chart.destroy();
-                this.chart = null;
-            }
-            if (mode !== 'health_check') {
-                this.destroyHealthChart();
-            }
-
-            if (mode === 'backtest') {
-                this.$nextTick(() => {
-                    this.renderChart();
-                });
-                return;
-            }
-            if (mode === 'health_check' && !this.healthCheck.as_of_date) {
-                this.loadHealthCheck();
-                return;
-            }
-            if (mode === 'health_check') {
-                this.$nextTick(() => {
-                    this.renderHealthChart();
-                });
-                return;
-            }
-            if (mode === 'macro' && !this.macroData.status) {
-                this.loadMacro();
-            }
-        },
-
-        async executeWorkspaceAction() {
-            if (this.viewMode === 'health_check') {
-                await this.loadHealthCheck();
-                return;
-            }
-            if (this.viewMode === 'macro') {
-                await this.loadMacro();
-            }
-        },
-
-        async loadHealthCheck() {
-            const symbol = (this.healthCheckQuery || '').trim();
-            if (!symbol) {
-                this.workspaceError = '請先輸入股票代號。';
-                return;
-            }
-
-            this.workspaceLoading = true;
-            this.workspaceError = '';
-            try {
-                const query = new URLSearchParams({
-                    symbol,
-                    period: this.getHealthCheckPeriod(),
-                    _ts: Date.now()
-                });
-                const selectedOverlays = this.getSelectedHealthCheckOverlays();
-                const selectedPanes = this.getSelectedHealthCheckPanes();
-                if (selectedOverlays.length) {
-                    query.set('overlays', selectedOverlays.join(','));
-                }
-                if (selectedPanes.length) {
-                    query.set('panes', selectedPanes.join(','));
-                }
-                const response = await fetch('/api/dashboard/health-check?' + query.toString());
-                const data = await response.json();
-                if (!response.ok || data.error) {
-                    throw new Error(data.error || '個股健檢資料讀取失敗');
-                }
-                this.healthCheck = this.normalizeHealthCheckPayload(data, symbol);
-                this.$nextTick(() => {
-                    this.renderHealthChart();
-                });
-            } catch (error) {
-                console.error('載入個股健檢失敗:', error);
-                this.healthCheck = this.emptyHealthCheckState(symbol);
-                this.healthCheck.message = error.message;
-                this.workspaceError = error.message;
-                this.destroyHealthChart();
-            } finally {
-                this.workspaceLoading = false;
-            }
-        },
-
-        async loadMacro() {
-            this.workspaceLoading = true;
-            this.workspaceError = '';
-            try {
-                const response = await fetch('/api/dashboard/macro?_ts=' + Date.now());
-                const data = await response.json();
-                if (!response.ok || data.error) {
-                    throw new Error(data.error || '大盤總經資料讀取失敗');
-                }
-                this.macroData = data;
-            } catch (error) {
-                console.error('載入大盤總經失敗:', error);
-                this.macroData = {
-                    status: 'degraded',
-                    as_of_date: '',
-                    market_snapshot: {},
-                    chip_snapshot: {},
-                    news_summary: '',
-                    message: error.message
-                };
-                this.workspaceError = error.message;
-            } finally {
-                this.workspaceLoading = false;
-            }
-        },
-
-        buildHealthChartSchema() {
-            const paneMap = this.healthCheck?.war_room?.panes || {};
-            const orderedPanes = this.getSelectedHealthCheckPanes()
-                .map((key) => ({ key, ...(paneMap[key] || {}) }))
-                .filter((pane) => pane.key);
-            const visiblePanes = this.isWarRoomCompact() && !this.showMobileWarRoomDetails
-                ? orderedPanes.slice(0, 1)
-                : orderedPanes;
-            return {
-                main: {
-                    candles: this.healthCheck.series?.candles || [],
-                    volume: this.healthCheck.series?.volume || [],
-                    ma5: this.healthCheck.series?.ma5 || [],
-                    ma20: this.healthCheck.series?.ma20 || [],
-                    ma60: this.healthCheck.series?.ma60 || [],
-                    overlays: this.getSelectedHealthCheckOverlays(),
-                    structure: this.healthCheck.war_room?.structure || {}
-                },
-                panes: visiblePanes
-            };
-        },
-
-        createLightweightSeries(chart, type, options = {}) {
-            if (!chart || typeof LightweightCharts === 'undefined') {
-                throw new Error('LightweightCharts chart instance unavailable');
-            }
-
-            const legacyMap = {
-                candlestick: 'addCandlestickSeries',
-                line: 'addLineSeries',
-                histogram: 'addHistogramSeries'
-            };
-            const legacyMethod = legacyMap[type];
-            if (legacyMethod && typeof chart[legacyMethod] === 'function') {
-                return chart[legacyMethod](options);
-            }
-
-            if (typeof chart.addSeries === 'function') {
-                const v5Map = {
-                    candlestick: LightweightCharts.CandlestickSeries,
-                    line: LightweightCharts.LineSeries,
-                    histogram: LightweightCharts.HistogramSeries
-                };
-                const seriesType = v5Map[type];
-                if (seriesType) {
-                    return chart.addSeries(seriesType, options);
-                }
-            }
-
-            throw new Error(`Unsupported lightweight-charts series type: ${type}`);
-        },
-
-        normalizeLightweightSeriesData(items) {
-            if (!Array.isArray(items)) {
-                return [];
-            }
-            const byTime = new Map();
-            items.forEach((item) => {
-                if (!item || item.time === undefined || item.time === null) {
-                    return;
-                }
-                byTime.set(String(item.time), item);
-            });
-            return Array.from(byTime.values()).sort((left, right) => String(left.time).localeCompare(String(right.time)));
-        },
-
-        setLightweightSeriesData(series, items) {
-            series.setData(this.normalizeLightweightSeriesData(items));
-        },
-
-        renderHealthPaneSeries(chart, pane) {
-            const paneKey = pane.key;
-            const paneSeries = pane.series || {};
-            if (paneKey === 'macd') {
-                const histSeries = this.createLightweightSeries(chart, 'histogram', {
-                    priceLineVisible: false,
-                    lastValueVisible: false
-                });
-                this.setLightweightSeriesData(histSeries, paneSeries.histogram || []);
-                const macdSeries = this.createLightweightSeries(chart, 'line', { color: '#38bdf8', lineWidth: 2, priceLineVisible: false });
-                const signalSeries = this.createLightweightSeries(chart, 'line', { color: '#f97316', lineWidth: 2, priceLineVisible: false });
-                this.setLightweightSeriesData(macdSeries, paneSeries.macd || []);
-                this.setLightweightSeriesData(signalSeries, paneSeries.signal || []);
-                return;
-            }
-            if (paneKey === 'rsi') {
-                const rsiSeries = this.createLightweightSeries(chart, 'line', { color: '#facc15', lineWidth: 2, priceLineVisible: false });
-                const overboughtSeries = this.createLightweightSeries(chart, 'line', { color: '#fb7185', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-                const oversoldSeries = this.createLightweightSeries(chart, 'line', { color: '#22c55e', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-                this.setLightweightSeriesData(rsiSeries, paneSeries.rsi || []);
-                this.setLightweightSeriesData(overboughtSeries, paneSeries.overbought || []);
-                this.setLightweightSeriesData(oversoldSeries, paneSeries.oversold || []);
-                return;
-            }
-            if (paneKey === 'kd') {
-                const kSeries = this.createLightweightSeries(chart, 'line', { color: '#22d3ee', lineWidth: 2, priceLineVisible: false });
-                const dSeries = this.createLightweightSeries(chart, 'line', { color: '#c084fc', lineWidth: 2, priceLineVisible: false });
-                this.setLightweightSeriesData(kSeries, paneSeries.k || []);
-                this.setLightweightSeriesData(dSeries, paneSeries.d || []);
-                return;
-            }
-            if (paneKey === 'flow') {
-                if (Array.isArray(paneSeries.total) && paneSeries.total.length) {
-                    const totalSeries = this.createLightweightSeries(chart, 'line', { color: '#f97316', lineWidth: 2, priceLineVisible: false });
-                    this.setLightweightSeriesData(totalSeries, paneSeries.total || []);
-                }
-                ['foreign_buy', 'trust_buy', 'dealer_buy'].forEach((seriesKey, index) => {
-                    const seriesData = paneSeries[seriesKey] || [];
-                    if (!seriesData.length) {
-                        return;
-                    }
-                    const colors = ['#38bdf8', '#22c55e', '#f472b6'];
-                    const lineSeries = this.createLightweightSeries(chart, 'line', { color: colors[index], lineWidth: 1.5, priceLineVisible: false });
-                    this.setLightweightSeriesData(lineSeries, seriesData);
-                });
-                if (Array.isArray(paneSeries.chip_score) && paneSeries.chip_score.length) {
-                    const chipSeries = this.createLightweightSeries(chart, 'line', { color: '#facc15', lineWidth: 2, priceLineVisible: false });
-                    this.setLightweightSeriesData(chipSeries, paneSeries.chip_score || []);
-                }
-            }
-        },
-
-        renderHealthChart() {
-            this.destroyHealthChart();
-            if (this.viewMode !== 'health_check' || !['ok', 'partial', 'degraded'].includes(this.healthCheck.status)) {
-                return;
-            }
-
-            const container = document.getElementById('healthCheckChart');
-            if (!container || typeof LightweightCharts === 'undefined') {
-                return;
-            }
-
-            const schema = this.buildHealthChartSchema();
-            if (!schema.main.candles.length) {
-                container.innerHTML = '<div class="rounded-xl border border-dashed border-gray-700 px-4 py-8 text-center text-sm text-gray-400">目前沒有可繪製的 K 線資料。</div>';
-                return;
-            }
-
-            const width = Math.max(container.clientWidth || 0, 320);
-            const stack = document.createElement('div');
-            stack.className = 'flex flex-col gap-3';
-            container.appendChild(stack);
-
-            const mainWrapper = document.createElement('div');
-            mainWrapper.className = 'overflow-hidden rounded-xl border border-gray-800';
-            stack.appendChild(mainWrapper);
-
-            const mainChart = LightweightCharts.createChart(mainWrapper, {
-                width,
-                height: this.isWarRoomCompact() ? 320 : 420,
-                layout: {
-                    background: { color: '#070c18' },
-                    textColor: '#9ba3b4'
-                },
-                grid: {
-                    vertLines: { color: 'rgba(45, 55, 72, 0.22)' },
-                    horzLines: { color: 'rgba(45, 55, 72, 0.22)' }
-                },
-                crosshair: {
-                    mode: LightweightCharts.CrosshairMode.Normal
-                },
-                rightPriceScale: {
-                    borderColor: 'rgba(45, 55, 72, 0.5)'
-                },
-                timeScale: {
-                    borderColor: 'rgba(45, 55, 72, 0.5)'
-                }
-            });
-            this.healthCharts.push(mainChart);
-
-            const candleSeries = this.createLightweightSeries(mainChart, 'candlestick', {
-                upColor: '#2ea043',
-                downColor: '#f85149',
-                borderVisible: false,
-                wickUpColor: '#2ea043',
-                wickDownColor: '#f85149'
-            });
-            this.setLightweightSeriesData(candleSeries, schema.main.candles || []);
-
-            const overlayMap = {
-                ma5: schema.main.ma5 || [],
-                ma20: schema.main.ma20 || [],
-                ma60: schema.main.ma60 || []
-            };
-            ['ma5', 'ma20', 'ma60'].forEach((key) => {
-                if (!schema.main.overlays.includes(key)) {
-                    return;
-                }
-                const lineSeries = this.createLightweightSeries(mainChart, 'line', {
-                    color: this.overlayColor(key),
-                    lineWidth: key === 'ma20' ? 2.5 : 2,
-                    priceLineVisible: false,
-                    lastValueVisible: false
-                });
-                this.setLightweightSeriesData(lineSeries, overlayMap[key]);
-            });
-
-            const lineStyle = LightweightCharts.LineStyle ? LightweightCharts.LineStyle.Dashed : 2;
-            if (schema.main.overlays.includes('support')) {
-                (schema.main.structure?.supports || []).forEach((level) => {
-                    candleSeries.createPriceLine({
-                        price: Number(level.value),
-                        color: this.overlayColor('support'),
-                        lineWidth: 1,
-                        lineStyle,
-                        axisLabelVisible: true,
-                        title: level.label || 'Support'
-                    });
-                });
-            }
-            if (schema.main.overlays.includes('resistance')) {
-                (schema.main.structure?.resistances || []).forEach((level) => {
-                    candleSeries.createPriceLine({
-                        price: Number(level.value),
-                        color: this.overlayColor('resistance'),
-                        lineWidth: 1,
-                        lineStyle,
-                        axisLabelVisible: true,
-                        title: level.label || 'Resistance'
-                    });
-                });
-            }
-
-            const volumeSeries = this.createLightweightSeries(mainChart, 'histogram', {
-                color: '#58a6ff',
-                priceFormat: { type: 'volume' },
-                priceScaleId: 'volume'
-            });
-            mainChart.priceScale('volume').applyOptions({
-                scaleMargins: { top: 0.78, bottom: 0 }
-            });
-            this.setLightweightSeriesData(volumeSeries, schema.main.volume || []);
-
-            const paneCharts = [];
-            schema.panes.forEach((pane) => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'rounded-xl border border-gray-800 bg-black/20 p-3';
-
-                const header = document.createElement('div');
-                header.className = 'mb-3 flex items-center justify-between gap-3';
-                header.innerHTML = `
-                    <div>
-                        <div class="text-sm font-bold text-gray-100">${pane.label || pane.key.toUpperCase()}</div>
-                        <div class="text-[11px] uppercase tracking-[0.22em] text-gray-500">${pane.key}</div>
-                    </div>
-                    <span class="rounded-full border px-2 py-1 text-[11px] ${this.sourceModeClass(pane.source_mode)}">${this.sourceModeLabel(pane.source_mode)}</span>
-                `;
-                wrapper.appendChild(header);
-
-                const hasPaneData = Object.values(pane.series || {}).some((items) => Array.isArray(items) && items.length);
-                if (pane.status === 'unavailable' || !hasPaneData) {
-                    const placeholder = document.createElement('div');
-                    placeholder.className = 'rounded-lg border border-dashed border-gray-700 px-4 py-6 text-sm text-gray-400';
-                    placeholder.textContent = pane.message || '目前沒有可顯示的副圖資料。';
-                    wrapper.appendChild(placeholder);
-                    stack.appendChild(wrapper);
-                    return;
-                }
-
-                const paneHolder = document.createElement('div');
-                paneHolder.className = 'overflow-hidden rounded-lg';
-                wrapper.appendChild(paneHolder);
-                stack.appendChild(wrapper);
-
-                const paneChart = LightweightCharts.createChart(paneHolder, {
-                    width,
-                    height: pane.key === 'flow' ? 150 : 130,
-                    layout: {
-                        background: { color: '#070c18' },
-                        textColor: '#9ba3b4'
-                    },
-                    grid: {
-                        vertLines: { color: 'rgba(45, 55, 72, 0.16)' },
-                        horzLines: { color: 'rgba(45, 55, 72, 0.16)' }
-                    },
-                    handleScroll: false,
-                    handleScale: false,
-                    crosshair: {
-                        mode: LightweightCharts.CrosshairMode.Normal
-                    },
-                    rightPriceScale: {
-                        borderColor: 'rgba(45, 55, 72, 0.5)'
-                    },
-                    timeScale: {
-                        borderColor: 'rgba(45, 55, 72, 0.5)'
-                    }
-                });
-                this.renderHealthPaneSeries(paneChart, pane);
-                paneChart.timeScale().fitContent();
-                paneCharts.push(paneChart);
-                this.healthCharts.push(paneChart);
-            });
-
-            if (typeof mainChart.timeScale().subscribeVisibleLogicalRangeChange === 'function' && paneCharts.length) {
-                mainChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-                    paneCharts.forEach((paneChart) => {
-                        paneChart.timeScale().setVisibleLogicalRange(range);
-                    });
-                });
-            }
-
-            mainChart.timeScale().fitContent();
-        },
-
-        signalDotClass(signal) {
-            if (signal === 'green') return 'bg-green-500';
-            if (signal === 'red') return 'bg-red-500';
-            return 'bg-amber-400';
-        },
-
-        scriptBarClass(signal) {
-            if (signal === 'red') return 'bg-red-500';
-            if (signal === 'green') return 'bg-green-500';
-            return 'bg-amber-400';
-        },
-
-        scriptTitleClass(signal) {
-            if (signal === 'red') return 'text-red-300';
-            if (signal === 'green') return 'text-green-300';
-            return 'text-amber-300';
-        },
-
-        llmStatusClass(status) {
-            if (status === 'ok') return 'border-green-500 text-green-300';
-            if (status === 'fallback') return 'border-amber-500 text-amber-300';
-            return 'border-gray-600 text-gray-300';
-        },
-
-        llmStatusLabel(status) {
-            if (status === 'ok') return 'Gemini 已啟用';
-            if (status === 'fallback') return '規則版 fallback';
-            return 'LLM 不可用';
-        },
-
-        macroStatusClass(status) {
-            return status === 'ok' ? 'border-green-500 text-green-300' : 'border-amber-500 text-amber-300';
-        },
-
-        macroStatusLabel(status) {
-            return status === 'ok' ? '資料完整' : '降級模式';
-        },
-
-        formatSourceList(value) {
-            if (Array.isArray(value)) {
-                return value.join(' / ');
-            }
-            return value || 'N/A';
-        },
-
-        formatCurrency(value) {
-            if (value === undefined || value === null || isNaN(value)) {
-                return 'N/A';
-            }
-            return '$' + Number(value).toFixed(2);
-        },
-
-        formatCompactNumber(value) {
-            if (value === undefined || value === null || isNaN(value)) {
-                return 'N/A';
-            }
-            const numeric = Number(value);
-            if (Math.abs(numeric) >= 1000000) {
-                return (numeric / 1000000).toFixed(1) + 'M';
-            }
-            if (Math.abs(numeric) >= 1000) {
-                return (numeric / 1000).toFixed(1) + 'K';
-            }
-            return numeric.toLocaleString('zh-TW');
-        },
-
-        formatSignedNumber(value) {
-            if (value === undefined || value === null || isNaN(value)) {
-                return 'N/A';
-            }
-            const numeric = Number(value);
-            return (numeric >= 0 ? '+' : '') + numeric.toLocaleString('zh-TW');
-        },
-
-        signedToneClass(value) {
-            if (value === undefined || value === null || isNaN(value)) {
-                return 'text-gray-300';
-            }
-            return Number(value) >= 0 ? 'text-emerald-300' : 'text-rose-300';
-        },
-
-        formatFixed(value, digits) {
-            if (value === undefined || value === null || isNaN(value)) {
-                return 'N/A';
-            }
-            return Number(value).toFixed(digits);
-        },
-
-        formatPercentFrom100(value) {
-            if (value === undefined || value === null || isNaN(value)) {
-                return 'N/A';
-            }
-            return Number(value).toFixed(0) + '%';
-        },
-        
         async init() {
-            try {
-                // 並行載入所有數據
-                await Promise.all([
-                    this.loadSummary(),
-                    this.loadPerformance(),
-                    this.loadTrades(),
-                    this.loadLiveSignals(),
-                    this.loadPKBattle()
-                ]);
-                
-                this.loading = false;
-
-                // 渲染圖表：必須在 loading = false 之後（確保 canvas 已顯示）
-                this.$nextTick(() => {
-                    this.renderChart();
-                });
-            } catch (error) {
-                console.error('載入失敗:', error);
-                alert('載入數據失敗: ' + error.message);
-                this.loading = false;
-            }
+            await Promise.all([
+                this.loadSummary(),
+                this.ensureTabData('strategy'),
+                this.loadSystemStatus()
+            ]);
         },
-        
+
         async loadSummary() {
-            try {
-                const response = await fetch('/api/summary');
-                if (!response.ok) {
-                    console.warn('無法載入總結數據');
-                    return;
-                }
-                const data = await response.json();
-                if (data && !data.error) {
-                    this.summary = data;
-                }
-            } catch (error) {
-                console.error('載入總結失敗:', error);
-            }
+            this.summary = await this.fetchJson('/api/market/summary');
         },
-        
-        async loadPerformance() {
-            try {
-                const response = await fetch('/api/performance');
-                if (!response.ok) {
-                    console.warn('無法載入資產曲線數據');
-                    return;
-                }
-                const data = await response.json();
-                if (data && !data.error) {
-                    this.performance = data;
-                }
-            } catch (error) {
-                console.error('載入資產曲線失敗:', error);
-            }
+
+        async loadSystemStatus() {
+            this.systemStatus = await this.fetchJson('/api/market/system-status');
+            this.tabState.systemStatus = { loading: false, loaded: true, payload: this.systemStatus };
         },
-        
-        async loadTrades() {
-            try {
-                const response = await fetch('/api/trades');
-                if (!response.ok) {
-                    console.warn('❌ 無法載入交易數據 - HTTP', response.status);
-                    this.trades = [];
-                    return;
-                }
-                const data = await response.json();
-                this.trades = Array.isArray(data) ? data : [];
-                console.log('✅ 交易數據載入成功:', this.trades.length, '筆');
-                
-                // 統計策略分布（用於調試）
-                const strategyCount = {};
-                this.trades.forEach(t => {
-                    const s = t.strategy || 'unknown';
-                    strategyCount[s] = (strategyCount[s] || 0) + 1;
-                });
-                console.log('📊 策略分布:', strategyCount);
-            } catch (error) {
-                console.error('❌ 載入交易數據失敗:', error);
-                this.trades = [];
-            }
-        },
-        
-        async loadLiveSignals() {
-            if (this.isFetching) {
+
+        async ensureTabData(tabKey) {
+            const tab = this.tabs.find((item) => item.key === tabKey);
+            if (!tab || !tab.endpoint) {
                 return;
             }
+            const state = this.tabState[tabKey];
+            if (state && (state.loaded || state.loading)) {
+                return;
+            }
+            this.tabState[tabKey] = { loading: true, loaded: false, payload: null };
+            const payload = await this.fetchJson(tab.endpoint);
+            this.tabState[tabKey] = { loading: false, loaded: true, payload };
+            if (tabKey === 'systemStatus') {
+                this.systemStatus = payload;
+            }
+        },
 
-            this.isFetching = true;
-            this.signalsLoading = true;
+        async refreshActiveTab() {
+            const tab = this.tabs.find((item) => item.key === this.activeTab);
+            if (!tab || !tab.endpoint) {
+                await this.loadSummary();
+                return;
+            }
+            this.tabState[this.activeTab] = { loading: true, loaded: false, payload: null };
+            const payload = await this.fetchJson(tab.endpoint);
+            this.tabState[this.activeTab] = { loading: false, loaded: true, payload };
+            await this.loadSummary();
+        },
+
+        async analyzeStock() {
+            const stockId = String(this.stockAnalysisQuery || '').trim();
+            if (!stockId) {
+                this.stockAnalysisError = '請輸入股票代號';
+                return;
+            }
+            this.stockAnalysisLoading = true;
+            this.stockAnalysisError = '';
             try {
-                const strategyKey = this.selectedLiveStrategy || '';
-                console.log('🔍 載入即時訊號 - 策略:', strategyKey, 'TopN:', this.liveTopN);
-                
-                const query = new URLSearchParams({
-                    strategy: strategyKey,
-                    top_n: this.liveTopN,
-                    _ts: Date.now()
-                });
-                const response = await fetch('/api/daily-signals?' + query.toString());
-                if (!response.ok) {
-                    console.warn('❌ 無法載入即時訊號 - HTTP', response.status);
-                    this.liveSignals = [];
-                    this.liveDate = null;
-                    this.liveStrategyDisplay = '';
-                    return;
+                const payload = await this.fetchJson('/api/stock-analysis?id=' + encodeURIComponent(stockId));
+                this.stockAnalysis = payload || {};
+                if (payload && payload.status === 'error') {
+                    this.stockAnalysisError = payload.error || '個股分析失敗';
                 }
-                const data = await response.json();
-                console.log('✅ 即時訊號載入成功:', data.strategy_display, '數量:', data.signals?.length || 0);
-                
-                this.liveSignals = data.signals || [];
-                this.liveDate = data.date;
-                this.liveStrategyDisplay = data.strategy_display || '';
-                // 只在初始載入（非使用者主動點擊）時才用 API 回傳的 strategy_key 同步按鈕狀態
-                // 避免 API fallback 時覆蓋使用者已點選的策略按鈕高亮
-                if (data.strategy_key && !this._liveStrategyUserSelected) {
-                    this.selectedLiveStrategy = data.strategy_key;
-                }
-                
-                // 強制 Alpine.js 更新 DOM
-                this.$nextTick(() => {
-                    console.log('📊 DOM 更新完成');
-                });
             } catch (error) {
-                console.error('❌ 載入即時訊號失敗:', error);
-                this.liveSignals = [];
-                this.liveDate = null;
-                this.liveStrategyDisplay = '';
+                this.stockAnalysisError = error.message || String(error);
+                this.stockAnalysis = {};
             } finally {
-                this.signalsLoading = false;
-                this.isFetching = false;
+                this.stockAnalysisLoading = false;
             }
         },
-        
-        async loadPKBattle() {
+
+        async fetchJson(url) {
             try {
-                const response = await fetch('/api/pk/battle');
+                const response = await fetch(url);
+                const payload = await response.json();
                 if (!response.ok) {
-                    console.warn('無法載入 PK Battle 數據');
-                    return;
+                    return { status: 'error', error: payload.error || response.statusText, data: {} };
                 }
-                this.pkBattle = await response.json();
+                return payload;
             } catch (error) {
-                console.error('載入 PK Battle 失敗:', error);
+                return { status: 'error', error: error.message || String(error), data: {} };
             }
         },
-        
-        renderChart() {
-            // 🔧 修復 1：銷毀舊的 Chart 實例（避免重複初始化錯誤）
-            if (this.chart) {
-                this.chart.destroy();
-                this.chart = null;
-            }
 
-            if (this.viewMode !== 'backtest') {
-                return;
+        renderTabPayload(tabKey) {
+            const state = this.tabState[tabKey] || {};
+            if (state.loading) {
+                return '<div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4 text-sm text-gray-400">載入中...</div>';
             }
-
-            const canvas = document.getElementById('equityChart');
-            if (!canvas) {
-                return;
+            if (!state.loaded) {
+                return '<div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4 text-sm text-gray-400">切換到此 tab 後載入資料。</div>';
             }
-            
-            const ctx = canvas.getContext('2d');
-            
-            // 🔧 修復 2：驗證數據存在（避免 undefined 錯誤）
-            if (!this.performance.roi || this.performance.roi.length === 0) {
-                console.warn('無回測數據，跳過圖表渲染');
-                return;
-            }
-            
-            // 決定線條顏色（根據最終 ROI）
-            const finalROI = this.performance.roi[this.performance.roi.length - 1] || 0;
-            const lineColor = finalROI >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
-            const fillColor = finalROI >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
-            
-            this.chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: this.performance.dates,
-                    datasets: [{
-                        label: '資產價值 (TWD)',
-                        data: this.performance.equity,
-                        borderColor: lineColor,
-                        backgroundColor: fillColor,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 5,
-                        pointHoverBackgroundColor: lineColor,
-                        pointHoverBorderColor: '#fff',
-                        pointHoverBorderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(26, 33, 50, 0.95)',
-                            titleColor: '#e4e8f0',
-                            bodyColor: '#9ba3b4',
-                            borderColor: '#2d3748',
-                            borderWidth: 1,
-                            padding: 12,
-                            displayColors: false,
-                            callbacks: {
-                                label: function(context) {
-                                    const value = context.parsed.y;
-                                    const roi = this.performance.roi[context.dataIndex];
-                                    // 🔧 修復 3：安全處理 roi 可能為 undefined 的情況
-                                    const roiText = roi !== undefined ? roi.toFixed(2) + '%' : 'N/A';
-                                    return [
-                                        '資產: $' + value.toLocaleString('zh-TW', {maximumFractionDigits: 0}),
-                                        'ROI: ' + roiText
-                                    ];
-                                }.bind(this)
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                color: 'rgba(45, 55, 72, 0.3)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#9ba3b4',
-                                maxRotation: 45,
-                                minRotation: 45,
-                                font: {
-                                    size: 10
-                                },
-                                callback: function(value, index) {
-                                    // 只顯示每 20 個日期
-                                    return index % 20 === 0 ? this.getLabelForValue(value) : '';
-                                }
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: 'rgba(45, 55, 72, 0.3)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#9ba3b4',
-                                font: {
-                                    size: 11
-                                },
-                                callback: function(value) {
-                                    return '$' + (value / 1000).toFixed(0) + 'K';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            return '<pre class="max-h-96 overflow-auto rounded-lg border border-gray-800 bg-black/30 p-4 text-xs text-gray-300">' + this.escapeHtml(JSON.stringify(state.payload, null, 2)) + '</pre>';
         },
-        
-        formatPercent(value) {
-            // 🔧 修復 4：安全處理可能為 undefined 的數值
-            if (value === undefined || value === null || isNaN(value)) {
+
+        formatPayload(payload) {
+            if (!payload || !Object.keys(payload).length) {
+                return '尚無資料';
+            }
+            return JSON.stringify(payload, null, 2);
+        },
+
+        formatNumber(value) {
+            if (value === undefined || value === null || Number.isNaN(Number(value))) {
                 return 'N/A';
             }
-            return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
+            return Number(value).toLocaleString('zh-TW');
+        },
+
+        escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
-    }
-}
+    }));
+});
 </script>
 {% endblock %}

@@ -9,7 +9,6 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -31,6 +30,26 @@ from jobs.update_database import prewarm_dashboard_aggregation_cache, update_mar
 DEFAULT_START_DATE = '2026-03-27'
 TWSE_CALENDAR_SYMBOL = '^TWII'
 _LOGGER = logging.getLogger(__name__)
+
+
+class _YFinanceProxy:
+    """Lazy proxy so test collection does not require yfinance."""
+
+    def _load(self):
+        try:
+            import yfinance as module
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                'yfinance is required for Yahoo Finance backfill. '
+                'Install yfinance or monkeypatch jobs.backfill_pipeline.yf.download in tests.'
+            ) from exc
+        return module
+
+    def download(self, *args, **kwargs):
+        return self._load().download(*args, **kwargs)
+
+
+yf = _YFinanceProxy()
 
 
 def _build_expected_weekdays(start_date: str, end_date: str) -> list[str]:

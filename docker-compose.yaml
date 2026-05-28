@@ -67,6 +67,7 @@ services:
       LINE_TOKEN: ${LINE_TOKEN:-}
       LINE_SECRET: ${LINE_SECRET:-}
       GEMINI_KEY: ${GEMINI_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-dev-secret-key}
     command:

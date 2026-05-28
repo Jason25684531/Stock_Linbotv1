@@ -16,16 +16,18 @@ import asyncio
 import json
 import feedparser
 import datetime
+from html import unescape
 import re
 import threading
 import time
 from typing import ClassVar
 from urllib.parse import quote_plus
+from urllib.request import Request, urlopen
 
 try:
     from google import genai
     from google.genai import types
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     genai = None
     types = None
 try:
@@ -66,7 +68,15 @@ RSS_SOURCES = {
     ),
 }
 
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+CNYES_API_SOURCES = {
+    '台股': 'tw_stock',
+    '美股': 'us_stock',
+    '國際政經': 'wd_stock',
+    '全球財經': 'forex',
+    '頭條': 'headline',
+}
+
+GEMINI_MODEL = Config.GEMINI_MODEL
 
 # 盤前/盤後關鍵字（用於優先排序）
 _PRIORITY_PATTERNS = [
@@ -620,7 +630,11 @@ def build_mcp_prompt_context() -> str:
 
 def _clean_html(text: str) -> str:
     """清除 HTML 標籤"""
-    return re.sub(r'<[^>]+>', '', text).strip()
+    cleaned = re.sub(r'<[^>]+>', '', unescape(str(text or ''))).strip()
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r'\s*-\s*news\.cnyes\.com\s*$', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\s*news\.cnyes\.com\s*$', '', cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _is_priority_news(title: str) -> bool:
@@ -645,14 +659,36 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
     other_articles = []     # 其他文章
     seen_titles: set = set()
 
+    for label, category in CNYES_API_SOURCES.items():
+        try:
+            articles = _fetch_cnyes_api_articles(category, label, max_per_source)
+            for article in articles:
+                title = article['title']
+                if not title or title in seen_titles:
+                    continue
+                seen_titles.add(title)
+                if _is_priority_news(title):
+                    priority_articles.append(article)
+                else:
+                    other_articles.append(article)
+            print(f"  ✓ {label}(API): {len(articles)} 篇")
+        except Exception as e:
+            print(f"  ⚠️ {label} API 抓取失敗: {e}")
+
+    rss_fetch_count = 0
+    if not priority_articles and not other_articles:
+        print("  ⚠️ 鉅亨 API 無可用資料，改用 Google News RSS 備援")
+
     for label, url in RSS_SOURCES.items():
+        if priority_articles or other_articles:
+            break
         try:
             feed = feedparser.parse(url)
             count = 0
             for entry in feed.entries:
                 if count >= max_per_source:
                     break
-                title = entry.title or ""
+                title = _clean_html(entry.title or "")
                 if len(title) < 5 or "贊助" in title:
                     continue
                 if title in seen_titles:
@@ -673,6 +709,7 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
                 else:
                     other_articles.append(article)
                 count += 1
+                rss_fetch_count += 1
             print(f"  ✓ {label}: {count} 篇")
         except Exception as e:
             print(f"  ⚠️ {label} 抓取失敗: {e}")
@@ -687,7 +724,7 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
             combined += f"- {a['title']}\n  {a['summary']}\n"
             priority_titles.append(a['title'])
 
-    for label in ["美股", "美股焦點", "國際政經", "全球財經", "台股"]:
+    for label in ["台股", "頭條", "美股", "美股焦點", "國際政經", "全球財經"]:
         label_articles = [a for a in other_articles if a['source'] == label]
         if label_articles:
             combined += f"\n【{label}】\n"
@@ -695,9 +732,96 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
                 combined += f"- {a['title']}\n  {a['summary']}\n"
 
     total = len(priority_articles) + len(other_articles)
-    print(f"  📊 共 {total} 篇 (盤前/盤後: {len(priority_articles)} 篇)")
+    source_label = 'API' if rss_fetch_count == 0 else 'RSS'
+    print(f"  📊 共 {total} 篇 ({source_label}; 盤前/盤後: {len(priority_articles)} 篇)")
 
     return combined, priority_titles
+
+
+def _fetch_cnyes_api_articles(
+    category: str,
+    label: str,
+    max_per_source: int,
+) -> list[dict[str, str]]:
+    limit = max(10, int(max_per_source or 1))
+    url = f'https://news.cnyes.com/api/v3/news/category/{category}?limit={limit}'
+    request = Request(
+        url,
+        headers={
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 StockAI-NewsAgent/1.0'
+            ),
+            'Accept': 'application/json',
+        },
+    )
+
+    with urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read().decode('utf-8'))
+
+    rows = payload.get('items', {}).get('data', [])
+    articles: list[dict[str, str]] = []
+    for row in rows[:max_per_source]:
+        title = _clean_html(row.get('title', ''))
+        summary = _clean_html(row.get('summary', '') or row.get('content', ''))
+        if not title or len(title) < 5:
+            continue
+        if len(summary) > 120:
+            summary = summary[:120] + "..."
+        articles.append({'title': title, 'summary': summary, 'source': label})
+    return articles
+
+
+def _extract_news_items(news_text: str, limit: int = 5) -> list[dict[str, str]]:
+    """Extract RSS titles and snippets from the combined feed text."""
+    items: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+
+    for raw_line in str(news_text or '').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('【'):
+            continue
+
+        if line.startswith('- '):
+            if current:
+                items.append(current)
+            current = {'title': line[2:].strip(), 'summary': ''}
+            if len(items) >= limit:
+                return items[:limit]
+            continue
+
+        if current and not current.get('summary'):
+            current['summary'] = line
+
+    if current:
+        items.append(current)
+
+    return items[:limit]
+
+
+def _is_complete_news_summary(summary: str, min_items: int = 3) -> bool:
+    lines = [line.strip() for line in str(summary or '').splitlines() if line.strip()]
+    item_count = sum(1 for line in lines if line.startswith('📌'))
+    has_commentary = any(line.startswith('📊') for line in lines)
+    return item_count >= min_items and has_commentary
+
+
+def _build_news_summary_fallback(news_text: str) -> str:
+    items = _extract_news_items(news_text, limit=5)
+    if not items:
+        return '目前暫無可用新聞摘要，請稍後再試。'
+
+    lines: list[str] = []
+    for item in items:
+        title = item.get('title', '').strip()
+        summary = item.get('summary', '').strip()
+        if not title:
+            continue
+        lines.append(f'📌 {title}')
+        lines.append(f'→ 影響：{summary or "此題材需持續觀察對台股族群輪動的影響。"}')
+
+    lines.append('📊 綜合研判：新聞資料已取得，但 AI 摘要格式不完整，先以原始新聞重點保底呈現。操作上留意權值股、AI供應鏈與國際盤勢連動。')
+    return '\n'.join(lines)
 
 
 # ==========================================
@@ -714,7 +838,7 @@ def _summarize_with_gemini(news_text: str) -> str:
         return "⚠️ 未設定 GEMINI_KEY，無法生成 AI 摘要"
 
     if genai is None or types is None:
-        return "?? google-genai SDK ?葉?批?嚗蝣箸?AI ??"
+        return _build_news_summary_fallback(news_text)
 
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     mcp_context = build_mcp_prompt_context()
@@ -754,7 +878,10 @@ def _summarize_with_gemini(news_text: str) -> str:
                 max_output_tokens=800,
             ),
         )
-        return response.text
+        summary = str(response.text or '').strip()
+        if not _is_complete_news_summary(summary):
+            return _build_news_summary_fallback(news_text)
+        return summary
     except Exception as e:
         return f"⚠️ Gemini 分析失敗: {e}"
 

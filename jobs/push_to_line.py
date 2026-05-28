@@ -509,7 +509,7 @@ def _build_evening_flex(news_summary: str, picks: list,
 # Morning 模式
 # ==========================================
 
-def run_morning():
+def run_morning(dry_run: bool = False):
     """早晨大局觀：市場概況 + 新聞摘要 + 精選五股。"""
     print("🌅 早晨大局觀模式啟動...")
 
@@ -523,6 +523,8 @@ def run_morning():
     # 1. 新聞摘要
     print("📰 取得新聞摘要...")
     try:
+        if dry_run:
+            raise RuntimeError("[DRY-RUN] news external call skipped")
         from core.news_agent import get_morning_news_summary
         news_summary = get_morning_news_summary()
     except Exception as e:
@@ -556,14 +558,20 @@ def run_morning():
     )
 
     # 5. 推播
-    _broadcast_flex(flex)
+    _broadcast_flex(flex, dry_run=dry_run)
+    return {
+        'target_time': 'morning',
+        'message_type': 'flex',
+        'recommendation_count': len(picks),
+        'would_push': not dry_run,
+    }
 
 
 # ==========================================
 # Evening 模式（原始邏輯 + 新增 Flex 精選）
 # ==========================================
 
-def run_evening():
+def run_evening(dry_run: bool = False):
     """晚間選股策劃：全策略推薦 + 明日關注精選"""
     print("🌙 晚間選股策劃模式啟動...")
     engine = get_db_engine()
@@ -714,6 +722,8 @@ def run_evening():
     # 6. 爬取盤後新聞摘要
     print("📰 取得盤後新聞摘要...")
     try:
+        if dry_run:
+            raise RuntimeError("[DRY-RUN] news external call skipped")
         from core.news_agent import get_morning_news_summary
         evening_news = get_morning_news_summary()
     except Exception as e:
@@ -739,7 +749,7 @@ def run_evening():
             strategy_summary_lines,
             picks_notice,
         )
-        _broadcast_flex(flex)
+        _broadcast_flex(flex, dry_run=dry_run)
         stock_ids = [p[1] for p in picks]
         print(f"✅ 明日關注精選已推播 ({picks_title}): {', '.join(stock_ids)}")
     else:
@@ -750,7 +760,22 @@ def run_evening():
 # 推播工具
 # ==========================================
 
-def _broadcast_text(msg: str):
+    return _push_preview_summary('evening', picks, dry_run)
+
+
+def _push_preview_summary(target_time: str, picks: list, dry_run: bool) -> dict:
+    return {
+        'target_time': target_time,
+        'message_type': 'flex',
+        'recommendation_count': len(picks or []),
+        'would_push': not dry_run,
+    }
+
+
+def _broadcast_text(msg: str, dry_run: bool = False):
+    if dry_run:
+        print("[DRY-RUN] LINE push skipped")
+        return
     """推播純文字訊息"""
     try:
         configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
@@ -764,7 +789,10 @@ def _broadcast_text(msg: str):
         print(f"❌ 文字推播失敗: {e}")
 
 
-def _broadcast_flex(flex_msg: FlexMessage):
+def _broadcast_flex(flex_msg: FlexMessage, dry_run: bool = False):
+    if dry_run:
+        print("[DRY-RUN] LINE push skipped")
+        return
     """推播 Flex Message"""
     try:
         configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
@@ -782,51 +810,70 @@ def _broadcast_flex(flex_msg: FlexMessage):
 # 主程式入口
 # ==========================================
 
-def main():
-    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('push_to_line')
-    record_pipeline_step_start(
-        pipeline_name=pipeline_name,
-        step_name=step_name,
-        run_date=run_date,
-    )
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="StockAI Line push")
     parser.add_argument(
         '--time', choices=['morning', 'evening'], default='evening',
         help='push mode: morning or evening'
     )
-    args = parser.parse_args()
+    parser.add_argument('--dry-run', action='store_true', help='Preview the LINE payload without pushing or status writes.')
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('push_to_line')
+    if not args.dry_run:
+        record_pipeline_step_start(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+        )
 
     print(f"StockAI push start (mode: {args.time})")
     print(f"Run timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
         if args.time == 'morning':
-            run_morning()
+            summary = run_morning(dry_run=args.dry_run)
         else:
-            run_evening()
+            summary = run_evening(dry_run=args.dry_run)
 
         trade_date = get_pipeline_baseline_date()
         status = 'success' if trade_date else 'failed'
-        record_pipeline_step_finish(
-            pipeline_name=pipeline_name,
-            step_name=step_name,
-            run_date=run_date,
-            status=status,
-            source_date=run_date,
-            trade_date=trade_date,
-            error_summary=None if trade_date else 'no pipeline baseline date available for push payload',
-        )
-        print('Line push completed.')
+        if args.dry_run:
+            summary = summary or _push_preview_summary(args.time, [], True)
+            print(
+                "[DRY-RUN] summary: "
+                f"target_time: {summary['target_time']}, "
+                f"message_type: {summary['message_type']}, "
+                f"recommendation_count: {summary['recommendation_count']}, "
+                "would_push: false"
+            )
+        else:
+            record_pipeline_step_finish(
+                pipeline_name=pipeline_name,
+                step_name=step_name,
+                run_date=run_date,
+                status=status,
+                source_date=run_date,
+                trade_date=trade_date,
+                error_summary=None if trade_date else 'no pipeline baseline date available for push payload',
+            )
+            print('Line push completed.')
+        return 0
     except Exception as exc:
-        record_pipeline_step_finish(
-            pipeline_name=pipeline_name,
-            step_name=step_name,
-            run_date=run_date,
-            status='failed',
-            source_date=run_date,
-            trade_date=get_pipeline_baseline_date(),
-            error_summary=str(exc),
-        )
+        if not args.dry_run:
+            record_pipeline_step_finish(
+                pipeline_name=pipeline_name,
+                step_name=step_name,
+                run_date=run_date,
+                status='failed',
+                source_date=run_date,
+                trade_date=get_pipeline_baseline_date(),
+                error_summary=str(exc),
+            )
         raise
 
 

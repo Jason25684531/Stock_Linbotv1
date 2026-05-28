@@ -151,6 +151,7 @@ def test_backfill_pipeline_repairs_missing_dates(monkeypatch):
     ])
     updated_market_dates = []
     rebuilt_recommendation_dates = []
+    prewarmed_dates = []
 
     monkeypatch.setattr(backfill_pipeline, 'StrategyManager', _FakeManager)
     monkeypatch.setattr(backfill_pipeline, 'get_db_engine', lambda: object())
@@ -180,11 +181,17 @@ def test_backfill_pipeline_repairs_missing_dates(monkeypatch):
         'run_daily_for_date',
         lambda date_str: rebuilt_recommendation_dates.append(date_str) or {'date': date_str},
     )
+    monkeypatch.setattr(
+        backfill_pipeline,
+        'prewarm_dashboard_aggregation_cache',
+        lambda trade_date=None, tracked_stock_ids=None: prewarmed_dates.append(trade_date) or {'trade_date': trade_date},
+    )
 
     summary = backfill_pipeline.backfill_pipeline('2026-03-27', '2026-03-31', dry_run=False)
 
     assert updated_market_dates == ['2026-03-30']
     assert rebuilt_recommendation_dates == ['2026-03-27', '2026-03-30', '2026-03-31']
+    assert prewarmed_dates == ['2026-03-27', '2026-03-30', '2026-03-31']
     assert summary['remaining_market_dates'] == []
     assert summary['remaining_recommendation_dates'] == []
 

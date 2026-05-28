@@ -58,7 +58,7 @@ def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
 # 模型存放目錄（與 jobs/train_model.py 一致）
 
 
-def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
+def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False) -> pd.DataFrame:
     """
     從歷史資料計算技術指標，並回傳最新一天含指標的完整 DataFrame。
 
@@ -192,7 +192,10 @@ def compute_indicators_from_history(date_str: str, engine) -> pd.DataFrame:
     print(f"    MA60: {has_ma60} 檔 | RSI: {has_rsi} 檔 | NATR: {has_natr} 檔")
 
     # ---- 回寫指標到 DB（供 get_market_trend 等使用）----
-    _write_indicators_to_db(latest_df, engine)
+    if dry_run:
+        print("[DRY-RUN] indicator DB update skipped")
+    else:
+        _write_indicators_to_db(latest_df, engine)
 
     return latest_df
 
@@ -372,7 +375,7 @@ def merge_financial_data(df: pd.DataFrame, engine) -> pd.DataFrame:
         return df
 
 
-def merge_revenue_data(df: pd.DataFrame, engine) -> pd.DataFrame:
+def merge_revenue_data(df: pd.DataFrame, engine, dry_run: bool = False) -> pd.DataFrame:
     """
     合併月營收資料到日線數據 [V35: 供 V34/V35 策略使用]
     
@@ -428,7 +431,10 @@ def merge_revenue_data(df: pd.DataFrame, engine) -> pd.DataFrame:
         print(f"  ✓ 有營收 YoY：{has_yoy} 檔 ({has_yoy/len(df)*100:.1f}%)")
         
         # 🔥 V35: 將 revenue_yoy 寫回 daily_market_data
-        _write_revenue_yoy_to_db(df, engine)
+        if dry_run:
+            print("[DRY-RUN] revenue_yoy DB update skipped")
+        else:
+            _write_revenue_yoy_to_db(df, engine)
         
         return df
         
@@ -520,6 +526,7 @@ def _persist_strategy_recommendations(
     strategy_name: str,
     date_str: str,
     engine,
+    dry_run: bool = False,
 ) -> tuple[int, bool]:
     """將策略結果寫入 daily_recommendations，零候選時改寫心跳。"""
     rows_to_insert: list[dict] = []
@@ -553,6 +560,14 @@ def _persist_strategy_recommendations(
                 }
             )
 
+    wrote_heartbeat = rows_to_insert[0]['stock_id'] == RECOMMENDATION_HEARTBEAT_STOCK_ID
+    if dry_run:
+        print(
+            f"[DRY-RUN] daily_recommendations persistence skipped "
+            f"(strategy={strategy_name}, preview_rows={len(rows_to_insert)})"
+        )
+        return len(rows_to_insert), wrote_heartbeat
+
     with engine.connect() as conn:
         conn.execute(text("""
             DELETE FROM daily_recommendations
@@ -568,10 +583,9 @@ def _persist_strategy_recommendations(
             """), record)
         conn.commit()
 
-    wrote_heartbeat = rows_to_insert[0]['stock_id'] == RECOMMENDATION_HEARTBEAT_STOCK_ID
     return len(rows_to_insert), wrote_heartbeat
 
-def run_strategy(strategy, df, date_str, engine):
+def run_strategy(strategy, df, date_str, engine, dry_run: bool = False):
     """執行單一策略的選股流程（自動載入策略專屬模型）"""
     print(f"\n{'='*40}")
     print(f"📊 執行策略: {strategy.display_name} ({strategy.name})")
@@ -586,12 +600,21 @@ def run_strategy(strategy, df, date_str, engine):
     if candidates.empty:
         print(f"💤 {strategy.name}: 今日無符合條件的股票")
         try:
-            _, wrote_heartbeat = _persist_strategy_recommendations(
-                candidates,
-                strategy.name,
-                date_str,
-                engine,
-            )
+            if dry_run:
+                _, wrote_heartbeat = _persist_strategy_recommendations(
+                    candidates,
+                    strategy.name,
+                    date_str,
+                    engine,
+                    dry_run=True,
+                )
+            else:
+                _, wrote_heartbeat = _persist_strategy_recommendations(
+                    candidates,
+                    strategy.name,
+                    date_str,
+                    engine,
+                )
             if wrote_heartbeat:
                 print(f"✅ {strategy.name}: 已寫入零候選心跳")
         except Exception as e:
@@ -681,12 +704,21 @@ def run_strategy(strategy, df, date_str, engine):
         candidates['news_boost_reason'] = ''
 
     try:
-        written_count, _ = _persist_strategy_recommendations(
-            candidates,
-            strategy.name,
-            date_str,
-            engine,
-        )
+        if dry_run:
+            written_count, _ = _persist_strategy_recommendations(
+                candidates,
+                strategy.name,
+                date_str,
+                engine,
+                dry_run=True,
+            )
+        else:
+            written_count, _ = _persist_strategy_recommendations(
+                candidates,
+                strategy.name,
+                date_str,
+                engine,
+            )
         print(f"✅ {strategy.name}: 已儲存 {written_count} 筆推薦")
     except Exception as e:
         print(f"⚠️ {strategy.name}: 資料庫寫入失敗: {e}")
@@ -702,9 +734,11 @@ def run_strategy(strategy, df, date_str, engine):
     return candidates
 
 
-def run_daily_for_date(target_date: str | None = None):
+def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
     print("\n" + "="*50)
     print("🤖 Stock AI 每日選股執行中...")
+    if dry_run:
+        print("[DRY-RUN] run_daily preview mode enabled")
     print("="*50 + "\n")
     
     # 1. 初始化策略管理器
@@ -729,7 +763,10 @@ def run_daily_for_date(target_date: str | None = None):
     print(f"✅ 資料日期: {date_str}")
 
     # 3. 從歷史資料計算完整技術指標（核心步驟）
-    df = compute_indicators_from_history(date_str, engine)
+    if dry_run:
+        df = compute_indicators_from_history(date_str, engine, dry_run=True)
+    else:
+        df = compute_indicators_from_history(date_str, engine)
     if df.empty:
         print("❌ 計算指標後無資料")
         return
@@ -747,7 +784,10 @@ def run_daily_for_date(target_date: str | None = None):
     
     # 6. [V35 升級] 合併月營收 YoY（供 V34/V35 策略使用）
     print("💰 合併月營收資料...")
-    df = merge_revenue_data(df, engine)
+    if dry_run:
+        df = merge_revenue_data(df, engine, dry_run=True)
+    else:
+        df = merge_revenue_data(df, engine)
     print("✅ 月營收合併完成\n")
     
     # 7. 新聞族群分析（全策略共用，只呼叫一次 Gemini）
@@ -759,7 +799,9 @@ def run_daily_for_date(target_date: str | None = None):
         "sentiment": "中性"
     }
     _stock_news_cache = {}
-    if Config.NEWS_BOOST_ENABLED:
+    if Config.NEWS_BOOST_ENABLED and dry_run:
+        print("[DRY-RUN] news boost external calls and sentiment persistence skipped")
+    elif Config.NEWS_BOOST_ENABLED:
         try:
             from core.news_agent import get_news_sector_boost
             from core.db_helper import ensure_news_schema, save_news_sentiment
@@ -791,7 +833,9 @@ def run_daily_for_date(target_date: str | None = None):
             print(f"⚠️ 新聞分析失敗（不影響選股）: {e}")
 
     # 7.5 個股層級新聞偵測（Phase 2：Yahoo 奇摩個股新聞）
-    if Config.NEWS_BOOST_ENABLED:
+    if Config.NEWS_BOOST_ENABLED and dry_run:
+        print("[DRY-RUN] per-stock news external calls skipped")
+    elif Config.NEWS_BOOST_ENABLED:
         try:
             from core.news_agent import get_stock_news_mentions
             # 取得所有策略候選股的合集（最多 20 支，控制 API 成本）
@@ -814,9 +858,26 @@ def run_daily_for_date(target_date: str | None = None):
     df = build_multi_factor_matrix(df, trade_date=date_str, news_sentiment=matrix_sentiment)
     print(f"[AI] Z-Score matrix ready for daily inference: {len(df)} rows")
 
+    required_supplement_cols = ['revenue_yoy', 'op_profit_margin', 'eps']
+    present_supplement_cols = [col for col in required_supplement_cols if col in df.columns]
+    missing_supplement_cols = [col for col in required_supplement_cols if col not in df.columns]
+    if dry_run:
+        print(
+            "[DRY-RUN] supplement column check: "
+            f"present={present_supplement_cols}, missing={missing_supplement_cols}"
+        )
+
     all_results = {}
+    strategy_errors = {}
     for strategy in strategies:
-        candidates = run_strategy(strategy, df, date_str, engine)
+        try:
+            candidates = run_strategy(strategy, df, date_str, engine, dry_run=dry_run)
+        except Exception as exc:
+            if not dry_run:
+                raise
+            candidates = pd.DataFrame()
+            strategy_errors[strategy.name] = str(exc)
+            print(f"[DRY-RUN] strategy error recorded: {strategy.name}: {exc}")
         all_results[strategy.name] = candidates
     
     # 9. 總結
@@ -831,57 +892,85 @@ def run_daily_for_date(target_date: str | None = None):
     print("✅ 今日選股作業完成！")
     print("="*50 + "\n")
 
-    return {
+    preview_count = sum(
+        int(len(candidates.head(10))) if candidates is not None and not candidates.empty else 1
+        for name, candidates in all_results.items()
+        if name not in strategy_errors
+    )
+    summary = {
         'date': date_str,
+        'dry_run': dry_run,
         'active_strategy_names': active_strategy_names,
         'strategy_names': strategy_names,
         'strategy_counts': {
             name: (len(candidates) if candidates is not None and not candidates.empty else 0)
             for name, candidates in all_results.items()
         },
+        'preview_recommendation_count': preview_count,
+        'skipped_persistence': dry_run,
+        'strategy_errors': strategy_errors,
+        'supplement_columns': {
+            'present': present_supplement_cols,
+            'missing': missing_supplement_cols,
+        },
     }
+    if dry_run:
+        print(
+            "[DRY-RUN] summary: "
+            f"processed_strategies={len(strategy_names)}, "
+            f"preview_recommendation_count={preview_count}, "
+            f"skipped_persistence={dry_run}, "
+            f"strategy_errors={strategy_errors}"
+        )
+    return summary
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='執行每日選股流程，可指定單日回補日期。')
     parser.add_argument('--date', help='指定要執行的交易日期 (YYYY-MM-DD)。')
+    parser.add_argument('--dry-run', action='store_true', help='Preview recommendations without DB writes or status updates.')
     return parser
 
 
 def main(argv=None):
-    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('run_daily')
-    record_pipeline_step_start(
-        pipeline_name=pipeline_name,
-        step_name=step_name,
-        run_date=run_date,
-    )
     parser = build_parser()
     args = parser.parse_args(argv)
+    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('run_daily')
+    if not args.dry_run:
+        record_pipeline_step_start(
+            pipeline_name=pipeline_name,
+            step_name=step_name,
+            run_date=run_date,
+        )
     try:
-        summary = run_daily_for_date(args.date)
+        summary = run_daily_for_date(args.date, dry_run=args.dry_run)
         trade_date = normalize_date_str((summary or {}).get('date') if isinstance(summary, dict) else args.date)
         strategy_counts = (summary or {}).get('strategy_counts', {}) if isinstance(summary, dict) else {}
         rows_inserted = sum(int(value or 0) for value in strategy_counts.values()) if isinstance(strategy_counts, dict) else None
-        record_pipeline_step_finish(
-            pipeline_name=pipeline_name,
-            step_name=step_name,
-            run_date=run_date,
-            status='success',
-            source_date=trade_date,
-            trade_date=trade_date,
-            rows_inserted=rows_inserted,
-        )
+        if args.dry_run:
+            print("[DRY-RUN] pipeline status persistence skipped")
+        else:
+            record_pipeline_step_finish(
+                pipeline_name=pipeline_name,
+                step_name=step_name,
+                run_date=run_date,
+                status='success',
+                source_date=trade_date,
+                trade_date=trade_date,
+                rows_inserted=rows_inserted,
+            )
         return 0
     except Exception as exc:
-        record_pipeline_step_finish(
-            pipeline_name=pipeline_name,
-            step_name=step_name,
-            run_date=run_date,
-            status='failed',
-            source_date=normalize_date_str(args.date),
-            trade_date=normalize_date_str(args.date),
-            error_summary=str(exc),
-        )
+        if not args.dry_run:
+            record_pipeline_step_finish(
+                pipeline_name=pipeline_name,
+                step_name=step_name,
+                run_date=run_date,
+                status='failed',
+                source_date=normalize_date_str(args.date),
+                trade_date=normalize_date_str(args.date),
+                error_summary=str(exc),
+            )
         raise
 
 if __name__ == "__main__":

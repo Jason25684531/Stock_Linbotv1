@@ -237,6 +237,12 @@ def api_summary():
         return jsonify({'error': str(exc)}), 500
 
 
+@app.route('/api/backtest-result')
+def api_backtest_result():
+    """Read-only backtest summary alias for smoke checks and dashboards."""
+    return api_summary()
+
+
 @app.route('/api/user/trade', methods=['POST'])
 def api_user_trade():
     """記錄使用者模擬交易。"""

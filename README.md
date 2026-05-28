@@ -44,8 +44,8 @@
 
 | 區塊 | 觸發方式 | 實作位置 | 說明 |
 |------|---------|---------|------|
-| 個股診斷 | `MessageAction(text="診斷 ")` | `core/richmenu.py` + `app/line_bot.py` | 先進入引導式流程，再接收 4 碼股票代號並回傳診斷 Flex |
-| 總經摘要 | `action=market_summary` | `app/line_bot.py` + `app/__init__.py::_build_market_summary_messages()` | 透過共享 Flex summary builder 輸出市場摘要 |
+| 個股診斷 | `action=prompt_stock_diagnosis` | `core/richmenu.py` + `app/__init__.py::_build_stock_diagnosis_prompt_messages()` | 先進入引導式流程，再接收 4 碼股票代號並回傳診斷 Flex |
+| 總經摘要 | `action=macro_summary` | `app/line_bot.py` + `app/__init__.py::_build_macro_news_messages()` | 透過共享 Flex summary builder 輸出總經摘要 |
 | 日誌反思 | `action=journal_reflection` | `app/line_bot.py` + `app/__init__.py::_build_journal_reflection_messages()` | 顯示目前啟用策略、績效快照與當日訊號狀態 |
 | 策略選股 | `action=choose_strategy` | `app/line_bot.py` + `app/__init__.py::_build_strategy_picker_messages()` | 先要求使用者明確選策略，再回應該策略的當日推薦 |
 
@@ -573,7 +573,7 @@ app/__init__.py
 └ app/line_bot.py → POST /callback
    ├ 4碼數字 → report_helper → Flex 卡片
    ├ "推薦" → strategy.get_best_stocks → Carousel
-    ├ Rich Menu postback → market_summary / chip_trend / random_strategy
+   ├ Rich Menu postback → prompt_stock_diagnosis / macro_summary / journal_reflection / choose_strategy
    ├ "切換V3x" → strategy_manager.set_active_strategy
    └ "設定停損 x" → db_helper.update_setting
 

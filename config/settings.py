@@ -249,6 +249,7 @@ class Config:
     LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_TOKEN", "")
     LINE_CHANNEL_SECRET = os.getenv("LINE_SECRET", "")
     GEMINI_API_KEY = os.getenv("GEMINI_KEY", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
     NEWS_BOOST_ENABLED = _env_flag("NEWS_BOOST_ENABLED", False)
     NEWS_BOOST_FACTOR = 0.10

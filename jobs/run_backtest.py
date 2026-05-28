@@ -32,6 +32,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
+if sys.platform == 'win32':
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core.strategy import get_v30_candidates, get_v30_params_from_db
 from core.db_helper import (
@@ -186,6 +192,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help='初始資金，預設 1000000',
     )
 
+    parser.add_argument(
+        '--no-persist',
+        action='store_true',
+        help='Run the backtest without writing CSV or DB result tables.',
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Smoke-test the backtest flow without writing CSV or DB result tables.',
+    )
+
     legacy_group = parser.add_mutually_exclusive_group()
     for legacy_flag in LEGACY_STRATEGY_FLAGS:
         legacy_group.add_argument(
@@ -291,8 +308,12 @@ def resolve_backtest_plan(args, strategy_manager=None, latest_trade_date=None) -
     if weights and not run_portfolio:
         raise ValueError('單一策略回測不可指定 --weights，請改用多策略模式')
 
+    plan_days = args.days
+    if getattr(args, 'dry_run', False) and args.start_date is None and args.days is None:
+        plan_days = 30
+
     start_date = args.start_date or calculate_backtest_start_date(
-        args.days,
+        plan_days,
         end_date=args.end_date,
         latest_trade_date=latest_trade_date,
     )
@@ -305,6 +326,8 @@ def resolve_backtest_plan(args, strategy_manager=None, latest_trade_date=None) -
         'end_date': args.end_date,
         'initial_capital': args.initial_capital,
         'strategy_filter_mode': args.mode,
+        'persist_results': not (getattr(args, 'no_persist', False) or getattr(args, 'dry_run', False)),
+        'dry_run': bool(getattr(args, 'dry_run', False)),
     }
 
 
@@ -648,7 +671,17 @@ class BacktestEngine:
                 df['revenue_yoy'] = df['stock_id'].map(self._revenue_cache).fillna(0)
             
             # 補充 op_profit_margin + eps（使用快取）
-            if 'op_profit_margin' not in df.columns or df['op_profit_margin'].isna().all() or (df['op_profit_margin'] == 0).all():
+            needs_op_margin = (
+                'op_profit_margin' not in df.columns
+                or df['op_profit_margin'].isna().all()
+                or (df['op_profit_margin'] == 0).all()
+            )
+            needs_eps = (
+                'eps' not in df.columns
+                or df['eps'].isna().all()
+                or (df['eps'] == 0).all()
+            )
+            if needs_op_margin or needs_eps:
                 if self._financial_cache is None:
                     try:
                         fin_query = text("""
@@ -674,9 +707,16 @@ class BacktestEngine:
                     except Exception:
                         self._financial_cache = {'op_margin': {}, 'eps': {}}
                 
-                df['op_profit_margin'] = df['stock_id'].map(self._financial_cache['op_margin']).fillna(0)
-                if 'eps' not in df.columns or df['eps'].isna().all():
+                if needs_op_margin:
+                    df['op_profit_margin'] = df['stock_id'].map(self._financial_cache['op_margin']).fillna(0)
+                if needs_eps:
                     df['eps'] = df['stock_id'].map(self._financial_cache['eps']).fillna(0)
+
+            for col in ['revenue_yoy', 'op_profit_margin', 'eps']:
+                if col not in df.columns:
+                    df[col] = 0
+                else:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # 依據策略模式選擇篩選邏輯
         if self.strategy_obj is not None:
@@ -977,7 +1017,7 @@ class BacktestEngine:
         print("=" * 60)
         
         # 輸出交易明細到 CSV
-        if self.trades:
+        if self.trades and self.persist_results:
             df_trades = pd.DataFrame(self.trades)
             output_path = 'ML_Data/backtest_result.csv'
             df_trades.to_csv(output_path, index=False, encoding='utf-8-sig')
@@ -1011,6 +1051,9 @@ class BacktestEngine:
                 print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
             else:
                 print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
+
+        if not self.persist_results:
+            print("[DRY-RUN] backtest persistence skipped")
 
         metrics = {
             'roi': roi,
@@ -1046,7 +1089,7 @@ class PortfolioBacktestEngine:
     """
     
     def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000,
-                 weights: list = None, strategy_filter_mode: str | None = None):
+                 weights: list = None, strategy_filter_mode: str | None = None, persist_results: bool = True):
         """初始化組合回測引擎
         
         Args:
@@ -1060,6 +1103,7 @@ class PortfolioBacktestEngine:
         self.end_date = end_date
         self.initial_capital = initial_capital
         self.strategy_filter_mode = strategy_filter_mode.lower() if strategy_filter_mode else None
+        self.persist_results = persist_results
         self.weights = self._normalize_weights(strategies, weights)
         
         # 為每個策略建立獨立的回測引擎
@@ -1293,13 +1337,16 @@ class PortfolioBacktestEngine:
         print("=" * 60)
         
         # 儲存結果
-        equity_df.to_csv('ML_Data/backtest_profit_report.csv', index=False, encoding='utf-8-sig')
-        if all_trades:
+        if self.persist_results:
+            equity_df.to_csv('ML_Data/backtest_profit_report.csv', index=False, encoding='utf-8-sig')
+        if all_trades and self.persist_results:
             pd.DataFrame(all_trades).to_csv('ML_Data/backtest_result.csv', index=False, encoding='utf-8-sig')
 
         # 同步回測結果到 DB（Dashboard / API 直接讀取）
         trades_df = pd.DataFrame(all_trades) if all_trades else pd.DataFrame()
-        if save_backtest_results(trades_df=trades_df, equity_df=equity_df):
+        if not self.persist_results:
+            print("[DRY-RUN] backtest persistence skipped")
+        elif save_backtest_results(trades_df=trades_df, equity_df=equity_df):
             print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
         else:
             print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
@@ -1330,6 +1377,9 @@ def main(argv=None):
     if plan['strategy_filter_mode']:
         print(f"🎛️ 篩選模式: {plan['strategy_filter_mode']}")
 
+    if plan.get('dry_run'):
+        print("[DRY-RUN] backtest preview mode enabled")
+
     if plan['run_portfolio']:
         engine = PortfolioBacktestEngine(
             strategies=plan['strategy_names'],
@@ -1338,8 +1388,11 @@ def main(argv=None):
             initial_capital=plan['initial_capital'],
             weights=plan['weights'],
             strategy_filter_mode=plan['strategy_filter_mode'],
+            persist_results=plan.get('persist_results', True),
         )
         engine.run_portfolio_backtest()
+        if not plan.get('persist_results', True):
+            print("[DRY-RUN] backtest persistence skipped")
         return 0
 
     engine = BacktestEngine(
@@ -1347,9 +1400,12 @@ def main(argv=None):
         start_date=plan['start_date'],
         end_date=plan['end_date'],
         initial_capital=plan['initial_capital'],
+        persist_results=plan.get('persist_results', True),
         strategy_filter_mode=plan['strategy_filter_mode'],
     )
     engine.run()
+    if not plan.get('persist_results', True):
+        print("[DRY-RUN] backtest persistence skipped")
     return 0
 
 

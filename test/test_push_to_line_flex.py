@@ -124,7 +124,7 @@ def test_run_morning_broadcasts_carousel_even_without_picks():
             with patch('jobs.push_to_line.get_pipeline_baseline_date', return_value='2026-04-19'):
                 with patch('jobs.push_to_line.get_market_status', return_value=('⚪ 資料不足', 0)):
                     with patch('jobs.push_to_line.StrategyManager', return_value=fake_manager):
-                        with patch('jobs.push_to_line._pick_featured_stocks', return_value=([], '多策略精選')):
+                        with patch('jobs.push_to_line._pick_featured_stocks', return_value=([], '多策略精選', '')):
                             with patch('jobs.push_to_line._broadcast_flex') as mock_broadcast:
                                 run_morning()
 
@@ -159,7 +159,7 @@ def test_run_evening_broadcasts_uniform_carousel():
                     with patch('jobs.push_to_line.StrategyManager', return_value=fake_manager):
                         with patch('jobs.push_to_line._pick_featured_stocks', return_value=([
                             ('🧪 經營效益', '2330', 600.0, 0.91),
-                        ], '多策略精選')):
+                        ], '多策略精選', '')):
                             with patch('jobs.push_to_line._broadcast_text'):
                                 with patch('jobs.push_to_line._broadcast_flex') as mock_flex:
                                     run_evening()
