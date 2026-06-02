@@ -30,3 +30,27 @@ Historical or deprecation-only notes in OpenSpec or docs SHALL NOT by themselves
 - **THEN** historical references may remain if they are clearly non-operational
 - **AND** active runtime guidance, active test expectations, or active support docs SHALL be removed before deletion proceeds
 
+### Requirement: Active references shall be separated from historical references
+Cleanup validation SHALL distinguish active references from archived or historical references before treating a reference as a blocker.
+
+#### Scenario: Reference scan finds an old path
+- **WHEN** a removed or deprecated path is found in docs, OpenSpec, tests, CI, scripts, or archived material
+- **THEN** validation SHALL classify it as active guidance, active test or CI dependency, active script dependency, current workflow reference, or historical-only reference
+- **AND** historical-only references SHALL NOT block cleanup by themselves
+
+### Requirement: Cleanup validation shall include baseline and post-change evidence
+Future cleanup implementation SHALL record baseline verification before changes and post-change verification after changes.
+
+#### Scenario: Cleanup validation report is written
+- **WHEN** the validation report is produced
+- **THEN** it SHALL include results for compile checks, targeted pytest commands, focused strategy/Rich Menu/MCP tests, and safe smoke checks where available
+- **AND** any skipped command SHALL include a concrete reason and residual risk
+
+### Requirement: Documentation updates shall not rewrite historical archives by default
+Cleanup documentation work SHALL update active operator guidance and active tests before considering archived OpenSpec or historical notes.
+
+#### Scenario: Active docs and archives disagree
+- **WHEN** active docs use the current canonical path and archived docs mention a removed path
+- **THEN** cleanup SHALL preserve the archived reference unless the archive is explicitly in active use
+- **AND** cleanup SHALL note the mismatch in the audit report instead of silently rewriting history
+

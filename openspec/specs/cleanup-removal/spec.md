@@ -39,3 +39,27 @@ Cleanup removal SHALL NOT be used to change scheduler logic, daily validation be
 - **THEN** the diff SHALL be limited to verified removals, related docs, and related tests
 - **AND** runtime behavior changes SHALL be rejected as out of scope
 
+### Requirement: Removed numeric launchers shall not be recreated during cleanup
+Cleanup implementation SHALL NOT recreate `1_update_database.py`, `2_rundaily.py`, `3_train_model.py`, or `6_optimize_params.py` when the target branch already removed them.
+
+#### Scenario: Removed launcher is referenced historically
+- **WHEN** the cleanup audit finds a reference to a removed numeric launcher
+- **THEN** it SHALL classify whether the reference is active or historical
+- **AND** it SHALL NOT recreate the launcher solely to satisfy historical references
+
+### Requirement: Remaining compatibility wrappers shall be retained until deletion gates pass
+Cleanup implementation SHALL retain `4_run_backtest.py`, `5_push_to_line.py`, `app.py`, and `tool/*` unless all deletion gates pass.
+
+#### Scenario: Compatibility wrapper appears redundant
+- **WHEN** a wrapper proxies to a canonical module
+- **THEN** cleanup SHALL verify imports, CLI references, active docs, tests, scheduler wiring, Compose usage, and user-facing workflows before deletion
+- **AND** cleanup SHALL keep the wrapper if any active dependency remains
+
+### Requirement: Low-risk cleanup candidates shall not imply broad deletion
+Tracked runtime artifacts and bare exception handlers SHALL be treated as narrow cleanup candidates, not justification for unrelated refactors.
+
+#### Scenario: Low-risk candidate is selected
+- **WHEN** `.coverage` or a bare `except:` occurrence is selected for future cleanup
+- **THEN** the implementation SHALL limit the change to that candidate and directly related tests or validation notes
+- **AND** it SHALL NOT change strategy behavior, scheduler behavior, LINE push behavior, or MCP boundaries
+

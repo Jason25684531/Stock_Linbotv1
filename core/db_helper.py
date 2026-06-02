@@ -1219,7 +1219,7 @@ def validate_setting(key, value):
         try:
             is_valid, err_msg = validators[key](value)
             return is_valid, err_msg
-        except:
+        except (TypeError, ValueError):
             return False, "參數格式錯誤"
     return True, ""
 
