@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-05-28T17:07:46.653099",
+  "last_updated": "2026-07-22T21:41:16.654000",
   "active_strategies": [
-    "v38_value_dividend"
+    "quality_value_low_volatility"
   ],
   "random_strategy_pool": [
     "v35_innovation",

@@ -17,8 +17,19 @@ StrategyManager - 策略管理器
 
 import json
 import os
+import warnings
+from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class StrategyMetadata:
+    id: str
+    legacy_ids: tuple[str, ...]
+    display_name_zh: str
+    display_name_en: str
+    category: str
 
 
 class StrategyManager:
@@ -44,7 +55,7 @@ class StrategyManager:
     
     # 預設設定 (V3: 支援 per-strategy overrides + backtest defaults)
     DEFAULT_SETTINGS = {
-        'active_strategies': ['v31_hybrid'],
+        'active_strategies': ['hybrid_trend_rank'],
         'persistence_strategies': [],
         'version': '3.0',
         'last_updated': None,
@@ -56,7 +67,7 @@ class StrategyManager:
     }
     
     # 策略註冊表（Lazy Loading，避免循環依賴）
-    STRATEGY_REGISTRY = {
+    LEGACY_STRATEGY_REGISTRY = {
         'v31_hybrid': 'core.strategies.v31_hybrid.V31HybridStrategy',
         'v33_low_vol': 'core.strategies.v33_low_vol.V33LowVolStrategy',
         'v34_turbo': 'core.strategies.v34_turbo.V34TurboStrategy',
@@ -65,6 +76,41 @@ class StrategyManager:
         'v37_mean_reversion': 'core.strategies.v37_mean_reversion.V37MeanReversionStrategy',  # 🔄 V37 均值回歸策略
         'v38_value_dividend': 'core.strategies.v38_value_dividend.V38ValueDividendStrategy',  # 💰 V38 高殖利率價值策略
     }
+
+    STRATEGY_METADATA = {
+        'hybrid_trend_rank': StrategyMetadata('hybrid_trend_rank', ('v31', 'v31_hybrid'), '混合趨勢排名策略', 'Hybrid Trend Rank', 'trend'),
+        'defensive_low_volatility': StrategyMetadata('defensive_low_volatility', ('v33', 'v33_low_vol'), '防禦型低波動策略', 'Defensive Low Volatility', 'defensive'),
+        'growth_momentum_breakout': StrategyMetadata('growth_momentum_breakout', ('v34', 'v34_turbo'), '成長動能突破策略', 'Growth Momentum Breakout', 'growth'),
+        'quality_growth': StrategyMetadata('quality_growth', ('v35', 'v35_innovation'), '品質成長策略', 'Quality Growth', 'quality'),
+        'institutional_flow_confirmation': StrategyMetadata('institutional_flow_confirmation', ('v36', 'v36_chip_momentum'), '法人資金流確認策略', 'Institutional Flow Confirmation', 'flow'),
+        'mean_reversion': StrategyMetadata('mean_reversion', ('v37', 'v37_mean_reversion'), '均值回歸策略', 'Mean Reversion', 'reversion'),
+        'quality_value_low_volatility': StrategyMetadata('quality_value_low_volatility', ('v38', 'v38_value_dividend'), '品質價值低波動策略', 'Quality Value Low Volatility', 'value'),
+    }
+    # Canonical registry for new callers; legacy keys remain public compatibility keys.
+    CANONICAL_REGISTRY = {
+        'hybrid_trend_rank': 'core.strategies.hybrid_trend_rank.HybridTrendRankStrategy',
+        'defensive_low_volatility': 'core.strategies.defensive_low_volatility.DefensiveLowVolatilityStrategy',
+        'growth_momentum_breakout': 'core.strategies.growth_momentum_breakout.GrowthMomentumBreakoutStrategy',
+        'quality_growth': 'core.strategies.quality_growth.QualityGrowthStrategy',
+        'institutional_flow_confirmation': 'core.strategies.institutional_flow_confirmation.InstitutionalFlowConfirmationStrategy',
+        'mean_reversion': 'core.strategies.mean_reversion.MeanReversionStrategy',
+        'quality_value_low_volatility': 'core.strategies.quality_value_low_volatility.QualityValueLowVolatilityStrategy',
+    }
+    STRATEGY_REGISTRY = {**CANONICAL_REGISTRY, **LEGACY_STRATEGY_REGISTRY}
+
+    def resolve(self, strategy_id: str, warn_legacy: bool = True) -> str:
+        """Resolve canonical and legacy IDs without changing persisted data."""
+        for canonical, metadata in self.STRATEGY_METADATA.items():
+            if strategy_id == canonical:
+                return canonical
+            if strategy_id in metadata.legacy_ids:
+                if warn_legacy:
+                    warnings.warn(f"strategy key '{strategy_id}' is deprecated; use '{canonical}'", DeprecationWarning, stacklevel=2)
+                return canonical
+        raise KeyError(f"unknown strategy: {strategy_id}")
+
+    def _registry_key(self, strategy_id: str) -> str:
+        return self.resolve(strategy_id, warn_legacy=False)
     
     def __new__(cls):
         """Singleton 模式：確保只有一個實例"""
@@ -152,13 +198,20 @@ class StrategyManager:
             List[str]: 策略名稱列表，例如 ['v31_hybrid', 'v33_low_vol']
         """
         settings = self.get_settings()
-        strategies = settings.get('active_strategies', ['v31_hybrid'])
+        strategies = settings.get('active_strategies', ['hybrid_trend_rank'])
         
         # 確保返回列表
         if isinstance(strategies, str):
             strategies = [strategies]
         
-        return strategies
+        return [self._registry_key(name) for name in strategies if self._is_known(name)]
+
+    def _is_known(self, strategy_id: str) -> bool:
+        try:
+            self.resolve(strategy_id, warn_legacy=False)
+            return True
+        except KeyError:
+            return False
 
     def get_persistence_strategy_names(self) -> List[str]:
         """取得每日落庫需覆蓋的策略名稱列表。"""
@@ -168,20 +221,21 @@ class StrategyManager:
         if isinstance(configured, str):
             configured = [configured]
 
-        strategy_names = configured or list(self.STRATEGY_REGISTRY.keys())
+        strategy_names = configured or list(self.STRATEGY_REGISTRY)
 
         deduped_names: List[str] = []
         seen_names: set[str] = set()
         for name in strategy_names:
-            if name not in self.STRATEGY_REGISTRY:
+            if not self._is_known(name):
                 continue
+            name = self._registry_key(name)
             if name in seen_names:
                 continue
             seen_names.add(name)
             deduped_names.append(name)
 
         if not deduped_names:
-            deduped_names = list(self.STRATEGY_REGISTRY.keys())
+            deduped_names = list(self.STRATEGY_REGISTRY)
 
         return deduped_names
 
@@ -201,7 +255,7 @@ class StrategyManager:
             str: 策略名稱，例如 'v31_hybrid'
         """
         names = self.get_active_strategy_names()
-        return names[0] if names else 'v31_hybrid'
+        return names[0] if names else 'hybrid_trend_rank'
     
     def get_active_strategies(self) -> List:
         """取得所有啟用的策略物件列表 (V2 新增)
@@ -219,7 +273,7 @@ class StrategyManager:
         
         # 確保至少有一個策略
         if not strategies:
-            fallback = self._get_or_load_strategy('v31_hybrid')
+            fallback = self._get_or_load_strategy('hybrid_trend_rank')
             if fallback:
                 strategies.append(fallback)
         
@@ -235,14 +289,18 @@ class StrategyManager:
             BaseStrategy 實例或 None
         """
         # 檢查快取
-        if strategy_name in self._strategy_cache:
-            return self._strategy_cache[strategy_name]
+        try:
+            registry_key = self._registry_key(strategy_name)
+        except KeyError:
+            return None
+        if registry_key in self._strategy_cache:
+            return self._strategy_cache[registry_key]
         
         # 載入策略
-        strategy = self._load_strategy(strategy_name)
+        strategy = self._load_strategy(registry_key)
         
         if strategy:
-            self._strategy_cache[strategy_name] = strategy
+            self._strategy_cache[registry_key] = strategy
         
         return strategy
 
@@ -317,10 +375,11 @@ class StrategyManager:
         # 驗證所有策略
         valid_strategies = []
         for name in strategy_names:
-            if name not in self.STRATEGY_REGISTRY:
+            if not self._is_known(name):
                 print(f"⚠️ 忽略未知策略: {name}")
                 continue
             
+            name = self._registry_key(name)
             strategy = self._get_or_load_strategy(name)
             if strategy:
                 valid_strategies.append(name)
@@ -387,7 +446,12 @@ class StrategyManager:
             Dict: 該策略的覆寫參數字典，不存在則回傳空字典
         """
         settings = self.get_settings()
-        return settings.get('per_strategy_overrides', {}).get(strategy_name, {})
+        overrides = settings.get('per_strategy_overrides', {})
+        canonical = self._registry_key(strategy_name)
+        if canonical in overrides:
+            return overrides[canonical]
+        metadata = self.STRATEGY_METADATA[canonical]
+        return next((overrides[key] for key in metadata.legacy_ids if key in overrides), {})
 
     def get_backtest_defaults(self) -> Dict[str, Any]:
         """取得回測預設參數 (V3)
@@ -400,7 +464,7 @@ class StrategyManager:
 
     def reset_to_default(self):
         """重置為預設策略"""
-        self.set_active_strategies(['v31_hybrid'])
+        self.set_active_strategies(['hybrid_trend_rank'])
     
     def list_strategies(self) -> List[str]:
         """列出所有可用策略名稱 (供前端使用)
@@ -408,16 +472,19 @@ class StrategyManager:
         Returns:
             List[str]: 策略名稱列表
         """
-        return list(self.STRATEGY_REGISTRY.keys())
+        return list(self.STRATEGY_REGISTRY)
+
+    def list_canonical_strategies(self) -> List[str]:
+        return list(self.CANONICAL_REGISTRY)
 
     # ============================================
     # Rich Menu 盲盒池 (V4 新增)
     # ============================================
 
     _DEFAULT_RANDOM_POOL: List[str] = [
-        'v35_innovation',
-        'v36_chip_momentum',
-        'v38_value_dividend',
+        'quality_growth',
+        'institutional_flow_confirmation',
+        'quality_value_low_volatility',
     ]
 
     def get_random_strategy_pool(self) -> List[str]:
@@ -438,7 +505,7 @@ class StrategyManager:
 
         validated: List[str] = []
         for key in pool:
-            if key in self.STRATEGY_REGISTRY:
+            if self._is_known(key):
                 validated.append(key)
             else:
                 print(f"⚠️ random_strategy_pool 中有無效策略鍵，已略過: {key}")

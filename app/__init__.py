@@ -372,6 +372,11 @@ def _normalize_strategy_request_key(strategy_value: str) -> str:
         return ''
 
     lowered = raw.lower()
+    if re.fullmatch(r'v\d+', lowered):
+        for metadata in strategy_manager.STRATEGY_METADATA.values():
+            legacy_key = next((key for key in metadata.legacy_ids if key.startswith(f'{lowered}_')), None)
+            if legacy_key:
+                return legacy_key
     strategy_keys = list(strategy_manager.list_strategies())
     for strategy_key in strategy_keys:
         if strategy_key.lower() == lowered:
@@ -534,7 +539,7 @@ _STRATEGY_SWITCH_MAP = {
     },
     'v38_value_dividend': {
         'aliases': ['切換v38', 'v38策略', '切v38', '高殖利', '價值股', '定存股'],
-        'display': 'V38 高殖利率價值策略',
+        'display': 'V38 品質價值低波動策略',
         'features': '• 高 EPS + 高營業利益率\n• 低波動穩健價值股\n• 類定存配置，適合保守投資者\n',
     },
 }
@@ -2345,7 +2350,7 @@ def _load_strategy_backtest_frame(strategy_key: str) -> tuple[pd.DataFrame, str]
     if trades:
         return pd.DataFrame(trades), '資料來源: 回測資料庫'
 
-    csv_path = REPO_ROOT / 'ML_Data' / 'backtest_result.csv'
+    csv_path = REPO_ROOT / Config.BACKTEST_TRADES_CSV
     if not csv_path.exists():
         return pd.DataFrame(), ''
 

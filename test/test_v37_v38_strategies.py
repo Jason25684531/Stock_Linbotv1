@@ -322,7 +322,7 @@ class TestV38Registration:
         assert strategy.name == 'v38_value_dividend'
 
     def test_v38_display_name(self, v38_strategy):
-        assert v38_strategy.display_name == 'V38 高殖利率價值策略'
+        assert v38_strategy.display_name == 'V38 品質價值低波動策略'
 
     def test_v38_description_not_empty(self, v38_strategy):
         assert len(v38_strategy.description) > 10

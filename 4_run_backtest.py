@@ -1,7 +1,10 @@
 """Compatibility-only legacy launcher for jobs.run_backtest.
 
+Do not remove this wrapper until the documented major-version migration.
+
 Official daily scheduler path for daily operations: jobs/scheduler.py.
-Do not remove this wrapper until cleanup evidence passes.
+Deprecated: use ``python jobs/run_backtest.py``. Planned removal: v4.0, after
+the characterization contract has remained compatible for a full release.
 """
 
 from __future__ import annotations

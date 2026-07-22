@@ -57,7 +57,7 @@ STRATEGY_DISPLAY_NAMES = {
     'v35_innovation': '🧪 經營效益 (V35)',
     'v36_chip_momentum': '📊 籌碼動能 (V36)',
     'v37_mean_reversion': '🔄 均值回歸 (V37)',
-    'v38_value_dividend': '💰 高殖利率 (V38)',
+    'v38_value_dividend': '💰 品質價值低波動 (V38)',
 }
 
 

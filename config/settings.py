@@ -40,6 +40,9 @@ class Config:
     APP_HEALTH_PATH = os.getenv("APP_HEALTH_PATH", "/health")
 
     MODEL_PATH = os.getenv("MODEL_PATH", "ML_Data/pkl/stock_ai_model.pkl")
+    BACKTEST_ARTIFACTS_DIR = os.getenv("BACKTEST_ARTIFACTS_DIR", "artifacts/backtests")
+    BACKTEST_TRADES_CSV = os.path.join(BACKTEST_ARTIFACTS_DIR, "backtest_result.csv")
+    BACKTEST_EQUITY_CSV = os.path.join(BACKTEST_ARTIFACTS_DIR, "backtest_profit_report.csv")
 
     FEATURES = [
         "rsi",

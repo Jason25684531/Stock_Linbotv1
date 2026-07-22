@@ -4,6 +4,9 @@
 __pycache__/
 *.py[cod]
 .coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # 2. 忽略環境變數 (這是機密，絕對不能上傳!)
 .env
@@ -32,31 +35,20 @@ mysql_data/
 .vscode/
 .github/
 .idea/
-specs/
-openspec/*
-openspec/config.yaml
-openspec/project.md
-openspec/specs/
-openspec/specs/**
-openspec/changes/
-openspec/changes/*
-openspec/changes/*/
-openspec/changes/*/*
-openspec/changes/*/proposal.md
-openspec/changes/*/design.md
-openspec/changes/*/specs/
-openspec/changes/*/specs/*
-openspec/changes/*/specs/**/
-openspec/changes/*/specs/**/spec.md
-openspec/changes/*/tasks.md
-openspec/changes/*/.openspec.yaml
-openspec/**/.cache/
-openspec/**/tmp/
-openspec/**/temp/
-openspec/**/*.tmp
-openspec/**/*.temp
+/specs/
+
+# Generated backtest artifacts; retain versioned usage and report examples.
+artifacts/*
+!artifacts/
+!artifacts/README.md
+!artifacts/reports/
+artifacts/reports/*
+!artifacts/reports/README.md
+
 .amazonq/
 .specify/
+.serena/
+.tokensave/
 .pytest_cache/
 .agents/
 .agent
@@ -65,3 +57,7 @@ openspec/**/*.temp
 Thumbs.db
 *.tmp
 *.swp
+
+*.codex/
+.claude/*
+openspec/*

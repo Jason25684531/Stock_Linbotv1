@@ -344,7 +344,7 @@ def handle_message(event):
             reply += '• 切換V35 → 經營效益策略（成長）\n'
             reply += '• 切換V36 → 籌碼動能策略（追蹤）\n'
             reply += '• 切換V37 → 均值回歸策略（反轉）\n'
-            reply += '• 切換V38 → 高殖利率策略（價值）\n'
+            reply += '• 切換V38 → 品質價值低波動策略\n'
         except Exception as exc:
             reply = f'❌ 查詢策略失敗: {exc}'
 
@@ -513,7 +513,7 @@ def handle_message(event):
         reply += '• 切換V35 → 經營效益（成長型）\n'
         reply += '• 切換V36 → 籌碼動能（追蹤型）\n'
         reply += '• 切換V37 → 均值回歸（反轉型）\n'
-        reply += '• 切換V38 → 高殖利率（價值型）\n'
+        reply += '• 切換V38 → 品質價值低波動策略\n'
         reply += '• 查看策略 → 顯示目前策略詳情\n'
         reply += '\n【📊 Dashboard】\n'
         reply += '• dashboard → 開啟視覺化儀表板\n'

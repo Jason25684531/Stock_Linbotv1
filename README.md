@@ -1,3 +1,7 @@
+# Quant system foundation
+
+Backtests write runtime files under `artifacts/backtests/`. The maintained engine is `core/backtest/runner.py`; `jobs/run_backtest.py`, `4_run_backtest.py` and `5_push_to_line.py` are compatibility entry points. See `docs/stability_validation_guide.md` for IS/OOS, walk-forward and bootstrap usage.
+
 # Stock AI Line Bot V38
 
 > 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論
@@ -10,7 +14,7 @@
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復
-> 📅 **最後更新**: 2026-04-30
+> 📅 **最後更新**: 2026-06-10
 > ✅ **系統狀態**: 穩定運行（canonical `app/` + `jobs/` 架構、多策略落庫同步、Rich Menu Flex 對話流）
 
 ---
@@ -39,6 +43,26 @@
 - `core/`：核心業務邏輯與資料存取，包含策略、DB helper、MCP client、Rich Menu、Flex builder。
 - 根目錄 `app.py` 與少量 legacy facade：目前僅保留 `4_run_backtest.py`、`5_push_to_line.py` 等相容 wrapper，實際實作已下沉到 `app/` 與 `jobs/`。
 - `services/mcp/server.py`：正式 MCP HTTP 服務；`scripts/twse_mcp_server.py` 僅保留 legacy launcher。
+
+### 🧰 運維速查（啟動 / 關閉 / 重啟 / 資料）
+
+| 目的 | 建議指令 | 備註 |
+|------|---------|------|
+| 本機啟動 Web + LINE + MCP | `execution\start_web.bat` | 會開啟本機 MCP 與 Web/LINE 視窗 |
+| 本機重啟服務 | `execution\restart_services.bat` | 僅停止本專案 `services\mcp\server.py` 與 `app.py` Python 流程 |
+| 先預覽本機重啟行為 | `execution\restart_services.bat --dry-run` | 不停止、不啟動任何服務 |
+| 手動操作選單 | `execution\run_manual.bat` | 提供 morning/evening/update/run/start web 選單 |
+| Docker 啟動 | `docker compose up --build -d db twse_mcp_server stock_bot` | container runtime |
+| Docker 重啟 | `docker compose restart db twse_mcp_server stock_bot` | 不重新 build image |
+| Docker 關閉 | `docker compose down` | 保留 named volume；需清資料再另行處理 volume |
+| 本機健康檢查 | `http://localhost:1688/health` | Web/LINE service health，不會跑排程或推播 |
+| MCP 健康檢查 | `http://localhost:8080/health` | 本機 MCP service health |
+| 完整每日流程 | `python jobs/scheduler.py daily` | 官方排程入口 |
+| 分步抓資料 | `python jobs/update_database.py` | 透過 MCP/爬蟲更新 DB |
+| 分步選股落庫 | `python jobs/run_daily.py` | 寫入 `daily_recommendations` |
+| 分步推播 | `python jobs/push_to_line.py --time evening` | 會實際發 LINE broadcast |
+
+更完整的重啟與人工排查流程請見 [`doc/SERVICE_RESTART_RUNBOOK.md`](doc/SERVICE_RESTART_RUNBOOK.md)。
 
 ### 📲 Rich Menu 目前架構
 
@@ -237,12 +261,22 @@ python services/mcp/server.py
 python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/health', timeout=3).read().decode())"
 ```
 
-### Docker Compose 冒煙驗證
+### Docker Compose 啟動 / 重啟 / 關閉
 
 ```powershell
+# 啟動或重新 build 後啟動
 docker compose up --build -d db twse_mcp_server stock_bot
 docker compose ps
+
+# 不重新 build，僅重啟現有 containers
+docker compose restart db twse_mcp_server stock_bot
+docker compose ps
+
+# 關閉 containers（預設保留 mysql_data volume）
+docker compose down
 ```
+
+服務重啟 runbook：請見 [`doc/SERVICE_RESTART_RUNBOOK.md`](doc/SERVICE_RESTART_RUNBOOK.md)，內含本機 Windows batch 重啟、Docker Compose 重啟與安全健康檢查。
 
 預期：`db`、`twse_mcp_server`、`stock_bot` 皆進入 `healthy`，且 `stock_bot` 可透過 `http://twse-mcp-server:8080` 使用 MCP transport。
 
@@ -271,9 +305,10 @@ execution\evening_run.bat
 ### 手動分步執行
 
 ```powershell
-python jobs/update_database.py   # 透過 MCP 抓市場/財報，合併籌碼與月營收後寫入 DB
-python jobs/run_daily.py         # 計算指標+選股+AI評分（零候選策略會寫入心跳）
-python jobs/push_to_line.py      # Line 推播（預設 evening 模式）
+python jobs/update_database.py   # 透過 MCP 抓市場快照/外資/財報，合併籌碼與月營收後寫入 DB
+python jobs/run_daily.py         # 計算指標 + 多策略選股 + AI 評分，零候選策略會寫入 heartbeat
+python jobs/run_daily_backtest_validation.py  # 輕量日更後驗證，不等同完整研究回測
+python jobs/push_to_line.py --time evening    # Line 晚間推播（會實際 broadcast）
 python jobs/backfill_pipeline.py --start-date 2026-03-27 --dry-run  # 先掃描缺口
 python jobs/backfill_pipeline.py --start-date 2026-03-27            # 實際補齊市場/推薦缺口
 python scripts\setup_rich_menu.py  # 手動部署最新 Rich Menu 版面
@@ -289,17 +324,47 @@ python -m pytest test/test_mcp_integration.py test/test_richmenu_mcp_server_rout
 - Web Dashboard、LINE 手動輸入「推薦」、以及早晚排程推播都會優先讀取資料庫已落庫的策略快照；若當日缺少該策略快照，才會回推到該策略自己的最近一筆落庫日期。
 - `jobs/backfill_pipeline.py` 的推薦缺口判定已改為「交易日 × 策略」矩陣檢查。只要某日少任一必要策略的候選股或 heartbeat，就會被列為缺口並重建該日期。
 
+### 資料抓取與落庫流程
+
+`jobs/scheduler.py daily` 是正式每日入口，流程順序如下：
+
+1. `jobs/update_database.py`
+   - 經 `core/mcp_client.py` 呼叫 `services/mcp/server.py`，更新市場快照、外資買賣超與季度財報 contract。
+   - 使用 `core/crawlers/chip_data_scraper.py` 補融資融券資料。
+   - 使用 `core/update_monthly_revenue.py` 與 `core/update_financials_mops.py` 補月營收與財報。
+2. `jobs/run_daily.py`
+   - 載入歷史價格與基本面資料，經 `core/calc_indicators.py` 計算技術/籌碼指標。
+   - 依 `core/strategy_manager.py` 註冊策略逐一選股，寫入 `daily_recommendations`。
+3. `jobs/run_daily_backtest_validation.py`
+   - 做日更後的輕量一致性驗證，避免把完整研究回測放進排程主路徑。
+4. `jobs/push_to_line.py`
+   - 從已落庫推薦讀取資料並推播，不重新計算選股。
+
+安全檢查只看 `/health`、`docker compose ps` 或 process/container 狀態；不要用 `scheduler.py daily` 或 `push_to_line.py` 當作單純重啟驗證，因為它們會觸發資料更新或 LINE broadcast。
+
 ### `/api/daily-signals` 目前回傳語意
 
 - API 會回傳 canonical recommendation metadata：`requested_date`、`market_anchor_date`、`recommendation_date`、`resolution_source`、`has_persisted_snapshot`、`fallback_used`。
 - 同日 heartbeat 會被視為「已完成但零候選」，因此 `signals` 可能為空，但不是資料缺漏。
 - Web 與 LINE 顯示風格可以不同，但底層 resolved snapshot contract 必須一致。
 
-### 啟動與關閉（Windows / 虛擬環境）
+### 啟動、關閉與重啟（Windows / 虛擬環境）
 
 ```powershell
 # 啟動虛擬環境
 .\myenv\Scripts\Activate.ps1
+
+# 一鍵啟動本機 MCP + Web/LINE
+execution\start_web.bat
+
+# 一鍵重啟本機 MCP + Web/LINE
+execution\restart_services.bat
+
+# 預覽重啟會鎖定哪些流程，不停止或啟動服務
+execution\restart_services.bat --dry-run
+
+# 手動操作選單（morning/evening/update/run/start web）
+execution\run_manual.bat
 
 # 終端 1：啟動 MCP 服務（Rich Menu / 新聞 / 資料同步依賴）
 python services\mcp\server.py
@@ -316,6 +381,7 @@ python scripts\setup_rich_menu.py
 
 # 關閉服務
 # 在各自執行中的終端按 Ctrl + C
+# 若是用 start_web.bat 啟動，請依 runbook 關閉對應視窗或使用 restart_services.bat 重啟
 
 # 退出虛擬環境
 deactivate
@@ -460,6 +526,7 @@ Stock_Linbotv1/
 │   ├── scheduler.py             # 排程流程總入口 (daily/evening/morning)
 │   ├── update_database.py       # 爬取股價+籌碼+月營收+季報
 │   ├── run_daily.py             # 計算指標+多策略選股+AI評分
+│   ├── run_daily_backtest_validation.py # 日更後輕量一致性驗證
 │   ├── train_model.py           # 多策略 XGBoost 批次訓練
 │   ├── run_backtest.py          # 多策略回測引擎（含組合回測）
 │   ├── push_to_line.py          # Line 推播 (SDK v3 Broadcast)
@@ -475,7 +542,9 @@ Stock_Linbotv1/
 │   ├── morning_run.bat          # 早晨排程 (08:30): 三卡 carousel 早報
 │   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
 │   ├── daily_run.bat            # 一鍵自動化 (呼叫 jobs/scheduler.py daily 的相容 wrapper)
-│   └── start_web.bat            # 一鍵啟動 Web 服務
+│   ├── run_manual.bat           # 本機手動操作選單
+│   ├── restart_services.bat     # 本機 MCP + Web/LINE 安全重啟
+│   └── start_web.bat            # 一鍵啟動本機 MCP + Web/LINE
 │
 ├── 📡 MCP / Rich Menu 腳本
 │   ├── services/mcp/server.py        # MCP HTTP 服務（port 8080）
@@ -546,7 +615,8 @@ Stock_Linbotv1/
 │
 └── 📝 文檔
     ├── README.md                # 本文件
-    ├── doc/                     # 輔助文件
+    ├── doc/                     # 輔助文件（含 SERVICE_RESTART_RUNBOOK.md）
+    ├── docs/                    # cleanup / audit / validation 報告
     └── openspec/                # 開發規範 (project.md, AGENTS.md)
 ```
 
@@ -555,14 +625,22 @@ Stock_Linbotv1/
 **每日自動化流程 (`daily_run.bat`)**：
 ```
 jobs/scheduler.py daily
-    ├ jobs/update_database.py     ├ jobs/run_daily.py                  ├ jobs/push_to_line.py
-    │  ├ MCPClient → services/mcp │  ├ 載入 150 天歷史資料             ├ 讀取 daily_recommendations
-    │  │  → 市場快照 + 外資流向   │  ├ compute_indicators_from_history  ├ 組合推播訊息
-    │  ├ chip_data_scraper        │  │  (MA/RSI/MACD/KD/BB/ATR/NATR  └ Line SDK v3 Broadcast
-    │  │  → 融資融券餘額          │  │   chip_score/consec_days)
-    │  ├ update_monthly_revenue   │  ├ merge_financial_data (季報)
-    │  └ update_financials_mops   │  ├ merge_revenue_data (月營收)
-    │       → MCP 財報 contract   │  └ 遍歷策略後存入 daily_recommendations
+    ├ jobs/update_database.py
+    │  ├ MCPClient → services/mcp → 市場快照 / 外資流向 / 財報 contract
+    │  ├ chip_data_scraper → 融資融券餘額
+    │  ├ update_monthly_revenue → 月營收
+    │  └ update_financials_mops → 季報 / 財報補值
+    ├ jobs/run_daily.py
+    │  ├ 載入 150 天歷史資料
+    │  ├ compute_indicators_from_history (MA/RSI/MACD/KD/BB/ATR/NATR/chip_score)
+    │  ├ merge_financial_data / merge_revenue_data
+    │  └ 遍歷策略後存入 daily_recommendations
+    ├ jobs/run_daily_backtest_validation.py
+    │  └ 日更後輕量驗證，不取代完整研究回測
+    └ jobs/push_to_line.py
+       ├ 讀取 daily_recommendations
+       ├ 組合推播訊息
+       └ Line SDK v3 Broadcast
 ```
 
 **Web + Line Bot (`app/` canonical package + `app.py` facade, port 1688)**：

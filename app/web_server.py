@@ -185,7 +185,7 @@ def api_performance():
         if db_curve.get('dates'):
             return jsonify(db_curve)
 
-        profit_file = 'ML_Data/backtest_profit_report.csv'
+        profit_file = Config.BACKTEST_EQUITY_CSV
         if not os.path.exists(profit_file):
             return jsonify({'error': '回測數據不存在，請先執行 jobs/run_backtest.py'}), 404
 
@@ -209,7 +209,7 @@ def api_trades():
         if db_trades:
             return jsonify(db_trades)
 
-        trades_file = 'ML_Data/backtest_result.csv'
+        trades_file = Config.BACKTEST_TRADES_CSV
         if not os.path.exists(trades_file):
             return jsonify({'error': '交易數據不存在，請先執行 jobs/run_backtest.py'}), 404
 
@@ -276,7 +276,7 @@ def api_pk_battle():
         user_roi = 15.5
         ai_roi = 19.2
 
-        trades_file = 'ML_Data/backtest_result.csv'
+        trades_file = Config.BACKTEST_TRADES_CSV
         if os.path.exists(trades_file):
             df_trades = pd.read_csv(trades_file)
             if 'roi' in df_trades.columns and not df_trades.empty:

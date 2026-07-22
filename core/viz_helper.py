@@ -14,6 +14,7 @@
 """
 
 import pandas as pd
+from config import Config
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
@@ -329,8 +330,8 @@ class PerformanceVisualizer:
 # ============================================
 
 def generate_report_from_csv(
-    equity_csv: str = 'ML_Data/backtest_profit_report.csv',
-    trades_csv: str = 'ML_Data/backtest_result.csv',
+    equity_csv: str | None = None,
+    trades_csv: str | None = None,
     benchmark_csv: Optional[str] = None
 ) -> Dict[str, Any]:
     """從 CSV 檔案生成視覺化報告
@@ -344,6 +345,8 @@ def generate_report_from_csv(
         完整報告字典
     """
     import os
+    equity_csv = equity_csv or Config.BACKTEST_EQUITY_CSV
+    trades_csv = trades_csv or Config.BACKTEST_TRADES_CSV
     
     # 讀取資料
     if not os.path.exists(equity_csv):
@@ -367,8 +370,8 @@ def generate_report_from_csv(
 
 
 def get_backtest_summary(
-    equity_csv: str = 'ML_Data/backtest_profit_report.csv',
-    trades_csv: str = 'ML_Data/backtest_result.csv'
+    equity_csv: str | None = None,
+    trades_csv: str | None = None,
 ) -> Optional[Dict[str, Any]]:
     """從 CSV 檔案計算回測摘要統計（供 API 共用）
     
@@ -382,6 +385,8 @@ def get_backtest_summary(
     """
     import os
     
+    equity_csv = equity_csv or Config.BACKTEST_EQUITY_CSV
+    trades_csv = trades_csv or Config.BACKTEST_TRADES_CSV
     if not os.path.exists(equity_csv):
         return None
     

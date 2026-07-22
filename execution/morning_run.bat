@@ -13,7 +13,7 @@ echo ============================================================
 
 echo.
 echo [%time%] 正在執行新聞彙整與推播...
-%PYTHON% -X utf8 5_push_to_line.py --time morning
+%PYTHON% -X utf8 jobs\scheduler.py morning
 
 if %errorlevel% neq 0 (
     echo.
