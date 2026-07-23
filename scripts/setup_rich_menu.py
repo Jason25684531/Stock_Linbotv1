@@ -15,7 +15,7 @@ from pathlib import Path
 # Ensure project root is on the path when run directly
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tool.richmenu import sync_default_rich_menu_from_token
+from core.richmenu import sync_default_rich_menu_from_token
 
 
 def main() -> None:

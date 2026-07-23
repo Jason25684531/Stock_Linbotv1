@@ -5,8 +5,8 @@
 """
 
 import pandas as pd
-from tool.strategy_manager import StrategyManager
-from tool.db_helper import get_db_engine
+from core.strategy_manager import StrategyManager
+from core.db_helper import get_db_engine
 
 def test_strategy_loading():
     """測試策略載入"""
@@ -74,7 +74,7 @@ def test_backward_compatibility():
     
     try:
         # 測試舊的 API 是否依然可用
-        from tool.strategy import get_v30_candidates
+        from core.strategy import get_v30_candidates
         
         engine = get_db_engine()
         query = """
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     if all_passed:
         print("\n🎉 所有測試通過！策略工廠重構成功！")
         print("\n下一步:")
-        print("  1. 執行 python 2_rundaily.py 測試完整流程")
+        print("  1. 執行 python jobs/run_daily.py 測試完整流程")
         print("  2. 開始實作 V33 Low Vol 策略")
         print("  3. 開始實作 V34 Twin-Turbo 策略")
     else:

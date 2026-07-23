@@ -4,921 +4,305 @@
 {% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
-<div x-data="dashboardData()" x-init="init()">
-    <!-- Loading State -->
-    <div x-show="loading" class="flex items-center justify-center py-20">
-        <div class="text-center">
-            <div class="spinner mx-auto mb-4"></div>
-            <p class="text-gray-400">載入回測數據中...</p>
-        </div>
-    </div>
-    
-    <!-- Dashboard Content -->
-    <div x-show="!loading" style="display: none;">
-        <!-- Strategy Control Center -->
-        <div class="chart-container mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-xl font-bold flex items-center">
-                        <span class="text-2xl mr-2">🎯</span>
-                        策略指揮中心 Strategy Control
-                    </h2>
-                    <p class="text-sm text-gray-400 mt-1">可同時選擇多個策略，分散風險</p>
-                    <p class="text-xs text-blue-300 mt-1">目前模式：
-                        <span class="font-semibold">
-                            {% if current_mode == 'aggressive' %}積極
-                            {% elif current_mode == 'balanced' %}平衡
-                            {% elif current_mode == 'loose' %}寬鬆
-                            {% elif current_mode == 'conservative' %}穩健（舊模式）
-                            {% else %}{{ current_mode }}{% endif %}
-                        </span>
-                    </p>
+<div x-data="stockSnapshotDashboard()" x-init="init()" class="space-y-6">
+    <section class="chart-container">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-white">Dashboard</h1>
+                <p class="mt-2 text-sm text-gray-400">策略、個股健檢與市場快照集中在同一個 lazy loading 工作區。</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">資料日期</div>
+                    <div class="mt-1 font-semibold text-gray-100" x-text="summary.as_of_date || 'N/A'"></div>
                 </div>
-                <div>
-                    <a href="/backtest" class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-105" style="display: inline-flex; align-items: center; font-size: 1.1rem;">
-                        <span class="text-2xl mr-3">🚀</span>
-                        <span>執行回測分析</span>
-                    </a>
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">市場燈號</div>
+                    <div class="mt-1 font-semibold text-gray-100" x-text="summary.data?.market_light?.state || summary.status || 'loading'"></div>
+                </div>
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">系統狀態</div>
+                    <div class="mt-1 font-semibold text-gray-100" x-text="systemStatus.status || 'pending'"></div>
+                </div>
+                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
+                    <div class="text-xs text-gray-500">目前策略</div>
+                    <div class="mt-1 font-semibold text-gray-100">{{ current_strategy }}</div>
                 </div>
             </div>
+        </div>
+    </section>
 
-            <div class="mb-5 p-4 bg-gray-900/40 border border-gray-700 rounded-lg">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div>
-                        <div class="text-sm font-semibold text-gray-200">V34/V35 篩選模式快速切換</div>
-                        <div class="text-xs text-gray-400 mt-1">同時套用到 LineBot 與網頁選股（積極 / 平衡 / 寬鬆）</div>
-                    </div>
-                    <div class="flex gap-2">
-                        <form method="POST" action="/update_mode">
-                            <input type="hidden" name="mode" value="aggressive">
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'aggressive' %}bg-red-600 border-red-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-red-400{% endif %}">積極</button>
-                        </form>
-                        <form method="POST" action="/update_mode">
-                            <input type="hidden" name="mode" value="balanced">
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'balanced' %}bg-blue-600 border-blue-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-400{% endif %}">平衡</button>
-                        </form>
-                        <form method="POST" action="/update_mode">
-                            <input type="hidden" name="mode" value="loose">
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors {% if current_mode == 'loose' %}bg-emerald-600 border-emerald-500 text-white{% else %}bg-gray-800 border-gray-600 text-gray-300 hover:border-emerald-400{% endif %}">寬鬆</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            
-            <form method="POST" action="/update_strategy" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-3">選擇啟用的策略 (可複選)</label>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {% for strategy in strategy_options %}
-                        <label class="flex items-center p-4 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors {% if strategy in active_strategies %}border-blue-500 bg-blue-900/20{% endif %}">
-                            <input type="checkbox" name="strategies" value="{{ strategy }}" 
-                                   class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                                   {% if strategy in active_strategies %}checked{% endif %}>
-                            <div class="ml-3">
-                                <div class="text-white font-medium">
-                                    {% if strategy == 'v31_hybrid' %}V31 混合策略
-                                    {% elif strategy == 'v33_low_vol' %}V33 低波動
-                                    {% elif strategy == 'v34_turbo' %}V34 雙渦輪
-                                    {% elif strategy == 'v35_innovation' %}V35 經營效益
-                                    {% elif strategy == 'v36_chip_momentum' %}V36 籌碼動能
-                                    {% elif strategy == 'v37_mean_reversion' %}V37 均值回歸
-                                    {% elif strategy == 'v38_value_dividend' %}V38 高殖利率
-                                    {% else %}{{ strategy }}{% endif %}
-                                </div>
-                                <div class="text-xs text-gray-400">
-                                    {% if strategy == 'v31_hybrid' %}均衡型 - 技術+AI
-                                    {% elif strategy == 'v33_low_vol' %}穩健型 - 低波動
-                                    {% elif strategy == 'v34_turbo' %}進攻型 - 高動能
-                                    {% elif strategy == 'v35_innovation' %}成長型 - 經營效益
-                                    {% elif strategy == 'v36_chip_momentum' %}追蹤型 - 法人籌碼
-                                    {% elif strategy == 'v37_mean_reversion' %}反轉型 - 區間震盪
-                                    {% elif strategy == 'v38_value_dividend' %}價值型 - 類定存股
-                                    {% else %}自訂策略{% endif %}
-                                </div>
-                            </div>
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-                <div class="flex justify-end">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
-                        ✅ 儲存策略設定
-                    </button>
-                </div>
-            </form>
-            
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                    <div class="mt-4 p-4 rounded-lg {% if category == 'success' %}bg-green-900/30 border border-green-700 text-green-300{% else %}bg-red-900/30 border border-red-700 text-red-300{% endif %}">
-                        {{ message }}
-                    </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-        </div>
-        
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Total ROI Card -->
-            <div class="metric-card">
-                <div class="metric-label">總報酬率 ROI</div>
-                <div class="metric-value" :class="summary.total_roi >= 0 ? 'positive' : 'negative'" x-text="formatPercent(summary.total_roi)"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    <span x-text="summary.trade_count"></span> 筆交易
-                </div>
-            </div>
-            
-            <!-- Win Rate Card -->
-            <div class="metric-card">
-                <div class="metric-label">勝率 Win Rate</div>
-                <div class="metric-value" :class="summary.win_rate >= 50 ? 'positive' : 'negative'" x-text="formatPercent(summary.win_rate)"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    平均持有 <span x-text="summary.avg_hold_days"></span> 天
-                </div>
-            </div>
-            
-            <!-- MDD Card -->
-            <div class="metric-card">
-                <div class="metric-label">最大回撤 MDD</div>
-                <div class="metric-value negative" x-text="formatPercent(summary.mdd)"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    高波動警示
-                </div>
-            </div>
-            
-            <!-- Sharpe Ratio Card -->
-            <div class="metric-card">
-                <div class="metric-label">夏普比率 Sharpe</div>
-                <div class="metric-value" :class="summary.sharpe >= 1 ? 'positive' : 'text-amber-400'" x-text="summary.sharpe != null ? summary.sharpe.toFixed(3) : 'N/A'"></div>
-                <div class="text-xs text-gray-400 mt-2">
-                    風險調整報酬
-                </div>
-            </div>
-        </div>
-        
-        <!-- Equity Curve Chart -->
-        <div class="chart-container">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-bold">資產曲線 Equity Curve</h2>
-                <div class="flex items-center space-x-2 text-sm text-gray-400">
-                    <span class="w-3 h-3 bg-green-500 rounded-full"></span>
-                    <span>資產價值</span>
-                </div>
-            </div>
-            <div class="relative" style="height: 400px;">
-                <canvas id="equityChart"></canvas>
-            </div>
-        </div>
-        
-        <!-- News Sentiment Panel -->
-        <div class="mt-8"
-             x-data="{
-               newsLoaded: false,
-               newsSentiment: '載入中...',
-               newsBull: [],
-               newsBear: [],
-               newsBullReasons: [],
-               newsBearReasons: [],
-                             newsBullThemes: {},
-                             newsBearThemes: {},
-               newsDate: '',
-               sentimentColor() {
-                 if (this.newsSentiment === '偏多') return 'text-green-400 border-green-500';
-                 if (this.newsSentiment === '偏空') return 'text-red-400 border-red-500';
-                 return 'text-yellow-300 border-yellow-500';
-               },
-                             themeEntries(themeMap) {
-                                 return Object.entries(themeMap || {});
-                             },
-               async loadNews() {
-                 try {
-                   const res = await fetch('/api/news_sentiment');
-                   const d = await res.json();
-                   this.newsSentiment = d.sentiment || '中性';
-                   this.newsBull = d.bull_sectors || [];
-                   this.newsBear = d.bear_sectors || [];
-                                     this.newsBullReasons = d.bull_reasons || [];
-                                     this.newsBearReasons = d.bear_reasons || [];
-                                     this.newsBullThemes = d.bull_theme_map || {};
-                                     this.newsBearThemes = d.bear_theme_map || {};
-                   this.newsDate = d.trade_date || '';
-                 } catch(e) { this.newsSentiment = '無資料'; }
-                 this.newsLoaded = true;
-               }
-             }"
-             x-init="loadNews()">
-            <div class="chart-container">
-                <h2 class="text-xl font-bold flex items-center mb-4">
-                    <span class="text-2xl mr-2">📰</span>
-                    消息面情緒
-                    <span class="text-xs font-normal text-gray-400 ml-3" x-text="newsDate ? '日期: ' + newsDate : ''"></span>
-                </h2>
-                <div class="flex flex-wrap items-center gap-3">
-                    <span class="px-4 py-1 rounded-full border text-sm font-bold" :class="sentimentColor()" x-text="newsSentiment"></span>
-                    <template x-if="newsBull.length > 0">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-xs text-gray-400">利多族群:</span>
-                            <template x-for="s in newsBull" :key="s">
-                                <span class="px-2 py-0.5 text-xs rounded bg-green-900 text-green-300 border border-green-700" x-text="s"></span>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="newsBear.length > 0">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-xs text-gray-400">利空族群:</span>
-                            <template x-for="s in newsBear" :key="s">
-                                <span class="px-2 py-0.5 text-xs rounded bg-red-900 text-red-300 border border-red-700" x-text="s"></span>
-                            </template>
-                        </div>
-                    </template>
-                    <template x-if="!newsLoaded">
-                        <span class="text-xs text-gray-500 animate-pulse">載入中...</span>
-                    </template>
-                </div>
-                <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
-                    <template x-if="newsBullReasons.length > 0">
-                        <div class="rounded-2xl border border-green-500/40 bg-gradient-to-br from-green-950/75 via-emerald-950/50 to-green-900/25 p-5 shadow-[0_0_30px_rgba(34,197,94,0.12)]">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="text-base font-bold text-green-300">📈 利多重點</div>
-                                <div class="px-3 py-1 rounded-full text-xs font-bold border border-green-500/40 bg-green-500/10 text-green-200" x-text="newsBullReasons.length + ' 則'"></div>
-                            </div>
-                            <div class="mb-3 space-y-2" x-show="themeEntries(newsBullThemes).length > 0">
-                                <template x-for="entry in themeEntries(newsBullThemes)" :key="'bull-theme-' + entry[0]">
-                                    <div class="rounded-xl border border-green-700/30 bg-green-900/15 px-3 py-2 text-sm text-green-100">
-                                        <span class="font-bold text-green-300" x-text="entry[0] + ': '"></span>
-                                        <span x-text="entry[1]"></span>
-                                    </div>
-                                </template>
-                            </div>
-                            <ul class="space-y-2 text-sm text-gray-100 leading-6">
-                                <template x-for="item in newsBullReasons" :key="'bull-' + item">
-                                    <li class="flex items-start gap-3 rounded-xl border border-green-800/40 bg-black/15 px-3 py-2">
-                                        <span class="text-green-300 mt-0.5 text-base">•</span>
-                                        <span x-text="item"></span>
-                                    </li>
-                                </template>
-                            </ul>
-                        </div>
-                    </template>
-                    <template x-if="newsBearReasons.length > 0">
-                        <div class="rounded-2xl border border-red-500/40 bg-gradient-to-br from-red-950/75 via-rose-950/50 to-red-900/25 p-5 shadow-[0_0_30px_rgba(239,68,68,0.12)]">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="text-base font-bold text-red-300">📉 利空重點</div>
-                                <div class="px-3 py-1 rounded-full text-xs font-bold border border-red-500/40 bg-red-500/10 text-red-200" x-text="newsBearReasons.length + ' 則'"></div>
-                            </div>
-                            <div class="mb-3 space-y-2" x-show="themeEntries(newsBearThemes).length > 0">
-                                <template x-for="entry in themeEntries(newsBearThemes)" :key="'bear-theme-' + entry[0]">
-                                    <div class="rounded-xl border border-red-700/30 bg-red-900/15 px-3 py-2 text-sm text-red-100">
-                                        <span class="font-bold text-red-300" x-text="entry[0] + ': '"></span>
-                                        <span x-text="entry[1]"></span>
-                                    </div>
-                                </template>
-                            </div>
-                            <ul class="space-y-2 text-sm text-gray-100 leading-6">
-                                <template x-for="item in newsBearReasons" :key="'bear-' + item">
-                                    <li class="flex items-start gap-3 rounded-xl border border-red-800/40 bg-black/15 px-3 py-2">
-                                        <span class="text-red-300 mt-0.5 text-base">•</span>
-                                        <span x-text="item"></span>
-                                    </li>
-                                </template>
-                            </ul>
-                        </div>
-                    </template>
-                </div>
-            </div>
+    <section class="chart-container">
+        <div class="flex flex-wrap gap-2 border-b border-gray-700 pb-4">
+            <template x-for="tab in tabs" :key="tab.key">
+                <button type="button"
+                        @click="activeTab = tab.key; ensureTabData(tab.key)"
+                        class="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
+                        :class="activeTab === tab.key ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-gray-700 bg-gray-900 text-gray-300 hover:border-blue-500/70'"
+                        x-text="tab.label"></button>
+            </template>
         </div>
 
-        <!-- Live Signals Section -->
-        <div class="mt-8">
-            <div class="chart-container">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4 gap-3">
-                    <div>
-                        <h2 class="text-xl font-bold flex items-center">
-                            <span class="text-2xl mr-2">⚡</span>
-                            即時選股訊號 Live Signals
-                        </h2>
-                        <p class="text-sm text-gray-400 mt-1" x-show="liveDate" x-text="'更新日期: ' + liveDate"></p>
-                        <p class="text-xs text-blue-300 mt-1" x-show="liveStrategyDisplay" x-text="'目前策略: ' + liveStrategyDisplay"></p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <label class="text-sm text-gray-400">TopN</label>
-                        <select x-model.number="liveTopN" @change="loadLiveSignals()"
-                                class="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option :value="3">3</option>
-                            <option :value="5">5</option>
-                            <option :value="8">8</option>
-                            <option :value="10">10</option>
-                        </select>
-                        <button type="button" @click="loadLiveSignals()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors">
-                            重新載入
-                        </button>
-                        <div class="text-sm text-gray-400 ml-1">
-                            <span x-text="liveSignals.length"></span> 檔股票
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap gap-2 mb-4">
-                    <template x-for="opt in liveStrategyOptions" :key="opt.value">
-                        <button type="button" 
-                                @click="console.log('🖱️ 點擊策略:', opt.label, opt.value); selectedLiveStrategy = opt.value; _liveStrategyUserSelected = true; loadLiveSignals()"
-                                class="px-3 py-1.5 text-xs rounded-lg border transition-colors"
-                                :class="selectedLiveStrategy === opt.value
-                                    ? 'bg-blue-600 border-blue-500 text-white font-bold'
-                                    : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-blue-500'"
-                                x-text="opt.label"></button>
-                    </template>
-                </div>
-                
-                <div x-show="liveSignals.length === 0" class="text-center py-12 text-gray-400">
-                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                    </svg>
-                    <p>今日無符合條件的股票</p>
-                    <p class="text-xs mt-2">請執行 1_update_database.py 更新資料</p>
-                </div>
-                
-                <div x-show="liveSignals.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <template x-for="signal in liveSignals" :key="(signal.strategy_key || selectedLiveStrategy || 'na') + '-' + signal.stock_id">
-                        <div class="metric-card border-l-4 border-blue-500">
-                            <div class="flex items-start justify-between">
+        <div class="mt-5">
+            <template x-for="tab in tabs" :key="tab.key + '-pane'">
+                <div>
+                    <section x-show="activeTab === 'strategy'" style="display: none;">
+                        <div x-show="tab.key === 'strategy'">
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
-                                    <div class="text-2xl font-bold text-blue-400" x-text="signal.stock_id"></div>
-                                    <div class="text-sm text-gray-400 mt-1" x-text="signal.strategy"></div>
+                                    <h2 class="text-xl font-bold text-white">策略選股</h2>
+                                    <p class="mt-2 text-sm text-gray-400">維持既有策略選擇 contract，不在 render 時讀取回測資料。</p>
                                 </div>
-                                <div class="text-right">
-                                    <div class="text-xl font-bold" x-text="'$' + signal.close_price.toFixed(2)"></div>
-                                    <div class="text-xs text-gray-400">收盤價</div>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 p-2.5 bg-gray-900/50 border border-gray-700 rounded-lg">
-                                <div class="grid grid-cols-3 gap-2 text-xs">
-                                    <div>
-                                        <div class="text-gray-400">建議買入</div>
-                                        <div class="font-bold text-cyan-300" x-text="'$' + signal.suggested_buy_price.toFixed(2)"></div>
+                                <form method="POST" action="/update_strategy" class="w-full max-w-2xl space-y-3">
+                                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        {% for strategy in strategy_options %}
+                                        <label class="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-3">
+                                            <input type="checkbox"
+                                                   name="strategies"
+                                                   value="{{ strategy }}"
+                                                   class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500"
+                                                   {% if strategy in active_strategies %}checked{% endif %}>
+                                            <span class="text-sm font-medium text-gray-100">{{ strategy }}</span>
+                                        </label>
+                                        {% endfor %}
                                     </div>
-                                    <div>
-                                        <div class="text-gray-400">建議賣出</div>
-                                        <div class="font-bold text-green-300" x-text="'$' + signal.suggested_sell_price.toFixed(2)"></div>
-                                    </div>
-                                    <div>
-                                        <div class="text-gray-400">停損參考</div>
-                                        <div class="font-bold text-red-300" x-text="'$' + signal.suggested_stop_loss_price.toFixed(2)"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <template x-if="hasNewsReasons(signal.news_reason_items)">
-                                <div class="mt-3 rounded-xl px-3 py-3 text-xs"
-                                     :class="signal.news_is_bearish
-                                        ? 'border border-red-700/60 bg-red-950/35 text-red-100'
-                                        : 'border border-green-700/60 bg-green-950/25 text-green-100'">
-                                    <div class="font-bold mb-2"
-                                         :class="signal.news_is_bearish ? 'text-red-300' : 'text-green-300'"
-                                         x-text="signal.news_signal_title"></div>
-                                    <ul class="space-y-1.5 pl-1">
-                                        <template x-for="item in signal.news_reason_items" :key="signal.stock_id + '-' + item">
-                                            <li class="flex items-start gap-2 leading-5">
-                                                <span :class="signal.news_is_bearish ? 'text-red-300' : 'text-green-300'">•</span>
-                                                <span x-text="item"></span>
-                                            </li>
-                                        </template>
-                                    </ul>
-                                </div>
-                            </template>
-                            
-                            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-                                <div x-show="signal.ai_score !== null">
-                                    <div class="text-gray-400">AI Score</div>
-                                    <div class="font-bold" 
-                                         :class="signal.ai_score >= 0.7 ? 'text-green-400' : signal.ai_score >= 0.5 ? 'text-amber-400' : 'text-gray-400'"
-                                         x-text="(signal.ai_score * 100).toFixed(1) + '%'"></div>
-                                </div>
-                                <div x-show="signal.rsi !== null">
-                                    <div class="text-gray-400">RSI</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.rsi != null ? signal.rsi.toFixed(1) : '-'"></div>
-                                </div>
-                                <div x-show="signal.volume !== null">
-                                    <div class="text-gray-400">成交量</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.volume != null ? (signal.volume / 1000).toFixed(0) + 'K' : '-'"></div>
-                                </div>
-                                <div x-show="signal.ma20 !== null">
-                                    <div class="text-gray-400">MA20</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.ma20 != null ? signal.ma20.toFixed(2) : '-'"></div>
-                                </div>
-                                <div x-show="signal.ma60 !== null">
-                                    <div class="text-gray-400">MA60</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.ma60 != null ? signal.ma60.toFixed(2) : '-'"></div>
-                                </div>
-                                <div x-show="signal.op_profit_margin !== null">
-                                    <div class="text-gray-400">營業利益率</div>
-                                    <div class="font-bold text-gray-300" x-text="signal.op_profit_margin != null ? (signal.op_profit_margin * 100).toFixed(1) + '%' : '-'"></div>
-                                </div>
-                                <div x-show="signal.revenue_yoy !== null">
-                                    <div class="text-gray-400">營收YoY</div>
-                                    <div class="font-bold" :class="signal.revenue_yoy != null && signal.revenue_yoy >= 0 ? 'text-green-400' : 'text-red-400'" x-text="signal.revenue_yoy != null ? signal.revenue_yoy.toFixed(1) + '%' : '-'"></div>
-                                </div>
-                            </div>
-
-                            <div class="mt-4 pt-3 border-t border-gray-700 flex items-center justify-between text-xs">
-                                <span class="text-gray-400">更多資訊</span>
-                                <a :href="signal.detail_url" target="_blank" class="text-blue-300 hover:text-blue-200 font-medium">Goodinfo 詳細資料 ↗</a>
+                                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
+                                        更新策略
+                                    </button>
+                                </form>
                             </div>
                         </div>
-                    </template>
+                    </section>
+
+                    <section x-show="activeTab === 'stockHealth'" style="display: none;">
+                        <div x-show="tab.key === 'stockHealth'">
+                            <div class="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+                                <div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
+                                    <h2 class="text-xl font-bold text-white">個股健檢</h2>
+                                    <p class="mt-2 text-sm text-gray-400">輸入股票代號後才呼叫個股分析 API。</p>
+                                    <div class="mt-4 flex gap-2">
+                                        <input type="text"
+                                               x-model.trim="stockAnalysisQuery"
+                                               @keyup.enter="analyzeStock()"
+                                               placeholder="2330"
+                                               class="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none">
+                                        <button type="button"
+                                                @click="analyzeStock()"
+                                                :disabled="stockAnalysisLoading"
+                                                class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
+                                            查詢
+                                        </button>
+                                    </div>
+                                    <div x-show="stockAnalysisError" class="mt-3 rounded-lg border border-red-700 bg-red-950/40 px-3 py-2 text-sm text-red-200" x-text="stockAnalysisError"></div>
+                                </div>
+                                <div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <h3 class="text-lg font-bold text-white">分析結果</h3>
+                                        <span class="rounded-full border border-gray-700 px-3 py-1 text-xs text-gray-300" x-text="stockAnalysis.status || 'idle'"></span>
+                                    </div>
+                                    <div x-show="stockAnalysisLoading" class="mt-6 text-sm text-gray-400">載入中...</div>
+                                    <template x-if="!stockAnalysisLoading && stockAnalysis.stock_id">
+                                        <div class="mt-4 grid gap-3 md:grid-cols-3">
+                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
+                                                <div class="text-xs text-gray-500">股票</div>
+                                                <div class="mt-1 font-semibold text-white" x-text="stockAnalysis.stock_id"></div>
+                                            </div>
+                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
+                                                <div class="text-xs text-gray-500">日期</div>
+                                                <div class="mt-1 font-semibold text-white" x-text="stockAnalysis.as_of_date || 'N/A'"></div>
+                                            </div>
+                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
+                                                <div class="text-xs text-gray-500">收盤</div>
+                                                <div class="mt-1 font-semibold text-white" x-text="formatNumber(stockAnalysis.quote?.close_price)"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <pre class="mt-4 max-h-72 overflow-auto rounded-lg border border-gray-800 bg-black/30 p-3 text-xs text-gray-300" x-text="formatPayload(stockAnalysis)"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Recent Trades Table -->
-        <div class="mt-8" x-data="{ strategyFilter: 'all' }">
-            <div class="chart-container">
-                <div class="flex items-center justify-between mb-4">
+            </template>
+
+            <section x-show="activeTab === 'recommendations'" style="display: none;">
+                <div class="flex items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-xl font-bold">📋 近期交易 Recent Trades</h2>
-                        <p class="text-sm text-gray-400 mt-1">
-                            顯示最後一次回測的交易明細（來源：ML_Data/backtest_result.csv）
-                        </p>
+                        <h2 class="text-xl font-bold text-white">每日推薦</h2>
+                        <p class="mt-2 text-sm text-gray-400">切換到此 tab 後才呼叫 /api/market/recommendations。</p>
                     </div>
-                    <div class="text-right flex items-center gap-3">
-                        <!-- 策略篩選 -->
-                        <select x-model="strategyFilter" 
-                                class="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="all">🎯 全部策略</option>
-                            <option value="v31_hybrid">V31 混合</option>
-                            <option value="v33_low_vol">V33 低波動</option>
-                            <option value="v34_turbo">V34 雙渦輪</option>
-                            <option value="v35_innovation">V35 經營效益</option>
-                            <option value="v36_chip_momentum">V36 籌碼動能</option>
-                            <option value="v37_mean_reversion">V37 均值回歸</option>
-                            <option value="v38_value_dividend">V38 高殖利率</option>
-                        </select>
-                        <div>
-                            <div class="text-sm text-gray-400">
-                                篩選後 <span x-text="trades.filter(t => strategyFilter === 'all' || t.strategy === strategyFilter).length" class="text-white font-bold"></span> 筆
-                            </div>
-                            <a href="/backtest" class="inline-block mt-1 text-xs text-blue-400 hover:text-blue-300">
-                                <i class="fas fa-sync-alt mr-1"></i>執行新回測
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="table-header">
-                                <th class="px-4 py-3 text-left">策略</th>
-                                <th class="px-4 py-3 text-left">股票代號</th>
-                                <th class="px-4 py-3 text-left">買入日期</th>
-                                <th class="px-4 py-3 text-left">賣出日期</th>
-                                <th class="px-4 py-3 text-right">買入價</th>
-                                <th class="px-4 py-3 text-right">賣出價</th>
-                                <th class="px-4 py-3 text-right">報酬率</th>
-                                <th class="px-4 py-3 text-center">原因</th>
-                                <th class="px-4 py-3 text-center">持有天數</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="trade in trades.filter(t => strategyFilter === 'all' || t.strategy === strategyFilter).slice(0, 30)" :key="trade.stock_id + trade.buy_date + (trade.strategy || 'unknown')">
-                                <tr class="table-row">
-                                    <td class="px-4 py-3">
-                                        <span class="px-2 py-1 rounded text-xs font-medium"
-                                              :class="{
-                                                  'badge-v31': trade.strategy === 'v31_hybrid',
-                                                  'badge-v33': trade.strategy === 'v33_low_vol',
-                                                  'badge-v34': trade.strategy === 'v34_turbo',
-                                                  'badge-v35': trade.strategy === 'v35_innovation',
-                                                  'badge-v36': trade.strategy === 'v36_chip_momentum',
-                                                  'badge-v37': trade.strategy === 'v37_mean_reversion',
-                                                  'badge-v38': trade.strategy === 'v38_value_dividend',
-                                                  'bg-gray-700 text-gray-300': !trade.strategy || trade.strategy === 'unknown'
-                                              }"
-                                              x-text="{
-                                                  'v31_hybrid':'V31',
-                                                  'v33_low_vol':'V33',
-                                                  'v34_turbo':'V34',
-                                                  'v35_innovation':'V35',
-                                                  'v36_chip_momentum':'V36',
-                                                  'v37_mean_reversion':'V37',
-                                                  'v38_value_dividend':'V38'
-                                              }[trade.strategy] || (trade.strategy || '未知')"></span>
-                                    </td>
-                                    <td class="px-4 py-3 font-bold" x-text="trade.stock_id"></td>
-                                    <td class="px-4 py-3 text-gray-400" x-text="trade.buy_date"></td>
-                                    <td class="px-4 py-3 text-gray-400" x-text="trade.sell_date"></td>
-                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.buy_price != null ? trade.buy_price.toFixed(2) : '-'"></td>
-                                    <td class="px-4 py-3 text-right text-gray-300" x-text="trade.sell_price != null ? trade.sell_price.toFixed(2) : '-'"></td>
-                                    <td class="px-4 py-3 text-right font-bold" 
-                                        :class="trade.profit_pct >= 0 ? 'positive' : 'negative'"
-                                        x-text="formatPercent(trade.profit_pct)"></td>
-                                    <td class="px-4 py-3 text-center">
-                                        <span class="px-2 py-1 rounded text-xs"
-                                              :class="{
-                                                  'bg-red-900 text-red-300': trade.reason === '停損',
-                                                  'bg-green-900 text-green-300': trade.reason === '停利',
-                                                  'bg-gray-700 text-gray-300': trade.reason === '時間到' || trade.reason === '趨勢轉空'
-                                              }"
-                                              x-text="trade.reason"></span>
-                                    </td>
-                                    <td class="px-4 py-3 text-center text-gray-400" x-text="trade.days + '天'"></td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <!-- ⚔️ V33 Phase 3: Battle Arena -->
-        <div class="mt-8">
-            <div class="chart-container">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 class="text-xl font-bold flex items-center">
-                            <span class="text-3xl mr-3">⚔️</span>
-                            Battle Arena - 人機對決
-                        </h2>
-                        <p class="text-sm text-gray-400 mt-1">模擬交易績效比較</p>
-                    </div>
-                </div>
-                
-                <!-- PK Stats Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <!-- User Stats Card -->
-                    <div class="metric-card border-l-4 border-blue-500">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-lg font-bold text-blue-400">👤 使用者</div>
-                            <div class="text-3xl">🏆</div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-sm text-gray-400">平均報酬率</div>
-                                <div class="text-2xl font-bold" 
-                                     :class="pkBattle.user_roi >= 0 ? 'text-green-400' : 'text-red-400'"
-                                     x-text="formatPercent(pkBattle.user_roi)"></div>
-                            </div>
-                            <div>
-                                <div class="text-sm text-gray-400">勝率</div>
-                                <div class="text-2xl font-bold text-gray-300" 
-                                     x-text="formatPercent(pkBattle.user_win_rate)"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- AI Stats Card -->
-                    <div class="metric-card border-l-4 border-purple-500">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-lg font-bold text-purple-400">🤖 AI 策略</div>
-                            <div class="text-3xl">🎯</div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-sm text-gray-400">平均報酬率</div>
-                                <div class="text-2xl font-bold" 
-                                     :class="pkBattle.ai_roi >= 0 ? 'text-green-400' : 'text-red-400'"
-                                     x-text="formatPercent(pkBattle.ai_roi)"></div>
-                            </div>
-                            <div>
-                                <div class="text-sm text-gray-400">勝率</div>
-                                <div class="text-2xl font-bold text-gray-300" 
-                                     x-text="formatPercent(pkBattle.ai_win_rate)"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Battle Result -->
-                <div class="text-center py-8 border-t border-gray-700">
-                    <template x-if="pkBattle.user_roi > pkBattle.ai_roi">
-                        <div>
-                            <div class="text-5xl mb-4">🎉</div>
-                            <div class="text-2xl font-bold text-green-400">恭喜！你擊敗了 AI</div>
-                            <div class="text-sm text-gray-400 mt-2">
-                                你的報酬率領先 <span class="font-bold" x-text="(pkBattle.user_roi - pkBattle.ai_roi).toFixed(2) + '%'"></span>
-                            </div>
-                        </div>
-                    </template>
-                    <template x-if="pkBattle.user_roi <= pkBattle.ai_roi">
-                        <div>
-                            <div class="text-5xl mb-4">💪</div>
-                            <div class="text-2xl font-bold text-amber-400">繼續加油！</div>
-                            <div class="text-sm text-gray-400 mt-2">
-                                AI 目前領先 <span class="font-bold" x-text="(pkBattle.ai_roi - pkBattle.user_roi).toFixed(2) + '%'"></span>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                
-                <!-- Mock Trade Button -->
-                <div class="mt-6 text-center">
-                    <button @click="alert('模擬交易功能開發中...')" 
-                            class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-bold transition-all transform hover:scale-105">
-                        📝 記錄新的模擬交易
+                    <button type="button" @click="refreshActiveTab()" class="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-blue-500">
+                        重新整理
                     </button>
                 </div>
-            </div>
+                <div class="mt-4" x-html="renderTabPayload('recommendations')"></div>
+            </section>
+
+            <section x-show="activeTab === 'snapshot'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">市場快照</h2>
+                <div class="mt-4" x-html="renderTabPayload('snapshot')"></div>
+            </section>
+
+            <section x-show="activeTab === 'institutional'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">法人籌碼</h2>
+                <div class="mt-4" x-html="renderTabPayload('institutional')"></div>
+            </section>
+
+            <section x-show="activeTab === 'technical'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">技術強度</h2>
+                <div class="mt-4" x-html="renderTabPayload('technical')"></div>
+            </section>
+
+            <section x-show="activeTab === 'margin'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">融資融券</h2>
+                <div class="mt-4" x-html="renderTabPayload('margin')"></div>
+            </section>
+
+            <section x-show="activeTab === 'systemStatus'" style="display: none;">
+                <h2 class="text-xl font-bold text-white">系統狀態</h2>
+                <div class="mt-4" x-html="renderTabPayload('systemStatus')"></div>
+            </section>
         </div>
-    </div>
+    </section>
 </div>
 
 <script>
-function dashboardData() {
-    return {
-        loading: true,
-        summary: {
-            total_roi: 0,
-            win_rate: 0,
-            mdd: 0,
-            sharpe: 0,
-            trade_count: 0,
-            avg_hold_days: 0
-        },
-        performance: {
-            dates: [],
-            equity: [],
-            roi: []
-        },
-        trades: [],
-        liveSignals: [],
-        liveDate: null,
-        liveStrategyDisplay: '',
-        liveTopN: 5,
-        _liveStrategyUserSelected: false,
-        selectedLiveStrategy: '{{ current_strategy }}',
-        liveStrategyOptions: [
-            {% for strategy in strategy_options %}
-            {
-                value: '{{ strategy }}',
-                label: '{% if strategy == "v31_hybrid" %}V31 混合{% elif strategy == "v33_low_vol" %}V33 低波動{% elif strategy == "v34_turbo" %}V34 雙渦輪{% elif strategy == "v35_innovation" %}V35 經營效益{% elif strategy == "v36_chip_momentum" %}V36 籌碼動能{% elif strategy == "v37_mean_reversion" %}V37 均值回歸{% elif strategy == "v38_value_dividend" %}V38 高殖利率{% else %}{{ strategy }}{% endif %}'
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
+document.addEventListener('alpine:init', () => {
+    Alpine.data('stockSnapshotDashboard', () => ({
+        activeTab: 'strategy',
+        tabs: [
+            { key: 'strategy', label: '策略選股' },
+            { key: 'stockHealth', label: '個股健檢' },
+            { key: 'recommendations', label: '每日推薦', endpoint: '/api/market/recommendations' },
+            { key: 'snapshot', label: '市場快照', endpoint: '/api/market/snapshot' },
+            { key: 'institutional', label: '法人籌碼', endpoint: '/api/market/institutional' },
+            { key: 'technical', label: '技術強度', endpoint: '/api/market/technical' },
+            { key: 'margin', label: '融資融券', endpoint: '/api/market/margin' },
+            { key: 'systemStatus', label: '系統狀態', endpoint: '/api/market/system-status' }
         ],
-        pkBattle: {
-            user_roi: 0,
-            ai_roi: 0,
-            user_win_rate: 0,
-            ai_win_rate: 0
-        },
-        chart: null,
+        summary: { status: 'loading', data: {} },
+        systemStatus: { status: 'pending', data: {} },
+        tabState: {},
+        stockAnalysisQuery: '2330',
+        stockAnalysisLoading: false,
+        stockAnalysisError: '',
+        stockAnalysis: {},
 
-        hasNewsReasons(items) {
-            return Array.isArray(items) && items.length > 0;
-        },
-        
         async init() {
-            try {
-                // 並行載入所有數據
-                await Promise.all([
-                    this.loadSummary(),
-                    this.loadPerformance(),
-                    this.loadTrades(),
-                    this.loadLiveSignals(),
-                    this.loadPKBattle()
-                ]);
-                
-                this.loading = false;
+            await Promise.all([
+                this.loadSummary(),
+                this.ensureTabData('strategy'),
+                this.loadSystemStatus()
+            ]);
+        },
 
-                // 渲染圖表：必須在 loading = false 之後（確保 canvas 已顯示）
-                this.$nextTick(() => {
-                    this.renderChart();
-                });
-            } catch (error) {
-                console.error('載入失敗:', error);
-                alert('載入數據失敗: ' + error.message);
-                this.loading = false;
-            }
-        },
-        
         async loadSummary() {
-            try {
-                const response = await fetch('/api/summary');
-                if (!response.ok) {
-                    console.warn('無法載入總結數據');
-                    return;
-                }
-                const data = await response.json();
-                if (data && !data.error) {
-                    this.summary = data;
-                }
-            } catch (error) {
-                console.error('載入總結失敗:', error);
-            }
+            this.summary = await this.fetchJson('/api/market/summary');
         },
-        
-        async loadPerformance() {
-            try {
-                const response = await fetch('/api/performance');
-                if (!response.ok) {
-                    console.warn('無法載入資產曲線數據');
-                    return;
-                }
-                const data = await response.json();
-                if (data && !data.error) {
-                    this.performance = data;
-                }
-            } catch (error) {
-                console.error('載入資產曲線失敗:', error);
-            }
+
+        async loadSystemStatus() {
+            this.systemStatus = await this.fetchJson('/api/market/system-status');
+            this.tabState.systemStatus = { loading: false, loaded: true, payload: this.systemStatus };
         },
-        
-        async loadTrades() {
-            try {
-                const response = await fetch('/api/trades');
-                if (!response.ok) {
-                    console.warn('❌ 無法載入交易數據 - HTTP', response.status);
-                    this.trades = [];
-                    return;
-                }
-                const data = await response.json();
-                this.trades = Array.isArray(data) ? data : [];
-                console.log('✅ 交易數據載入成功:', this.trades.length, '筆');
-                
-                // 統計策略分布（用於調試）
-                const strategyCount = {};
-                this.trades.forEach(t => {
-                    const s = t.strategy || 'unknown';
-                    strategyCount[s] = (strategyCount[s] || 0) + 1;
-                });
-                console.log('📊 策略分布:', strategyCount);
-            } catch (error) {
-                console.error('❌ 載入交易數據失敗:', error);
-                this.trades = [];
-            }
-        },
-        
-        async loadLiveSignals() {
-            try {
-                const strategyKey = this.selectedLiveStrategy || '';
-                console.log('🔍 載入即時訊號 - 策略:', strategyKey, 'TopN:', this.liveTopN);
-                
-                const query = new URLSearchParams({
-                    strategy: strategyKey,
-                    top_n: this.liveTopN,
-                    _ts: Date.now()
-                });
-                const response = await fetch('/api/daily-signals?' + query.toString());
-                if (!response.ok) {
-                    console.warn('❌ 無法載入即時訊號 - HTTP', response.status);
-                    return;
-                }
-                const data = await response.json();
-                console.log('✅ 即時訊號載入成功:', data.strategy_display, '數量:', data.signals?.length || 0);
-                
-                this.liveSignals = data.signals || [];
-                this.liveDate = data.date;
-                this.liveStrategyDisplay = data.strategy_display || '';
-                // 只在初始載入（非使用者主動點擊）時才用 API 回傳的 strategy_key 同步按鈕狀態
-                // 避免 API fallback 時覆蓋使用者已點選的策略按鈕高亮
-                if (data.strategy_key && !this._liveStrategyUserSelected) {
-                    this.selectedLiveStrategy = data.strategy_key;
-                }
-                
-                // 強制 Alpine.js 更新 DOM
-                this.$nextTick(() => {
-                    console.log('📊 DOM 更新完成');
-                });
-            } catch (error) {
-                console.error('❌ 載入即時訊號失敗:', error);
-                this.liveSignals = [];
-                this.liveStrategyDisplay = '';
-            }
-        },
-        
-        async loadPKBattle() {
-            try {
-                const response = await fetch('/api/pk/battle');
-                if (!response.ok) {
-                    console.warn('無法載入 PK Battle 數據');
-                    return;
-                }
-                this.pkBattle = await response.json();
-            } catch (error) {
-                console.error('載入 PK Battle 失敗:', error);
-            }
-        },
-        
-        renderChart() {
-            // 🔧 修復 1：銷毀舊的 Chart 實例（避免重複初始化錯誤）
-            if (this.chart) {
-                this.chart.destroy();
-                this.chart = null;
-            }
-            
-            const ctx = document.getElementById('equityChart').getContext('2d');
-            
-            // 🔧 修復 2：驗證數據存在（避免 undefined 錯誤）
-            if (!this.performance.roi || this.performance.roi.length === 0) {
-                console.warn('無回測數據，跳過圖表渲染');
+
+        async ensureTabData(tabKey) {
+            const tab = this.tabs.find((item) => item.key === tabKey);
+            if (!tab || !tab.endpoint) {
                 return;
             }
-            
-            // 決定線條顏色（根據最終 ROI）
-            const finalROI = this.performance.roi[this.performance.roi.length - 1] || 0;
-            const lineColor = finalROI >= 0 ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
-            const fillColor = finalROI >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
-            
-            this.chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: this.performance.dates,
-                    datasets: [{
-                        label: '資產價值 (TWD)',
-                        data: this.performance.equity,
-                        borderColor: lineColor,
-                        backgroundColor: fillColor,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 5,
-                        pointHoverBackgroundColor: lineColor,
-                        pointHoverBorderColor: '#fff',
-                        pointHoverBorderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(26, 33, 50, 0.95)',
-                            titleColor: '#e4e8f0',
-                            bodyColor: '#9ba3b4',
-                            borderColor: '#2d3748',
-                            borderWidth: 1,
-                            padding: 12,
-                            displayColors: false,
-                            callbacks: {
-                                label: function(context) {
-                                    const value = context.parsed.y;
-                                    const roi = this.performance.roi[context.dataIndex];
-                                    // 🔧 修復 3：安全處理 roi 可能為 undefined 的情況
-                                    const roiText = roi !== undefined ? roi.toFixed(2) + '%' : 'N/A';
-                                    return [
-                                        '資產: $' + value.toLocaleString('zh-TW', {maximumFractionDigits: 0}),
-                                        'ROI: ' + roiText
-                                    ];
-                                }.bind(this)
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                color: 'rgba(45, 55, 72, 0.3)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#9ba3b4',
-                                maxRotation: 45,
-                                minRotation: 45,
-                                font: {
-                                    size: 10
-                                },
-                                callback: function(value, index) {
-                                    // 只顯示每 20 個日期
-                                    return index % 20 === 0 ? this.getLabelForValue(value) : '';
-                                }
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: 'rgba(45, 55, 72, 0.3)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#9ba3b4',
-                                font: {
-                                    size: 11
-                                },
-                                callback: function(value) {
-                                    return '$' + (value / 1000).toFixed(0) + 'K';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            const state = this.tabState[tabKey];
+            if (state && (state.loaded || state.loading)) {
+                return;
+            }
+            this.tabState[tabKey] = { loading: true, loaded: false, payload: null };
+            const payload = await this.fetchJson(tab.endpoint);
+            this.tabState[tabKey] = { loading: false, loaded: true, payload };
+            if (tabKey === 'systemStatus') {
+                this.systemStatus = payload;
+            }
         },
-        
-        formatPercent(value) {
-            // 🔧 修復 4：安全處理可能為 undefined 的數值
-            if (value === undefined || value === null || isNaN(value)) {
+
+        async refreshActiveTab() {
+            const tab = this.tabs.find((item) => item.key === this.activeTab);
+            if (!tab || !tab.endpoint) {
+                await this.loadSummary();
+                return;
+            }
+            this.tabState[this.activeTab] = { loading: true, loaded: false, payload: null };
+            const payload = await this.fetchJson(tab.endpoint);
+            this.tabState[this.activeTab] = { loading: false, loaded: true, payload };
+            await this.loadSummary();
+        },
+
+        async analyzeStock() {
+            const stockId = String(this.stockAnalysisQuery || '').trim();
+            if (!stockId) {
+                this.stockAnalysisError = '請輸入股票代號';
+                return;
+            }
+            this.stockAnalysisLoading = true;
+            this.stockAnalysisError = '';
+            try {
+                const payload = await this.fetchJson('/api/stock-analysis?id=' + encodeURIComponent(stockId));
+                this.stockAnalysis = payload || {};
+                if (payload && payload.status === 'error') {
+                    this.stockAnalysisError = payload.error || '個股分析失敗';
+                }
+            } catch (error) {
+                this.stockAnalysisError = error.message || String(error);
+                this.stockAnalysis = {};
+            } finally {
+                this.stockAnalysisLoading = false;
+            }
+        },
+
+        async fetchJson(url) {
+            try {
+                const response = await fetch(url);
+                const payload = await response.json();
+                if (!response.ok) {
+                    return { status: 'error', error: payload.error || response.statusText, data: {} };
+                }
+                return payload;
+            } catch (error) {
+                return { status: 'error', error: error.message || String(error), data: {} };
+            }
+        },
+
+        renderTabPayload(tabKey) {
+            const state = this.tabState[tabKey] || {};
+            if (state.loading) {
+                return '<div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4 text-sm text-gray-400">載入中...</div>';
+            }
+            if (!state.loaded) {
+                return '<div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4 text-sm text-gray-400">切換到此 tab 後載入資料。</div>';
+            }
+            return '<pre class="max-h-96 overflow-auto rounded-lg border border-gray-800 bg-black/30 p-4 text-xs text-gray-300">' + this.escapeHtml(JSON.stringify(state.payload, null, 2)) + '</pre>';
+        },
+
+        formatPayload(payload) {
+            if (!payload || !Object.keys(payload).length) {
+                return '尚無資料';
+            }
+            return JSON.stringify(payload, null, 2);
+        },
+
+        formatNumber(value) {
+            if (value === undefined || value === null || Number.isNaN(Number(value))) {
                 return 'N/A';
             }
-            return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
+            return Number(value).toLocaleString('zh-TW');
+        },
+
+        escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
-    }
-}
+    }));
+});
 </script>
 {% endblock %}

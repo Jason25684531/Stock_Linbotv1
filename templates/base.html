@@ -11,6 +11,50 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script>
+        (function installLightweightChartsLegacyPatch() {
+            if (!window.LightweightCharts || window.LightweightCharts.__stockLinbotLegacyPatch) {
+                return;
+            }
+
+            const originalCreateChart = window.LightweightCharts.createChart;
+            if (typeof originalCreateChart !== 'function') {
+                return;
+            }
+
+            function patchLegacySeriesMethods(chart) {
+                if (!chart || typeof chart.addSeries !== 'function') {
+                    return chart;
+                }
+
+                [
+                    ['addCandlestickSeries', 'CandlestickSeries'],
+                    ['addLineSeries', 'LineSeries'],
+                    ['addHistogramSeries', 'HistogramSeries'],
+                    ['addAreaSeries', 'AreaSeries'],
+                    ['addBarSeries', 'BarSeries']
+                ].forEach(([legacyMethod, seriesTypeName]) => {
+                    if (typeof chart[legacyMethod] === 'function') {
+                        return;
+                    }
+                    const seriesType = window.LightweightCharts[seriesTypeName];
+                    if (!seriesType) {
+                        return;
+                    }
+                    chart[legacyMethod] = function addLegacySeries(options) {
+                        return chart.addSeries(seriesType, options || {});
+                    };
+                });
+                return chart;
+            }
+
+            window.LightweightCharts.createChart = function createPatchedChart() {
+                return patchLegacySeriesMethods(originalCreateChart.apply(this, arguments));
+            };
+            window.LightweightCharts.__stockLinbotLegacyPatch = true;
+        })();
+    </script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

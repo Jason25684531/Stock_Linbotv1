@@ -1,40 +1,30 @@
 @echo off
+REM Compatibility-only batch wrapper.
+REM Official daily scheduler path: jobs\scheduler.py
+REM Do not remove until cleanup evidence passes.
 chcp 65001 >nul
 cd /d D:\01_Project\Stocke\Stock_Linbotv1
+set PYTHON=D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe
+set SCHEDULER=jobs\scheduler.py
 
 echo ============================================================
-echo  Stock Linbot - 晚間選股策劃排程
+echo  StockAI - 晚間資料庫更新與選股排程啟動
 echo  執行時間: %date% %time%
 echo ============================================================
 
 echo.
-echo [%time%] ========== Step 1: 更新資料庫 (1_update_database.py) ==========
-D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe -X utf8 1_update_database.py
-if %errorlevel% neq 0 (
-    echo [%time%] ❌ Step 1 失敗，錯誤碼: %errorlevel%
-) else (
-    echo [%time%] ✅ Step 1 完成
-)
+echo [%time%] 正在執行 canonical evening scheduler...
+%PYTHON% -X utf8 %SCHEDULER% evening --stop-on-error
 
-echo.
-echo [%time%] ========== Step 2: 每日選股 (2_rundaily.py) ==========
-D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe -X utf8 2_rundaily.py
 if %errorlevel% neq 0 (
-    echo [%time%] ❌ Step 2 失敗，錯誤碼: %errorlevel%
+    echo.
+    echo [%time%] ❌ 執行過程中出錯，請檢查 MCP Server 是否有開啟。
 ) else (
-    echo [%time%] ✅ Step 2 完成
-)
-
-echo.
-echo [%time%] ========== Step 3: 晚間推播 (5_push_to_line.py --time evening) ==========
-D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe -X utf8 5_push_to_line.py --time evening
-if %errorlevel% neq 0 (
-    echo [%time%] ❌ Step 3 失敗，錯誤碼: %errorlevel%
-) else (
-    echo [%time%] ✅ Step 3 完成
+    echo.
+    echo [%time%] ✅ 晚間所有自動化任務已成功跑完！
 )
 
 echo.
 echo ============================================================
-echo  全部執行完畢: %date% %time%
-echo ============================================================
+echo  視窗將於 10 秒後自動關閉...
+timeout /t 10 >nul

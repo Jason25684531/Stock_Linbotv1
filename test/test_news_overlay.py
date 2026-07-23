@@ -4,6 +4,8 @@ import pandas as pd
 def test_apply_news_sentiment_overlay_reorders_candidates(monkeypatch):
     import app as app_module
 
+    monkeypatch.setattr(app_module.Config, "is_news_boost_enabled", classmethod(lambda cls: True))
+
     candidates = pd.DataFrame(
         [
             {"stock_id": "2330", "ai_score": 0.70, "close_price": 950.0},
@@ -36,3 +38,22 @@ def test_apply_news_sentiment_overlay_reorders_candidates(monkeypatch):
 
     assert list(boosted["stock_id"]) == ["2317", "2330"]
     assert "GB200 供應鏈追單" in boosted.iloc[0]["news_boost_reason"]
+
+
+def test_apply_news_sentiment_overlay_skips_when_disabled(monkeypatch):
+    import app as app_module
+
+    candidates = pd.DataFrame(
+        [
+            {"stock_id": "2330", "ai_score": "0.70", "close_price": 950.0},
+            {"stock_id": "2317", "ai_score": None, "close_price": 205.0},
+        ]
+    )
+
+    monkeypatch.setattr(app_module.Config, "NEWS_BOOST_ENABLED", False)
+
+    boosted = app_module._apply_news_sentiment_overlay(candidates, "2026-04-02")
+
+    assert list(boosted["stock_id"]) == ["2330", "2317"]
+    assert boosted["ai_score"].dtype.kind == "f"
+    assert boosted.iloc[0]["ai_score"] == 0.70

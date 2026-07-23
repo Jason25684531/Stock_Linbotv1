@@ -6,6 +6,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: my_secret_password
       MYSQL_DATABASE: stock_ai_db
+      MYSQL_USER: trader
+      MYSQL_PASSWORD: trader_password
       TZ: Asia/Taipei
     ports:
       - "3306:3306"
@@ -58,13 +60,14 @@ services:
     volumes:
       - ./:/app
     environment:
-      DB_URL: mysql+pymysql://root:my_secret_password@db:3306/stock_ai_db
+      DB_URL: mysql+pymysql://trader:trader_password@db:3306/stock_ai_db
       MCP_BASE_URL: http://twse-mcp-server:8080
       PYTHONUNBUFFERED: "1"
       TZ: Asia/Taipei
       LINE_TOKEN: ${LINE_TOKEN:-}
       LINE_SECRET: ${LINE_SECRET:-}
       GEMINI_KEY: ${GEMINI_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-dev-secret-key}
     command:

@@ -3,9 +3,14 @@
 # 1. 忽略 Python 編譯檔 (垃圾)
 __pycache__/
 *.py[cod]
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # 2. 忽略環境變數 (這是機密，絕對不能上傳!)
 .env
+.env*
 
 # 3. 忽略虛擬環境
 venv/
@@ -28,8 +33,22 @@ mysql_data/
 
 # 7. 忽略工具與編輯器產物
 .vscode/
+.github/
 .idea/
+/specs/
+
+# Generated backtest artifacts; retain versioned usage and report examples.
+artifacts/*
+!artifacts/
+!artifacts/README.md
+!artifacts/reports/
+artifacts/reports/*
+!artifacts/reports/README.md
+
+.amazonq/
 .specify/
+.serena/
+.tokensave/
 .pytest_cache/
 .agents/
 .agent
@@ -38,3 +57,7 @@ mysql_data/
 Thumbs.db
 *.tmp
 *.swp
+
+*.codex/
+.claude/*
+openspec/*

@@ -20,11 +20,11 @@ import pytest
 # ============================================
 
 class TestFlexMessageBuilder:
-    """測試 tool/line_message_builder.py"""
+    """測試 core/line_message_builder.py"""
 
     def test_create_stock_flex_message_full_data(self):
         """完整資料 → 產生正確的 Flex Bubble"""
-        from tool.line_message_builder import create_stock_flex_message
+        from core.line_message_builder import create_stock_flex_message
 
         data = {
             'stock_id': '2330',
@@ -57,7 +57,7 @@ class TestFlexMessageBuilder:
 
     def test_create_stock_flex_message_sparse_data(self):
         """缺失資料 → 不報錯, N/A 顯示"""
-        from tool.line_message_builder import create_stock_flex_message
+        from core.line_message_builder import create_stock_flex_message
 
         sparse = {
             'stock_id': '9999',
@@ -78,7 +78,7 @@ class TestFlexMessageBuilder:
         assert '9999' in msg.alt_text
 
     def test_recommendation_carousel_includes_linbot_news_tag(self):
-        from tool.line_message_builder import create_recommendation_carousel
+        from core.line_message_builder import create_recommendation_carousel
 
         picks = [{
             'stock_id': '2330',
@@ -106,9 +106,95 @@ class TestFlexMessageBuilder:
         assert 'Linbot 利多' in rendered
         assert '先進封裝需求增溫' in rendered
 
+    def test_build_macro_summary_flex_renders_market_and_chip_sections(self):
+        from core.line_message_builder import build_macro_summary_flex
+
+        msg = build_macro_summary_flex(
+            news_summary='📌 美股科技股反彈\n→ 半導體族群風險偏好回升\n📊 綜合研判：短線偏多。',
+            market_snapshot={
+                'status': 'ok',
+                'date_str': '2026-04-20',
+                'rising': 612,
+                'falling': 388,
+                'flat': 74,
+                'total_volume_b': 32.5,
+                'summary': '盤面偏多，上漲家數明顯優於下跌家數。',
+            },
+            chip_snapshot={
+                'status': 'ok',
+                'date_str': '2026-04-20',
+                'foreign_net': 18234,
+                'trust_net': 2311,
+                'dealer_net': -845,
+                'total_net': 19700,
+                'summary': '三大法人偏多，且外資站在買方，籌碼面偏正向。',
+            },
+            date_str='2026-04-20',
+        )
+
+        payload = json.loads(msg.to_json())
+        rendered = json.dumps(payload, ensure_ascii=False)
+
+        assert payload['type'] == 'flex'
+        assert '消息面綜整' in rendered
+        assert '盤勢快照' in rendered
+        assert '籌碼面狀態' in rendered
+        assert '32.5 億股' in rendered
+
+    def test_build_strategy_prompt_flex_contains_postback_buttons(self):
+        from core.line_message_builder import build_strategy_prompt_flex
+
+        msg = build_strategy_prompt_flex(
+            title='🎯 策略選股',
+            prompt_text='請選擇您要觀看的策略選股盤勢。',
+            strategies=[
+                {
+                    'key': 'v35_innovation',
+                    'label': 'V35 經營效益策略',
+                    'short_label': 'V35',
+                    'payload_key': 'v35',
+                    'display_text': '查看 V35 經營效益策略',
+                }
+            ],
+            action='strategy_select',
+            date_str='2026-04-20',
+        )
+
+        payload = json.loads(msg.to_json())
+        rendered = json.dumps(payload, ensure_ascii=False)
+
+        assert payload['type'] == 'flex'
+        assert 'action=strategy_select&strategy=v35' in rendered
+        assert 'V35 經營效益策略' in rendered
+
+    def test_build_backtest_reflection_flex_contains_metrics_and_suggestions(self):
+        from core.line_message_builder import build_backtest_reflection_flex
+
+        msg = build_backtest_reflection_flex(
+            strategy_name='V35 經營效益策略',
+            total_roi=18.4,
+            win_rate=62.5,
+            max_drawdown=-6.8,
+            trade_count=16,
+            date_str='2026-04-19',
+            avg_hold_days=5.2,
+            latest_trade_summary='2330 +5.2%｜出場原因：停利',
+            suggestions=['維持強勢族群觀察', '留意回撤控制'],
+            source_label='資料來源: 回測資料庫',
+        )
+
+        payload = json.loads(msg.to_json())
+        rendered = json.dumps(payload, ensure_ascii=False)
+
+        assert payload['type'] == 'flex'
+        assert '策略回測摘要' in rendered
+        assert '近似最大回撤' in rendered
+        assert '維持強勢族群觀察' in rendered
+        assert '資料來源: 回測資料庫' in rendered
+
     def test_flex_color_helpers(self):
         """顏色 helper 正確回傳"""
-        from tool.line_message_builder import _color_by_value, _ai_score_label
+        from core.line_message_builder import _color_by_value, _ai_score_label
 
         assert _color_by_value(10) == '#1DB446'  # positive → green
         assert _color_by_value(-5) == '#DD2222'  # negative → red
@@ -128,7 +214,7 @@ class TestCheckExitSignal:
     """測試 BaseStrategy.check_exit_signal() 邏輯"""
 
     def _get_strategy(self):
-        from tool.strategy_manager import StrategyManager
+        from core.strategy_manager import StrategyManager
         mgr = StrategyManager()
         return mgr._get_or_load_strategy('v31_hybrid')
 
@@ -228,19 +314,19 @@ class TestStrategyBackwardCompat:
     """確認清理 strategy.py 後舊 import 路徑仍可用"""
 
     def test_get_v30_candidates_importable(self):
-        from tool.strategy import get_v30_candidates
+        from core.strategy import get_v30_candidates
         assert callable(get_v30_candidates)
 
     def test_get_v30_params_from_db_importable(self):
-        from tool.strategy import get_v30_params_from_db
+        from core.strategy import get_v30_params_from_db
         assert callable(get_v30_params_from_db)
 
     def test_calculate_v30_signal_importable(self):
-        from tool.strategy import calculate_v30_signal
+        from core.strategy import calculate_v30_signal
         assert callable(calculate_v30_signal)
 
     def test_format_functions_importable(self):
-        from tool.strategy import (
+        from core.strategy import (
             format_v30_recommendation,
             format_v31_recommendation,
             format_stock_query,
@@ -254,7 +340,7 @@ class TestStrategyBackwardCompat:
 
     def test_removed_functions_absent(self):
         """已移除的函式不應存在"""
-        import tool.strategy as mod
+        import core.strategy as mod
         assert not hasattr(mod, 'check_sentiment_filter')
         assert not hasattr(mod, 'check_market_trend')
         assert not hasattr(mod, '_load_v31_model')
@@ -266,15 +352,15 @@ class TestStrategyBackwardCompat:
 # ============================================
 
 class TestReportHelper:
-    """測試 tool/report_helper.py (不需 DB)"""
+    """測試 core/report_helper.py (不需 DB)"""
 
     def test_format_stock_diagnosis_none(self):
-        from tool.report_helper import format_stock_diagnosis
+        from core.report_helper import format_stock_diagnosis
         result = format_stock_diagnosis(None)
         assert '查無' in result
 
     def test_format_stock_diagnosis_full(self):
-        from tool.report_helper import format_stock_diagnosis
+        from core.report_helper import format_stock_diagnosis
         report = {
             'stock_id': '2330',
             'close_price': 850.0,

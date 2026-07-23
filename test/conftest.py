@@ -7,7 +7,7 @@
 
 import pytest
 import pandas as pd
-from tool.strategy_manager import StrategyManager
+from core.strategy_manager import StrategyManager
 
 
 @pytest.fixture

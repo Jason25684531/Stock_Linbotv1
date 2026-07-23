@@ -1,4 +1,4 @@
-# AI Coding Instructions: Stock Linbot V35
+﻿# AI Coding Instructions: Stock Linbot V35
 
 ## Project Overview
 Taiwan stock trading system combining ML (XGBoost) with technical analysis. Delivers real-time stock recommendations via Line Bot and Web Dashboard, with multi-strategy backtesting engine supporting 4+ parallel strategies (V31/V33/V34/V35).
@@ -7,9 +7,9 @@ Taiwan stock trading system combining ML (XGBoost) with technical analysis. Deli
 
 ### 1. Layered Dependency Flow (Top-Down)
 ```
-Application (app.py, 1-7_*.py) 
+Application (app.py facade + app/ package + jobs/*.py)
   ↓ 
-Backtest Layer (4_run_backtest.py) 
+Backtest Layer (jobs/run_backtest.py + compatibility facade)
   ↓ 
 Strategy Layer (tool/strategy_manager.py → tool/strategies/*) 
   ↓ 
@@ -43,11 +43,16 @@ All strategies inherit from `BaseStrategy` (abstract class) and implement:
 ### Daily Execution Pipeline (Production)
 ```powershell
 # Complete daily workflow
-python 1_update_database.py    # Fetch TWSE/TPEX price data
-python 7_update_financials.py  # Update quarterly financials from OpenAPI
-python 3_train_model.py        # Retrain XGBoost model
-python 2_rundaily.py           # Calculate indicators for all stocks
-python 5_push_to_line.py       # Send recommendations to Line Bot
+python jobs/scheduler.py daily
+
+# Evening operator workflow
+python jobs/scheduler.py evening --stop-on-error
+
+# Individual canonical jobs
+python jobs/update_database.py  # Fetch TWSE/TPEX price data
+python jobs/train_model.py      # Retrain XGBoost model
+python jobs/run_daily.py        # Calculate indicators and recommendations
+python jobs/push_to_line.py     # Send recommendations to Line Bot
 
 # Start web dashboard
 python app.py                  # Access at http://localhost:5000
@@ -56,13 +61,13 @@ python app.py                  # Access at http://localhost:5000
 ### Backtesting & Optimization
 ```powershell
 # Single strategy backtest
-python 4_run_backtest.py --v31
+python jobs/run_backtest.py --v31
 
 # Multi-strategy portfolio backtest (default)
-python 4_run_backtest.py       # Uses active_strategies from settings
+python jobs/run_backtest.py    # Uses active_strategies from settings
 
 # Parameter optimization
-python 6_optimize_params.py    # Grid search for best MA/RSI combinations
+python jobs/optimize_params.py # Grid search for best MA/RSI combinations
 ```
 
 ### Testing (pytest)
@@ -217,8 +222,8 @@ def get_active_features(cls):
 
 ### Issue: Backtest Returns Zero Trades
 **Debug steps**:
-1. Check market filter: `收盤價 < MA60` triggers market-wide stop ([4_run_backtest.py](4_run_backtest.py#L520))
-2. Verify indicator columns exist in `stock_data` table (run `python 2_rundaily.py`)
+1. Check market filter: `收盤價 < MA60` triggers market-wide stop ([jobs/run_backtest.py](../jobs/run_backtest.py))
+2. Verify indicator columns exist in `stock_data` table (run `python jobs/run_daily.py`)
 3. Print `filter_candidates()` output to see filtering stages
 
 ## Key Files Reference
@@ -229,7 +234,7 @@ def get_active_features(cls):
 | Technical indicators | [tool/calc_indicators.py](tool/calc_indicators.py) | RSI, MACD, KD, BB, ATR, volume ratios |
 | Strategy factory | [tool/strategy_manager.py](tool/strategy_manager.py) | Singleton, reads strategy_settings.json |
 | Base strategy class | [tool/strategies/base.py](tool/strategies/base.py) | Abstract class defining strategy interface |
-| Backtest engine | [4_run_backtest.py](4_run_backtest.py) | Supports single/portfolio mode |
+| Backtest engine | [jobs/run_backtest.py](../jobs/run_backtest.py) | Supports single/portfolio mode |
 | Configuration hub | [config.py](config.py) | Loads from .env, defines all constants |
 | Web application | [app.py](app.py) | Flask + Line Bot webhook + dashboard routes |
 

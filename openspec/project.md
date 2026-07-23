@@ -1,399 +1,625 @@
-# 專案規格：Stock_Linbotv1（當前版本 V38）
+# Stock_Linbotv1 專案目標
 
-> 最後更新：2026-03-09
+> 生效日期：2026-07-22
+> 適用範圍：系統架構、量化策略、回測引擎、資料流程、Web、LINE Bot、排程工作與 OpenSpec 變更
 
-## 1. 專案目標
+## 1. 專案使命
 
-**Stock_Linbotv1** 是一套整合台股量化分析、機器學習選股與 Line Bot 推播通知的自動化交易輔助系統。
+Stock_Linbotv1 的目標是建立一套面向台股的自動化量化研究、選股、回測、推薦落庫與訊息推播系統。
 
-核心目標：
-- **穩健獲利**：透過多策略框架（保守型 / 動能型 / 價值型）因應不同市場環境，維持長期正期望值。
-- **自動化營運**：每日自動更新資料、執行選股、推播建議，降低人工干預。
-- **架構可擴展**：策略工廠模式（Strategy Factory Pattern）支援快速新增或切換策略，不影響核心引擎。
+系統必須同時具備：
 
-## 2. 核心技術棧
+1. **可行性 Feasibility**
 
-| 層次 | 技術 |
-|------|------|
-| 語言 | Python 3.10+ |
-| 資料庫 | MySQL 8.0+（SQLAlchemy ORM，連線池 + 重試） |
-| 資料來源 | `tool/mcp_client.py` → `scripts/twse_mcp_server.py` → TWSE/TPEX covered dataset、MOPS 財報備援；月營收與融資融券維持既有 crawler |
-| Web 儀表板 | Flask + Jinja2 + Tailwind CSS (CDN) + Plotly |
-| 通知 | Line Bot SDK v3（Flex Message 卡片 + 廣播推播） |
-| 機器學習 | XGBoost（每策略獨立模型，LRU 快取載入） |
-| 參數最佳化 | Optuna（TPE Sampler） |
+   * 能在現有 Python、Flask、MySQL、LINE Bot、Plotly、XGBoost 與 MCP 技術棧上持續運作。
+   * 優先改善既有模組，而不是無必要地全面重寫。
+   * 所有架構設計必須考量現有部署、資料庫、CLI、Web 與排程相容性。
 
-## 3. 系統架構
+2. **可靠性 Reliability**
 
-採用 **分層架構 + 策略工廠** 設計：
+   * 相同資料、設定與交易規則必須產生可重現的結果。
+   * 推薦結果必須以已落庫 snapshot 為主要資料來源。
+   * 資料缺漏、零候選、外部服務失敗及指標無法計算時，必須具有明確狀態，不得靜默失敗。
+   * 回測不得使用未來資料，財務資料必須依實際公告日期生效。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                  應用層 (Application)                     │
-│   app.py (Flask + Line Bot Webhook, port 1688)          │
-│   execution/morning_run.bat (08:30 早晨大局觀)            │
-│   execution/evening_run.bat (19:00 晚間選股策劃)          │
-│   1~6_*.py (資料更新/選股/訓練/回測/推播/最佳化)          │
-└────────────┬────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────┐
-│         呈現層 (Presentation)                            │
-│   templates/ (dashboard, backtest, login)                │
-│   tool/line_message_builder.py (Flex Message 卡片)       │
-│   tool/viz_helper.py (Plotly 互動式圖表)                 │
-│   tool/report_helper.py (個股 AI 診斷報告)               │
-└────────────┬────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────┐
-│                 策略層 (Multi-Strategy)                   │
-│   tool/strategy_manager.py (Singleton 工廠, 7 策略註冊)   │
-│   tool/strategies/base.py (BaseStrategy + check_exit)    │
-│   tool/strategies/v31~v38 (各策略實作)                    │
-│   tool/strategy.py (V30/V31 向後相容層)                   │
-└────────────┬────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────┐
-│                   指標層 (Indicators)                     │
-│   tool/calc_indicators.py                                │
-│   (MA, RSI, MACD, KD, BB, ATR, NATR, chip_score 等)     │
-│   tool/model_utils.py (XGBoost 模型載入, LRU 快取)       │
-└────────────┬────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────┐
-│                傳輸層 (MCP Transport)                    │
-│   tool/mcp_client.py (sync/async, retries, DTOs)        │
-│   scripts/twse_mcp_server.py (Flask MCP, port 8080)     │
-│   /health + dataset POST endpoints                       │
-└────────────┬────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────┐
-│                   資料層 (Data)                           │
-│   tool/db_helper.py (唯一 DB 存取入口)                    │
-│   tool/crawlers/chip_data_scraper.py (融資融券爬蟲)       │
-│   tool/crawlers/quarterly_scraper.py (MCP server 財報備援)│
-│   tool/update_monthly_revenue.py (月營收爬蟲)             │
-│   tool/update_financials_mops.py (MCP-backed 季度財報)     │
-└────────────┬────────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────────┐
-│                   配置層 (Config)                         │
-│   config.py (所有常數 + V34/V35 Presets + MODE_CMD_MAP)  │
-│   .env (敏感資訊: DB_URL, LINE_TOKEN, LINE_SECRET)       │
-│   strategy_settings.json (策略啟用狀態, V3 格式)          │
-└─────────────────────────────────────────────────────────┘
-```
+3. **可維護性 Maintainability**
 
-### 完整目錄結構
+   * 程式碼應具備清楚責任、穩定介面、合理封裝及完整測試。
+   * 優先降低重複程式、巨型函式、巨型類別、隱性依賴與跨層耦合。
+   * 每次重構必須小步執行，保留相容入口並提供回復方式。
 
-```
-Stock_Linbotv1/
-├── app.py                       # Flask 入口 + Line Bot Webhook (port 1688)
-├── config.py                    # 全域常數中心（手續費/稅率/策略門檻/Presets）
-├── strategy_settings.json       # 策略啟用狀態 (V3 JSON 格式)
-├── init_settings.py             # 資料庫 user_settings 表初始化
-│
-├── 1_update_database.py         # 每日資料更新（股價+籌碼+月營收+季報）
-├── 2_rundaily.py                # 每日選股（計算指標→合併財報→多策略篩選→AI評分）
-├── 3_train_model.py             # 多策略 XGBoost 批次訓練
-├── 4_run_backtest.py            # 多策略回測引擎（含組合回測）
-├── 5_push_to_line.py            # Line 推播（SDK v3 Broadcast）
-├── 6_optimize_params.py         # Optuna 參數最佳化
-│
-├── execution/                   # 自動化批次檔
-│   ├── morning_run.bat          # 早晨排程 (08:30)
-│   ├── evening_run.bat          # 晚間排程 (19:00)
-│   ├── daily_run.bat            # 舊版一鍵自動化
-│   └── start_web.bat            # 一鍵啟動 Web 服務
-│
-├── tool/                        # 核心工具模組
-│   ├── db_helper.py             # 資料庫操作（唯一合法 DB 存取點）
-│   ├── mcp_client.py            # MCP transport boundary（sync/async）
-│   ├── calc_indicators.py       # 技術指標 + 籌碼指標計算
-│   ├── model_utils.py           # XGBoost 模型載入（LRU 快取）
-│   ├── strategy_manager.py      # 策略工廠（Singleton + Registry）
-│   ├── strategy.py              # V30/V31 向後相容層
-│   ├── report_helper.py         # 個股 AI 診斷報告聚合
-│   ├── line_message_builder.py  # Line Flex Message 卡片建構器
-│   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
-│   ├── news_agent.py            # RSS 新聞 + Gemini 分析（實驗性）
-│   ├── update_monthly_revenue.py    # 月營收爬蟲（MOPS 靜態 HTML）
-│   ├── update_financials_mops.py    # 季度財報更新（MOPS 備援站）
-│   ├── update_history_financials.py # 歷史財報批量更新
-│   ├── strategies/              # 策略實作目錄
-│   │   ├── __init__.py          # 策略模組匯出
-│   │   ├── base.py              # BaseStrategy 抽象基底（含 check_exit_signal）
-│   │   ├── v31_hybrid.py        # V31 混合策略（MA+RSI+籌碼+XGBoost）
-│   │   ├── v33_low_vol.py       # V33 低波動穩健型
-│   │   ├── v34_turbo.py         # V34 雙渦輪飆股型
-│   │   ├── v35_innovation.py    # V35 經營效益型（營業利益率驅動）
-│   │   ├── v36_chip_momentum.py # V36 籌碼動能型
-│   │   ├── v37_mean_reversion.py# V37 均值回歸型
-│   │   └── v38_value_dividend.py# V38 高殖利率價值型
-│   └── crawlers/                # 爬蟲模組
-│       ├── chip_data_scraper.py # 融資融券爬蟲（TWSE/TPEx）
-│       └── quarterly_scraper.py # MOPS 季報爬蟲（mopsov 備援站）
-│
-├── templates/                   # Flask Jinja2 模板
-│   ├── base.html                # Layout 基底
-│   ├── dashboard.html           # 主儀表板
-│   ├── backtest.html            # 回測設定頁
-│   ├── backtest_result.html     # 回測結果頁（Plotly 圖表）
-│   └── login.html               # 登入頁
-│
-├── static/                      # CSS / JS 靜態資源
-│
-├── test/                        # pytest 測試套件
-│   ├── conftest.py              # 共用 Fixture（manager, empty_df）
-│   ├── test_strategy_factory.py
-│   ├── test_v35_refactor_flex.py
-│   ├── test_phase2_chip_data.py
-│   ├── test_v36_chip_momentum.py
-│   └── test_v37_v38_strategies.py
-│
-├── ML_Data/pkl/                 # XGBoost 模型檔（每策略獨立 .pkl）
-├── scripts/
-│   ├── diagnose_strategies.py   # 策略條件診斷工具
-│   └── twse_mcp_server.py       # MCP 服務（/health + dataset endpoints）
-├── doc/                         # 輔助文件
-└── openspec/                    # 開發規範與變更管理
-    ├── project.md               # 本文件（專案規格）
-    ├── AGENTS.md                # AI Agent 編碼規範
-    └── specs/                   # 前端/測試規範
-```
+4. **可驗證性 Verifiability**
 
-## 4. 核心流程串接
+   * 所有策略、風險指標、回測結果與資料契約都必須可測試。
+   * 結構重構前應先建立 characterization tests。
+   * 策略績效必須區分樣本內與樣本外結果。
+   * 回測穩定性必須可透過 Walk-forward、Bootstrap、參數敏感度及交易成本分析驗證。
 
-### 4.1 Windows 排程 — 早晚雙模式
+5. **可理解性 Readability**
 
-| 排程 | 時間 | 批次檔 | 內容 |
-|------|------|--------|------|
-| `Stock_Linbot_Morning` | 每天 08:30 | `execution/morning_run.bat` | 早晨大局觀推播 |
-| `Stock_Linbot_Evening` | 每天 19:00 | `execution/evening_run.bat` | 資料更新→選股→晚間推播 |
+   * 類別、函式、變數及策略名稱必須反映真實用途。
+   * 禁止使用無法表達策略本質的名稱，例如 `turbo`、`innovation` 或純版本代碼作為主要名稱。
+   * 舊版代碼可保留為 alias，但新程式必須使用語意化名稱。
 
-**早晨模式** (`5_push_to_line.py --time morning`)：
-```
-news_agent.get_morning_news_summary()
-  ├── fetch_anue_news()    → 鉅亨網 RSS (美股/國際政經/台股)
-  └── Gemini 濃縮          → 3 個台股影響 Bullet Points
-+ 隨機策略精選一股 (daily_recommendations Top 1)
-→ Flex Message 推播（早安大局觀卡片）
-```
+## 2. 當前優化目標
 
-**晚間模式** (`execution/evening_run.bat` = 1→2→5 三步驟)：
-```
-Step 1: 1_update_database.py
-  ├── MCPClient.fetch_many_sync()
-  │   → twse_mcp_server 市場快照 + 外資買賣超
-  ├── fetch_margin_balance() → 融資融券餘額 (chip_data_scraper.py)
-  ├── process_and_save()   → 清洗數值 → upsert_stock_data() 寫入 DB
-  ├── run_monthly_revenue_update() → MOPS 月營收爬蟲
-  └── run_financial_update()       → MCP financial contract
+本階段優化以「先穩定系統，再改善策略」為原則。
 
-Step 2: 2_rundaily.py
-  ├── compute_indicators_from_history()  → 載入 150 天歷史 → 計算全部指標
-  ├── merge_financial_data() + merge_revenue_data()
-  └── 遍歷啟用策略 → filter → AI 評分 → 存入 daily_recommendations
+### 2.1 專案結構
 
-Step 3: 5_push_to_line.py --time evening
-  ├── 全策略日報（純文字推播）
-  └── 明日關注精選（Flex Message 卡片）
+* 盤點並移除可證明無引用的死碼、重複程式與產物檔案。
+* 保留 `app/`、`jobs/`、`core/`、`services/` 為現階段 canonical 架構。
+* 新功能不得繼續加入 legacy facade。
+* Legacy 入口僅負責轉呼叫 canonical 模組，不得包含業務邏輯。
+* 避免為了形式上的分層建立大量只有數行內容的檔案。
+
+### 2.2 回測系統
+
+* 將回測流程、投資組合、成交規則、交易成本、績效計算及視覺化解耦。
+* 建立統一的 `BacktestResult`。
+* 單策略與多策略組合必須共用同一套績效指標實作。
+* 視覺化不得重新執行策略或回測。
+
+### 2.3 策略系統
+
+* 所有策略繼承穩定的 `BaseStrategy` 抽象。
+* 策略透過多型提供統一的選股、排序與出場介面。
+* 策略參數必須封裝於設定物件，不得散落於多個模組。
+* 策略名稱必須反映實際因子與市場假設。
+* 舊策略代碼保留為相容 alias。
+
+### 2.4 風險評估
+
+新增並統一計算：
+
+* CAGR
+* Annualized Volatility
+* Sharpe Ratio
+* Sortino Ratio
+* Calmar Ratio
+* Maximum Drawdown
+* Downside Deviation
+* Drawdown Duration
+* Recovery Duration
+* Profit Factor
+* Maximum Consecutive Losses
+* Exposure
+* Turnover
+
+第一階段僅用於報表與分析，不直接改變交易訊號或配置權重。
+
+### 2.5 穩定性驗證
+
+新增：
+
+* IS/OOS 切分
+* Walk-forward analysis
+* Rolling Sharpe、Sortino、MDD
+* Bootstrap 分布及信賴區間
+* 參數熱力圖
+* 交易成本敏感度
+* 策略報酬相關矩陣
+* 持股重疊率
+* 有無市場風控對照
+
+## 3. 成功標準
+
+本階段完成時應符合：
+
+1. 既有 CLI、Web、LINE Bot 與排程仍可使用。
+2. 重構前後相同條件下的交易序列一致。
+3. 所有刪除檔案皆附有無引用證據。
+4. 每個策略都有語意化名稱、穩定識別碼與 legacy alias。
+5. 風險指標具有統一定義、邊界條件及單元測試。
+6. 回測結果可以直接產生穩定性報告。
+7. 核心業務邏輯不依賴 Flask、Plotly 或 LINE SDK。
+8. 新增模組必須降低複雜度，而非只將一個大型檔案拆成多個互相耦合的小型檔案。
+
+# Stock_Linbotv1 開發憲法
+
+> 版本：1.0
+> 生效日期：2026-07-22
+> 本文件優先於單次 Agent 對話中的臨時架構偏好。
+
+## 第一條：可運作優先
+
+所有設計必須先證明可在目前技術棧與部署環境中運作。
+
+不得僅為追求理想架構而：
+
+* 全面重寫已穩定運作的模組。
+* 破壞現有 CLI、Web、LINE Bot 或排程。
+* 引入無明確效益的新框架。
+* 增加超出專案規模所需的基礎設施。
+* 將簡單問題抽象成多層工廠、容器或事件系統。
+
+採用新設計前，必須說明：
+
+1. 解決的具體問題。
+2. 對既有流程的影響。
+3. 遷移方式。
+4. 測試方式。
+5. 回復方式。
+
+## 第二條：可靠性優先於功能數量
+
+新增功能前，必須確保現有資料與結果契約可靠。
+
+系統必須遵守：
+
+* 使用者可見推薦優先讀取已落庫 snapshot。
+* heartbeat 表示策略當日已完成但沒有候選，不得被視為資料缺漏。
+* 缺口檢查以「交易日 × 策略」為單位。
+* 相同策略只能回退至自身歷史結果。
+* 外部資料服務失敗必須回傳明確錯誤或退化狀態。
+* 批次工作應盡量具備冪等性。
+* 重跑相同日期不得無限制產生重複資料。
+* 回測與模型訓練必須可設定 random seed。
+* 不得以 `except Exception: pass` 隱藏錯誤。
+
+## 第三條：單一真實來源
+
+每一類設定或資料契約只能有一個 canonical source。
+
+目前主要單一來源包括：
+
+* 資料庫操作：`core/db_helper.py`
+* 策略註冊：`StrategyManager.STRATEGY_REGISTRY`
+* 策略啟用及持久化：`strategy_settings.json`
+* 外部市場資料存取：`core/mcp_client.py`
+* MCP 服務：`services/mcp/server.py`
+* Web：`app/web_server.py`
+* LINE：`app/line_bot.py`
+* 批次工作：`jobs/`
+* OpenSpec 變更：`openspec/changes/`
+
+Legacy facade 只能轉送呼叫，不得複製核心邏輯。
+
+## 第四條：封裝 Encapsulation
+
+物件必須隱藏內部狀態與實作細節，只公開穩定且必要的操作。
+
+要求：
+
+* 投資組合的現金、持股與損益不可由外部任意修改。
+* 交易成本由成本模型負責，不得散落在回測流程中。
+* 策略參數應封裝於設定類別或不可變資料物件。
+* 資料庫查詢細節不得洩漏至 Web、LINE 或策略類別。
+* XGBoost 模型載入、預測與特徵順序應由專責物件封裝。
+* 類別欄位預設為內部狀態，僅在有明確需求時公開。
+
+優先提供具語意的方法：
+
+```python
+portfolio.open_position(order)
+portfolio.close_position(order)
+strategy.generate_candidates(context)
+metrics.calculate(equity_curve, trades)
 ```
 
-### 4.2 Web + Line Bot（app.py）
+避免外部直接操作：
 
-```
-Flask App (port 1688)
-├── Web Dashboard:
-│   ├── GET  /health    → 容器健康檢查
-│   ├── GET  /login     → 登入頁（Flask-Login）
-│   ├── GET  /dashboard → 儀表板（需登入）
-│   ├── GET  /backtest  → 回測設定頁
-│   ├── POST /backtest  → 執行回測 → backtest_result.html（Plotly 圖表）
-│   └── API:
-│       ├── /api/summary        → 市場摘要 JSON
-│       ├── /api/daily-signals  → 當日推薦 JSON
-│       └── /api/backtest-result→ 回測結果 JSON
-│
-└── Line Bot Webhook:
-    ├── POST /callback → WebhookHandler 驗簽 → MessageEvent
-    └── 訊息處理:
-        ├── 4 碼數字 → get_stock_report() → create_stock_flex_message() → Flex 卡片
-        ├── "推薦"/"選股" → get_best_stocks_v31_hybrid() → create_recommendation_carousel()
-        ├── "切換V3x" → strategy_manager.set_active_strategy()
-        ├── "設定停損 x" → update_setting()
-        ├── "切換積極/平衡/寬鬆" → V34+V35 Preset 批次更新
-        ├── "持股" → get_open_holdings() → create_holdings_flex()
-        ├── "回測" → get_backtest_summary_from_db() → create_backtest_summary_flex()
-        └── "查看設定" → 顯示當前所有參數
+```python
+portfolio.cash -= amount
+portfolio.positions[stock_id] = raw_dict
 ```
 
-### 4.3 回測與訓練
+## 第五條：多型 Polymorphism
 
-```
-3_train_model.py:
-  遍歷所有策略 → 載入歷史資料 → 計算特徵 → XGBoost 訓練
-  → 輸出: ML_Data/pkl/stock_ai_model_{strategy_name}.pkl
+相同性質的元件應透過共同介面替換，不應在核心流程中大量判斷具體類型。
 
-4_run_backtest.py:
-  ├── 單策略: python 4_run_backtest.py --v33
-  ├── 組合回測: python 4_run_backtest.py --portfolio --strategies v33_low_vol,v35_innovation
-  └── 加權組合: python 4_run_backtest.py --portfolio --strategies ... --weights 7,3
+策略應遵守共同介面，例如：
 
-  流程: 載入歷史 → 策略篩選 → AI 排名 → 模擬交易 → check_exit_signal() 出場
-       → save_backtest_results() 寫入 DB → Plotly 視覺化
+```python
+class BaseStrategy(ABC):
+    @abstractmethod
+    def generate_candidates(self, context):
+        ...
 
-6_optimize_params.py:
-  Optuna + TPE Sampler → 搜尋最佳策略參數（ROI/Sharpe/MDD）
-```
+    @abstractmethod
+    def rank_candidates(self, candidates, context):
+        ...
 
-## 5. 策略定義
-
-| 版本 | 名稱 | 核心邏輯 | 風險等級 | 停損/停利/持有天數 |
-|------|------|---------|---------|-----------------|
-| V31 | 混合型 Hybrid | MA 多頭排列 + RSI 40~70 + 量能放大 + XGBoost 排名 | 中 | 7% / 15% / 10天 |
-| V33 | 低波動穩健型 | NATR < 3.5% + 收盤 > MA20 > MA60 + 量比 > 1.0 | 低 | 7% / 15% / 10天 |
-| V34 | 雙渦輪飆股型 | revenue_yoy > 18% + 收盤 >= 60日高*0.93 + 量比 > 0.9 | 高 | 7% / 15% / 10天 |
-| V35 | 經營效益型 | op_profit_margin > 6% + revenue_yoy > 0 + EPS > 0 | 中高 | 7% / 15% / 10天 |
-| V36 | 籌碼動能型 | chip_score >= 55 + 外資連買 >= 3天 + 投信連買 >= 2天 | 中高 | 7% / 15% / 12天 |
-| V37 | 均值回歸型 | KD 黃金交叉 + BB 收斂 + RSI 30~55 + 低乖離 | 中 | 5% / 10% / 8天 |
-| V38 | 高殖利率價值型 | op_margin > 8% + EPS > 0 + NATR < 4% + STD_20 < 3% | 低中 | 6% / 12% / 15天 |
-
-所有策略均繼承 `BaseStrategy`，統一實作 `check_exit_signal()` 出場邏輯（階梯式移動停損：+10%保本 / +20%鎖15% / +30%鎖25%）。
-
-## 6. 資料庫表結構
-
-| 資料表 | 用途 | 寫入來源 |
-|--------|------|---------|
-| `daily_market_data` | 每日 OHLCV + 技術指標 + 籌碼 | 1_update_database.py（MCP 市場資料 + 籌碼 enrich）, 2_rundaily.py |
-| `monthly_revenue` | 月營收 + YoY | 1_update_database.py (MOPS 爬蟲) |
-| `financial_statements` | 季度財報（營收/營業利益/EPS） | 1_update_database.py / tool/update_financials_mops.py（MCP financial contract） |
-| `daily_recommendations` | AI 選股結果（每策略 Top 10） | 2_rundaily.py |
-| `user_settings` | 使用者參數（停損/停利/門檻） | app.py (Line Bot 指令) |
-| `user_simulation_trades` | PK 模擬交易紀錄 | app.py |
-| `backtest_trades` | 回測交易明細 | 4_run_backtest.py |
-| `backtest_equity_curve` | 回測權益曲線 | 4_run_backtest.py |
-
-## 7. 架構限制（強制規範）
-
-1. **資料庫存取**：所有 DB 操作必須透過 `tool/db_helper.py`，禁止在 `app.py` 或策略類別中直接使用 SQL。
-2. **常數管理**：手續費（0.001425）、交易稅（0.003）、滑價等一律定義於 `config.py`。
-3. **策略擴充**：新策略必須繼承 `BaseStrategy`，並在 `tool/strategies/__init__.py` + `strategy_manager.py` STRATEGY_REGISTRY 中註冊。
-4. **前端開發**：不使用 npm/webpack，僅使用 CDN（Tailwind / Alpine.js / Chart.js）；視覺規範參照 `openspec/specs/frontend-design.md`。
-5. **提案流程**：涉及多個模組的變更需先建立 `openspec/changes/<id>/proposal.md`，取得確認後方可實作。
-6. **安全規範**：敏感資訊（DB_URL, LINE_TOKEN）一律走 `.env` 環境變數；SQL 一律參數化。
-
-## 8. 啟動方式
-
-### 8.1 前置準備
-
-```powershell
-# 建立虛擬環境 + 安裝依賴
-python -m venv myenv
-.\myenv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-# 設定環境變數（複製 .env.example 為 .env）
-# DB_URL=mysql+pymysql://user:password@localhost:3306/stock_ai_db
-# MCP_BASE_URL=http://localhost:8080
-# LINE_TOKEN=你的_Channel_Access_Token
-# LINE_SECRET=你的_Channel_Secret
-# ADMIN_PASSWORD=Web登入密碼
-
-# 初始化資料庫
-python init_settings.py
-
-# 啟動本機 MCP 服務（另一個終端）
-python scripts/twse_mcp_server.py
+    def should_exit(self, position, context):
+        ...
 ```
 
-### 8.2 日常啟動
+回測引擎只依賴 `BaseStrategy`，不得出現：
 
-```powershell
-# 方式 A: 一鍵自動化（推薦，含更新+選股+推播）
-execution\daily_run.bat
-
-# 方式 B: 手動分步
-python 1_update_database.py   # Step 1: MCP-backed 市場/財報更新
-python 2_rundaily.py          # Step 2: 選股
-python 5_push_to_line.py      # Step 3: Line 推播
-
-# 啟動 Web + Line Bot
-python app.py                 # port 1688
-# 或
-execution\start_web.bat       # 背景啟動
+```python
+if strategy_name == "v31":
+    ...
+elif strategy_name == "v34":
+    ...
 ```
 
-## 9. 測試方式
+適合使用多型的元件包括：
 
-### 9.1 爬蟲測試
+* 選股策略
+* 排名模型
+* 交易成本模型
+* 滑價模型
+* 部位配置模型
+* 資料供應器
+* 報告輸出器
 
-```powershell
-# 語法檢查
-python -m py_compile 1_update_database.py
+## 第六條：繼承 Inheritance
 
-# 冒煙測試（需先啟動 MCP server，並確保網路可達 upstream）
-python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/health', timeout=3).status)"
-python 1_update_database.py
-# 觀察: 步驟 1/3 市場快照與外資 → 步驟 2/3 月營收 → 步驟 3/3 季報
-# 正常: "成功寫入 xxxx 筆資料"
-# 假日: "假日或無資料"
+繼承只用於穩定且真正具有「is-a」關係的抽象。
+
+允許的例子：
+
+* `HybridTrendRankStrategy` 是 `BaseStrategy`
+* `FixedSlippageModel` 是 `SlippageModel`
+* `HtmlReportRenderer` 是 `ReportRenderer`
+
+禁止：
+
+* 僅為重用兩三個工具函式而建立父類別。
+* 超過兩至三層的深層繼承。
+* 父類別掌握大量子類別專屬條件。
+* 透過繼承共享可變狀態。
+* 建立抽象類別但只有一個實作，且沒有明確替換需求。
+
+原則：
+
+> 穩定介面使用繼承；行為組合優先使用 composition。
+
+## 第七條：組合優於繼承
+
+策略所需能力應優先由可組合元件提供，例如：
+
+```python
+strategy = GrowthMomentumStrategy(
+    factor_model=factor_model,
+    risk_filter=risk_filter,
+    ranking_model=ranking_model,
+    exit_policy=exit_policy,
+)
 ```
 
-### 9.2 Web Dashboard 測試
+不得建立：
 
-```powershell
-python app.py
-# 瀏覽器開啟:
-#   http://localhost:1688/login      → 測試登入（密碼見 ADMIN_PASSWORD）
-#   http://localhost:1688/dashboard  → 主儀表板
-#   http://localhost:1688/backtest   → 回測頁面
-# API 端點:
-#   http://localhost:1688/api/summary
-#   http://localhost:1688/api/daily-signals
+```text
+BaseStrategy
+  └─ MomentumStrategy
+       └─ GrowthMomentumStrategy
+            └─ GrowthMomentumWithBreadthStrategy
+                 └─ GrowthMomentumWithBreadthAndMFI...
 ```
 
-### 9.3 Line Bot 測試
+當新增一個條件就需要新增一層子類別時，代表設計應改為組合。
 
-```powershell
-# 前提: 已設定 LINE_TOKEN + LINE_SECRET + Webhook URL（需 HTTPS）
-# 本地開發可用 ngrok:
-#   ngrok http 1688
-#   將 https://xxxx.ngrok.io/callback 設為 Line Webhook URL
+## 第八條：介面隔離
 
-python app.py
+介面必須小而明確。
 
-# Line 測試指令:
-#   "2330"     → 個股診斷 Flex 卡片
-#   "推薦"     → AI 選股推薦
-#   "查看策略"  → 顯示當前策略
-#   "切換V33"   → 切換策略
-#   "設定停損 5" → 調整停損
-#   "持股"      → 查看模擬持倉
+不得要求所有策略實作與其無關的方法。
+
+可將介面拆為：
+
+* `CandidateGenerator`
+* `CandidateRanker`
+* `ExitPolicy`
+* `PositionSizer`
+* `RiskFilter`
+
+但只有在存在兩個以上實作或明確替換需求時才建立獨立抽象。
+
+禁止為每一個函式建立一個檔案或介面。
+
+## 第九條：依賴反轉
+
+核心領域不得依賴外部框架細節。
+
+依賴方向應為：
+
+```text
+Web / LINE / Jobs
+        ↓
+Application Services
+        ↓
+Domain / Strategy / Backtest
+        ↓
+Interfaces
+        ↑
+Database / MCP / Plotly implementations
 ```
 
-### 9.4 自動化測試
+要求：
 
-```powershell
-# 全量測試（推薦）
-python -m pytest test/ -v --tb=short
+* 策略不得 import Flask。
+* 回測引擎不得 import Plotly。
+* 績效模組不得依賴策略類別。
+* Web route 不得直接實作 SQL。
+* LINE message builder 不得負責重新計算推薦。
+* 核心業務物件不得直接讀取環境變數。
 
-# 分模組測試
-python -m pytest test/test_strategy_factory.py -v      # 策略載入
-python -m pytest test/test_v35_refactor_flex.py -v     # Flex + 出場邏輯
-python -m pytest test/test_phase2_chip_data.py -v      # 籌碼指標
-python -m pytest test/test_v36_chip_momentum.py -v     # V36 策略
-python -m pytest test/test_v37_v38_strategies.py -v    # V37+V38 策略
+## 第十條：避免過度拆檔
 
-# 回測冒煙測試
-python 4_run_backtest.py --v31
+模組化的目的在降低認知負擔，不是增加檔案數量。
+
+建立新檔案前必須符合至少一項：
+
+1. 具有獨立且清楚的業務責任。
+2. 可被兩個以上模組重用。
+3. 需要獨立測試或替換。
+4. 原檔案已因多項責任而難以理解。
+5. 新模組能明顯降低循環依賴。
+
+以下情況不應拆檔：
+
+* 新檔案只有一個三至五行函式。
+* 新檔案只被單一位置使用，且沒有獨立概念。
+* 拆分後必須跨三個以上檔案才能理解一個簡單流程。
+* 新增大量 `manager`、`helper`、`utils`，但責任不明。
+* 只是為了讓每個檔案行數變少。
+
+建議限制：
+
+* 一個檔案主要負責一個內聚領域，不要求一個檔案只放一個類別。
+* 一個類別應有一個主要變更原因。
+* 一個函式原則上控制在可一次閱讀理解的範圍。
+* 超過約 300 至 500 行的核心模組應檢查是否存在多重責任，但不得機械式拆分。
+* 共用工具必須依領域命名，避免建立無邊界的 `utils.py`。
+
+## 第十一條：可讀性
+
+程式碼應優先表達意圖。
+
+要求：
+
+* 名稱應使用完整英文語意。
+* 避免不明縮寫與魔術數字。
+* 策略參數必須有名稱、型別、預設值及說明。
+* 複雜判斷應拆成具業務語意的方法。
+* 註解應解釋「為什麼」，不是重述程式碼。
+* 公開類別及公開方法應提供簡潔 docstring。
+* 同一概念不得同時使用多種名稱。
+* Boolean 名稱使用 `is_`、`has_`、`should_` 或 `can_` 前綴。
+* 日期、報酬率與百分比的單位必須明確。
+
+## 第十二條：策略設計規範
+
+每個策略必須包含：
+
+* 穩定策略 ID
+* 中文顯示名稱
+* 英文顯示名稱
+* Legacy alias
+* 市場假設
+* 選股因子
+* 排序因子
+* 出場規則
+* 適用行情
+* 失效條件
+* 必要資料欄位
+* 預設參數
+* 回測基準
+
+策略名稱不得宣稱程式中不存在的條件。
+
+例如：
+
+* 沒有股利殖利率條件，不得稱為高殖利率策略。
+* 沒有趨勢過濾，不得稱為趨勢過濾均值回歸。
+* 沒有價值因子，不得稱為價值策略。
+
+## 第十三條：回測正確性
+
+回測必須明確定義：
+
+* 訊號產生時間
+* 成交時間
+* 成交價格
+* 滑價
+* 手續費
+* 證交稅
+* 最低手續費
+* 資金不足處理
+* 部位限制
+* 停損停利觸發順序
+* 同日多訊號的排序
+* 財報及月營收生效日期
+
+禁止：
+
+* 使用當日收盤資訊並假設能以同一收盤價成交，除非規格明確允許。
+* 使用財報期間結束日代替公告日。
+* 在 OOS 結果出現後回頭調整同一組參數，卻仍稱為 OOS。
+* 隱藏交易成本。
+* 因結果不佳而任意排除交易。
+
+## 第十四條：風險指標規範
+
+風險指標必須由統一 metrics 模組計算。
+
+所有指標都要明確定義：
+
+* 使用的報酬頻率
+* 年化係數
+* 無風險利率
+* 最低可接受報酬
+* 缺失值處理
+* 樣本數門檻
+* 無限值處理
+
+當指標不可計算時：
+
+* 回傳 `None` 或結構化不可用狀態。
+* 附上不可計算原因。
+* 不得用零偽裝有效結果。
+* 不得默默回傳 infinity。
+
+## 第十五條：測試憲法
+
+每次結構重構至少應具備：
+
+1. Characterization test
+2. Unit test
+3. Integration test
+4. Regression test
+
+高風險流程必須覆蓋：
+
+* 推薦 fallback
+* heartbeat 語意
+* 策略持久化
+* Web、LINE、scheduled push 一致性
+* 回測交易序列
+* 交易成本
+* 日期與資料可用性
+* IS/OOS 切分
+* Walk-forward 無洩漏
+
+測試失敗時不得：
+
+* 直接刪除測試。
+* 放寬 assertion 以掩蓋錯誤。
+* 將真實差異全部改成浮點誤差。
+* 更新 baseline 而不說明行為差異。
+
+## 第十六條：刪除與死碼清理
+
+刪除檔案前必須檢查：
+
+* Import
+* CLI
+* 排程
+* Docker
+* GitHub Actions
+* 文件
+* 測試
+* Web route
+* LINE Bot
+* Agent 設定
+* OpenSpec
+* 字串形式動態載入
+
+刪除項目必須記錄：
+
+* 路徑
+* 無引用證據
+* 刪除原因
+* 影響
+* 回復方式
+
+無法證明無用時，標記為 `UNKNOWN` 或 `DEPRECATED`，不得刪除。
+
+## 第十七條：OpenSpec 日期規範
+
+所有 OpenSpec Change 名稱必須使用建立日期作為前綴。
+
+格式：
+
+```text
+YYYY-MM-DD-<change-name>
 ```
 
-## 10. 當前狀態（2026 年 3 月）
+範例：
 
-- **多策略並行**：V31~V38 共 7 種策略，透過 `strategy_settings.json` 切換或多選並行。
-- **Line Bot Flex Message**：輸入股票代號可獲得三維度（技術+基本面+AI）診斷卡片。
-- **策略出場邏輯**：統一由 `BaseStrategy.check_exit_signal()` 管理，階梯式移動停損。
-- **組合回測**：支援多策略組合 + 加權分配，含 Plotly 互動式圖表。
-- **每日自動化**：`execution/` 下的 BAT 排程（morning 08:30 / evening 19:00）全自動運行。
-- **安全強化**：環境變數隔離 + Web 登入驗證 + SQL 參數化 + DB 連線重試。
-- **當前啟用策略**：V38 高殖利率價值型（可於 strategy_settings.json 或 Line Bot 切換）。
+```text
+2026-07-22-refactor-quant-system-foundation
+2026-07-22-cleanup-dead-code
+2026-07-22-modularize-backtest-engine
+2026-07-22-add-risk-adjusted-performance
+2026-07-22-add-backtest-stability-analysis
+```
+
+執行命令：
+
+```text
+/opsx:propose 2026-07-22-refactor-quant-system-foundation
+```
+
+Change 目錄：
+
+```text
+openspec/changes/2026-07-22-refactor-quant-system-foundation/
+```
+
+每個 `tasks.md` 任務標題也必須使用日期前綴：
+
+```markdown
+## [2026-07-22] Phase 1：Repository inventory
+
+- [ ] [2026-07-22] 1.1 建立 repository inventory
+- [ ] [2026-07-22] 1.2 建立 file reference map
+- [ ] [2026-07-23] 1.3 確認 deletion candidates
+```
+
+日期定義：
+
+* Change 前綴使用提案建立日期。
+* Task 前綴使用預計開始日期。
+* 完成後不得修改原開始日期。
+* 延期時保留原日期，另加 `rescheduled` 註記。
+* 文件內所有日期使用 ISO 8601：`YYYY-MM-DD`。
+* 不使用「今天」、「明天」、「下週」等相對日期。
+
+## 第十八條：OpenSpec 任務粒度
+
+每個任務必須能獨立驗證，並包含：
+
+* 開發日期
+* 目標
+* 修改範圍
+* 明確非目標
+* 預期修改檔案
+* 驗收條件
+* 測試命令
+* 風險
+* 回復方式
+
+任務不得同時混合：
+
+* 結構重構與策略條件調整。
+* 資料庫遷移與 UI 改版。
+* 死碼刪除與新功能開發。
+* 風險指標新增與動態資金配置。
+* 回測引擎拆分與績效最佳化。
+
+## 第十九條：架構決策
+
+重大架構決策應在 OpenSpec `design.md` 中記錄：
+
+* Context
+* Decision
+* Alternatives
+* Consequences
+* Migration
+* Rollback
+
+以下變更必須記錄設計決策：
+
+* 新增核心抽象類別。
+* 改變 canonical 入口。
+* 改變資料庫存取方式。
+* 改變策略介面。
+* 改變成交規則。
+* 改變推薦 fallback contract。
+* 引入新框架或服務。
+* 建立新的跨模組依賴。
+
+## 第二十條：完成定義
+
+OpenSpec 任務只有在以下條件全部成立時才能標記完成：
+
+* 程式實作完成。
+* 新增或更新測試。
+* 測試通過。
+* Lint 與型別檢查通過，或已記錄既有例外。
+* 文件已更新。
+* 相容性已驗證。
+* 行為差異已記錄。
+* 回復方式已驗證。
+* `tasks.md` 已標記實際完成日期。
+
+完成格式：
+
+```markdown
+- [x] [2026-07-22] 1.1 建立 repository inventory
+  - Completed: 2026-07-22
+  - Verification: `python -m pytest test/ -q`
+  - Evidence: `docs/refactor/repository_inventory.md`
+```

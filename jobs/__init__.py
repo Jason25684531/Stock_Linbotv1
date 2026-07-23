@@ -1,0 +1,1 @@
+"""Canonical batch job entrypoints."""
