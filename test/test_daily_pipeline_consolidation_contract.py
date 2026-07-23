@@ -124,7 +124,6 @@ def test_removed_numeric_wrappers_are_not_active_supported_commands():
     ]
     active_guidance_paths = [
         'README.md',
-        'doc/LINE_BOT_GUIDE.md',
         'templates/dashboard.html',
         'scripts/diagnose_strategies.py',
         'jobs/train_model.py',

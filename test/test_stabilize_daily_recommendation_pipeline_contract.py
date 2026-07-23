@@ -110,23 +110,30 @@ def test_openspec_design_keeps_dashboard_health_check_boundary_explicit():
     assert "not the container health endpoint" in design_text
 
 
-def test_openspec_change_artifacts_are_not_gitignored():
-    tracked_artifacts = [
-        "openspec/config.yaml",
-        "openspec/project.md",
-        "openspec/specs/recommendation-fallback-sync/spec.md",
-        "openspec/changes/stabilize-daily-recommendation-pipeline/proposal.md",
-        "openspec/changes/stabilize-daily-recommendation-pipeline/design.md",
-        "openspec/changes/stabilize-daily-recommendation-pipeline/specs/scheduler-pipeline/spec.md",
-        "openspec/changes/consolidate-daily-data-backtest-pipeline/proposal.md",
-        "openspec/changes/consolidate-daily-data-backtest-pipeline/design.md",
-        "openspec/changes/consolidate-daily-data-backtest-pipeline/specs/pipeline-consolidation/spec.md",
+import subprocess
+
+
+def test_openspec_change_artifacts_are_not_git_tracked():
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "--",
+            "openspec",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    tracked_files = [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip()
     ]
 
-    ignored = {
-        artifact_path: "ignored by gitignore policy"
-        for artifact_path in tracked_artifacts
-        if _check_ignore(artifact_path)
-    }
-
-    assert not ignored, ignored
+    assert not tracked_files, (
+        "OpenSpec files should remain local and must not be tracked by Git: "
+        f"{tracked_files}"
+    )
