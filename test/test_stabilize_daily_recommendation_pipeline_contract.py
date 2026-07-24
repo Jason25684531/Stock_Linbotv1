@@ -5,6 +5,7 @@ import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+OPENSPEC_CHANGE_NAME = "stabilize-daily-recommendation-pipeline"
 
 
 def _read_text(relative_path: str) -> str:
@@ -17,6 +18,20 @@ def _check_ignore(relative_path: str) -> bool:
         cwd=REPO_ROOT,
         check=False,
     ).returncode == 0
+
+
+def _resolve_openspec_change_root(change_name: str = OPENSPEC_CHANGE_NAME) -> Path:
+    changes_root = REPO_ROOT / "openspec" / "changes"
+    active_root = changes_root / change_name
+    if active_root.exists():
+        return active_root
+
+    archive_root = changes_root / "archive"
+    archived_matches = sorted(archive_root.glob(f"*-{change_name}")) if archive_root.exists() else []
+    if archived_matches:
+        return archived_matches[-1]
+
+    raise AssertionError(f"OpenSpec change not found: {change_name}")
 
 
 def test_config_defaults_non_root_db_url_and_model_path_contract():
@@ -73,7 +88,7 @@ def test_readme_documents_runtime_contract_and_healthcheck_boundary():
 
 
 def test_openspec_change_artifacts_exist_with_fixed_delta_spec_paths():
-    change_root = REPO_ROOT / "openspec" / "changes" / "stabilize-daily-recommendation-pipeline"
+    change_root = _resolve_openspec_change_root()
     expected_files = [
         "proposal.md",
         "design.md",
@@ -88,7 +103,7 @@ def test_openspec_change_artifacts_exist_with_fixed_delta_spec_paths():
 
 
 def test_openspec_tasks_reference_targeted_verification_files():
-    tasks_path = REPO_ROOT / "openspec" / "changes" / "stabilize-daily-recommendation-pipeline" / "tasks.md"
+    tasks_path = _resolve_openspec_change_root() / "tasks.md"
     if not tasks_path.exists():
         return
 
@@ -101,17 +116,11 @@ def test_openspec_tasks_reference_targeted_verification_files():
 
 
 def test_openspec_design_keeps_dashboard_health_check_boundary_explicit():
-    design_text = _read_text(
-        "openspec/changes/stabilize-daily-recommendation-pipeline/design.md"
-    )
+    design_text = (_resolve_openspec_change_root() / "design.md").read_text(encoding="utf-8")
 
     assert "/health" in design_text
     assert "/api/dashboard/health-check" in design_text
     assert "not the container health endpoint" in design_text
-
-
-import subprocess
-
 
 def test_openspec_change_artifacts_are_not_git_tracked():
     result = subprocess.run(

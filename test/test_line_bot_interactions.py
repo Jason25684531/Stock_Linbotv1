@@ -105,7 +105,9 @@ def test_build_selected_strategy_messages_targets_requested_strategy(monkeypatch
 
     result = app_module._build_selected_strategy_messages({'strategy': 'v35'})
 
-    assert captured == {'as_flex': True, 'strategy_key': 'v35_innovation'}
+    # Phase 1.1: _normalize_strategy_request_key now resolves to the canonical id
+    # (StrategyManager.get_strategy accepts both, so behavior is unchanged).
+    assert captured == {'as_flex': True, 'strategy_key': 'quality_growth'}
     assert result == [marker]
 
 

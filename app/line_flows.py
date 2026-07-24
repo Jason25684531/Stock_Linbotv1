@@ -136,12 +136,12 @@ def _normalize_strategy_request_key(strategy_value: str) -> str:
         return ''
 
     lowered = raw.lower()
-    if re.fullmatch(r'v\d+', lowered):
-        for metadata in app_pkg.strategy_manager.STRATEGY_METADATA.values():
-            legacy_key = next((key for key in metadata.legacy_ids if key.startswith(f'{lowered}_')), None)
-            if legacy_key:
-                return legacy_key
-    strategy_keys = list(app_pkg.strategy_manager.list_strategies())
+    for canonical, metadata in app_pkg.strategy_manager.STRATEGY_METADATA.items():
+        if lowered == canonical or lowered in metadata.legacy_ids:
+            return canonical
+        if re.fullmatch(r'v\d+', lowered) and any(key.startswith(f'{lowered}_') for key in metadata.legacy_ids):
+            return canonical
+    strategy_keys = app_pkg.strategy_manager.list_strategies()
     for strategy_key in strategy_keys:
         if strategy_key.lower() == lowered:
             return strategy_key

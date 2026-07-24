@@ -51,7 +51,7 @@ class StrategyManager:
     _instance: Optional['StrategyManager'] = None
     
     # 設定檔路徑
-    SETTINGS_FILE = 'strategy_settings.json'
+    SETTINGS_FILE = Path(__file__).resolve().parents[1] / 'strategy_settings.json'
     
     # 預設設定 (V3: 支援 per-strategy overrides + backtest defaults)
     DEFAULT_SETTINGS = {
@@ -112,19 +112,20 @@ class StrategyManager:
     def _registry_key(self, strategy_id: str) -> str:
         return self.resolve(strategy_id, warn_legacy=False)
     
-    def __new__(cls):
+    def __new__(cls, settings_path=None):
         """Singleton 模式：確保只有一個實例"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self):
+    def __init__(self, settings_path=None):
         """初始化管理器"""
         if self._initialized:
             return
         
         self._initialized = True
+        self.settings_file = Path(settings_path) if settings_path else self.SETTINGS_FILE
         self._strategy_cache: Dict[str, Any] = {}  # 策略物件快取
         self._settings: Optional[Dict] = None
         
@@ -137,14 +138,14 @@ class StrategyManager:
     
     def _ensure_settings_file(self):
         """確保設定檔存在，不存在則建立預設設定"""
-        if not os.path.exists(self.SETTINGS_FILE):
-            print(f"📝 建立策略設定檔: {self.SETTINGS_FILE}")
+        if not self.settings_file.exists():
+            print(f"📝 建立策略設定檔: {self.settings_file}")
             self._save_settings(self.DEFAULT_SETTINGS)
     
     def _load_settings(self) -> Dict:
         """載入設定檔 (含向後相容性處理)"""
         try:
-            with open(self.SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            with self.settings_file.open('r', encoding='utf-8') as f:
                 settings = json.load(f)
                 
                 # 🔄 V2 向後相容：舊格式 active_strategy (字串) -> active_strategies (列表)
@@ -175,9 +176,9 @@ class StrategyManager:
             from datetime import datetime
             settings['last_updated'] = datetime.now().isoformat()
             
-            with open(self.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            with self.settings_file.open('w', encoding='utf-8') as f:
                 json.dump(settings, f, indent=2, ensure_ascii=False)
-            print(f"✅ 策略設定已儲存: {self.SETTINGS_FILE}")
+            print(f"✅ 策略設定已儲存: {self.settings_file}")
         except Exception as e:
             print(f"❌ 儲存設定檔失敗: {e}")
     
@@ -472,7 +473,7 @@ class StrategyManager:
         Returns:
             List[str]: 策略名稱列表
         """
-        return list(self.STRATEGY_REGISTRY)
+        return self.list_canonical_strategies()
 
     def list_canonical_strategies(self) -> List[str]:
         return list(self.CANONICAL_REGISTRY)

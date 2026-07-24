@@ -305,7 +305,10 @@ def api_strategies():
     """取得所有策略清單及當前啟用策略。"""
     try:
         mgr = app_pkg.StrategyManager()
-        available = mgr.list_available_strategies()
+        available = {
+            name: getattr(mgr.get_strategy(name), 'display_name', name)
+            for name in mgr.list_strategies()
+        }
         active_names = mgr.get_active_strategy_names()
 
         strategies = []
@@ -428,7 +431,7 @@ def api_daily_signals():
             picks = candidates.head(top_n)
             active_strategy = active
         except Exception:
-            picks = app_pkg.get_best_stocks_v31_hybrid(df, top_n=top_n)
+            picks = app_pkg.get_v30_candidates(df).head(top_n)
             strategy_key = 'v31_hybrid'
             strategy_name = 'V31 混合策略'
             active_strategy = None
@@ -1045,7 +1048,7 @@ def api_market_system_status():
 def backtest():
     """回測頁面。"""
     if request.method == 'GET':
-        available_strategies = list(app_pkg.strategy_manager.STRATEGY_REGISTRY.keys())
+        available_strategies = app_pkg.strategy_manager.list_strategies()
         return render_template('backtest.html', strategies=available_strategies)
 
     try:
@@ -1056,6 +1059,7 @@ def backtest():
         end_date = request.form.get('end_date')
         weights_raw = (request.form.get('weights') or '').strip()
         weights = [float(w.strip()) for w in weights_raw.split(',') if w.strip()] if weights_raw else None
+        persist_to_db = (request.form.get('persist') or '').strip().lower() in ('1', 'true', 'on')
 
         if not selected_strategies:
             flash('請至少選擇一個策略', 'error')
@@ -1066,6 +1070,7 @@ def backtest():
             start_date=start_date,
             end_date=end_date,
             weights=weights,
+            persist_to_db=persist_to_db,
         )
         report = generate_report_from_csv()
         return render_template(
@@ -1102,15 +1107,19 @@ def api_run_backtest():
         elif isinstance(raw_weights, str) and raw_weights.strip():
             weights = [float(w.strip()) for w in raw_weights.split(',') if w.strip()]
 
+        persist_to_db = bool(data.get('persist', False))
+
         result, _, _ = app_pkg._run_portfolio_backtest(
             selected_strategies,
             start_date=start_date,
             end_date=end_date,
             weights=weights,
+            persist_to_db=persist_to_db,
         )
         return jsonify(
             {
                 'success': True,
+                'persisted': persist_to_db,
                 'data': {
                     'metrics': result['metrics'],
                     'strategy_performance': result['strategy_performance'],

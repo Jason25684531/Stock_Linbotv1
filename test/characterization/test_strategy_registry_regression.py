@@ -1,6 +1,7 @@
 import json
 
 from core.strategy_manager import StrategyManager
+from core.backtest.runner import get_registered_strategy_names
 
 
 def test_canonical_registry_resolves_existing_settings_keys():
@@ -20,5 +21,7 @@ def test_canonical_registry_resolves_existing_settings_keys():
     assert set(settings['active_strategies']) <= supported
     assert set(settings['random_strategy_pool']) <= supported
     manager = StrategyManager()
+    assert manager.list_strategies() == list(StrategyManager.CANONICAL_REGISTRY)
+    assert get_registered_strategy_names(manager) == manager.list_strategies()
     assert manager.resolve('v31_hybrid') == 'hybrid_trend_rank'
     assert manager.get_active_strategy_names() == ['quality_value_low_volatility']

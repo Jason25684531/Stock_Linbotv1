@@ -86,7 +86,7 @@ from core.strategy import (
     format_stock_query,
     format_v30_recommendation,
     format_v31_recommendation,
-    get_best_stocks_v31_hybrid,
+    get_v30_candidates,
     get_v30_params_from_db,
 )
 from core.strategy_manager import StrategyManager
@@ -275,23 +275,16 @@ def _normalize_backtest_dates(start_date, end_date):
     return start_date, end_date
 
 
-def _get_backtest_module():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    root_dir = os.path.dirname(base_dir)
-    if root_dir not in sys.path:
-        sys.path.insert(0, root_dir)
-    from importlib import import_module
-    return import_module('4_run_backtest')
+def _run_portfolio_backtest(selected_strategies, start_date=None, end_date=None, weights=None, persist_to_db=False):
+    from core.backtest.runner import PortfolioBacktestEngine
 
-
-def _run_portfolio_backtest(selected_strategies, start_date=None, end_date=None, weights=None):
     start_date, end_date = _normalize_backtest_dates(start_date, end_date)
-    backtest_module = _get_backtest_module()
-    engine = backtest_module.PortfolioBacktestEngine(
+    engine = PortfolioBacktestEngine(
         strategies=selected_strategies,
         start_date=start_date,
         end_date=end_date,
         weights=weights,
+        persist_to_db=persist_to_db,
     )
     result = engine.run_portfolio_backtest()
     return result, start_date, end_date

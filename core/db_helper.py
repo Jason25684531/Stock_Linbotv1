@@ -1610,6 +1610,12 @@ def ensure_backtest_tables() -> bool:
                     INDEX idx_date (date)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """))
+
+            # 自我修復：清除上一輪原子替換若異常中斷所遺留的 staging/old 表
+            for table_name in ('backtest_trades', 'backtest_equity_curve'):
+                conn.execute(text(f'DROP TABLE IF EXISTS `{table_name}_staging`'))
+                conn.execute(text(f'DROP TABLE IF EXISTS `{table_name}_old`'))
+
             conn.commit()
         return True
     except Exception as e:
@@ -1617,10 +1623,70 @@ def ensure_backtest_tables() -> bool:
         return False
 
 
-def save_backtest_results(trades_df: pd.DataFrame = None, equity_df: pd.DataFrame = None) -> bool:
-    """將最新回測結果覆寫保存至資料庫。"""
+def _atomic_replace_table(
+    conn,
+    table_name: str,
+    insert_columns: list = None,
+    insert_records: list = None,
+    preserve_where: str = None,
+    preserve_params: dict = None,
+) -> None:
+    """以 staging table + RENAME TABLE 原子替換 table_name 的全部內容。
+
+    讀取端任何時刻只會看到「完整舊資料」或「完整新資料」，不會看到清空後、
+    寫入前的中間狀態；替換中途若拋出例外，呼叫端的交易（conn 未 commit）
+    會整段 rollback，table_name 本身從未被觸碰（staging/old 皆為新建/暫存表）。
+
+    Args:
+        conn: 已開啟的 SQLAlchemy Connection，呼叫端負責 commit/rollback。
+        table_name: 目標表名稱。
+        insert_columns: 新資料要寫入的欄位（不含 id/created_at 等自動欄位）。
+        insert_records: 新資料（list of dict），可為空。
+        preserve_where: 若需保留現有表中部分資料（如其他策略的歷史），
+            指定 WHERE 條件（例如 'strategy NOT IN (:s0, :s1)'）；為 None 則不保留任何舊資料。
+        preserve_params: preserve_where 對應的參數。
+    """
+    staging = f'{table_name}_staging'
+    old = f'{table_name}_old'
+    conn.execute(text(f'DROP TABLE IF EXISTS `{staging}`'))
+    conn.execute(text(f'DROP TABLE IF EXISTS `{old}`'))
+    conn.execute(text(f'CREATE TABLE `{staging}` LIKE `{table_name}`'))
+
+    if preserve_where:
+        conn.execute(
+            text(f'INSERT INTO `{staging}` SELECT * FROM `{table_name}` WHERE {preserve_where}'),
+            preserve_params or {},
+        )
+
+    if insert_records:
+        columns_sql = ', '.join(insert_columns)
+        placeholders = ', '.join(f':{col}' for col in insert_columns)
+        conn.execute(
+            text(f'INSERT INTO `{staging}` ({columns_sql}) VALUES ({placeholders})'),
+            insert_records,
+        )
+
+    conn.execute(text(f'RENAME TABLE `{table_name}` TO `{old}`, `{staging}` TO `{table_name}`'))
+    conn.execute(text(f'DROP TABLE IF EXISTS `{old}`'))
+
+
+def save_backtest_results(
+    trades_df: pd.DataFrame = None,
+    equity_df: pd.DataFrame = None,
+    market_data_available: bool = True,
+) -> bool:
+    """將最新回測結果覆寫保存至資料庫（以 staging table + RENAME TABLE 原子替換）。
+
+    market_data_available: 呼叫端聲明本次回測是否確實讀到底層市場資料。
+    為 False 時（例如整個回測期間查詢皆失敗、非合法的零交易日）拒絕覆寫既有資料，
+    避免無效結果（空資料、dummy equity curve）覆寫正式回測歷史。
+    """
     if trades_df is None and equity_df is None:
         return True
+
+    if not market_data_available:
+        print("⚠️ save_backtest_results 拒絕覆寫：本次回測未讀到任何有效市場資料")
+        return False
 
     if not ensure_backtest_tables():
         return False
@@ -1629,57 +1695,58 @@ def save_backtest_results(trades_df: pd.DataFrame = None, equity_df: pd.DataFram
         engine = get_db_engine()
         with engine.connect() as conn:
             if trades_df is not None:
-                if trades_df.empty:
-                    # 無資料時才清空全表
-                    conn.execute(text("DELETE FROM backtest_trades"))
-                else:
+                trade_columns = [
+                    'strategy', 'stock_id', 'buy_date', 'sell_date',
+                    'buy_price', 'sell_price', 'profit_pct', 'reason', 'days',
+                ]
+                records = [
+                    {
+                        'strategy': str(row.get('strategy') or ''),
+                        'stock_id': str(row.get('stock_id') or ''),
+                        'buy_date': row.get('buy_date'),
+                        'sell_date': row.get('sell_date'),
+                        'buy_price': safe_float(row.get('buy_price')),
+                        'sell_price': safe_float(row.get('sell_price')),
+                        'profit_pct': safe_float(row.get('profit_pct')),
+                        'reason': str(row.get('reason') or ''),
+                        'days': safe_int(row.get('days')),
+                    }
+                    for _, row in trades_df.iterrows()
+                ]
+
+                preserve_where = None
+                preserve_params = {}
+                if not trades_df.empty:
                     # 僅清除本次回測涉及的策略舊資料，保留其他策略歷史
                     strategies_in_batch = trades_df['strategy'].dropna().unique().tolist()
                     if strategies_in_batch:
                         placeholders = ', '.join(f':s{i}' for i in range(len(strategies_in_batch)))
-                        params = {f's{i}': s for i, s in enumerate(strategies_in_batch)}
-                        conn.execute(
-                            text(f"DELETE FROM backtest_trades WHERE strategy IN ({placeholders})"),
-                            params
-                        )
-                if not trades_df.empty:
-                    insert_sql = text("""
-                        INSERT INTO backtest_trades
-                        (strategy, stock_id, buy_date, sell_date, buy_price, sell_price, profit_pct, reason, days)
-                        VALUES
-                        (:strategy, :stock_id, :buy_date, :sell_date, :buy_price, :sell_price, :profit_pct, :reason, :days)
-                    """)
+                        preserve_where = f'strategy NOT IN ({placeholders})'
+                        preserve_params = {f's{i}': s for i, s in enumerate(strategies_in_batch)}
+                # trades_df.empty 且未帶策略資訊時，維持既有語意：整表清空（無法得知本批次涉及哪些策略）
 
-                    records = []
-                    for _, row in trades_df.iterrows():
-                        records.append({
-                            'strategy': str(row.get('strategy') or ''),
-                            'stock_id': str(row.get('stock_id') or ''),
-                            'buy_date': row.get('buy_date'),
-                            'sell_date': row.get('sell_date'),
-                            'buy_price': safe_float(row.get('buy_price')),
-                            'sell_price': safe_float(row.get('sell_price')),
-                            'profit_pct': safe_float(row.get('profit_pct')),
-                            'reason': str(row.get('reason') or ''),
-                            'days': safe_int(row.get('days')),
-                        })
-                    conn.execute(insert_sql, records)
+                _atomic_replace_table(
+                    conn, 'backtest_trades',
+                    insert_columns=trade_columns,
+                    insert_records=records,
+                    preserve_where=preserve_where,
+                    preserve_params=preserve_params,
+                )
 
             if equity_df is not None:
-                conn.execute(text("DELETE FROM backtest_equity_curve"))
-                if not equity_df.empty:
-                    insert_sql = text("""
-                        INSERT INTO backtest_equity_curve (date, asset_value, roi)
-                        VALUES (:date, :asset_value, :roi)
-                    """)
-                    records = []
-                    for _, row in equity_df.iterrows():
-                        records.append({
-                            'date': row.get('date'),
-                            'asset_value': safe_float(row.get('asset_value')) or 0.0,
-                            'roi': safe_float(row.get('roi')) or 0.0,
-                        })
-                    conn.execute(insert_sql, records)
+                equity_records = [
+                    {
+                        'date': row.get('date'),
+                        'asset_value': safe_float(row.get('asset_value')) or 0.0,
+                        'roi': safe_float(row.get('roi')) or 0.0,
+                    }
+                    for _, row in equity_df.iterrows()
+                ]
+                _atomic_replace_table(
+                    conn, 'backtest_equity_curve',
+                    insert_columns=['date', 'asset_value', 'roi'],
+                    insert_records=equity_records,
+                )
 
             conn.commit()
         return True

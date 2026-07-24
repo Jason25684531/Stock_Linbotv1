@@ -369,28 +369,35 @@ class BacktestEngine:
     """
     
     def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
-                 persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None):
+                 persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None,
+                 persist_to_db: bool | None = None):
         """
         初始化回測引擎
-        
+
         Args:
             mode: 'v30' = 純技術面, 'v31' = 技術 + AI,
                   'v33_low_vol' / 'v34_turbo' / 'v35_innovation' = 策略專屬模型
             start_date: 回測起始日（None 則使用全域預設）
             end_date: 回測結束日（None 則回測到最新交易日）
             initial_capital: 初始資金
-            persist_results: 是否輸出 CSV 並同步 DB
+            persist_results: 是否輸出 CSV（不影響 DB 落庫，見 persist_to_db）
             use_db_params: V30 模式是否優先讀取 DB 參數
             strategy_filter_mode: V34/V35 等策略的 preset 模式，例如 balanced
+            persist_to_db: 是否呼叫 save_backtest_results() 寫入 DB；None 時 fallback 為 persist_results
+                （CLI 既有行為不變）。與 persist_results 正交，讓呼叫端可以「輸出 CSV 但不寫 DB」。
         """
         self.mode = mode.lower()
         self.start_date = start_date or BACKTEST_START
         self.end_date = end_date
         self.initial_capital = initial_capital
         self.persist_results = persist_results
+        self.persist_to_db = persist_results if persist_to_db is None else persist_to_db
         self.use_db_params = use_db_params
         self.strategy_filter_mode = strategy_filter_mode.lower() if strategy_filter_mode else None
         self.engine = get_db_engine()
+        # 記錄大盤基準資料讀取成功/失敗次數，供 save_backtest_results 前的有效性檢查使用
+        self.market_data_reads = 0
+        self.market_data_read_failures = 0
         self.portfolio = Portfolio(initial_capital)
         self.costs = CostModel(FEE_RATE, TAX_RATE, MIN_FEE)
         self.trade_count = 0
@@ -619,7 +626,24 @@ class BacktestEngine:
                 self.sell(sid, curr_price, date_str, "趨勢轉空")
     
     def get_market_trend(self, date_str):
-        """判斷大盤趨勢（使用共用函數）"""
+        """判斷大盤趨勢（使用共用函數）
+
+        get_market_trend() 內部的 get_stock_data() 在查詢失敗時會靜默回傳
+        空 DataFrame 並將 date_str 設為 None（與「當日確實無資料」的合法情況共用
+        df.empty 訊號，但只有失敗時 date_str 才是 None）。這裡額外讀一次同一顆
+        大盤基準列，藉由 date_str 是否為 None 分辨「查詢失敗」與「當日無資料」，
+        記錄成功/失敗次數供 save_backtest_results 前的有效性檢查使用。
+        """
+        try:
+            from core.db_helper import get_stock_data
+            _, resolved_date = get_stock_data(Config.MARKET_SYMBOL, date_str)
+            if resolved_date is None:
+                self.market_data_read_failures += 1
+            else:
+                self.market_data_reads += 1
+        except Exception:
+            pass
+
         try:
             return db_get_market_trend(date_str)
         except Exception as e:
@@ -1074,15 +1098,18 @@ class BacktestEngine:
                 Path(profit_path).parent.mkdir(parents=True, exist_ok=True)
                 df_profit.to_csv(profit_path, index=False, encoding='utf-8-sig')
                 print(f"📈 資產曲線已輸出至: {profit_path}")
+        else:
+            print("[DRY-RUN] backtest CSV export skipped")
 
-            # 同步回測結果到 DB（Dashboard / API 直接讀取）
-            if save_backtest_results(trades_df=df_trades, equity_df=df_profit):
+        # 同步回測結果到 DB（Dashboard / API 直接讀取）；與 CSV 輸出正交，由 persist_to_db 單獨控制
+        market_data_available = not (self.market_data_reads == 0 and self.market_data_read_failures > 0)
+        if self.persist_to_db:
+            if save_backtest_results(trades_df=df_trades, equity_df=df_profit, market_data_available=market_data_available):
                 print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
             else:
-                print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
-
-        if not self.persist_results:
-            print("[DRY-RUN] backtest persistence skipped")
+                print("⚠️ 回測結果同步資料庫失敗（或因無有效市場資料被拒絕），已保留 CSV 檔案")
+        else:
+            print("[DRY-RUN] backtest DB persistence skipped")
 
         metrics = {
             'roi': roi,
@@ -1119,14 +1146,17 @@ class PortfolioBacktestEngine:
     """
     
     def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000,
-                 weights: list = None, strategy_filter_mode: str | None = None, persist_results: bool = True):
+                 weights: list = None, strategy_filter_mode: str | None = None, persist_results: bool = True,
+                 persist_to_db: bool | None = None):
         """初始化組合回測引擎
-        
+
         Args:
             strategies: 策略名稱列表 (如 ['v33_low_vol', 'v35_innovation'])
             start_date: 回測起始日
             end_date: 回測結束日 (None = 最新日期)
             initial_capital: 初始資金
+            persist_results: 是否輸出 CSV（不影響 DB 落庫，見 persist_to_db）
+            persist_to_db: 是否呼叫 save_backtest_results() 寫入 DB；None 時 fallback 為 persist_results
         """
         self.strategy_names = strategies
         self.start_date = start_date
@@ -1134,6 +1164,7 @@ class PortfolioBacktestEngine:
         self.initial_capital = initial_capital
         self.strategy_filter_mode = strategy_filter_mode.lower() if strategy_filter_mode else None
         self.persist_results = persist_results
+        self.persist_to_db = persist_results if persist_to_db is None else persist_to_db
         self.weights = self._normalize_weights(strategies, weights)
         
         # 為每個策略建立獨立的回測引擎
@@ -1373,15 +1404,20 @@ class PortfolioBacktestEngine:
             equity_df.to_csv(Config.BACKTEST_EQUITY_CSV, index=False, encoding='utf-8-sig')
         if all_trades and self.persist_results:
             pd.DataFrame(all_trades).to_csv(Config.BACKTEST_TRADES_CSV, index=False, encoding='utf-8-sig')
-
-        # 同步回測結果到 DB（Dashboard / API 直接讀取）
-        trades_df = pd.DataFrame(all_trades) if all_trades else pd.DataFrame()
         if not self.persist_results:
-            print("[DRY-RUN] backtest persistence skipped")
-        elif save_backtest_results(trades_df=trades_df, equity_df=equity_df):
+            print("[DRY-RUN] backtest CSV export skipped")
+
+        # 同步回測結果到 DB（Dashboard / API 直接讀取）；與 CSV 輸出正交，由 persist_to_db 單獨控制
+        trades_df = pd.DataFrame(all_trades) if all_trades else pd.DataFrame()
+        total_reads = sum(e.market_data_reads for e in self.engines.values())
+        total_failures = sum(e.market_data_read_failures for e in self.engines.values())
+        market_data_available = not (total_reads == 0 and total_failures > 0)
+        if not self.persist_to_db:
+            print("[DRY-RUN] backtest DB persistence skipped")
+        elif save_backtest_results(trades_df=trades_df, equity_df=equity_df, market_data_available=market_data_available):
             print("🗄️ 回測結果已同步至資料庫 (backtest_trades / backtest_equity_curve)")
         else:
-            print("⚠️ 回測結果同步資料庫失敗，已保留 CSV 檔案")
+            print("⚠️ 回測結果同步資料庫失敗（或因無有效市場資料被拒絕），已保留 CSV 檔案")
         
         return {
             'equity_curve': equity_df,
