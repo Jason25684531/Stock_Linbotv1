@@ -1,6 +1,6 @@
 import pandas as pd
 
-from tool import db_helper
+from core import db_helper
 
 
 def test_get_recommendations_with_market_fallback_uses_same_strategy_latest_snapshot(monkeypatch):

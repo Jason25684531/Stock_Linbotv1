@@ -20,7 +20,7 @@
 
 ## Compatibility
 
-- `tool/`、`4_run_backtest.py`、`5_push_to_line.py`、舊策略 key 均為相容面；未有明確移除證據前不得刪除。
+- `4_run_backtest.py`、`5_push_to_line.py`、舊策略 key 均為相容面；未有明確移除證據前不得刪除。
 - 舊策略 key 經 alias 解析；不得改寫歷史資料庫紀錄。
 - CLI、Web、LINE Bot 與 `jobs/scheduler.py` 的公開行為需維持相容。
 

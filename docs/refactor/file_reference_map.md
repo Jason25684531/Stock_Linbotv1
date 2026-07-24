@@ -6,7 +6,6 @@
 |---|---|---|---|---|
 | `4_run_backtest.py` | LEGACY_COMPATIBILITY | `rg -n "4_run_backtest" app execution jobs test README.md doc` | `app/__init__.py:270` 動態 import；測試與歷史文件均引用 | 保留 |
 | `5_push_to_line.py` | LEGACY_COMPATIBILITY | `rg -n "5_push_to_line" app execution jobs test README.md doc` | `execution/morning_run.bat:16` 使用；文件與測試保留契約 | 保留 |
-| `tool/**` | LEGACY_COMPATIBILITY | `rg -n "from tool|import tool|tool\\." --glob '*.py' --glob '*.bat' --glob '*.md'` | `tool/_proxy.py` 與各 module wrapper 都轉向 `core.*`；外部 script 相容性無法由 repo 證明 | 保留 |
 | `specs/**` | DEVELOPMENT_TOOLING | `rg -n "specs/|001-|002-|003-|004-" README.md doc openspec .github` | 歷史規格文件，未完成遷移決策 | 保留 |
 | `doc/**` | DEVELOPMENT_TOOLING | `rg -n "doc/|DASHBOARD_FIX_GUIDE|UpdateList" README.md .github openspec` | 維運與歷史變更證據；文件本身也記錄舊入口 | 保留 |
 | `core/viz_helper.py`、`core/report_helper.py` | UNKNOWN | `rg -n "viz_helper|report_helper" app core jobs test` | 有現存程式引用；與未來模組重疊尚未確認 | 保留，Phase 9 再判定 |

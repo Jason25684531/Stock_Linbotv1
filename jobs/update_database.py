@@ -1,12 +1,12 @@
 """每日資料庫統一更新入口。
 
 目前 covered dataset 全數經由 MCP transport boundary 取得：
-- 市場快照 / 外資買賣超：`tool.mcp_client.TWSEMCPClient`
-- 季度財報：`tool.update_financials_mops.update_quarter`
+- 市場快照 / 外資買賣超：`core.mcp_client.TWSEMCPClient`
+- 季度財報：`core.update_financials_mops.update_quarter`
 
 保留在本程序中的本地 enrichers：
-- `tool.update_monthly_revenue` 月營收
-- `tool.crawlers.chip_data_scraper` 融資融券
+- `core.update_monthly_revenue` 月營收
+- `core.crawlers.chip_data_scraper` 融資融券
 
 使用方式：`python jobs/update_database.py`
 """

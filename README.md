@@ -1,8 +1,6 @@
-# Quant system foundation
-
-Backtests write runtime files under `artifacts/backtests/`. The maintained engine is `core/backtest/runner.py`; `jobs/run_backtest.py`, `4_run_backtest.py` and `5_push_to_line.py` are compatibility entry points. See `docs/stability_validation_guide.md` for IS/OOS, walk-forward and bootstrap usage.
-
 # Stock AI Line Bot V38
+
+> 回測執行檔輸出至 `artifacts/backtests/`。正式回測引擎為 `core/backtest/runner.py`;`jobs/run_backtest.py`、`4_run_backtest.py`、`5_push_to_line.py` 為相容入口。IS/OOS、walk-forward 與 bootstrap 用法見 [`docs/stability_validation_guide.md`](docs/stability_validation_guide.md)。
 
 > 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論
 > 🔥 **7 Strategy Factory** | V31/V33/V34/V35/V36/V37/V38 策略工廠 + BaseStrategy 繼承體系
@@ -14,7 +12,7 @@ Backtests write runtime files under `artifacts/backtests/`. The maintained engin
 > ⚔️ **PK System 人機對決** | 模擬交易與 AI 績效比較
 > 🔐 **Security Hardening** | 環境變數隔離 + Web 登入驗證 + SQL 注入修復 + DB 重試
 > 📊 **Backtesting Engine** | 組合回測 + 互動式圖表 + MDD 修復
-> 📅 **最後更新**: 2026-06-10
+> 📅 **最後更新**: 2026-07-23
 > ✅ **系統狀態**: 穩定運行（canonical `app/` + `jobs/` 架構、多策略落庫同步、Rich Menu Flex 對話流）
 
 ---
@@ -38,7 +36,7 @@ Backtests write runtime files under `artifacts/backtests/`. The maintained engin
 
 ### 🧭 目前 canonical 入口
 
-- `app/`：正式 Web + LINE 應用封裝，`app/web_server.py` 與 `app/line_bot.py` 為主要入口。
+- `app/`：正式 Web + LINE 應用封裝，`app/web_server.py` 與 `app/line_bot.py` 為主要入口；業務 helper 依領域拆至 `app/dashboard_payloads.py`、`app/news_overlay.py`、`app/line_flows.py`，`app/__init__.py` 只保留 Flask 組裝與 re-export surface。
 - `jobs/`：正式批次工作入口，涵蓋資料更新、每日選股、回測、推播、回補與排程。
 - `core/`：核心業務邏輯與資料存取，包含策略、DB helper、MCP client、Rich Menu、Flex builder。
 - 根目錄 `app.py` 與少量 legacy facade：目前僅保留 `4_run_backtest.py`、`5_push_to_line.py` 等相容 wrapper，實際實作已下沉到 `app/` 與 `jobs/`。
@@ -62,16 +60,16 @@ Backtests write runtime files under `artifacts/backtests/`. The maintained engin
 | 分步選股落庫 | `python jobs/run_daily.py` | 寫入 `daily_recommendations` |
 | 分步推播 | `python jobs/push_to_line.py --time evening` | 會實際發 LINE broadcast |
 
-更完整的重啟與人工排查流程請見 [`doc/SERVICE_RESTART_RUNBOOK.md`](doc/SERVICE_RESTART_RUNBOOK.md)。
+重啟與人工排查請依上表操作;安全檢查一律以 `/health` 與 `docker compose ps` 為準,勿以排程或推播指令驗證重啟。
 
 ### 📲 Rich Menu 目前架構
 
 | 區塊 | 觸發方式 | 實作位置 | 說明 |
 |------|---------|---------|------|
-| 個股診斷 | `action=prompt_stock_diagnosis` | `core/richmenu.py` + `app/__init__.py::_build_stock_diagnosis_prompt_messages()` | 先進入引導式流程，再接收 4 碼股票代號並回傳診斷 Flex |
-| 總經摘要 | `action=macro_summary` | `app/line_bot.py` + `app/__init__.py::_build_macro_news_messages()` | 透過共享 Flex summary builder 輸出總經摘要 |
-| 日誌反思 | `action=journal_reflection` | `app/line_bot.py` + `app/__init__.py::_build_journal_reflection_messages()` | 顯示目前啟用策略、績效快照與當日訊號狀態 |
-| 策略選股 | `action=choose_strategy` | `app/line_bot.py` + `app/__init__.py::_build_strategy_picker_messages()` | 先要求使用者明確選策略，再回應該策略的當日推薦 |
+| 個股診斷 | `action=prompt_stock_diagnosis` | `core/richmenu.py` + `app/line_flows.py::_build_stock_diagnosis_prompt_messages()` | 先進入引導式流程，再接收 4 碼股票代號並回傳診斷 Flex |
+| 總經摘要 | `action=macro_summary` | `app/line_bot.py` + `app/line_flows.py::_build_macro_news_messages()` | 透過共享 Flex summary builder 輸出總經摘要 |
+| 日誌反思 | `action=journal_reflection` | `app/line_bot.py` + `app/line_flows.py::_build_journal_reflection_messages()` | 顯示目前啟用策略、績效快照與當日訊號狀態 |
+| 策略選股 | `action=choose_strategy` | `app/line_bot.py` + `app/line_flows.py::_build_strategy_picker_messages()` | 先要求使用者明確選策略，再回應該策略的當日推薦 |
 
 Rich Menu 的版型與圖片上傳唯一入口為 `core/richmenu.py`，部署腳本為 `scripts/setup_rich_menu.py`。正式 Web 與 LINE 入口已拆到 `app/web_server.py` 與 `app/line_bot.py`，根目錄 `app.py` 僅保留 legacy facade，供 `python app.py` 與既有部署指令相容轉發。
 
@@ -275,8 +273,6 @@ docker compose ps
 # 關閉 containers（預設保留 mysql_data volume）
 docker compose down
 ```
-
-服務重啟 runbook：請見 [`doc/SERVICE_RESTART_RUNBOOK.md`](doc/SERVICE_RESTART_RUNBOOK.md)，內含本機 Windows batch 重啟、Docker Compose 重啟與安全健康檢查。
 
 預期：`db`、`twse_mcp_server`、`stock_bot` 皆進入 `healthy`，且 `stock_bot` 可透過 `http://twse-mcp-server:8080` 使用 MCP transport。
 
@@ -524,100 +520,121 @@ python scripts\setup_rich_menu.py
 Stock_Linbotv1/
 ├── 📊 jobs/ — 正式批次入口
 │   ├── scheduler.py             # 排程流程總入口 (daily/evening/morning)
-│   ├── update_database.py       # 爬取股價+籌碼+月營收+季報
-│   ├── run_daily.py             # 計算指標+多策略選股+AI評分
-│   ├── run_daily_backtest_validation.py # 日更後輕量一致性驗證
+│   ├── update_database.py       # 經 MCP 抓市場快照/外資/財報 + 籌碼/月營收合併落庫
+│   ├── run_daily.py             # 計算指標 + 多策略選股 + AI 評分 → daily_recommendations
+│   ├── run_daily_backtest_validation.py # 日更後輕量一致性驗證（非完整研究回測）
 │   ├── train_model.py           # 多策略 XGBoost 批次訓練
-│   ├── run_backtest.py          # 多策略回測引擎（含組合回測）
-│   ├── push_to_line.py          # Line 推播 (SDK v3 Broadcast)
+│   ├── run_backtest.py          # 回測 CLI 入口（薄 wrapper → core/backtest/runner.py）
+│   ├── push_to_line.py          # Line 推播 (SDK v3 Broadcast，早/晚雙模式)
 │   ├── optimize_params.py       # Optuna 參數最佳化
-│   └── backfill_pipeline.py     # 掃描並補齊市場/推薦資料缺口
+│   └── backfill_pipeline.py     # 掃描並補齊市場/推薦資料缺口（交易日×策略矩陣）
 │
-├── 🧭 Legacy launchers（相容保留）
-│   ├── 4_run_backtest.py        # → jobs/run_backtest.py
-│   ├── 5_push_to_line.py        # → jobs/push_to_line.py
-│   └── app.py                   # legacy facade -> app package
+├── 🌐 app/ — 正式 Web / LINE package
+│   ├── __init__.py              # Flask app 組裝、login、webhook 掛載 + re-export surface
+│   ├── dashboard_payloads.py    # Dashboard payload / 戰情室 / signal light / rule & llm report builders
+│   ├── news_overlay.py          # 新聞摘要查詢與情緒 overlay helpers
+│   ├── line_flows.py            # LINE 文字正規化、postback 解析、策略選單/日誌反思/總經摘要組卡流程
+│   ├── web_server.py            # Flask dashboard / API / login routes (port 1688)
+│   └── line_bot.py              # LINE webhook / callback / reply path
 │
-├── 🚀 execution/ — 自動化腳本 + Windows 排程
-│   ├── morning_run.bat          # 早晨排程 (08:30): 三卡 carousel 早報
-│   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
-│   ├── daily_run.bat            # 一鍵自動化 (呼叫 jobs/scheduler.py daily 的相容 wrapper)
-│   ├── run_manual.bat           # 本機手動操作選單
-│   ├── restart_services.bat     # 本機 MCP + Web/LINE 安全重啟
-│   └── start_web.bat            # 一鍵啟動本機 MCP + Web/LINE
-│
-├── 📡 MCP / Rich Menu 腳本
-│   ├── services/mcp/server.py        # MCP HTTP 服務（port 8080）
-│   ├── scripts/twse_mcp_server.py    # MCP legacy launcher
-│   └── scripts/setup_rich_menu.py    # 部署 Rich Menu 到 LINE
-│
-├── 🌐 使用者介面
-│   ├── app/                     # 正式 Web / LINE package
-│   │   ├── __init__.py          # canonical export surface + shared helpers
-│   │   ├── web_server.py        # Flask dashboard / API / login routes
-│   │   └── line_bot.py          # LINE webhook / callback / reply path
-│   ├── app.py                   # legacy facade (python app.py / gunicorn相容)
-│   └── templates/               # Web Dashboard (Jinja2)
-│       ├── base.html            # Layout 基底
-│       ├── dashboard.html       # 主儀表板
-│       ├── backtest.html        # 回測設定頁
-│       ├── backtest_result.html # 回測結果（Plotly 圖表）
-│       └── login.html           # 登入頁
-│
-├── ⚙️ 核心模組 (core/) — 統一共用函數，禁止 raw SQL
+├── ⚙️ core/ — 核心業務邏輯（統一共用函數，禁止 raw SQL）
 │   ├── strategy_manager.py      # 策略工廠 (Singleton + Registry, 7 策略)
-│   ├── strategies/              # 策略實作目錄
+│   ├── strategies/              # 策略實作目錄（語意命名為正式檔，vXX 為 2 行 deprecated proxy）
 │   │   ├── base.py              # BaseStrategy 抽象基底 (含 check_exit_signal)
-│   │   ├── v31_hybrid.py        # V31 混合策略 (V30+XGBoost)
-│   │   ├── v33_low_vol.py       # V33 低波動策略
-│   │   ├── v34_turbo.py         # V34 高成長策略
-│   │   ├── v35_innovation.py    # V35 經營效益策略
-│   │   ├── v36_chip_momentum.py # V36 籌碼動能策略
-│   │   ├── v37_mean_reversion.py# V37 均值回歸策略
-│   │   └── v38_value_dividend.py# V38 高殖利率價值策略
+│   │   ├── hybrid_trend_rank.py            # V31 混合策略 (V30+XGBoost)
+│   │   ├── defensive_low_volatility.py     # V33 低波動策略
+│   │   ├── growth_momentum_breakout.py     # V34 高成長策略
+│   │   ├── quality_growth.py               # V35 經營效益策略
+│   │   ├── institutional_flow_confirmation.py # V36 籌碼動能策略
+│   │   ├── mean_reversion.py               # V37 均值回歸策略
+│   │   ├── quality_value_low_volatility.py # V38 高殖利率價值策略
+│   │   └── v31~v38*.py          # 舊命名相容 proxy（對照表見 docs/strategy_naming_map.md）
+│   ├── backtest/                # 回測引擎（唯一維護版本）
+│   │   ├── runner.py            # 回測主流程（單策略 + 組合），輸出 artifacts/backtests/
+│   │   ├── engine.py            # canonical 回測執行 API
+│   │   ├── portfolio.py         # 組合持倉狀態
+│   │   ├── execution.py         # 成交價格決定（確定性友善）
+│   │   ├── costs.py             # 交易成本（單策略/組合共用）
+│   │   ├── metrics.py           # 風險指標（明確標示不可用值，不以 0/inf 誤導）
+│   │   └── result.py            # 回測/驗證/圖表間交換的型別化結果物件
+│   ├── validation/              # 確定性穩定度驗證（IS/OOS、walk-forward、bootstrap、
+│   │                            #   rolling、param_scan、cost_sensitivity、correlation）
+│   ├── visualization/           # Plotly 穩定度視覺化（只讀 result 物件，不計算訊號）
 │   ├── strategy.py              # V30/V31 向後相容層 (格式化函式)
 │   ├── line_message_builder.py  # Line Flex Message 卡片建構器
 │   ├── report_helper.py         # 個股 AI 診斷報告聚合
 │   ├── calc_indicators.py       # 技術指標 + 籌碼指標 (唯一來源)
 │   ├── viz_helper.py            # Plotly 視覺化 + 回測摘要
-│   ├── db_helper.py             # 資料庫操作 (唯一入口)
-│   ├── mcp_client.py            # 唯一外部市場資料 HTTP 邊界
+│   ├── db_helper.py             # 資料庫操作 (唯一入口, Singleton 連線池)
+│   ├── mcp_client.py            # 唯一外部市場資料 HTTP 邊界 (sync/async + retries)
 │   ├── model_utils.py           # XGBoost 模型載入工具 (LRU 快取)
 │   ├── richmenu.py              # Rich Menu 版面 / 圖片上傳 / 綁定
+│   ├── news_agent.py            # RSS 新聞 + Gemini 分析
 │   ├── update_monthly_revenue.py    # 月營收爬蟲 (MOPS 靜態 HTML)
-│   ├── update_financials_mops.py    # 季度財報更新 (MOPS 備援站)
+│   ├── update_financials_mops.py    # 季度財報更新 (MCP-backed)
 │   ├── update_history_financials.py # 歷史財報批量更新
-│   ├── news_agent.py            # RSS 新聞 + Gemini 分析 (實驗性)
+│   ├── stock_sector_map.json    # 股票產業分類對照表
 │   └── crawlers/                # 爬蟲模組
 │       ├── chip_data_scraper.py # 融資融券爬蟲 (TWSE/TPEx)
 │       └── quarterly_scraper.py # MOPS 季報爬蟲 (mopsov 備援站)
 │
-├── 🧪 測試 (test/) — pytest + conftest 共用 Fixture
+├── 📡 services/ — 對外服務
+│   └── mcp/server.py            # MCP HTTP 服務 (Flask, port 8080, /health + /v1/tools/*)
+│
+├── 🔧 scripts/ — 部署 / 診斷腳本
+│   ├── setup_rich_menu.py       # 部署 Rich Menu 到 LINE
+│   ├── twse_mcp_server.py       # MCP legacy launcher（轉發 services/mcp/server.py）
+│   └── diagnose_strategies.py   # 策略診斷工具
+│
+├── 🚀 execution/ — Windows 自動化批次
+│   ├── morning_run.bat          # 早晨排程 (08:30): 三卡 carousel 早報
+│   ├── evening_run.bat          # 晚間排程 (19:00): 更新→選股→推播
+│   ├── daily_run.bat            # 一鍵自動化 (jobs/scheduler.py daily 相容 wrapper)
+│   ├── run_manual.bat           # 本機手動操作選單
+│   ├── restart_services.bat     # 本機 MCP + Web/LINE 安全重啟（支援 --dry-run）
+│   └── start_web.bat            # 一鍵啟動本機 MCP + Web/LINE
+│
+├── 🖼️ templates/ — Web Dashboard (Jinja2)
+│   ├── base.html                # Layout 基底
+│   ├── dashboard.html           # 主儀表板
+│   ├── backtest.html            # 回測設定頁
+│   ├── backtest_result.html     # 回測結果（Plotly 圖表）
+│   └── login.html               # 登入頁
+│
+├── 🧭 Legacy 相容層（僅轉發，無業務邏輯）
+│   ├── app.py                   # legacy facade → app package (python app.py / gunicorn)
+│   ├── config.py                # 相容 shim → config/settings.py
+│   ├── 4_run_backtest.py        # → jobs/run_backtest.py
+│   ├── 5_push_to_line.py        # → jobs/push_to_line.py
+│
+├── 🧪 test/ — pytest（conftest 共用 Fixture）
 │   ├── conftest.py              # 共用 Fixture (manager, empty_df)
-│   ├── test_strategy_factory.py # 策略載入 & 篩選
-│   ├── test_richmenu_mcp_integration.py # Rich Menu / Postback / MCP 回歸
-│   ├── test_v35_refactor_flex.py# Flex + 出場邏輯 + 向後相容
-│   ├── test_phase2_chip_data.py # 籌碼指標
-│   ├── test_v36_chip_momentum.py# V36 策略
-│   └── test_v37_v38_strategies.py# V37+V38 策略
+│   ├── characterization/        # 特徵化回歸測試（回測 seed、選股快照、legacy CLI）
+│   ├── unit/                    # 單元測試（backtest/validation/visualization）
+│   ├── fixtures/baseline/       # 回歸基準 JSON 快照
+│   └── test_*.py                # 整合/契約測試（策略、Flex、MCP、Dashboard、推播、回補…）
 │
 ├── 📦 數據與模型
-│   └── ML_Data/pkl/             # XGBoost 模型 (每策略獨立 .pkl)
+│   ├── ML_Data/pkl/             # XGBoost 模型 (每策略獨立 .pkl，gitignore)
+│   ├── artifacts/               # 回測 runtime 輸出 (gitignore，保留 README)
+│   └── Richmenu/Richmenu.png    # Rich Menu 版面圖
 │
 ├── 📄 設定檔
-│   ├── config/                  # 正式設定 package
-│   │   ├── __init__.py          # 向後相容 export surface
-│   │   └── settings.py          # 單一設定來源 (環境變數 + DB 預設設定)
-│   ├── config.py                # 相容 shim (re-export config/settings.py)
+│   ├── config/settings.py       # 單一設定來源 (環境變數 + Presets + 建表 SQL)
+│   ├── config/__init__.py       # 向後相容 export surface
 │   ├── strategy_settings.json   # 策略啟用狀態 (V3 JSON 格式)
 │   ├── init_settings.py         # 資料庫初始化腳本（消費 config/settings.py）
-│   └── .env                     # 敏感資訊 (DB_URL, LINE_TOKEN 等)
+│   ├── .env / .env.example      # 敏感資訊 (DB_URL, LINE_TOKEN 等；.env 已 gitignore)
+│   ├── requirements*.txt        # 依賴（完整 / runtime / mcp 三份）
+│   ├── docker-compose.yaml      # db + twse_mcp_server + stock_bot 三容器
+│   └── pytest.ini               # 測試設定
 │
-└── 📝 文檔
+└── 📝 文檔與規格
     ├── README.md                # 本文件
-    ├── doc/                     # 輔助文件（含 SERVICE_RESTART_RUNBOOK.md）
-    ├── docs/                    # cleanup / audit / validation 報告
-    └── openspec/                # 開發規範 (project.md, AGENTS.md)
+    ├── AGENTS.md                # AI agent 協作說明
+    ├── docs/                    # cleanup / refactor 審計、風險指標定義、穩定度驗證指南
+    ├── specs/                   # spec-kit 規格 (001~006，gitignore 規則已排除新增)
+    └── openspec/                # OpenSpec 開發規範（gitignore，僅本機）
 ```
 
 ### 核心流程串接
@@ -687,6 +704,22 @@ app.py
 
 ---
 
+## 🔍 架構檢視與已知疑慮（2026-07-23）
+
+依嚴重度排序，皆已核實於當前程式碼：
+
+| # | 疑慮 | 現況 | 建議 |
+|---|------|------|------|
+| 3 | **`.gitignore` 與版控矛盾** | `.github/`、`/specs/` 在 ignore 清單但檔案已被追蹤（ignore 不影響已追蹤檔）；`openspec/*` 被 ignore，但 README 引用其為開發規範，clone 者拿不到 | 決定去留：要版控就移出 ignore，不版控就 `git rm --cached` 並移除文件引用 |
+| 4 | **`strategy_settings.json` 被 git 追蹤但為執行期狀態** | 使用者在 LINE「切換策略」會改寫此檔，導致工作樹永遠 dirty、部署更新可能覆蓋線上狀態 | 移入 gitignore + 提供 `.example`，或改存 DB（已有 settings 表） |
+| 5 | **God module 傾向** | `core/db_helper.py` 2,558 行、`core/mcp_client.py` 2,004 行、`core/backtest/runner.py` 1,446 行 | 尚可運作；新功能避免再往這三檔堆，達痛點時再按領域拆分 |
+| 6 | **策略雙命名並存** | 語意命名（正式）+ vXX proxy（相容）共 14 檔；LINE 指令、README、settings 仍以 vXX 溝通 | 屬已文件化的過渡設計（`docs/strategy_naming_map.md`），待外部指令面改版後移除 proxy |
+| 7 | **根目錄 legacy facade** | `app.py`、`config.py`、`4_run_backtest.py`、`5_push_to_line.py` 皆為純轉發 | 已知可控債務；等部署腳本/排程全面改用 canonical 入口後移除 |
+
+**整體評價**：分層清楚（app → core → services/data → config），DB/HTTP/指標皆有單一邊界，legacy 都收斂成薄轉發層且有文件對照，是健康的收尾期架構。主要風險集中在 #3/#4 的版控治理，其餘為低風險已知債務。
+
+---
+
 ## 📱 Line Bot 指令
 
 ### 🎯 選股功能
@@ -733,7 +766,6 @@ app.py
 
 ## 📋 相關文件
 
-- **[UpdateList.md](UpdateList.md)** - 版本更新記錄
 - **[config/settings.py](config/settings.py)** - 正式參數與初始化設定說明
 - **[config.py](config.py)** - 相容 shim 說明
 - **[openspec/project.md](openspec/project.md)** - 專案規格
@@ -748,7 +780,7 @@ app.py
 
 ## 📞 支援
 
-如有問題，請提交 Issue 或參考 [UpdateList.md](UpdateList.md) 中的常見問題排查。
+如有問題，請提交 Issue，或參考 `docs/` 下的審計與驗證報告。
 
 ---
 

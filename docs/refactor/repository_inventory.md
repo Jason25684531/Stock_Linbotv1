@@ -15,7 +15,6 @@
 | ACTIVE | `strategy_settings.json`, `docker-compose.yaml`, `.dockerignore`, `init_settings.py`, `requirements*.txt`, `README.md`, `.gitignore` | 10 | 執行、部署與專案設定 |
 | ACTIVE | `doc/SERVICE_RESTART_RUNBOOK.md`, `execution/restart_services.bat` | 2 | 未追蹤的維運文件／腳本；保留且不在本 Change 修改 |
 | LEGACY_COMPATIBILITY | `4_run_backtest.py`, `5_push_to_line.py` | 2 | 根目錄舊入口，轉呼叫 `jobs.*` |
-| LEGACY_COMPATIBILITY | `tool/**` | 29 | `core.*` 的 module proxy facade |
 | DEVELOPMENT_TOOLING | `.claude/**`, `.github/**`, `openspec/**` | 48 | Agent、CI 與正式 OpenSpec 工作流 |
 | DEVELOPMENT_TOOLING | `specs/**` | 28 | 歷史 spec-kit 規格；待遷移方案，非刪除候選 |
 | DEVELOPMENT_TOOLING | `doc/**`（既有 5 檔） | 5 | 歷史操作／變更文件；待盤點遷移 |
@@ -26,7 +25,6 @@
 
 | 路徑 | 分類 | 結論 |
 |---|---|---|
-| `tool/` | LEGACY_COMPATIBILITY | 每個 wrapper 轉呼叫同名 `core.*`；保留。 |
 | `specs/` | DEVELOPMENT_TOOLING | 28 份歷史編號規格；僅標記，Phase 1 不刪。 |
 | `doc/` | DEVELOPMENT_TOOLING | 既有操作與歷史報告；提出遷移方案前保留。 |
 | 根目錄 wrappers | LEGACY_COMPATIBILITY | 仍被 `app/__init__.py`、批次檔、測試與文件引用；保留。 |
