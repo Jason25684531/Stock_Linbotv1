@@ -97,7 +97,7 @@
   - Verification: `python -m pytest test/unit/research/test_raw_response.py test/unit/research/test_package_boundaries.py -q` → 4 passed
   - Evidence: `core/research/sources/__init__.py`；`test/unit/research/test_raw_response.py`
 
-- [ ] [2026-08-02] 1.3 實作 ticker mapping（★ runtime 資料置於 `resources/`）
+- [x] [2026-08-02] 1.3 實作 ticker mapping（★ runtime 資料置於 `resources/`）
   - 檔案：`core/research/ticker_map.py`、**`core/research/resources/ticker_map.csv`**
   - 欄位：`stock_id, market, twse_code, yahoo_symbol, valid_from, valid_to, mapping_status`
   - **驗收**：
@@ -108,6 +108,11 @@
     5. `market='TPEx'` 的列可被資料模型表達，但**本 change 不由任何 adapter 消費**
   - 測試：`test/unit/research/test_ticker_map.py`
   - 註：`test/fixtures/research/` 可另放測試專用的 mapping 副本，**不得**被 runtime 讀取。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 9 passed
+  - Evidence: `core/research/ticker_map.py`、`core/research/resources/ticker_map.csv`；`test/unit/research/test_ticker_map.py`
+
+> Phase 1 completed: 2026-07-30. Verification: `python -c "import core.research"`、`python -m pytest test/unit/research -q` → 9 passed、`git diff --check`、`openspec validate 2026-07-30-factor-research-mvp --strict` → valid.
 
 ---
 
