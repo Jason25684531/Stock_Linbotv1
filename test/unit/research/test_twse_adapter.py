@@ -139,3 +139,28 @@ def test_missing_or_ambiguous_closing_table_is_f009_schema_drift():
         with pytest.raises(twse.SchemaDriftError) as error:
             twse.find_closing_table(payload)
         assert error.value.code == "F009_schema_drift"
+
+
+def test_request_gate_honours_minimum_interval_without_real_sleep():
+    now = [0.0]
+    sleeps = []
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    gate = twse.RequestGate(2.0, clock=lambda: now[0], sleep=sleep)
+    gate.wait()
+    now[0] += 0.5
+    gate.wait()
+
+    assert sleeps == [1.5]
+
+
+def test_fetch_daily_quotes_exhausts_retries_into_error_response(tmp_path, monkeypatch):
+    monkeypatch.setattr(twse.requests, "get", lambda *args, **kwargs: (_ for _ in ()).throw(twse.requests.Timeout("offline")))
+
+    response = twse.fetch_daily_quotes(date(2023, 1, 3), tmp_path, max_attempts=2, sleep=lambda _: None)
+
+    assert response.payload is None
+    assert response.error == "offline"

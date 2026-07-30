@@ -154,8 +154,11 @@
   - Verification: `python -m pytest test/unit/research/test_twse_adapter.py -q` → 7 passed
   - Evidence: `core/research/sources/twse.py`；`test/fixtures/research/mi_index/ten_tables.json`；`test/unit/research/test_twse_adapter.py`
 
-- [ ] [2026-08-04] 2.3 節流、重試與逾時
+- [x] [2026-08-04] 2.3 節流、重試與逾時
   - **驗收**：連續兩次請求間隔 ≥ 設定值（**注入假時鐘斷言，不得實際 `sleep`**）；重試耗盡回傳帶 `error` 的 `RawResponse`，**不拋例外**。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 18 passed
+  - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
 - [ ] [2026-08-04] 2.4 實作 `TWT49U` 除權息 adapter
   - 目標：`fetch_corporate_actions(start, end, cache_dir) -> RawResponse`（design §3.1 M2）。

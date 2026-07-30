@@ -1,11 +1,12 @@
 """TWSE official-source adapters."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Mapping
+from time import monotonic, sleep as real_sleep
+from typing import Callable, Mapping
 
 import requests
 
@@ -40,6 +41,21 @@ class ResponseKind(str, Enum):
 
 class SchemaDriftError(ValueError):
     code = "F009_schema_drift"
+
+
+@dataclass
+class RequestGate:
+    minimum_interval: float
+    clock: Callable[[], float] = monotonic
+    sleep: Callable[[float], None] = real_sleep
+    _last_request_at: float | None = field(default=None, init=False)
+
+    def wait(self) -> None:
+        if self._last_request_at is not None:
+            remaining = self.minimum_interval - (self.clock() - self._last_request_at)
+            if remaining > 0:
+                self.sleep(remaining)
+        self._last_request_at = self.clock()
 
 
 @dataclass(frozen=True)
@@ -128,7 +144,14 @@ def find_closing_table(payload: Mapping[str, object]) -> Mapping[str, object]:
     return matches[0]
 
 
-def fetch_daily_quotes(trade_date: date, cache_dir: Path) -> RawResponse:
+def fetch_daily_quotes(
+    trade_date: date,
+    cache_dir: Path,
+    *,
+    max_attempts: int = 3,
+    gate: RequestGate | None = None,
+    sleep: Callable[[float], None] = real_sleep,
+) -> RawResponse:
     """Fetch and cache one official daily closing-report response."""
 
     day = trade_date.strftime("%Y%m%d")
@@ -137,9 +160,28 @@ def fetch_daily_quotes(trade_date: date, cache_dir: Path) -> RawResponse:
     if cache_path.exists():
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
     else:
-        response = requests.get(MI_INDEX_URL, params=parameters, timeout=30)
-        response.raise_for_status()
-        payload = response.json()
+        gate = gate or RequestGate(0, sleep=sleep)
+        payload = None
+        error = None
+        for _ in range(max_attempts):
+            try:
+                gate.wait()
+                response = requests.get(MI_INDEX_URL, params=parameters, timeout=30)
+                response.raise_for_status()
+                payload = response.json()
+                break
+            except (requests.RequestException, ValueError) as caught:
+                error = str(caught)
+        if payload is None:
+            return RawResponse(
+                source="twse_rwd",
+                endpoint="MI_INDEX",
+                request_parameters=parameters,
+                retrieved_at=datetime.now(),
+                source_revision=None,
+                payload=None,
+                error=error or "request failed",
+            )
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
