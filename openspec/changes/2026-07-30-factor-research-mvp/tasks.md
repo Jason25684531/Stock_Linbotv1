@@ -118,12 +118,15 @@
 
 ## [2026-08-03] Phase 2：TWSE adapter
 
-- [ ] [2026-08-03] 2.1 實作 `MI_INDEX` adapter
+- [x] [2026-08-03] 2.1 實作 `MI_INDEX` adapter
   - 檔案：`core/research/sources/twse.py`
   - 目標：`fetch_daily_quotes(trade_date, cache_dir) -> RawResponse`（design §3.1 M1）。
   - 必要行為：依**欄位名稱**定位；raw response 落地 `_raw/twse_rwd/MI_INDEX_<YYYYMMDD>.json`，命中即不重抓。
   - **驗收**：離線 fixture 測試通過；快取命中時零 HTTP 請求（monkeypatch 斷言）。
   - 測試：`test/unit/research/test_twse_adapter.py`
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research/test_twse_adapter.py -q` → 2 passed
+  - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
 - [ ] [2026-08-03] 2.2 ★ 回應五分類（Phase 0.3 已完成，實測依據見 `_baseline` §2.2）
   - 目標：`classify(response) -> TRADING_DAY | NON_TRADING_DAY | OUT_OF_RANGE(bound) | EMPTY_RESULT | SOURCE_ERROR`（design §3.1）。
