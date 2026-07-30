@@ -136,19 +136,23 @@
     3. **未列於實測表的 `stat` 值歸為 `SOURCE_ERROR`，不得歸為 `NON_TRADING_DAY`**
     4. `NON_TRADING_DAY` **不計為警告**；`OUT_OF_RANGE` 與 `EMPTY_RESULT` **不重試**
     5. `OUT_OF_RANGE(bound='early')` → **FATAL `F011`**；`bound='future'` → `W013`
-    6. `EMPTY_RESULT` → `W010`；`SOURCE_ERROR` → `W011` 且寫 `source_coverage.csv`
+    6. `EMPTY_RESULT`（唯一匹配但列數為 0）→ `W010`；匹配數 0 或多個 → `F009`；`SOURCE_ERROR` → `W011` 且寫 `source_coverage.csv`
     7. transport error／timeout／HTTP 非 200／JSON parse failure 以 **mock** 測試，**不得以任何日期回應冒充**
   - 測試：同上
   - Completed: 2026-07-30
   - Verification: `python -m pytest test/unit/research -q` → 14 passed（離線 fixture 與 transport-error envelope）
   - Evidence: `core/research/sources/twse.py`；提前前置的純寫檔 `core/research/artifacts.py`；`test/unit/research/test_twse_adapter.py`、`test/fixtures/research/mi_index/`
 
-- [ ] [2026-08-03] 2.2b ★ 收盤行情 table 定位（Phase 0.4 已完成，依據見 `_baseline` §2.2b）
+- [x] [2026-08-03] 2.2b ★ 收盤行情 table 定位（Phase 0.4 已完成，依據見 `_baseline` §2.2b）
   - 目標：以 **title 子字串 ＋ 8 個必要欄位** 定位，匹配數必須恰為 1。
   - **驗收（阻擋）**：
     1. **原始碼中不得出現任何 table index 常數**（掃描斷言）——實測目標在 index 8，且 index 9 為空 table，任何位置啟發式都會錯
     2. 以真實 10-table fixture 驗證唯一匹配
     3. 匹配 **0 個** → `F009`；匹配 **多個** → `F009`（各有 fixture 測試）
+  - Decision: 2026-07-30 使用者確認：匹配數 0 或多個皆為 `F009`；只有唯一匹配且列數為 0 才是 `W010`。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research/test_twse_adapter.py -q` → 7 passed
+  - Evidence: `core/research/sources/twse.py`；`test/fixtures/research/mi_index/ten_tables.json`；`test/unit/research/test_twse_adapter.py`
 
 - [ ] [2026-08-04] 2.3 節流、重試與逾時
   - **驗收**：連續兩次請求間隔 ≥ 設定值（**注入假時鐘斷言，不得實際 `sleep`**）；重試耗盡回傳帶 `error` 的 `RawResponse`，**不拋例外**。

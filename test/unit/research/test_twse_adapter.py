@@ -4,6 +4,8 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 
+import pytest
+
 from core.research.artifacts import write_source_coverage
 from core.research.sources import RawResponse
 from core.research.sources import twse
@@ -52,7 +54,11 @@ FIXTURE_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "research" / "m
 
 
 def _response(name):
-    return _payload_response(json.loads((FIXTURE_DIR / name).read_text(encoding="utf-8")))
+    return _payload_response(_fixture(name))
+
+
+def _fixture(name):
+    return json.loads((FIXTURE_DIR / name).read_text(encoding="utf-8"))
 
 
 def _payload_response(payload):
@@ -105,7 +111,8 @@ def test_classify_never_treats_unknown_or_transport_failure_as_non_trading_day()
 
 
 def test_classify_empty_success_and_writes_source_coverage(tmp_path):
-    response = _payload_response({"stat": "OK", "tables": []})
+    table = _fixture("normal.json")["tables"][0] | {"data": []}
+    response = _payload_response({"stat": "OK", "tables": [table]})
     classification = twse.classify(response)
 
     assert (classification.kind, classification.diagnostic_code) == (
@@ -115,5 +122,20 @@ def test_classify_empty_success_and_writes_source_coverage(tmp_path):
     output = write_source_coverage(tmp_path, [classification.coverage_row("2023-01-03")])
     assert output.read_text(encoding="utf-8") == (
         "trade_date,classification,bound,code,severity,detail\n"
-        "2023-01-03,EMPTY_RESULT,,W010_source_empty,WARN,successful response has no tables\n"
+        "2023-01-03,EMPTY_RESULT,,W010_source_empty,WARN,successful response has no rows\n"
     )
+
+
+def test_find_closing_table_by_title_and_fields_not_position():
+    payload = _fixture("ten_tables.json")
+
+    assert twse.find_closing_table(payload) == payload["tables"][8]
+    assert "tables[" not in Path(twse.__file__).read_text(encoding="utf-8")
+
+
+def test_missing_or_ambiguous_closing_table_is_f009_schema_drift():
+    target = _fixture("normal.json")["tables"][0]
+    for payload in ({"tables": []}, {"tables": [target, target]}):
+        with pytest.raises(twse.SchemaDriftError) as error:
+            twse.find_closing_table(payload)
+        assert error.value.code == "F009_schema_drift"
