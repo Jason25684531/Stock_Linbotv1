@@ -214,3 +214,7 @@ def test_openapi_reference_adapters_are_offline_mockable(monkeypatch):
     assert [item.endpoint for item in (twse.fetch_delisted(), twse.fetch_holidays(), twse.fetch_company_profile())] == [
         "company/suspendListingCsvAndHtml", "holidaySchedule/holidaySchedule", "opendata/t187ap03_L"
     ]
+
+
+def test_unknown_declared_field_does_not_trigger_schema_drift():
+    twse.validate_corporate_action_fields({"fields": [*twse.REQUIRED_ACTION_FIELDS, "新增欄位"]})

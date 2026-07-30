@@ -174,8 +174,13 @@
   - Verification: `python -m pytest test/unit/research -q` → 28 passed
   - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
-- [ ] [2026-08-05] 2.6 Schema drift 偵測
+- [x] [2026-08-05] 2.6 Schema drift 偵測
   - **驗收**：刻意刪欄的 fixture 觸發 `F009`；新增未知欄的 fixture **不**觸發。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 29 passed
+  - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
+
+> Phase 2 completed: 2026-07-30. Verification: `python -m pytest test/unit/research -q` → 29 passed；`git diff --check`；`openspec validate 2026-07-30-factor-research-mvp --strict` → valid.
 
 ---
 
