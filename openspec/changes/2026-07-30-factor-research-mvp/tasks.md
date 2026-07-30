@@ -88,11 +88,14 @@
   - Verification: `python -m pytest test/unit/research/test_package_boundaries.py -q` → 2 passed
   - Evidence: `core/research/{__init__.py,sources/__init__.py,resources/__init__.py}`；`test/unit/research/test_package_boundaries.py`
 
-- [ ] [2026-08-01] 1.2 定義 provider 回傳契約
+- [x] [2026-08-01] 1.2 定義 provider 回傳契約
   - 檔案：`core/research/sources/__init__.py`
   - 目標：`RawResponse` frozen dataclass：`source, endpoint, request_parameters, retrieved_at, source_revision, payload, error`。
   - **驗收**：`frozen=True`；`error` 非 None 時 `payload` 必為 None。
   - 測試：`test/unit/research/test_raw_response.py`
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research/test_raw_response.py test/unit/research/test_package_boundaries.py -q` → 4 passed
+  - Evidence: `core/research/sources/__init__.py`；`test/unit/research/test_raw_response.py`
 
 - [ ] [2026-08-02] 1.3 實作 ticker mapping（★ runtime 資料置於 `resources/`）
   - 檔案：`core/research/ticker_map.py`、**`core/research/resources/ticker_map.csv`**
