@@ -186,10 +186,13 @@
 
 ## [2026-08-06] Phase 3：yfinance adapter（僅對帳）
 
-- [ ] [2026-08-06] 3.1 實作 adapter
+- [x] [2026-08-06] 3.1 實作 adapter
   - 檔案：`core/research/sources/yahoo.py`
   - **驗收（阻擋）**：實際傳入的 kwargs **完全等於** `{auto_adjust: False, actions: True, keepna: True, repair: False, interval: '1d'}`，且**不含 `period`**（monkeypatch 斷言）。
   - 依據：實測預設 `auto_adjust=True`、`keepna=False`（`_baseline/source_capability.md` §3）。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 30 passed
+  - Evidence: `core/research/sources/yahoo.py`；`test/unit/research/test_yahoo_adapter.py`
 
 - [ ] [2026-08-06] 3.2 來源 metadata
   - **驗收**：`ticker, package_version, request_parameters, requested_period, retrieved_at, repair_status, source_error` 齊全；`package_version` 讀自 `yfinance.__version__`（非硬編碼）。
