@@ -128,7 +128,7 @@
   - Verification: `python -m pytest test/unit/research/test_twse_adapter.py -q` → 2 passed
   - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
-- [ ] [2026-08-03] 2.2 ★ 回應五分類（Phase 0.3 已完成，實測依據見 `_baseline` §2.2）
+- [x] [2026-08-03] 2.2 ★ 回應五分類（Phase 0.3 已完成，實測依據見 `_baseline` §2.2）
   - 目標：`classify(response) -> TRADING_DAY | NON_TRADING_DAY | OUT_OF_RANGE(bound) | EMPTY_RESULT | SOURCE_ERROR`（design §3.1）。
   - **驗收（阻擋）**：
     1. 五類各有獨立 fixture 測試，fixture 取自 `_baseline/_p3p4_raw/` 的真實回應
@@ -139,6 +139,9 @@
     6. `EMPTY_RESULT` → `W010`；`SOURCE_ERROR` → `W011` 且寫 `source_coverage.csv`
     7. transport error／timeout／HTTP 非 200／JSON parse failure 以 **mock** 測試，**不得以任何日期回應冒充**
   - 測試：同上
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 14 passed（離線 fixture 與 transport-error envelope）
+  - Evidence: `core/research/sources/twse.py`；提前前置的純寫檔 `core/research/artifacts.py`；`test/unit/research/test_twse_adapter.py`、`test/fixtures/research/mi_index/`
 
 - [ ] [2026-08-03] 2.2b ★ 收盤行情 table 定位（Phase 0.4 已完成，依據見 `_baseline` §2.2b）
   - 目標：以 **title 子字串 ＋ 8 個必要欄位** 定位，匹配數必須恰為 1。
