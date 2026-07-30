@@ -14,6 +14,8 @@ from core.research.sources import RawResponse
 
 
 MI_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
+TWT49U_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U"
+REQUIRED_ACTION_FIELDS = frozenset({"資料日期", "股票代號", "除權息前收盤價", "除權息參考價", "權/息"})
 NON_TRADING_STAT = "很抱歉，沒有符合條件的資料!"
 FUTURE_STAT = "查詢日期大於今日，請重新查詢!"
 EARLY_STAT = "查詢日期小於93年2月11日，請重新查詢!"
@@ -142,6 +144,45 @@ def find_closing_table(payload: Mapping[str, object]) -> Mapping[str, object]:
     if len(matches) != 1:
         raise SchemaDriftError(f"expected one daily closing table, found {len(matches)}")
     return matches[0]
+
+
+def parse_roc_date(value: str) -> date:
+    """Parse the TWT49U Republic-of-China calendar date format."""
+
+    year, remainder = value.split("年", 1)
+    month, day = remainder.removesuffix("日").split("月", 1)
+    return date(int(year) + 1911, int(month), int(day))
+
+
+def fetch_corporate_actions(start: date, end: date, cache_dir: Path) -> RawResponse:
+    """Fetch and cache the TWSE-listed corporate-action response."""
+
+    start_text, end_text = start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
+    parameters = {"startDate": start_text, "endDate": end_text, "response": "json"}
+    cache_path = Path(cache_dir) / f"TWT49U_{start_text}_{end_text}.json"
+    if cache_path.exists():
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    else:
+        response = requests.get(TWT49U_URL, params=parameters, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    validate_corporate_action_fields(payload)
+    return RawResponse(
+        source="twse_rwd",
+        endpoint="TWT49U",
+        request_parameters=parameters,
+        retrieved_at=datetime.now(),
+        source_revision=None,
+        payload=payload,
+        error=None,
+    )
+
+
+def validate_corporate_action_fields(payload: Mapping[str, object]) -> None:
+    if not REQUIRED_ACTION_FIELDS.issubset(set(payload.get("fields", []))):
+        raise SchemaDriftError("TWT49U required fields are missing")
 
 
 def fetch_daily_quotes(

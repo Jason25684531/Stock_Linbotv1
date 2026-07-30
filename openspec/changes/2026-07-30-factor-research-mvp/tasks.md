@@ -1,7 +1,7 @@
 # Tasks: 2026-07-30-factor-research-mvp
 
 > **通則**
-> - 一任務一 commit；**回復以 Phase 為單位**逆序 `git revert`，或以 merge commit `git revert -m 1`。**單一 task commit 不足以回復整個 change。**
+<!-- > - 一任務一 commit；**回復以 Phase 為單位**逆序 `git revert`，或以 merge commit `git revert -m 1`。**單一 task commit 不足以回復整個 change。** -->
 > - 本 change **不修改任何既有業務程式**。若某任務發現必須改既有檔案，**停止並回報**，不得擴大範圍。
 > - **市場範圍限定 TWSE 上市普通股。** 任何 TPEx／上櫃路徑皆為非目標。
 > - 非目標（全 Phase 共用）：不改 `daily_market_data` schema、不改 `jobs/update_database.py`、不改 `services/mcp/server.py`、不改回測成交時點、不註冊排程、不新增 Python 依賴。
@@ -160,9 +160,12 @@
   - Verification: `python -m pytest test/unit/research -q` → 18 passed
   - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
-- [ ] [2026-08-04] 2.4 實作 `TWT49U` 除權息 adapter
+- [x] [2026-08-04] 2.4 實作 `TWT49U` 除權息 adapter
   - 目標：`fetch_corporate_actions(start, end, cache_dir) -> RawResponse`（design §3.1 M2）。
   - **驗收**：民國中文日期（`112年01月04日`）正確轉 `2023-01-04`（含 `100年`、`115年` 邊界）；欄位缺失 → schema drift 標記。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 22 passed
+  - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
 - [ ] [2026-08-05] 2.5 TWSE OpenAPI 參考資料 adapter
   - 目標：`fetch_delisted()`、`fetch_holidays()`、`fetch_company_profile()`（design §3.2）。

@@ -164,3 +164,34 @@ def test_fetch_daily_quotes_exhausts_retries_into_error_response(tmp_path, monke
 
     assert response.payload is None
     assert response.error == "offline"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("112年01月04日", date(2023, 1, 4)), ("100年01月01日", date(2011, 1, 1)), ("115年12月31日", date(2026, 12, 31))],
+)
+def test_parse_roc_date(value, expected):
+    assert twse.parse_roc_date(value) == expected
+
+
+def test_fetch_corporate_actions_caches_official_response(tmp_path, monkeypatch):
+    payload = {"stat": "OK", "fields": ["資料日期", "股票代號", "除權息前收盤價", "除權息參考價", "權/息"], "data": []}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    monkeypatch.setattr(twse.requests, "get", lambda *args, **kwargs: Response())
+
+    response = twse.fetch_corporate_actions(date(2023, 1, 1), date(2023, 12, 31), tmp_path)
+
+    assert response.payload == payload
+    assert (tmp_path / "TWT49U_20230101_20231231.json").exists()
+
+
+def test_missing_corporate_action_field_is_schema_drift():
+    with pytest.raises(twse.SchemaDriftError):
+        twse.validate_corporate_action_fields({"fields": []})
