@@ -1,6 +1,6 @@
 """Research data-source adapters."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Mapping
 
@@ -16,6 +16,7 @@ class RawResponse:
     source_revision: str | None
     payload: object | None
     error: str | None
+    metadata: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.error is not None and self.payload is not None:

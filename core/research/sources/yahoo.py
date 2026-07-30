@@ -14,4 +14,22 @@ def fetch_history(symbol: str, start: date, end: date) -> RawResponse:
         error = None
     except Exception as caught:
         payload, error = None, str(caught)
-    return RawResponse("yfinance", "history", parameters, datetime.now(), None, payload, error)
+    retrieved_at = datetime.now()
+    return RawResponse(
+        "yfinance",
+        "history",
+        parameters,
+        retrieved_at,
+        None,
+        payload,
+        error,
+        {
+            "ticker": symbol,
+            "package_version": yf.__version__,
+            "request_parameters": parameters,
+            "requested_period": {"start": parameters["start"], "end": parameters["end"]},
+            "retrieved_at": retrieved_at,
+            "repair_status": None,
+            "source_error": error,
+        },
+    )

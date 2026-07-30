@@ -194,8 +194,11 @@
   - Verification: `python -m pytest test/unit/research -q` → 30 passed
   - Evidence: `core/research/sources/yahoo.py`；`test/unit/research/test_yahoo_adapter.py`
 
-- [ ] [2026-08-06] 3.2 來源 metadata
+- [x] [2026-08-06] 3.2 來源 metadata
   - **驗收**：`ticker, package_version, request_parameters, requested_period, retrieved_at, repair_status, source_error` 齊全；`package_version` 讀自 `yfinance.__version__`（非硬編碼）。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 31 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/sources/__init__.py`；`core/research/sources/yahoo.py`；`test/unit/research/test_yahoo_adapter.py`
 
 - [ ] [2026-08-07] 3.3 失敗隔離
   - **驗收（阻擋）**：yfinance **完全不可用時，canonical 與因子輸出完全不受影響**；`reconciliation_summary.csv` 仍產生（僅表頭），`reconciliation_coverage=0`。
