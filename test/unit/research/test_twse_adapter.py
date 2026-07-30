@@ -195,3 +195,22 @@ def test_fetch_corporate_actions_caches_official_response(tmp_path, monkeypatch)
 def test_missing_corporate_action_field_is_schema_drift():
     with pytest.raises(twse.SchemaDriftError):
         twse.validate_corporate_action_fields({"fields": []})
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("1150729", date(2026, 7, 29)), ("115/06/23", date(2026, 6, 23)), ("19620209", date(1962, 2, 9)), ("112年01月04日", date(2023, 1, 4))],
+)
+def test_parse_twse_reference_dates(value, expected):
+    assert twse.parse_twse_date(value) == expected
+
+
+def test_openapi_reference_adapters_are_offline_mockable(monkeypatch):
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return []
+    monkeypatch.setattr(twse.requests, "get", lambda *args, **kwargs: Response())
+
+    assert [item.endpoint for item in (twse.fetch_delisted(), twse.fetch_holidays(), twse.fetch_company_profile())] == [
+        "company/suspendListingCsvAndHtml", "holidaySchedule/holidaySchedule", "opendata/t187ap03_L"
+    ]

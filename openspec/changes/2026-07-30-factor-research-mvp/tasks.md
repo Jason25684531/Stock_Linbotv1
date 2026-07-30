@@ -167,9 +167,12 @@
   - Verification: `python -m pytest test/unit/research -q` → 22 passed
   - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
-- [ ] [2026-08-05] 2.5 TWSE OpenAPI 參考資料 adapter
+- [x] [2026-08-05] 2.5 TWSE OpenAPI 參考資料 adapter
   - 目標：`fetch_delisted()`、`fetch_holidays()`、`fetch_company_profile()`（design §3.2）。
   - **驗收**：**四種日期格式各有獨立測試**——`1150729`、`115/06/23`、`19620209`、`112年01月04日`。
+  - Completed: 2026-07-30
+  - Verification: `python -m pytest test/unit/research -q` → 28 passed
+  - Evidence: `core/research/sources/twse.py`；`test/unit/research/test_twse_adapter.py`
 
 - [ ] [2026-08-05] 2.6 Schema drift 偵測
   - **驗收**：刻意刪欄的 fixture 觸發 `F009`；新增未知欄的 fixture **不**觸發。

@@ -15,6 +15,7 @@ from core.research.sources import RawResponse
 
 MI_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
 TWT49U_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U"
+OPENAPI_URL = "https://openapi.twse.com.tw/v1"
 REQUIRED_ACTION_FIELDS = frozenset({"資料日期", "股票代號", "除權息前收盤價", "除權息參考價", "權/息"})
 NON_TRADING_STAT = "很抱歉，沒有符合條件的資料!"
 FUTURE_STAT = "查詢日期大於今日，請重新查詢!"
@@ -152,6 +153,37 @@ def parse_roc_date(value: str) -> date:
     year, remainder = value.split("年", 1)
     month, day = remainder.removesuffix("日").split("月", 1)
     return date(int(year) + 1911, int(month), int(day))
+
+
+def parse_twse_date(value: str) -> date:
+    """Parse the four observed TWSE date encodings."""
+
+    if "年" in value:
+        return parse_roc_date(value)
+    if "/" in value:
+        year, month, day = value.split("/")
+        return date(int(year) + 1911, int(month), int(day))
+    if len(value) == 7:
+        return date(int(value[:3]) + 1911, int(value[3:5]), int(value[5:]))
+    return date.fromisoformat(f"{value[:4]}-{value[4:6]}-{value[6:]}")
+
+
+def fetch_delisted() -> RawResponse:
+    return _fetch_openapi("company/suspendListingCsvAndHtml")
+
+
+def fetch_holidays() -> RawResponse:
+    return _fetch_openapi("holidaySchedule/holidaySchedule")
+
+
+def fetch_company_profile() -> RawResponse:
+    return _fetch_openapi("opendata/t187ap03_L")
+
+
+def _fetch_openapi(endpoint: str) -> RawResponse:
+    response = requests.get(f"{OPENAPI_URL}/{endpoint}", timeout=30)
+    response.raise_for_status()
+    return RawResponse("twse_openapi", endpoint, {}, datetime.now(), None, response.json(), None)
 
 
 def fetch_corporate_actions(start: date, end: date, cache_dir: Path) -> RawResponse:
