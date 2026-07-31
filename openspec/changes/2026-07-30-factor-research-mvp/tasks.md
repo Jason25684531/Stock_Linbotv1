@@ -246,7 +246,7 @@
   - Verification: `python -m pytest test/unit/research -q` → 41 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/normalize.py::apply_adjustments`；`test/unit/research/test_adjustment.py`
 
-- [ ] [2026-08-10] 4.5 ★ Reconciliation
+- [x] [2026-08-10] 4.5 ★ Reconciliation
   - 檔案：`core/research/reconcile.py`
   - **驗收（阻擋）**：
     1. 差異超門檻 → `W004`，**不是 FATAL**
@@ -255,6 +255,9 @@
     4. **抽樣種子為獨立的 `reconciliation_seed` 設定值**；斷言「相同 seed + 不同 `run_id` → 相同抽樣結果」
     5. 未抽樣的列 `quality_status='unverified'`，**不得為 `ok`**
   - 測試：`test/unit/research/test_reconciliation.py`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 43 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/reconcile.py`；`test/unit/research/test_reconciliation.py`
 
 ---
 
