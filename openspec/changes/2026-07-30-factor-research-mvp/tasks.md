@@ -328,7 +328,7 @@
 
 ## [2026-08-15] Phase 7：每日動態股票池
 
-- [ ] [2026-08-15] 7.1 universe mask（★ 一律使用**原始價**）
+- [x] [2026-08-15] 7.1 universe mask（★ 一律使用**原始價**）
   - 檔案：`core/research/universe.py`
   - 規則：`^[1-9]\d{3}$` ∩ `market == 'TWSE'` ∩ **`raw_close >= 10`** ∩ `rolling_20_mean(amount) >= 20_000_000` ∩ `volume > 0`
   - 流動性 proxy 公式：**`raw_close × volume`**
@@ -341,6 +341,9 @@
     6. **歷史成員資格對 `adjustment_as_of` 不變**：以「同一份行情 + 兩份不同 corporate action 快照」建 mask，斷言先前交易日的成員完全相同
   - 依據：design 決策 X-7。`adjusted_close` 是回溯快照，用它建歷史股票池會讓**同一個歷史交易日的成員因未來的公司行動而改變**。價格門檻問的是「那天實際股價是否高於跳動單位失真區」，屬 point-in-time 事實。
   - 註：**raw／adjusted 的不對稱是刻意的**——可交易性判斷用 raw，報酬率計算用 adjusted。需寫入 12.1 的限制文件，避免被後人「修正」成一致。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 53 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/universe.py`；`test/unit/research/test_universe.py`
 
 - [ ] [2026-08-15] 7.2 Universe counts artifact
   - 目標：`universe_counts.csv`：`trade_date, count, liquidity_basis_official, liquidity_basis_proxy`
