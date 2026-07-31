@@ -347,9 +347,13 @@
   - Verification: `python -m pytest test/unit/research -q` → 53 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/universe.py`；`test/unit/research/test_universe.py`
 
-- [ ] [2026-08-15] 7.2 Universe counts artifact
+- [x] [2026-08-15] 7.2 Universe counts artifact
   - 目標：`universe_counts.csv`：`trade_date, count, liquidity_basis_official, liquidity_basis_proxy`
   - **驗收（阻擋）**：檔案必產生；`count` 序列單調遞增至最後一日時，輸出明確警告文字「存活者偏差未消除，Rank IC 為上限估計」。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 54 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/universe.py::universe_counts`；`test/unit/research/test_universe.py`
+  - Deferred end-to-end acceptance (user-approved 2026-07-31): Phase 9 artifacts SHALL always write `universe_counts.csv` and disclose monotonic survivorship risk.
 
 ---
 

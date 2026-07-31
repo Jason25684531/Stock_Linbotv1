@@ -23,3 +23,16 @@ def build_mask(quotes: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     columns = pd.Index(sorted(work["stock_id"].unique()), name="stock_id")
     mask = work.pivot(index="trade_date", columns="stock_id", values="member").reindex(index=index, columns=columns, fill_value=False)
     return mask.astype(bool), ["W006_liquidity_proxy"] if missing_amount.any() else []
+
+
+def universe_counts(mask: pd.DataFrame, liquidity_basis: pd.DataFrame) -> pd.DataFrame:
+    """Summarize daily membership and the liquidity source used by members."""
+
+    return pd.DataFrame(
+        {
+            "trade_date": mask.index,
+            "count": mask.sum(axis=1).astype(int),
+            "liquidity_basis_official": (mask & liquidity_basis.eq("official_amount")).sum(axis=1).astype(int),
+            "liquidity_basis_proxy": (mask & liquidity_basis.eq("close_times_volume_proxy")).sum(axis=1).astype(int),
+        }
+    )
