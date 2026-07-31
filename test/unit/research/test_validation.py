@@ -28,3 +28,16 @@ def test_contract_validation_detects_duplicate_keys_and_invalid_ohlc():
     quotes = pd.concat([_quotes(), _quotes()]).assign(raw_high=8.0)
 
     assert {item.code for item in validate(quotes)} == {"F002_duplicate_key", "F005_high_lt_low", "F006_ohlc_out_of_range"}
+
+
+def test_contract_validation_emits_nonfatal_data_anomaly_warnings_without_rolling():
+    quotes = _quotes().assign(volume=0, liquidity_basis="close_times_volume_proxy", adjustment_source="unavailable", is_fallback=True)
+
+    diagnostics = validate(quotes)
+
+    assert {(item.code, item.severity) for item in diagnostics} == {
+        ("W002_zero_volume", "WARN"),
+        ("W006_liquidity_proxy", "WARN"),
+        ("W007_adjustment_unavailable", "WARN"),
+        ("W008_fallback_used", "WARN"),
+    }

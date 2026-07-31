@@ -298,7 +298,10 @@
   - Evidence: `core/research/validation.py`；`core/research/market_data.py`；`core/research/sources/twse.py`；`test/unit/research/test_validation.py`
   - **驗收**：每個代碼各有觸發與不觸發測試。**含 `F011_window_before_source_start`**（請求日期早於來源歷史下界 2004-02-11）。
 
-- [ ] [2026-08-13] 6.2 WARN 規則 `W001`–`W013`
+- [x] [2026-08-13] 6.2 WARN 規則 `W001`–`W013`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 50 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/validation.py`；`core/research/{normalize,reconcile,factors,sources/twse,ticker_map}.py`；`test/unit/research/test_validation.py`
   - **驗收**：每個代碼各有觸發測試；WARN 不中止。**含 `W010`／`W011`／`W012`／`W013`。**
 
 - [ ] [2026-08-14] 6.3 分級不可降級
