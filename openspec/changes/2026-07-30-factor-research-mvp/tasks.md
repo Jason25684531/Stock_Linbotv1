@@ -273,8 +273,11 @@
   - Verification: `python -m pytest test/unit/research -q` → 45 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/market_data.py`；`test/unit/research/test_market_data.py`
 
-- [ ] [2026-08-12] 5.2 requested / loaded window
+- [x] [2026-08-12] 5.2 requested / loaded window
   - **驗收**：`maximum_lookback=253` 時 `loaded_start` 至少早於 `requested_start` 263 個交易日；輸出僅含 requested 區間。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 46 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/market_data.py::loaded_window`；`test/unit/research/test_market_data.py`
 
 - [ ] [2026-08-12] 5.3 長 ↔ 寬轉換
   - **驗收（阻擋）**：
