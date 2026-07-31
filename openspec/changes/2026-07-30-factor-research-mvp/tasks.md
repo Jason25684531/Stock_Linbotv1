@@ -279,11 +279,14 @@
   - Verification: `python -m pytest test/unit/research -q` → 46 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/market_data.py::loaded_window`；`test/unit/research/test_market_data.py`
 
-- [ ] [2026-08-12] 5.3 長 ↔ 寬轉換
+- [x] [2026-08-12] 5.3 長 ↔ 寬轉換
   - **驗收（阻擋）**：
     1. pivot 前斷言 `(trade_date, stock_id)` 唯一；重複即 `F002`
     2. **禁用 `pivot_table`**（原始碼掃描該字串不存在於 `core/research/`）
     3. 各寬表 index 與 columns 完全一致；不符即 `F008`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 47 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/market_data.py::to_wide`；`test/unit/research/test_market_data.py`
 
 ---
 

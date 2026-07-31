@@ -58,3 +58,19 @@ def restrict_to_requested_window(quotes: pd.DataFrame, window: DataWindow) -> pd
 
     dates = pd.to_datetime(quotes["trade_date"])
     return quotes.loc[(dates >= window.requested_start) & (dates <= window.requested_end)].copy()
+
+
+def to_wide(quotes: pd.DataFrame, columns: list[str]) -> dict[str, pd.DataFrame]:
+    """Create aligned computation frames after proving the natural key is unique."""
+
+    if quotes.duplicated(["trade_date", "stock_id"]).any():
+        raise SchemaError("F002_duplicate_key: duplicate (trade_date, stock_id)")
+    index = pd.Index(sorted(quotes["trade_date"].unique()), name="trade_date")
+    stock_ids = pd.Index(sorted(quotes["stock_id"].unique()), name="stock_id")
+    frames = {
+        column: quotes.pivot(index="trade_date", columns="stock_id", values=column).reindex(index=index, columns=stock_ids)
+        for column in columns
+    }
+    if any(not frame.index.equals(index) or not frame.columns.equals(stock_ids) for frame in frames.values()):
+        raise SchemaError("F008_wide_frame_misalignment")
+    return frames
