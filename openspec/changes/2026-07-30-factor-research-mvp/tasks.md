@@ -304,7 +304,10 @@
   - Evidence: `core/research/validation.py`；`core/research/{normalize,reconcile,factors,sources/twse,ticker_map}.py`；`test/unit/research/test_validation.py`
   - **驗收**：每個代碼各有觸發測試；WARN 不中止。**含 `W010`／`W011`／`W012`／`W013`。**
 
-- [ ] [2026-08-14] 6.3 分級不可降級
+- [x] [2026-08-14] 6.3 分級不可降級
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 51 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/validation.py::validate`；`test/unit/research/test_validation.py`
   - **驗收（阻擋）**：`validate()` 簽章中**不存在**可調整分級的參數（`inspect.signature` 斷言）。
 
 - [ ] [2026-08-14] 6.4 ★ Validation 只做契約層，不做 rolling

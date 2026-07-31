@@ -1,3 +1,5 @@
+import inspect
+
 import pandas as pd
 
 from core.research.market_data import CANONICAL_QUOTE_COLUMNS
@@ -41,3 +43,7 @@ def test_contract_validation_emits_nonfatal_data_anomaly_warnings_without_rollin
         ("W007_adjustment_unavailable", "WARN"),
         ("W008_fallback_used", "WARN"),
     }
+
+
+def test_validation_exposes_no_runtime_severity_override():
+    assert tuple(inspect.signature(validate).parameters) == ("quotes",)
