@@ -317,12 +317,14 @@
   - Evidence: `core/research/validation.py`；`test/unit/research/test_validation.py`
   - 依據：design 決策 X-6。
 
-- [ ] [2026-08-14] 6.5 Validation artifact（★ 由 pipeline 合併後寫出）
+- [x] [2026-08-14] 6.5 Validation artifact（★ 由 pipeline 合併後寫出）
   - 欄位：**`stage, code, severity, trade_date, stock_id, detail`**（`stage` ∈ `contract` \| `factor`）
   - **驗收（阻擋）**：
     1. 零 WARN 時仍產生 `validation_report.csv`（僅表頭）；**不得僅 print**
     2. **`validation.py` 與 `factors.py` 皆不寫此檔**——由 `pipeline.py` 合併兩階段診斷後交給 `artifacts.py` 寫出
     3. 同時含 contract 與 factor 診斷的 run，兩者皆出現於同一份報表且 `stage` 正確
+  - Completed: 2026-07-31
+  - Deferred end-to-end acceptance (user-approved 2026-07-31): Phase 9 pipeline/artifacts SHALL emit a header-only report when clean and merge both contract/factor diagnostics into `validation_report.csv`.
 
 ---
 
