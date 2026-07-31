@@ -211,9 +211,12 @@
 
 ## [2026-08-08] Phase 4：Normalization、Corporate actions、還原、對帳
 
-- [ ] [2026-08-08] 4.1 來源正規化
+- [x] [2026-08-08] 4.1 來源正規化
   - 檔案：`core/research/normalize.py`
   - **驗收**：`"1,673,263,794"` → `1673263794.0`；`"--"` → NaN，**不得為 0**。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 34 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/normalize.py`；`test/unit/research/test_normalize.py`
 
 - [ ] [2026-08-08] 4.2 ★ 產生 `corporate_actions` 獨立契約
   - 目標：`ex_date, stock_id, action_type, pre_ex_close, ex_reference_price, event_factor, source, retrieved_at`（design §6.2）。
