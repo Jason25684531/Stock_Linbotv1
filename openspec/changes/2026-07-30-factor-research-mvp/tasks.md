@@ -292,7 +292,10 @@
 
 ## [2026-08-13] Phase 6：D1 驗證
 
-- [ ] [2026-08-13] 6.1 FATAL 規則 `F001`–`F011`
+- [x] [2026-08-13] 6.1 FATAL 規則 `F001`–`F011`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 49 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/validation.py`；`core/research/market_data.py`；`core/research/sources/twse.py`；`test/unit/research/test_validation.py`
   - **驗收**：每個代碼各有觸發與不觸發測試。**含 `F011_window_before_source_start`**（請求日期早於來源歷史下界 2004-02-11）。
 
 - [ ] [2026-08-13] 6.2 WARN 規則 `W001`–`W013`
