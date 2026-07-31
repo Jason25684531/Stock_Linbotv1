@@ -218,13 +218,16 @@
   - Verification: `python -m pytest test/unit/research -q` → 34 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/normalize.py`；`test/unit/research/test_normalize.py`
 
-- [ ] [2026-08-08] 4.2 ★ 產生 `corporate_actions` 獨立契約
+- [x] [2026-08-08] 4.2 ★ 產生 `corporate_actions` 獨立契約
   - 目標：`ex_date, stock_id, action_type, pre_ex_close, ex_reference_price, event_factor, source, retrieved_at`（design §6.2）。
   - **驗收（阻擋）**：
     1. `event_factor = ex_reference_price / pre_ex_close`
     2. **契約中不得存在 `cash_dividend` 或 `stock_split_ratio`**（原始碼掃描）——來源只提供合併的「權值+息值」
     3. `(ex_date, stock_id)` 重複 → `F002`
   - 測試：`test/unit/research/test_corporate_actions.py`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 37 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/normalize.py`；`test/unit/research/test_corporate_actions.py`
 
 - [ ] [2026-08-09] 4.3 Lineage 欄位填充
   - **驗收（阻擋）**：**同一列 OHLC 的四個價格必須來自同一來源的同一次回應**（斷言不存在混來源的列）。
