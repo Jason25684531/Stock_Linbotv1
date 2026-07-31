@@ -1,5 +1,6 @@
 """Source-value normalization for research data."""
 
+from dataclasses import dataclass
 from datetime import date, datetime
 from math import nan
 from typing import Mapping
@@ -15,6 +16,12 @@ CORPORATE_ACTION_COLUMNS = (
 
 class DuplicateKeyError(ValueError):
     code = "F002_duplicate_key"
+
+
+@dataclass(frozen=True)
+class AdjustmentResult:
+    quotes: pd.DataFrame
+    warnings: list[str]
 
 
 def parse_number(value: object) -> float:
@@ -37,6 +44,35 @@ def quote_lineage(source: str, fallback_reason: str = "") -> dict[str, object]:
         "fallback_reason": fallback_reason,
         "quality_status": "degraded" if is_fallback else "unverified",
     }
+
+
+def apply_adjustments(
+    quotes: pd.DataFrame, actions: pd.DataFrame | None, adjustment_as_of: datetime
+) -> AdjustmentResult:
+    """Apply official event factors without overwriting raw prices."""
+
+    adjusted = quotes.copy()
+    adjusted["adjustment_as_of"] = adjustment_as_of
+    if actions is None:
+        adjusted["adjustment_factor"] = nan
+        adjusted["adjustment_source"] = "unavailable"
+        for price in ("open", "high", "low", "close"):
+            adjusted[f"adjusted_{price}"] = nan
+        return AdjustmentResult(adjusted, ["W007_adjustment_unavailable"])
+
+    valid_actions = actions.loc[actions["pre_ex_close"] > 0]
+    warnings = ["W007_adjustment_unavailable"] if len(valid_actions) != len(actions) else []
+    adjusted["adjustment_factor"] = [
+        valid_actions.loc[
+            (valid_actions["stock_id"] == row.stock_id) & (valid_actions["ex_date"] > row.trade_date),
+            "event_factor",
+        ].prod()
+        for row in adjusted.itertuples()
+    ]
+    adjusted["adjustment_source"] = "local_twse_twt49u"
+    for price in ("open", "high", "low", "close"):
+        adjusted[f"adjusted_{price}"] = adjusted[f"raw_{price}"] * adjusted["adjustment_factor"]
+    return AdjustmentResult(adjusted, warnings)
 
 
 def normalize_corporate_actions(payload: Mapping[str, object], retrieved_at: datetime) -> pd.DataFrame:

@@ -235,13 +235,16 @@
   - Verification: `python -m pytest test/unit/research -q` → 38 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/normalize.py::quote_lineage`；`test/unit/research/test_normalize.py`
 
-- [ ] [2026-08-09] 4.4 還原係數計算
+- [x] [2026-08-09] 4.4 還原係數計算
   - **驗收**：
     1. 無事件 → `adjustment_factor` 全為 1.0
     2. 單一事件 → 事件日**之前**為 `event_factor`，事件日**當日及之後**為 1.0
     3. `pre_ex_close <= 0` 的事件跳過並記 WARN，**不產生 Inf**
     4. `adjustment_source='unavailable'` 時 `adjusted_*` 為 NaN，**不得以 raw 冒充**
   - 測試：`test/unit/research/test_adjustment.py`（手算 fixture）
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 41 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/normalize.py::apply_adjustments`；`test/unit/research/test_adjustment.py`
 
 - [ ] [2026-08-10] 4.5 ★ Reconciliation
   - 檔案：`core/research/reconcile.py`
