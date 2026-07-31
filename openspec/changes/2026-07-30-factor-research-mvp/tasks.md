@@ -359,7 +359,7 @@
 
 ## [2026-08-16] Phase 8：D2 因子引擎
 
-- [ ] [2026-08-16] 8.1 ★ 算子（修正後的 NaN 語義）
+- [x] [2026-08-16] 8.1 ★ 算子（修正後的 NaN 語義）
   - 檔案：`core/research/factors.py`
   - 算子：`ts_mean, ts_std, ts_max, ts_min, ts_corr, delta, pct_change, wilder_atr`
   - **驗收（阻擋）**：
@@ -372,6 +372,9 @@
     7. `wilder_atr`：**`TR(1) = high(1) - low(1)`**；**seed = 前 14 筆 TR 的簡單平均**；其後 Wilder 遞迴。與手算一致。**第一個非 NaN 值在第 14 根日線**
     8. 輸出 index／columns 與輸入完全相同
   - 測試：`test/unit/research/test_operators.py`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 56 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/factors.py`；`test/unit/research/test_operators.py`
 
 - [ ] [2026-08-16] 8.1b ★ `FactorResult` 與因子階段診斷
   - 目標：因子計算回傳 `FactorResult(values, diagnostics)`。`diagnostics` 收錄**只有算完才知道**的觀察，目前為 `W012_zero_dispersion`，每筆標 `stage='factor'`。
