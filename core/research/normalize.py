@@ -25,6 +25,20 @@ def parse_number(value: object) -> float:
     return float(str(value).replace(",", ""))
 
 
+def quote_lineage(source: str, fallback_reason: str = "") -> dict[str, object]:
+    """Describe one source for every OHLC value in a quote row."""
+
+    is_fallback = source == "yfinance"
+    if is_fallback != bool(fallback_reason):
+        raise ValueError("fallback rows require yfinance and a reason")
+    return {
+        "raw_price_source": source,
+        "is_fallback": is_fallback,
+        "fallback_reason": fallback_reason,
+        "quality_status": "degraded" if is_fallback else "unverified",
+    }
+
+
 def normalize_corporate_actions(payload: Mapping[str, object], retrieved_at: datetime) -> pd.DataFrame:
     """Convert the official combined rights-and-dividend report to its own contract."""
 

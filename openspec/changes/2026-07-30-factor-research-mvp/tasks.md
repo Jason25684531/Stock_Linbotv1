@@ -229,8 +229,11 @@
   - Verification: `python -m pytest test/unit/research -q` → 37 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/normalize.py`；`test/unit/research/test_corporate_actions.py`
 
-- [ ] [2026-08-09] 4.3 Lineage 欄位填充
+- [x] [2026-08-09] 4.3 Lineage 欄位填充
   - **驗收（阻擋）**：**同一列 OHLC 的四個價格必須來自同一來源的同一次回應**（斷言不存在混來源的列）。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 38 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/normalize.py::quote_lineage`；`test/unit/research/test_normalize.py`
 
 - [ ] [2026-08-09] 4.4 還原係數計算
   - **驗收**：
