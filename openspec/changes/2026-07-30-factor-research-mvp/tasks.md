@@ -263,12 +263,15 @@
 
 ## [2026-08-11] Phase 5：研究資料契約
 
-- [ ] [2026-08-11] 5.1 定義 `canonical_quotes` schema
+- [x] [2026-08-11] 5.1 定義 `canonical_quotes` schema
   - 檔案：`core/research/market_data.py`（design §6.1）
   - **驗收（阻擋）**：
     1. 必填欄缺失 → `F001`；多出未知欄 → 通過
     2. **契約中不得存在 `cash_dividend`、`stock_split_ratio`、`available_at`**（原始碼掃描）
     3. 存在 `market_closed_at`、`retrieved_at`、`adjustment_as_of`、`liquidity_basis`、`quality_status`
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 45 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/market_data.py`；`test/unit/research/test_market_data.py`
 
 - [ ] [2026-08-12] 5.2 requested / loaded window
   - **驗收**：`maximum_lookback=253` 時 `loaded_start` 至少早於 `requested_start` 263 個交易日；輸出僅含 requested 區間。
