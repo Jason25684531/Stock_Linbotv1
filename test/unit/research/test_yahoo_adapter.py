@@ -48,3 +48,20 @@ def test_fetch_history_records_runtime_source_metadata(monkeypatch):
         "repair_status": None,
         "source_error": None,
     }
+
+
+def test_fetch_history_isolates_an_unavailable_vendor(monkeypatch):
+    class Ticker:
+        def __init__(self, symbol):
+            pass
+
+        def history(self, **kwargs):
+            raise RuntimeError("vendor unavailable")
+
+    monkeypatch.setattr(yahoo.yf, "Ticker", Ticker)
+
+    response = yahoo.fetch_history("2330.TW", date(2023, 1, 1), date(2023, 1, 31))
+
+    assert response.payload is None
+    assert response.error == "vendor unavailable"
+    assert response.metadata["source_error"] == "vendor unavailable"

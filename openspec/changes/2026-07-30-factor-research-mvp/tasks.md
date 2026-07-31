@@ -200,8 +200,12 @@
   - Verification: `python -m pytest test/unit/research -q` → 31 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
   - Evidence: `core/research/sources/__init__.py`；`core/research/sources/yahoo.py`；`test/unit/research/test_yahoo_adapter.py`
 
-- [ ] [2026-08-07] 3.3 失敗隔離
+- [x] [2026-08-07] 3.3 失敗隔離
   - **驗收（阻擋）**：yfinance **完全不可用時，canonical 與因子輸出完全不受影響**；`reconciliation_summary.csv` 仍產生（僅表頭），`reconciliation_coverage=0`。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 32 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `test/unit/research/test_yahoo_adapter.py::test_fetch_history_isolates_an_unavailable_vendor`
+  - Deferred end-to-end acceptance (user-approved 2026-07-31): Phase 9 pipeline/artifacts integration SHALL prove canonical/factor outputs unchanged, header-only `reconciliation_summary.csv`, and `reconciliation_coverage=0`.
 
 ---
 
