@@ -3,6 +3,7 @@ import inspect
 import pandas as pd
 
 from core.research.market_data import CANONICAL_QUOTE_COLUMNS
+from core.research import validation
 from core.research.validation import validate
 
 
@@ -47,3 +48,10 @@ def test_contract_validation_emits_nonfatal_data_anomaly_warnings_without_rollin
 
 def test_validation_exposes_no_runtime_severity_override():
     assert tuple(inspect.signature(validate).parameters) == ("quotes",)
+
+
+def test_validation_performs_no_rolling_or_factor_stage_diagnostics():
+    source = open(validation.__file__, encoding="utf-8").read()
+
+    assert ".rolling(" not in source
+    assert "W012" not in source

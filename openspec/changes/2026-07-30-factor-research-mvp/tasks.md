@@ -310,8 +310,11 @@
   - Evidence: `core/research/validation.py::validate`；`test/unit/research/test_validation.py`
   - **驗收（阻擋）**：`validate()` 簽章中**不存在**可調整分級的參數（`inspect.signature` 斷言）。
 
-- [ ] [2026-08-14] 6.4 ★ Validation 只做契約層，不做 rolling
+- [x] [2026-08-14] 6.4 ★ Validation 只做契約層，不做 rolling
   - **驗收（阻擋）**：`validation.py` **不含任何 `.rolling(`**（AST 掃描）；其產生的診斷全部 `stage='contract'`；**不產生 `W012`**。
+  - Completed: 2026-07-31
+  - Verification: `python -m pytest test/unit/research -q` → 52 passed；`strategy_settings.json` SHA256 `f64e37c7…41ec` unchanged
+  - Evidence: `core/research/validation.py`；`test/unit/research/test_validation.py`
   - 依據：design 決策 X-6。
 
 - [ ] [2026-08-14] 6.5 Validation artifact（★ 由 pipeline 合併後寫出）
