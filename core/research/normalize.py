@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 from math import nan
+import re
 from typing import Mapping
 
 import pandas as pd
@@ -46,6 +47,27 @@ def quote_lineage(source: str, fallback_reason: str = "") -> dict[str, object]:
     }
 
 
+def normalize_twse_closing_table(table: Mapping[str, object], trade_date: object, retrieved_at: object) -> pd.DataFrame:
+    """Map the declared MI_INDEX closing-table columns into canonical rows."""
+
+    rows = []
+    for row in table.get("data", []):
+        if len(row) >= 9:
+            stock_id, _, volume, transactions, amount, open_, high, low, close = row[:9]
+        else:
+            stock_id, volume, transactions, amount, open_, high, low, close = row[:8]
+        if not re.fullmatch(r"[1-9]\d{3}", str(stock_id)):
+            continue
+        rows.append({
+            "trade_date": pd.Timestamp(trade_date), "stock_id": str(stock_id), "market": "TWSE", "currency": "TWD",
+            "raw_open": parse_number(open_), "raw_high": parse_number(high), "raw_low": parse_number(low), "raw_close": parse_number(close),
+            "volume": parse_number(volume), "amount": parse_number(amount), "transaction_count": parse_number(transactions),
+            "liquidity_basis": "official_amount", "market_closed_at": None, "retrieved_at": retrieved_at, "ingested_at": retrieved_at,
+            "source_revision": None, "quality_flags": "", **quote_lineage("twse_rwd"),
+        })
+    return pd.DataFrame(rows)
+
+
 def apply_adjustments(
     quotes: pd.DataFrame, actions: pd.DataFrame | None, adjustment_as_of: datetime
 ) -> AdjustmentResult:
@@ -60,11 +82,13 @@ def apply_adjustments(
             adjusted[f"adjusted_{price}"] = nan
         return AdjustmentResult(adjusted, ["W007_adjustment_unavailable"])
 
-    valid_actions = actions.loc[actions["pre_ex_close"] > 0]
+    valid_actions = actions.loc[actions["pre_ex_close"] > 0].copy()
+    valid_actions["ex_date"] = pd.to_datetime(valid_actions["ex_date"])
     warnings = ["W007_adjustment_unavailable"] if len(valid_actions) != len(actions) else []
     adjusted["adjustment_factor"] = [
         valid_actions.loc[
-            (valid_actions["stock_id"] == row.stock_id) & (valid_actions["ex_date"] > row.trade_date),
+            (valid_actions["stock_id"] == row.stock_id)
+            & (valid_actions["ex_date"] > pd.Timestamp(row.trade_date)),
             "event_factor",
         ].prod()
         for row in adjusted.itertuples()
