@@ -6,6 +6,9 @@ import pytest
 from core.research.market_data import (
     CANONICAL_QUOTE_COLUMNS,
     SchemaError,
+    add_asset_id,
+    add_available_at,
+    add_is_tradable,
     loaded_window,
     restrict_to_requested_window,
     to_wide,
@@ -31,7 +34,61 @@ def test_canonical_quote_schema_carries_provenance_and_time_fields_only():
     assert {"market_closed_at", "retrieved_at", "adjustment_as_of", "liquidity_basis", "quality_status"} <= set(CANONICAL_QUOTE_COLUMNS)
     assert "cash_dividend" not in source
     assert "stock_split_ratio" not in source
-    assert "available_at" not in source
+    # available_at is now a derived compatibility column (see add_available_at below);
+    # it is not part of the required canonical schema itself.
+    assert "available_at" not in CANONICAL_QUOTE_COLUMNS
+
+
+def test_asset_id_mirrors_stock_id():
+    quotes = pd.DataFrame({"stock_id": ["2330", "2317"]})
+
+    result = add_asset_id(quotes)
+
+    assert result["asset_id"].tolist() == result["stock_id"].tolist()
+
+
+def test_is_tradable_rules():
+    quotes = pd.DataFrame({
+        "volume": [0.0, 10.0, 10.0, 10.0],
+        "quality_status": ["ok", "degraded", "unverified", "ok"],
+    })
+
+    result = add_is_tradable(quotes)
+
+    assert result["is_tradable"].tolist() == [False, False, False, True]
+
+
+def test_available_at_uses_next_trading_day_not_market_close():
+    quotes = pd.DataFrame({
+        "trade_date": ["2026-01-02", "2026-01-05", "2026-01-06"],
+        "market_closed_at": ["2026-01-02T13:30", "2026-01-05T13:30", "2026-01-06T13:30"],
+    })
+
+    result = add_available_at(quotes)
+
+    assert result["available_at"].iloc[0] == pd.Timestamp("2026-01-05T13:30")
+    assert result["available_at"].iloc[1] == pd.Timestamp("2026-01-06T13:30")
+    # available_at is never the row's own trade date/observation instant
+    assert result["available_at"].iloc[0] != pd.Timestamp(quotes["market_closed_at"].iloc[0])
+
+
+def test_available_at_is_null_for_last_loaded_trade_date():
+    quotes = pd.DataFrame({
+        "trade_date": ["2026-01-02", "2026-01-05"],
+        "market_closed_at": ["2026-01-02T13:30", "2026-01-05T13:30"],
+    })
+
+    result = add_available_at(quotes)
+
+    assert pd.isna(result["available_at"].iloc[-1])
+
+
+def test_legacy_and_canonical_columns_coexist():
+    quotes = pd.DataFrame({"stock_id": ["2330"], "trade_date": ["2026-01-02"]})
+
+    result = add_asset_id(quotes)
+
+    assert {"stock_id", "asset_id", "trade_date"} <= set(result.columns)
 
 
 def test_loaded_window_includes_lookback_and_only_emits_requested_dates():

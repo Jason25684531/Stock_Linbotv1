@@ -5,6 +5,7 @@
 """
 
 import pandas as pd
+import pytest
 from core.strategy_manager import StrategyManager
 from core.db_helper import get_db_engine
 
@@ -26,6 +27,7 @@ def test_strategy_loading():
     return True
 
 
+@pytest.mark.integration
 def test_filter_candidates():
     """測試篩選邏輯"""
     print("\n" + "="*60)
@@ -66,6 +68,7 @@ def test_filter_candidates():
         return False
 
 
+@pytest.mark.integration
 def test_backward_compatibility():
     """測試向後兼容性"""
     print("\n" + "="*60)

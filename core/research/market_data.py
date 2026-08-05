@@ -60,6 +60,40 @@ def restrict_to_requested_window(quotes: pd.DataFrame, window: DataWindow) -> pd
     return quotes.loc[(dates >= window.requested_start) & (dates <= window.requested_end)].copy()
 
 
+def add_asset_id(quotes: pd.DataFrame) -> pd.DataFrame:
+    """Add `asset_id` as a read-only mirror of `stock_id` for compatibility consumers."""
+
+    return quotes.assign(asset_id=quotes["stock_id"])
+
+
+def add_is_tradable(quotes: pd.DataFrame) -> pd.DataFrame:
+    """Flag per-row tradability, independent of the research universe filter in universe.py."""
+
+    degraded = quotes["quality_status"].isin(["degraded", "unverified"])
+    return quotes.assign(is_tradable=(quotes["volume"] > 0) & ~degraded)
+
+
+def add_available_at(quotes: pd.DataFrame) -> pd.DataFrame:
+    """Add a conservative `available_at`: the observation instant of the next trading day.
+
+    `market_closed_at` is this row's own observation instant (the instant the trade
+    date's market activity was observed), not a claim about when the data became
+    available. `available_at` never equals the row's own trade date; for the last
+    trading day present in this dataset there is no known next trading day, so
+    `available_at` is null rather than guessed from a calendar-day offset.
+    """
+
+    trade_dates = pd.Index(sorted(pd.to_datetime(quotes["trade_date"]).unique()))
+    observation_time = (
+        quotes.assign(trade_date=pd.to_datetime(quotes["trade_date"]), market_closed_at=pd.to_datetime(quotes["market_closed_at"]))
+        .drop_duplicates("trade_date")
+        .set_index("trade_date")["market_closed_at"]
+    )
+    next_trade_date = pd.Series(trade_dates, index=trade_dates).shift(-1)
+    available_at_by_date = next_trade_date.map(observation_time)
+    return quotes.assign(available_at=pd.to_datetime(quotes["trade_date"]).map(available_at_by_date))
+
+
 def to_wide(quotes: pd.DataFrame, columns: list[str]) -> dict[str, pd.DataFrame]:
     """Create aligned computation frames after proving the natural key is unique."""
 

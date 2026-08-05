@@ -25,6 +25,7 @@ class FactorSpec:
     price_basis: str
     unit: str
     description: str
+    canonical: bool = True
 
 
 def _ratio(numerator: pd.DataFrame, denominator: pd.DataFrame) -> pd.DataFrame:
@@ -54,6 +55,10 @@ def _near_high_252d(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
 def _return_5d(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
     close = frames["adjusted_close"]
     return _ratio(close, close.shift(5)) - 1
+
+
+def _reversal_5d(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    return -_return_5d(frames)
 
 
 def _volume_ratio_20d(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -87,31 +92,43 @@ def _overnight_gap_20d(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return ts_mean(_ratio(frames["adjusted_open"], frames["adjusted_close"].shift(1)) - 1, 20)
 
 
+def _vwap_gap(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    volume = frames["volume"].where(frames["volume"] > 0)
+    raw_vwap = _ratio(frames["amount"], volume)
+    return _ratio(frames["raw_close"], raw_vwap) - 1
+
+
 def _spec(
     name: str, family: str, fn: Callable[..., pd.DataFrame], required_columns: tuple[str, ...], lookback: int,
-    price_basis: str, unit: str, description: str,
+    price_basis: str, unit: str, description: str, *, direction: int, canonical: bool = True,
 ) -> FactorSpec:
     return FactorSpec(name, "1", family, fn, required_columns,
-                      lookback, 0, price_basis, unit, description)
+                      lookback, direction, price_basis, unit, description, canonical)
 
+
+_UNDETERMINED_DESCRIPTION = " (direction undetermined pending Rank IC / quantile-return research)"
 
 FACTOR_REGISTRY = {
     spec.name: spec
     for spec in (
-        _spec("momentum_20d", "momentum", _momentum_20d, ("adjusted_close",), 21, "local_adjusted", "ratio", "20-day momentum"),
-        _spec("momentum_60d", "momentum", _momentum_60d, ("adjusted_close",), 61, "local_adjusted", "ratio", "60-day momentum"),
-        _spec("momentum_12_1", "momentum", _momentum_12_1, ("adjusted_close",), 253, "local_adjusted", "ratio", "12-month momentum excluding one month"),
-        _spec("near_high_252d", "momentum", _near_high_252d, ("adjusted_close",), 252, "local_adjusted", "ratio", "distance from 252-day high"),
-        _spec("return_5d", "return", _return_5d, ("adjusted_close",), 6, "local_adjusted", "ratio", "5-day return"),
-        _spec("volume_ratio_20d", "volume", _volume_ratio_20d, ("volume",), 20, "not_applicable", "ratio", "volume over 20-day mean"),
-        _spec("price_volume_corr_20d", "volume", _price_volume_corr_20d, ("adjusted_close", "volume"), 21, "local_adjusted", "correlation", "20-day price-volume correlation"),
-        _spec("range_position", "range", _range_position, ("adjusted_high", "adjusted_low", "adjusted_close"), 1, "local_adjusted", "ratio", "intraday range position"),
-        _spec("realized_vol_20d", "volatility", _realized_vol_20d, ("adjusted_close",), 21, "local_adjusted", "annualized_ratio", "20-day realized volatility"),
-        _spec("natr_14d", "volatility", _natr_14d, ("adjusted_high", "adjusted_low", "adjusted_close"), 14, "local_adjusted", "ratio", "14-day normalized ATR"),
-        _spec("amihud_20d", "liquidity", _amihud_20d, ("adjusted_close", "amount"), 21, "local_adjusted", "ratio_per_currency", "20-day Amihud illiquidity"),
-        _spec("overnight_gap_20d", "return", _overnight_gap_20d, ("adjusted_open", "adjusted_close"), 21, "local_adjusted", "ratio", "20-day mean overnight gap"),
+        _spec("momentum_20d", "momentum", _momentum_20d, ("adjusted_close",), 21, "local_adjusted", "ratio", "20-day momentum", direction=1),
+        _spec("momentum_60d", "momentum", _momentum_60d, ("adjusted_close",), 61, "local_adjusted", "ratio", "60-day momentum", direction=1),
+        _spec("momentum_12_1", "momentum", _momentum_12_1, ("adjusted_close",), 253, "local_adjusted", "ratio", "12-month momentum excluding one month", direction=1),
+        _spec("near_high_252d", "momentum", _near_high_252d, ("adjusted_close",), 252, "local_adjusted", "ratio", "distance from 252-day high", direction=1),
+        _spec("reversal_5d", "reversal", _reversal_5d, ("adjusted_close",), 6, "local_adjusted", "ratio", "negated 5-day return, a short-horizon reversal signal", direction=1),
+        _spec("return_5d", "return", _return_5d, ("adjusted_close",), 6, "local_adjusted", "ratio", "5-day return" + _UNDETERMINED_DESCRIPTION, direction=0, canonical=False),
+        _spec("vwap_gap", "return", _vwap_gap, ("raw_close", "amount", "volume"), 1, "raw_unadjusted", "ratio", "unadjusted close vs. same-day VWAP" + _UNDETERMINED_DESCRIPTION, direction=0),
+        _spec("volume_ratio_20d", "volume", _volume_ratio_20d, ("volume",), 20, "not_applicable", "ratio", "volume over 20-day mean" + _UNDETERMINED_DESCRIPTION, direction=0),
+        _spec("price_volume_corr_20d", "volume", _price_volume_corr_20d, ("adjusted_close", "volume"), 21, "local_adjusted", "correlation", "20-day price-volume correlation" + _UNDETERMINED_DESCRIPTION, direction=0),
+        _spec("range_position", "range", _range_position, ("adjusted_high", "adjusted_low", "adjusted_close"), 1, "local_adjusted", "ratio", "intraday range position", direction=1),
+        _spec("realized_vol_20d", "volatility", _realized_vol_20d, ("adjusted_close",), 21, "local_adjusted", "annualized_ratio", "20-day realized volatility", direction=-1),
+        _spec("natr_14d", "volatility", _natr_14d, ("adjusted_high", "adjusted_low", "adjusted_close"), 14, "local_adjusted", "ratio", "14-day normalized ATR", direction=-1),
+        _spec("amihud_20d", "liquidity", _amihud_20d, ("adjusted_close", "amount"), 21, "local_adjusted", "ratio_per_currency", "20-day Amihud illiquidity", direction=-1),
+        _spec("overnight_gap_20d", "return", _overnight_gap_20d, ("adjusted_open", "adjusted_close"), 21, "local_adjusted", "ratio", "20-day mean overnight gap" + _UNDETERMINED_DESCRIPTION, direction=0, canonical=False),
     )
 }
+
+CANONICAL_FACTOR_IDS = frozenset(spec.name for spec in FACTOR_REGISTRY.values() if spec.canonical)
 
 
 def ts_mean(values: pd.DataFrame, window: int) -> pd.DataFrame:

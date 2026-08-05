@@ -10,7 +10,11 @@ import pandas as pd
 
 SOURCE_COVERAGE_FIELDS = ("trade_date", "classification", "bound", "code", "severity", "detail")
 VALIDATION_FIELDS = ("stage", "code", "severity", "trade_date", "stock_id", "detail")
-FACTOR_FIELDS = ("trade_date", "stock_id", "factor_name", "factor_version", "value", "price_basis", "run_id")
+FACTOR_FIELDS = (
+    "trade_date", "stock_id", "factor_name", "factor_version", "value", "price_basis", "run_id",
+    # Canonical aliases mirroring the legacy columns above; kept alongside them for compatibility.
+    "asof_date", "asset_id", "factor_id", "raw_value",
+)
 
 
 def write_source_coverage(output_dir: Path, rows: Iterable[Mapping[str, object]]) -> Path:
@@ -50,6 +54,10 @@ def write_factor_values(
     long["factor_version"] = factor_version
     long["price_basis"] = price_basis
     long["run_id"] = run_id
+    long["asof_date"] = long["trade_date"]
+    long["asset_id"] = long["stock_id"]
+    long["factor_id"] = long["factor_name"]
+    long["raw_value"] = long["value"]
     paths = []
     for year, partition in long.groupby(long["trade_date"].dt.year, sort=True):
         paths.append(_write_frame(root / f"{year}.csv", partition.loc[:, FACTOR_FIELDS]))

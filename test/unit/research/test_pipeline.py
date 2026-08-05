@@ -74,6 +74,19 @@ def test_same_inputs_and_run_id_produce_equal_artifact_schema(tmp_path):
     assert pd.read_csv(first / "values" / "momentum_20d" / "2025.csv").columns.tolist() == pd.read_csv(second / "values" / "momentum_20d" / "2025.csv").columns.tolist()
 
 
+def test_factor_values_carry_canonical_columns_alongside_legacy_columns(tmp_path):
+    run(_config(tmp_path, _quotes()))
+
+    written = pd.read_csv(tmp_path / "values" / "momentum_20d" / "2025.csv")
+
+    assert (written["asof_date"] == written["trade_date"]).all()
+    assert (written["asset_id"] == written["stock_id"]).all()
+    assert (written["factor_id"] == written["factor_name"]).all()
+    assert written["raw_value"].equals(written["value"])
+    assert not written.duplicated(["asof_date", "asset_id", "factor_id", "factor_version"]).any()
+    assert not written.isin([float("inf"), float("-inf")]).any().any()
+
+
 def test_fallback_is_observable_in_coverage_quote_lineage_and_manifest(tmp_path):
     quotes = _quotes()
     quotes["is_fallback"] = True

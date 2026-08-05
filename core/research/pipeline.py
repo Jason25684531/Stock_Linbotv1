@@ -59,20 +59,30 @@ def run(config: RunConfig) -> RunResult:
             f"raw_{column[9:]}" for column in spec.required_columns if column.startswith("adjusted_")
         })
         frames = market_data.to_wide(adjusted, source_columns)
-        raw_frames = _raw_frames(frames)
         primary = factors.compute_factor(spec, frames)
-        qa = factors.compute_factor(spec, raw_frames)
-        published, comparison = _requested_wide(primary.values, config), _requested_wide(qa.values, config)
-        value_count += published.size + comparison.size
-        null_count += int(published.isna().sum().sum() + comparison.isna().sum().sum())
-        factor_diagnostics.extend(_diagnostic(item) for item in primary.diagnostics + qa.diagnostics)
+        published = _requested_wide(primary.values, config)
+        value_count += published.size
+        null_count += int(published.isna().sum().sum())
+        factor_diagnostics.extend(_diagnostic(item) for item in primary.diagnostics)
         artifacts.write_factor_values(output_dir, published, factor_name=name,
                                       factor_version=spec.version, price_basis=spec.price_basis, run_id=config.run_id)
-        artifacts.write_factor_values(output_dir, comparison, factor_name=name,
-                                      factor_version=spec.version,
-                                      price_basis="not_applicable" if spec.price_basis == "not_applicable" else "raw_unadjusted",
-                                      run_id=config.run_id, qa=True)
-        del frames, raw_frames, primary, qa
+        # Only factors officially published on locally adjusted prices have a
+        # raw-price QA counterpart: renaming raw_* columns to adjusted_* only
+        # makes sense when the factor's own formula already reads adjusted_*.
+        # A factor whose official basis is already raw (e.g. vwap_gap) or that
+        # is not price-derived has no separate raw variant to compare against.
+        if spec.price_basis == "local_adjusted":
+            raw_frames = _raw_frames(frames)
+            qa = factors.compute_factor(spec, raw_frames)
+            comparison = _requested_wide(qa.values, config)
+            value_count += comparison.size
+            null_count += int(comparison.isna().sum().sum())
+            factor_diagnostics.extend(_diagnostic(item) for item in qa.diagnostics)
+            artifacts.write_factor_values(output_dir, comparison, factor_name=name,
+                                          factor_version=spec.version, price_basis="raw_unadjusted",
+                                          run_id=config.run_id, qa=True)
+            del raw_frames, qa
+        del frames, primary
 
     mask, universe_warnings = universe.build_mask(adjusted)
     liquidity_basis = market_data.to_wide(adjusted, ["liquidity_basis"])["liquidity_basis"]
@@ -111,7 +121,9 @@ def _load_twse_quotes(config: RunConfig) -> pd.DataFrame:
         classification = twse.classify(response)
         if classification.kind is twse.ResponseKind.TRADING_DAY:
             quotes.append(normalize.normalize_twse_closing_table(twse.find_closing_table(response.payload), day, response.retrieved_at))
-    return pd.concat(quotes, ignore_index=True) if quotes else pd.DataFrame()
+    if not quotes:
+        return pd.DataFrame()
+    return normalize.sort_canonical_quotes(pd.concat(quotes, ignore_index=True))
 
 
 def _load_actions(config: RunConfig) -> pd.DataFrame | None:

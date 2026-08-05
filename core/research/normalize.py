@@ -68,6 +68,16 @@ def normalize_twse_closing_table(table: Mapping[str, object], trade_date: object
     return pd.DataFrame(rows)
 
 
+def sort_canonical_quotes(quotes: pd.DataFrame) -> pd.DataFrame:
+    """Stably sort canonical rows by (stock_id, trade_date).
+
+    This is the sole place in the pipeline that reorders canonical quotes;
+    validation.py only detects unsorted input and never reorders it.
+    """
+
+    return quotes.sort_values(["stock_id", "trade_date"], kind="stable").reset_index(drop=True)
+
+
 def apply_adjustments(
     quotes: pd.DataFrame, actions: pd.DataFrame | None, adjustment_as_of: datetime
 ) -> AdjustmentResult:

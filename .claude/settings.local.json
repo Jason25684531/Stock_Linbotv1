@@ -41,8 +41,5 @@
       "Bash(git *)",
       "Bash(python jobs/run_factor_research.py --start 2023-01-03 --end 2026-07-28 --run-id full_20260731)"
     ]
-  },
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787"
   }
 }
