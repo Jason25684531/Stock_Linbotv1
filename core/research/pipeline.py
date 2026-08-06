@@ -7,6 +7,8 @@ from typing import Mapping
 import pandas as pd
 
 from core.research import artifacts, factors, market_data, normalize, reconcile, universe, validation
+from core.research.research_dataset import build_research_dataset
+from core.research.forward_returns import forward_return_definitions
 from core.research.sources import twse
 
 
@@ -25,6 +27,7 @@ class RunConfig:
     allow_vendor_fallback: bool = False
     source_coverage: tuple[Mapping[str, object], ...] = ()
     no_fetch: bool = False
+    listing_dates: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,7 @@ def run(config: RunConfig) -> RunResult:
 
     adjusted = normalize.apply_adjustments(config.quotes, config.actions, config.adjustment_as_of).quotes
     factor_diagnostics: list[dict[str, object]] = []
+    factor_rows: list[pd.DataFrame] = []
     skipped: list[str] = []
     value_count = null_count = 0
     for name, spec in factors.FACTOR_REGISTRY.items():
@@ -66,6 +70,7 @@ def run(config: RunConfig) -> RunResult:
         factor_diagnostics.extend(_diagnostic(item) for item in primary.diagnostics)
         artifacts.write_factor_values(output_dir, published, factor_name=name,
                                       factor_version=spec.version, price_basis=spec.price_basis, run_id=config.run_id)
+        factor_rows.append(_factor_rows(published, name, spec.version, spec.price_basis, config.run_id))
         # Only factors officially published on locally adjusted prices have a
         # raw-price QA counterpart: renaming raw_* columns to adjusted_* only
         # makes sense when the factor's own formula already reads adjusted_*.
@@ -91,12 +96,39 @@ def run(config: RunConfig) -> RunResult:
         {"stage": "universe", "code": code, "severity": "WARN", "trade_date": None, "stock_id": None, "detail": ""}
         for code in universe_warnings
     ]
+    d3_manifest: dict[str, object] = {}
+    dataset = None
+    if config.listing_dates is not None:
+        membership = universe.build_membership_v2(adjusted, config.listing_dates)
+        d2_values = pd.concat(factor_rows, ignore_index=True) if factor_rows else pd.DataFrame()
+        directions = {name: spec.direction for name, spec in factors.FACTOR_REGISTRY.items()}
+        dataset, leakage_diagnostics = build_research_dataset(d2_values, membership, adjusted, directions, run_id=config.run_id)
+        leakage_rows = [_diagnostic(item) for item in leakage_diagnostics]
+        merged_diagnostics.extend(leakage_rows)
+        artifacts.write_universe_membership(output_dir, _requested(membership, config))
+        artifacts.write_preprocessing_summary(output_dir, _requested(dataset, config))
+        artifacts.write_leakage_validation(output_dir, leakage_rows)
+        artifacts.write_label_coverage(output_dir, _requested(dataset, config))
+        artifacts.write_research_dataset(output_dir, _requested(dataset, config))
+        d3_manifest = {
+            "d2_source_run_id": config.run_id,
+            "universe_rule_id": universe.UNIVERSE_RULE_V2.rule_id,
+            "universe_parameters": universe.universe_rule_v2_parameters(),
+            "preprocess_parameters": {"method": "winsorize_cs", "lower": 0.01, "upper": 0.99},
+            "forward_return_definitions": forward_return_definitions(),
+            "maximum_forward_horizon": 60,
+            "research_dataset_row_counts": {"total": len(dataset)},
+            "missingness_by_label": {column: int(dataset[column].isna().sum()) for column in dataset if column.startswith("forward_return_") and not column.endswith("_missing_reason")},
+            "leakage_failure_count": len(leakage_diagnostics),
+            "label_versions": {item["label_id"]: item["formula_version"] for item in forward_return_definitions()},
+        }
     artifacts.write_validation_report(output_dir, merged_diagnostics)
     artifacts.write_source_coverage(output_dir, config.source_coverage)
     artifacts.write_universe_counts(output_dir, _requested(counts, config))
     artifacts.write_reconciliation_summary(output_dir, _reconciliation(config))
-    artifacts.write_manifest(output_dir, _manifest(config, "success", merged_diagnostics, counts, skipped, null_count / value_count if value_count else None))
-    return RunResult("success", merged_diagnostics, tuple(skipped), output_dir)
+    status = "failed" if _has_fatal(merged_diagnostics) else "success"
+    artifacts.write_manifest(output_dir, _manifest(config, status, merged_diagnostics, counts, skipped, null_count / value_count if value_count else None, d3_manifest))
+    return RunResult(status, merged_diagnostics, tuple(skipped), output_dir)
 
 
 def _failed(config: RunConfig, diagnostics: list[dict[str, object]]) -> RunResult:
@@ -146,14 +178,20 @@ def _raw_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     }
 
 
+def _factor_rows(values: pd.DataFrame, factor_name: str, factor_version: str, price_basis: str, run_id: str) -> pd.DataFrame:
+    long = values.rename_axis(index="asof_date", columns="asset_id").stack(dropna=False).rename("raw_value").reset_index()
+    return long.assign(factor_id=factor_name, factor_name=factor_name, factor_version=factor_version, price_basis=price_basis, run_id=run_id)
+
+
 def _requested_wide(values: pd.DataFrame, config: RunConfig) -> pd.DataFrame:
     return values.loc[(values.index >= pd.Timestamp(config.requested_start)) & (values.index <= pd.Timestamp(config.requested_end))]
 
 
 def _requested(values: pd.DataFrame, config: RunConfig) -> pd.DataFrame:
-    if values.empty or "trade_date" not in values:
+    date_column = "trade_date" if "trade_date" in values else "asof_date"
+    if values.empty or date_column not in values:
         return values
-    dates = pd.to_datetime(values["trade_date"])
+    dates = pd.to_datetime(values[date_column])
     return values.loc[(dates >= pd.Timestamp(config.requested_start)) & (dates <= pd.Timestamp(config.requested_end))]
 
 
@@ -174,8 +212,8 @@ def _has_fatal(diagnostics: list[dict[str, object]]) -> bool:
     return any(item["severity"] == "FATAL" for item in diagnostics)
 
 
-def _manifest(config: RunConfig, status: str, diagnostics: list[dict[str, object]], counts: pd.DataFrame, skipped: list[str], nan_ratio: float | None = None) -> dict[str, object]:
-    return {
+def _manifest(config: RunConfig, status: str, diagnostics: list[dict[str, object]], counts: pd.DataFrame, skipped: list[str], nan_ratio: float | None = None, extra: Mapping[str, object] | None = None) -> dict[str, object]:
+    manifest = {
         "run_id": config.run_id, "status": status, "generated_at": config.generated_at,
         "git_commit": None, "market_scope": "TWSE",
         "fallback_mode": "allow_vendor_fallback" if config.allow_vendor_fallback else "official_only",
@@ -192,3 +230,5 @@ def _manifest(config: RunConfig, status: str, diagnostics: list[dict[str, object
         "nan_ratio": nan_ratio,
         "skipped_factors": skipped,
     }
+    manifest.update(extra or {})
+    return manifest

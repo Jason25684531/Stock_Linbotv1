@@ -1,4 +1,7 @@
 {
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787"
+  },
   "permissions": {
     "allow": [
       "Bash(source:*)",
@@ -39,7 +42,8 @@
       "Bash(python jobs/run_factor_research.py --start 2023-01-03 --end 2026-07-28 --run-id 2026-07-31T_full_range_dry_run)",
       "Bash(echo \"EXIT_CODE=$?\")",
       "Bash(git *)",
-      "Bash(python jobs/run_factor_research.py --start 2023-01-03 --end 2026-07-28 --run-id full_20260731)"
+      "Bash(python jobs/run_factor_research.py --start 2023-01-03 --end 2026-07-28 --run-id full_20260731)",
+      "Bash(docker compose *)"
     ]
   }
 }

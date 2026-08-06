@@ -41,6 +41,33 @@ def write_reconciliation_summary(output_dir: Path, summary: pd.DataFrame) -> Pat
     return _write_frame(Path(output_dir) / "reconciliation_summary.csv", summary)
 
 
+def write_universe_membership(output_dir: Path, membership: pd.DataFrame) -> Path:
+    return _write_frame(Path(output_dir) / "universe_membership.csv", membership)
+
+
+def write_preprocessing_summary(output_dir: Path, dataset: pd.DataFrame) -> Path:
+    columns = ["asof_date", "factor_id", "member"]
+    return _write_frame(Path(output_dir) / "preprocessing_summary.csv", dataset.loc[:, columns].groupby(columns[:2], dropna=False).agg(member_count=("member", "sum")).reset_index())
+
+
+def write_leakage_validation(output_dir: Path, rows: Iterable[Mapping[str, object]]) -> Path:
+    return _write_rows(Path(output_dir) / "leakage_validation.csv", VALIDATION_FIELDS, rows)
+
+
+def write_label_coverage(output_dir: Path, dataset: pd.DataFrame) -> Path:
+    labels = [column for column in dataset if column.startswith("forward_return_") and not column.endswith("_missing_reason")]
+    return _write_frame(Path(output_dir) / "label_coverage.csv", pd.DataFrame({"label": labels, "non_null_count": [int(dataset[label].notna().sum()) for label in labels]}))
+
+
+def write_research_dataset(output_dir: Path, dataset: pd.DataFrame) -> list[Path]:
+    paths = []
+    work = dataset.copy()
+    work["asof_date"] = pd.to_datetime(work["asof_date"])
+    for (factor_id, year), partition in work.groupby(["factor_id", work["asof_date"].dt.year], sort=True):
+        paths.append(_write_frame(Path(output_dir) / "research_dataset" / str(factor_id) / f"{year}.csv", partition))
+    return paths
+
+
 def write_factor_values(
     output_dir: Path, values: pd.DataFrame, *, factor_name: str, factor_version: str,
     price_basis: str, run_id: str, qa: bool = False,

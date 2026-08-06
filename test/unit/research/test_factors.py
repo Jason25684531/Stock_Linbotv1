@@ -1,6 +1,7 @@
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -120,3 +121,42 @@ def test_masking_before_factor_calculation_breaks_the_historical_window(frames):
 
     assert full.iloc[20, 0] == pytest.approx(2.0)
     assert pd.isna(compute_factor(FACTOR_REGISTRY["momentum_20d"], early).values.iloc[20, 0])
+
+
+def test_factor_values_are_isolated_between_assets(frames):
+    index = frames["adjusted_close"].index
+    second_close = pd.Series([1_000_000.0 if day % 2 else 1.0 for day in range(len(index))], index=index)
+    second_volume = pd.Series([0.0 if day % 17 == 0 else float(10_000 + day) for day in range(len(index))], index=index)
+    second_values = {
+        "adjusted_open": second_close - 0.5,
+        "adjusted_high": second_close + 1.0,
+        "adjusted_low": second_close - 1.0,
+        "adjusted_close": second_close,
+        "volume": second_volume,
+        "amount": second_close * second_volume,
+        "raw_close": second_close,
+    }
+    single_asset = {name: value[["2330"]].copy() for name, value in frames.items()}
+    multi_asset = {name: value.assign(**{"2317": second_values[name]}) for name, value in frames.items()}
+
+    for factor_id in ("momentum_20d", "price_volume_corr_20d", "range_position"):
+        single_result = compute_factor(FACTOR_REGISTRY[factor_id], single_asset).values
+        multi_result = compute_factor(FACTOR_REGISTRY[factor_id], multi_asset).values
+
+        np.testing.assert_allclose(
+            single_result["2330"].to_numpy(),
+            multi_result["2330"].to_numpy(),
+            rtol=1e-9,
+            atol=1e-12,
+            equal_nan=True,
+        )
+        assert multi_result.index.equals(index)
+        assert multi_result.columns.tolist() == ["2330", "2317"]
+
+    np.testing.assert_allclose(
+        compute_factor(FACTOR_REGISTRY["range_position"], multi_asset).values.to_numpy(),
+        np.full((len(index), 2), 0.5),
+        rtol=1e-9,
+        atol=1e-12,
+        equal_nan=True,
+    )

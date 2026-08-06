@@ -2,10 +2,12 @@ import ast
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from core.research.factor_operators import (
     delay,
+    delta,
     rolling_corr,
     rolling_max,
     rolling_mean,
@@ -44,6 +46,38 @@ def test_delay_never_uses_future_data():
     result = delay(perturbed, 1)
 
     pd.testing.assert_series_equal(result.iloc[:-1]["2330"], baseline.iloc[:-1]["2330"])
+
+
+def test_delta_returns_the_observed_difference_for_each_asset():
+    actual = delta(FRAME, 2)
+    expected = FRAME - FRAME.shift(2)
+
+    pd.testing.assert_frame_equal(actual, expected)
+    assert actual.iloc[:2].isna().all().all()
+    np.testing.assert_allclose(
+        actual.iloc[2:].to_numpy(),
+        np.array([[2.0, -2.0], [2.0, -2.0], [2.0, -2.0]]),
+        rtol=0,
+        atol=0,
+    )
+
+
+def test_delta_nulls_its_first_periods_and_propagates_nulls_per_asset():
+    values = FRAME.copy()
+    values.loc[2, "2330"] = float("nan")
+
+    actual = delta(values, 1)
+    expected = pd.DataFrame(
+        {"2330": [float("nan"), 1.0, float("nan"), float("nan"), 1.0],
+         "2317": [float("nan"), -1.0, -1.0, -1.0, -1.0]},
+        index=values.index,
+    )
+
+    pd.testing.assert_frame_equal(actual, expected)
+    assert actual.iloc[:1].isna().all().all()
+    assert actual.loc[3, "2317"] == -1.0
+    assert actual.index.equals(values.index)
+    assert actual.columns.equals(values.columns)
 
 
 def test_winsorize_cs_needs_at_least_two_cross_sectional_observations():

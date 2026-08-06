@@ -59,6 +59,32 @@ def validate(quotes: pd.DataFrame) -> list[Diagnostic]:
     return diagnostics
 
 
+def validate_research_dataset(rows: pd.DataFrame) -> list[Diagnostic]:
+    """Return fatal diagnostics for point-in-time violations in a research dataset."""
+
+    dates = rows.assign(
+        factor_asof_date=pd.to_datetime(rows["factor_asof_date"]),
+        source_max_trade_date=pd.to_datetime(rows["source_max_trade_date"]),
+        execution_date=pd.to_datetime(rows["execution_date"]),
+    )
+    diagnostics: list[Diagnostic] = []
+    checks = (
+        ("F101_source_after_asof", dates["source_max_trade_date"] > dates["factor_asof_date"]),
+        ("F102_execution_not_after_asof", dates["execution_date"] <= dates["factor_asof_date"]),
+    )
+    if {"factor_asof_time", "source_max_available_at", "execution_time"} <= set(rows):
+        instants = rows.loc[:, ["factor_asof_time", "source_max_available_at", "execution_time"]].apply(pd.to_datetime)
+        checks += (
+            ("F103_source_available_after_asof", instants["source_max_available_at"] > instants["factor_asof_time"]),
+            ("F104_execution_not_after_asof_time", instants["factor_asof_time"] >= instants["execution_time"]),
+        )
+    for code, matches in checks:
+        if matches.any():
+            row = rows.loc[matches].iloc[0]
+            diagnostics.append(Diagnostic("research_dataset", code, "FATAL", row.get("factor_asof_date"), row.get("asset_id")))
+    return diagnostics
+
+
 def _has_unsorted_dates(quotes: pd.DataFrame) -> bool:
     """Detect only; sorting itself is normalize.py's sole responsibility."""
 

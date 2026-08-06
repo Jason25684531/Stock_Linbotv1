@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 
+import numpy as np
 import pandas as pd
 
 from core.research.pipeline import RunConfig, run
@@ -79,12 +80,16 @@ def test_factor_values_carry_canonical_columns_alongside_legacy_columns(tmp_path
 
     written = pd.read_csv(tmp_path / "values" / "momentum_20d" / "2025.csv")
 
+    assert {"asof_date", "asset_id", "factor_id", "raw_value"}.issubset(written.columns)
     assert (written["asof_date"] == written["trade_date"]).all()
     assert (written["asset_id"] == written["stock_id"]).all()
     assert (written["factor_id"] == written["factor_name"]).all()
     assert written["raw_value"].equals(written["value"])
     assert not written.duplicated(["asof_date", "asset_id", "factor_id", "factor_version"]).any()
-    assert not written.isin([float("inf"), float("-inf")]).any().any()
+    raw_values = pd.to_numeric(written["raw_value"], errors="coerce")
+    legacy_values = pd.to_numeric(written["value"], errors="coerce")
+    assert not np.isinf(raw_values.to_numpy()).any()
+    assert not np.isinf(legacy_values.to_numpy()).any()
 
 
 def test_fallback_is_observable_in_coverage_quote_lineage_and_manifest(tmp_path):
