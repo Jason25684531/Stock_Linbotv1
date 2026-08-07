@@ -176,8 +176,21 @@ def fetch_holidays() -> RawResponse:
     return _fetch_openapi("holidaySchedule/holidaySchedule")
 
 
-def fetch_company_profile() -> RawResponse:
-    return _fetch_openapi("opendata/t187ap03_L")
+def fetch_company_profile(cache_dir: Path | None = None) -> RawResponse:
+    """Fetch or reuse the payload-only listed-company profile response."""
+
+    if cache_dir is None:
+        return _fetch_openapi("opendata/t187ap03_L")
+    cache_path = Path(cache_dir) / "t187ap03_L.json"
+    if cache_path.exists():
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache_used = True
+    else:
+        payload = _fetch_openapi("opendata/t187ap03_L").payload
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        cache_used = False
+    return RawResponse("twse_openapi", "opendata/t187ap03_L", {}, datetime.now(), None, payload, None, {"cache_used": cache_used})
 
 
 def _fetch_openapi(endpoint: str) -> RawResponse:

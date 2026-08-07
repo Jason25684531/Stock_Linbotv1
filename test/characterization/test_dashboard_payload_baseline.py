@@ -16,7 +16,7 @@ def test_health_check_payload_matches_baseline(monkeypatch):
     response = flask_app.test_client().get('/api/dashboard/health-check?symbol=2330&date=2026-04-24')
     payload = response.get_json()
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-    baseline_path = Path(__file__).parents[2] / 'openspec' / 'changes' / '2026-07-24-stabilize-architecture-for-future-expansion' / '_baseline' / 'dashboard_health_check.sha256.json'
+    baseline_path = Path(__file__).parents[2] / 'openspec' / 'changes' / 'archive' / '2026-08-06-2026-07-24-stabilize-architecture-for-future-expansion' / '_baseline' / 'dashboard_health_check.sha256.json'
     baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
 
     assert response.status_code == 200
@@ -45,7 +45,7 @@ def test_macro_payload_matches_baseline(monkeypatch):
     }))
     response = flask_app.test_client().get('/api/dashboard/macro?date=2026-04-29')
     serialized = json.dumps(response.get_json(), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-    baseline_path = Path(__file__).parents[2] / 'openspec' / 'changes' / '2026-07-24-stabilize-architecture-for-future-expansion' / '_baseline' / 'dashboard_health_check.sha256.json'
+    baseline_path = Path(__file__).parents[2] / 'openspec' / 'changes' / 'archive' / '2026-08-06-2026-07-24-stabilize-architecture-for-future-expansion' / '_baseline' / 'dashboard_health_check.sha256.json'
 
     assert response.status_code == 200
     assert hashlib.sha256(serialized.encode()).hexdigest() == json.loads(baseline_path.read_text(encoding='utf-8'))['macro_sha256']

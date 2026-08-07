@@ -39,3 +39,14 @@ def test_forward_returns_have_reasoned_nulls_without_substitution_or_infinity():
     assert result.loc[1, "forward_return_1d_missing_reason"] == "t1_untradable"
     assert result.loc[3, "forward_return_1d_missing_reason"] == "t1_untradable"
     assert not np.isinf(result.select_dtypes("number").to_numpy()).any()
+
+
+def test_missing_next_calendar_row_is_not_replaced_by_a_later_asset_row():
+    dates = pd.bdate_range("2025-01-01", periods=4)
+    quotes = pd.DataFrame({"trade_date": [dates[0], dates[2], dates[3], *dates], "stock_id": ["A", "A", "A", "B", "B", "B", "B"], "adjusted_open": [10, 100, 101, 10, 11, 12, 13]})
+
+    result = compute_forward_returns(quotes, horizons=(1,))
+
+    first = result.loc[(result.stock_id == "A") & (result.trade_date == dates[0])].iloc[0]
+    assert pd.isna(first.forward_return_1d)
+    assert first.forward_return_1d_missing_reason == "t1_untradable"

@@ -2,7 +2,7 @@ import math
 
 import pandas as pd
 
-from core.research.normalize import normalize_twse_closing_table, quote_lineage, parse_number, sort_canonical_quotes
+from core.research.normalize import normalize_company_profile_listing_dates, normalize_twse_closing_table, quote_lineage, parse_number, sort_canonical_quotes
 
 
 def test_parse_number_removes_thousands_separators():
@@ -31,6 +31,20 @@ def test_normalize_twse_closing_table_creates_twse_canonical_rows():
     quotes = normalize_twse_closing_table(table, "2026-07-28", "retrieved")
 
     assert quotes.loc[0, ["stock_id", "market", "raw_open", "raw_high", "raw_low", "raw_close", "volume", "amount"]].tolist() == ["2330", "TWSE", 10.0, 12.0, 9.0, 11.0, 100.0, 3000.0]
+
+
+def test_normalize_company_profiles_keeps_only_unambiguous_valid_listing_dates():
+    listing_dates = normalize_company_profile_listing_dates([
+        {"公司代號": "2330", "上市日期": "19940905"},
+        {"公司代號": "2317", "上市日期": "not-a-date"},
+        {"公司代號": "2454", "上市日期": "19940905"},
+        {"公司代號": "2454", "上市日期": "19940905"},
+        {"公司代號": "2303", "上市日期": "19940905"},
+        {"公司代號": "2303", "上市日期": "19940906"},
+        {"公司代號": "ABC", "上市日期": "19940905"},
+    ])
+
+    assert listing_dates == {"2330": pd.Timestamp("1994-09-05"), "2454": pd.Timestamp("1994-09-05")}
 
 
 def test_normalize_sorts_by_stock_id_and_trade_date():

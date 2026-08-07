@@ -2,11 +2,15 @@
 
 from dataclasses import dataclass
 from datetime import date, datetime
+import logging
 from math import nan
 import re
 from typing import Mapping
 
 import pandas as pd
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 CORPORATE_ACTION_COLUMNS = (
@@ -76,6 +80,27 @@ def sort_canonical_quotes(quotes: pd.DataFrame) -> pd.DataFrame:
     """
 
     return quotes.sort_values(["stock_id", "trade_date"], kind="stable").reset_index(drop=True)
+
+
+def normalize_company_profile_listing_dates(payload: object) -> dict[str, pd.Timestamp]:
+    """Return unambiguous four-digit stock identifiers and their listed dates."""
+
+    dates_by_stock: dict[str, set[pd.Timestamp | None]] = {}
+    for row in payload if isinstance(payload, list) else []:
+        if not isinstance(row, Mapping):
+            continue
+        stock_id = str(row.get("公司代號", "")).strip()
+        if not re.fullmatch(r"[1-9]\d{3}", stock_id):
+            continue
+        parsed = pd.to_datetime(row.get("上市日期"), format="%Y%m%d", errors="coerce")
+        dates_by_stock.setdefault(stock_id, set()).add(None if pd.isna(parsed) else pd.Timestamp(parsed))
+    listing_dates = {}
+    for stock_id, dates in dates_by_stock.items():
+        if len(dates) == 1 and None not in dates:
+            listing_dates[stock_id] = next(iter(dates))
+        else:
+            LOGGER.warning("listing date unavailable or conflicting for %s", stock_id)
+    return listing_dates
 
 
 def apply_adjustments(

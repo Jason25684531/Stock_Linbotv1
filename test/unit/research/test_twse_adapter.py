@@ -216,5 +216,35 @@ def test_openapi_reference_adapters_are_offline_mockable(monkeypatch):
     ]
 
 
+def test_fetch_company_profile_uses_payload_only_cache_without_http_request(tmp_path, monkeypatch):
+    cached = [{"公司代號": "2330", "上市日期": "19940905"}]
+    (tmp_path / "t187ap03_L.json").write_text(json.dumps(cached, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(twse.requests, "get", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("cache hit must not make an HTTP request")))
+
+    response = twse.fetch_company_profile(tmp_path)
+
+    assert response.payload == cached
+    assert response.metadata["cache_used"] is True
+
+
+def test_fetch_company_profile_fetches_once_and_writes_payload_only_cache(tmp_path, monkeypatch):
+    payload = [{"公司代號": "2330", "上市日期": "19940905"}]
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    monkeypatch.setattr(twse.requests, "get", lambda *_args, **_kwargs: Response())
+
+    response = twse.fetch_company_profile(tmp_path)
+
+    assert response.payload == payload
+    assert response.metadata["cache_used"] is False
+    assert json.loads((tmp_path / "t187ap03_L.json").read_text(encoding="utf-8")) == payload
+
+
 def test_unknown_declared_field_does_not_trigger_schema_drift():
     twse.validate_corporate_action_fields({"fields": [*twse.REQUIRED_ACTION_FIELDS, "新增欄位"]})

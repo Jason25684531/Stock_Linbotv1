@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import asdict, dataclass
-from typing import Mapping
+from typing import Iterable, Mapping
 
 import pandas as pd
 
@@ -63,7 +63,8 @@ def universe_counts(mask: pd.DataFrame, liquidity_basis: pd.DataFrame) -> pd.Dat
 
 
 def build_membership_v2(
-    quotes: pd.DataFrame, listing_dates: Mapping[str, object], rule: UniverseRuleV2 = UNIVERSE_RULE_V2
+    quotes: pd.DataFrame, listing_dates: Mapping[str, object], rule: UniverseRuleV2 = UNIVERSE_RULE_V2,
+    *, trading_calendar: Iterable[object] | None = None,
 ) -> pd.DataFrame:
     """Build explainable, point-in-time version-two membership rows."""
 
@@ -71,7 +72,9 @@ def build_membership_v2(
     work["trade_date"] = pd.to_datetime(work["trade_date"])
     work["listing_date"] = work["stock_id"].astype(str).map(listing_dates)
     work["listing_date"] = pd.to_datetime(work["listing_date"], errors="coerce")
-    calendar = pd.DatetimeIndex(sorted(work["trade_date"].unique()))
+    if trading_calendar is None:
+        raise ValueError("trading_calendar is required for universe v2")
+    calendar = pd.DatetimeIndex(sorted(pd.to_datetime(trading_calendar)))
     positions = pd.Series(range(len(calendar)), index=calendar)
     listing_positions = work["listing_date"].map(lambda value: calendar.searchsorted(value, side="left") if pd.notna(value) else pd.NA)
     work["listing_age_trading_days"] = [
@@ -86,7 +89,9 @@ def build_membership_v2(
     )
     work["liquidity_sufficient"] = work["liquidity_mean"].ge(rule.minimum_average_amount)
     work["is_tradable_t"] = work["volume"].gt(0)
-    work["is_tradable_t1"] = work.groupby("stock_id")["volume"].shift(-1).gt(0).fillna(False)
+    next_dates = pd.Series(calendar, index=calendar).shift(-1)
+    tradable = work.set_index(["trade_date", "stock_id"])["volume"].gt(0)
+    work["is_tradable_t1"] = [bool(tradable.get((next_dates.get(day), stock_id), False)) for day, stock_id in zip(work["trade_date"], work["stock_id"])]
     eligible = (
         work["stock_id"].astype(str).str.fullmatch(rule.code_regex)
         & work["market"].eq(rule.market)
@@ -98,6 +103,8 @@ def build_membership_v2(
     work["member"] = eligible.fillna(False)
     work["exclusion_reason"] = pd.NA
     for condition, reason in (
+        (~work["stock_id"].astype(str).str.fullmatch(rule.code_regex), "invalid_code"),
+        (~work["market"].eq(rule.market), "wrong_market"),
         (work["listing_date"].isna(), "listing_date_unavailable"),
         (~work["listing_history_sufficient"], "listing_history_insufficient"),
         (~work["liquidity_sufficient"], "liquidity_insufficient"),

@@ -7,8 +7,9 @@ from typing import Mapping
 import pandas as pd
 
 from core.research import artifacts, factors, market_data, normalize, reconcile, universe, validation
+from core.research.factor_preprocess import preprocess_factors
 from core.research.research_dataset import build_research_dataset
-from core.research.forward_returns import forward_return_definitions
+from core.research.forward_returns import compute_forward_returns, forward_return_definitions
 from core.research.sources import twse
 
 
@@ -28,6 +29,9 @@ class RunConfig:
     source_coverage: tuple[Mapping[str, object], ...] = ()
     no_fetch: bool = False
     listing_dates: Mapping[str, object] | None = None
+    trading_calendar: tuple[object, ...] | pd.DatetimeIndex | None = None
+    listing_date_provenance: Mapping[str, object] | None = None
+    require_research_dataset: bool = False
 
 
 @dataclass(frozen=True)
@@ -42,7 +46,7 @@ def run(config: RunConfig) -> RunResult:
     """Run validation, factors, universe, and pure artifact serialization in order."""
 
     if config.quotes is None:
-        config = replace(config, quotes=_load_twse_quotes(config))
+        config = replace(config, quotes=load_twse_quotes(config))
     if config.actions is None:
         config = replace(config, actions=_load_actions(config))
     output_dir = Path(config.output_dir)
@@ -98,18 +102,25 @@ def run(config: RunConfig) -> RunResult:
     ]
     d3_manifest: dict[str, object] = {}
     dataset = None
+    research_dataset_paths = []
     if config.listing_dates is not None:
-        membership = universe.build_membership_v2(adjusted, config.listing_dates)
+        membership = universe.build_membership_v2(adjusted, config.listing_dates, trading_calendar=config.trading_calendar)
         d2_values = pd.concat(factor_rows, ignore_index=True) if factor_rows else pd.DataFrame()
         directions = {name: spec.direction for name, spec in factors.FACTOR_REGISTRY.items()}
-        dataset, leakage_diagnostics = build_research_dataset(d2_values, membership, adjusted, directions, run_id=config.run_id)
+        processed = preprocess_factors(d2_values, membership, directions)
+        label_input = adjusted.merge(
+            membership.loc[:, ["trade_date", "stock_id", "is_tradable_t1"]], on=["trade_date", "stock_id"], how="left",
+        )
+        labels = compute_forward_returns(label_input)
+        dataset = build_research_dataset(processed, membership, labels, adjusted, run_id=config.run_id)
+        leakage_diagnostics = validation.validate_research_dataset(dataset)
         leakage_rows = [_diagnostic(item) for item in leakage_diagnostics]
         merged_diagnostics.extend(leakage_rows)
         artifacts.write_universe_membership(output_dir, _requested(membership, config))
         artifacts.write_preprocessing_summary(output_dir, _requested(dataset, config))
         artifacts.write_leakage_validation(output_dir, leakage_rows)
         artifacts.write_label_coverage(output_dir, _requested(dataset, config))
-        artifacts.write_research_dataset(output_dir, _requested(dataset, config))
+        research_dataset_paths = artifacts.write_research_dataset(output_dir, _requested(dataset, config))
         d3_manifest = {
             "d2_source_run_id": config.run_id,
             "universe_rule_id": universe.UNIVERSE_RULE_V2.rule_id,
@@ -122,6 +133,8 @@ def run(config: RunConfig) -> RunResult:
             "leakage_failure_count": len(leakage_diagnostics),
             "label_versions": {item["label_id"]: item["formula_version"] for item in forward_return_definitions()},
         }
+    if config.require_research_dataset and not research_dataset_paths:
+        merged_diagnostics.append({"stage": "runner", "code": "F015_research_dataset_missing", "severity": "FATAL", "trade_date": None, "stock_id": None, "detail": "D3 run requires research_dataset output"})
     artifacts.write_validation_report(output_dir, merged_diagnostics)
     artifacts.write_source_coverage(output_dir, config.source_coverage)
     artifacts.write_universe_counts(output_dir, _requested(counts, config))
@@ -138,7 +151,7 @@ def _failed(config: RunConfig, diagnostics: list[dict[str, object]]) -> RunResul
     return RunResult("failed", diagnostics, (), Path(config.output_dir))
 
 
-def _load_twse_quotes(config: RunConfig) -> pd.DataFrame:
+def load_twse_quotes(config: RunConfig) -> pd.DataFrame:
     """Fetch or reuse MI_INDEX raw files, then normalize only TWSE source rows."""
 
     cache_dir = Path(config.output_dir) / "_raw" / "twse_rwd"
@@ -160,6 +173,8 @@ def _load_twse_quotes(config: RunConfig) -> pd.DataFrame:
 
 def _load_actions(config: RunConfig) -> pd.DataFrame | None:
     cache_dir = Path(config.output_dir) / "_raw" / "twse_rwd"
+    if config.no_fetch and not (cache_dir / f"TWT49U_{pd.Timestamp(config.requested_start):%Y%m%d}_{pd.Timestamp(config.requested_end):%Y%m%d}.json").exists():
+        return None
     try:
         response = twse.fetch_corporate_actions(pd.Timestamp(config.requested_start).date(), pd.Timestamp(config.requested_end).date(), cache_dir)
         return normalize.normalize_corporate_actions(response.payload, response.retrieved_at)
@@ -229,6 +244,13 @@ def _manifest(config: RunConfig, status: str, diagnostics: list[dict[str, object
         "warning_counts": {code: sum(item["code"] == code for item in diagnostics) for code in sorted({item["code"] for item in diagnostics if item["severity"] == "WARN"})},
         "nan_ratio": nan_ratio,
         "skipped_factors": skipped,
+        "d3_enabled": config.listing_dates is not None,
+        "listing_date_source": None,
+        "listing_date_cache_used": False,
+        "listing_date_retrieved_at": None,
+        "listing_date_asset_count": 0,
+        "listing_date_missing_count": 0,
     }
+    manifest.update(config.listing_date_provenance or {})
     manifest.update(extra or {})
     return manifest

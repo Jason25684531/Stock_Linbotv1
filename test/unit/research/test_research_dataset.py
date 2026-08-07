@@ -2,7 +2,10 @@ import numpy as np
 import pandas as pd
 
 from core.research.pipeline import RunConfig, run
+from core.research.factor_preprocess import preprocess_factors
+from core.research.forward_returns import compute_forward_returns
 from core.research.research_dataset import build_research_dataset
+from core.research.validation import validate_research_dataset
 
 
 def test_research_dataset_is_unique_explainable_and_has_no_infinities():
@@ -21,7 +24,10 @@ def test_research_dataset_is_unique_explainable_and_has_no_infinities():
         {"trade_date": dates.tolist() * 2, "stock_id": ["A"] * 4 + ["B"] * 4, "adjusted_open": [10.0, 11.0, 12.0, 13.0] * 2}
     )
 
-    dataset, diagnostics = build_research_dataset(factors, membership, quotes, {"f": 1}, run_id="run")
+    processed = preprocess_factors(factors, membership, {"f": 1})
+    labels = compute_forward_returns(quotes.merge(membership.loc[:, ["trade_date", "stock_id", "is_tradable_t1"]], on=["trade_date", "stock_id"], how="left"))
+    dataset = build_research_dataset(processed, membership, labels, quotes, run_id="run")
+    diagnostics = validate_research_dataset(dataset)
 
     assert not dataset.duplicated(["asof_date", "asset_id", "factor_id"]).any()
     assert not np.isinf(dataset.select_dtypes("number").to_numpy()).any()
@@ -35,7 +41,7 @@ def test_pipeline_dataset_stage_is_opt_in_and_offline(tmp_path):
     quotes = pd.concat(
         [
             pd.DataFrame({"trade_date": dates, "stock_id": stock_id, "market": "TWSE", "currency": "TWD", "raw_open": 20.0, "raw_high": 21.0, "raw_low": 19.0, "raw_close": 20.0, "volume": volume, "amount": 25_000_000.0, "transaction_count": 1, "liquidity_basis": "official_amount"})
-            for stock_id, volume in (("A", 1_000_000.0), ("B", 1_000_000.0), ("C", 0.0))
+            for stock_id, volume in (("2330", 1_000_000.0), ("2317", 1_000_000.0), ("2454", 0.0))
         ],
         ignore_index=True,
     )
@@ -43,7 +49,7 @@ def test_pipeline_dataset_stage_is_opt_in_and_offline(tmp_path):
         run_id="d3", generated_at="2026-08-06T00:00:00Z", adjustment_as_of="2026-08-06",
         requested_start=dates[0], requested_end=dates[-1], output_dir=tmp_path, quotes=quotes,
         actions=pd.DataFrame(columns=["ex_date", "stock_id", "pre_ex_close", "event_factor"]),
-        listing_dates={"A": dates[0], "B": dates[100], "C": dates[0]}, no_fetch=True,
+        listing_dates={"2330": dates[0], "2317": dates[100], "2454": dates[0]}, trading_calendar=dates, no_fetch=True,
     )
 
     result = run(config)
@@ -51,4 +57,9 @@ def test_pipeline_dataset_stage_is_opt_in_and_offline(tmp_path):
     assert result.status == "success"
     assert (tmp_path / "universe_membership.csv").exists()
     assert (tmp_path / "research_dataset").exists()
-    assert not pd.read_csv(tmp_path / "universe_membership.csv").query("stock_id == 'B'")["member"].any()
+    membership = pd.read_csv(tmp_path / "universe_membership.csv")
+    membership["stock_id"] = membership["stock_id"].astype(str)
+    assert membership.query("stock_id == '2330'")["member"].any()
+    assert not membership.query("stock_id == '2317'")["member"].any()
+    assert not membership.query("stock_id == '2454'")["member"].any()
+    assert pd.read_csv(next((tmp_path / "research_dataset").rglob("*.csv")))["forward_return_1d"].notna().any()

@@ -5,26 +5,16 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from core.research.factor_preprocess import preprocess_factors
-from core.research.forward_returns import compute_forward_returns
-from core.research.validation import Diagnostic, validate_research_dataset
-
 
 def build_research_dataset(
-    factors: pd.DataFrame, membership: pd.DataFrame, quotes: pd.DataFrame, directions: Mapping[str, int], *, run_id: str
-) -> tuple[pd.DataFrame, list[Diagnostic]]:
+    processed: pd.DataFrame, membership: pd.DataFrame, labels: pd.DataFrame, quotes: pd.DataFrame, *, run_id: str
+) -> pd.DataFrame:
     """Combine factor values, membership, timing, and labels into one stable table."""
 
-    processed = preprocess_factors(factors, membership, directions)
     member_fields = membership.rename(columns={"trade_date": "asof_date", "stock_id": "asset_id"}).copy()
     member_fields["asof_date"] = pd.to_datetime(member_fields["asof_date"])
     extras = [column for column in member_fields if column not in {"asof_date", "asset_id", "member"}]
     dataset = processed.merge(member_fields.loc[:, ["asof_date", "asset_id", *extras]], on=["asof_date", "asset_id"], how="left")
-    label_input = quotes.merge(
-        member_fields.loc[:, ["asof_date", "asset_id", "is_tradable_t1"]].rename(columns={"asof_date": "trade_date", "asset_id": "stock_id"}),
-        on=["trade_date", "stock_id"], how="left",
-    )
-    labels = compute_forward_returns(label_input)
     label_columns = [column for column in labels if column.startswith("forward_return_")] + ["trade_date", "stock_id", "entry_price"]
     dataset = dataset.merge(
         labels.loc[:, label_columns].rename(columns={"trade_date": "asof_date", "stock_id": "asset_id"}),
@@ -53,5 +43,4 @@ def build_research_dataset(
     dataset["label_missing_reason"] = dataset[reason_columns].bfill(axis=1).iloc[:, 0] if reason_columns else pd.NA
     numeric = dataset.select_dtypes(include="number").columns
     dataset.loc[:, numeric] = dataset.loc[:, numeric].replace([np.inf, -np.inf], np.nan)
-    diagnostics = validate_research_dataset(dataset)
-    return dataset, diagnostics
+    return dataset
