@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 
-from core.research.factor_charts import FACTOR_CHARTS, GLOBAL_CHARTS, write_charts
+from core.research.factor_charts import CANDIDATE_CHARTS, FACTOR_CHARTS, GLOBAL_CHARTS, comparison_frame, write_charts
 from core.research.factor_report import write_evaluation_artifacts
 
 
@@ -59,3 +59,68 @@ def test_charts_are_nonempty_and_factor_markdown_paths_resolve(tmp_path):
     report = output / "reports" / "factors" / "momentum_20d.md"
     for relative in ("../../charts/factors/momentum_20d/ic_timeseries.png", "../../charts/factors/momentum_20d/coverage_timeseries.png"):
         assert (report.parent / relative).resolve().is_file()
+
+
+def test_cross_factor_reporting_uses_artifact_60d_values_and_status_candidates(tmp_path):
+    output = tmp_path / "eval"
+    scoreboard = pd.DataFrame([
+        {"factor_id": "candidate_a", "status": "CANDIDATE", "aligned_mean_ic": 999.0, "best_horizon": 5, "best_horizon_confidence": "CLEAR", "direction": 1},
+        {"factor_id": "candidate_b", "status": "CANDIDATE", "aligned_mean_ic": 999.0, "best_horizon": 20, "best_horizon_confidence": "CLEAR", "direction": 1},
+        {"factor_id": "weak", "status": "WEAK", "aligned_mean_ic": 999.0, "best_horizon": 60, "best_horizon_confidence": "CLEAR", "direction": 1},
+    ])
+    tables = {
+        "ic_summary": pd.DataFrame([
+            {"factor_id": factor_id, "horizon": horizon, "raw_mean_ic": 0.01, "aligned_mean_ic": value, "raw_icir": 0.1, "aligned_icir": value * 10}
+            for factor_id, horizon, value in (("candidate_a", 60, 0.02), ("candidate_a", 5, 0.80), ("candidate_b", 60, 0.03), ("weak", 60, 0.04))
+        ]),
+        "quantile_returns": pd.DataFrame([
+            {"factor_id": factor_id, "horizon": 60, "quantile": quantile, "mean_return": value}
+            for factor_id, value in (("candidate_a", 0.01), ("candidate_b", 0.02), ("weak", 0.03)) for quantile, value in ((1, value), (5, value + 0.05))
+        ]),
+        "coverage": pd.DataFrame([
+            {"factor_id": factor_id, "horizon": 60, "average_coverage": value}
+            for factor_id, value in (("candidate_a", 0.7), ("candidate_b", 0.8), ("weak", 0.9))
+        ]),
+        "turnover": pd.DataFrame([
+            {"factor_id": factor_id, "equal_weight_turnover": value}
+            for factor_id, value in (("candidate_a", 0.1), ("candidate_b", 0.2), ("weak", 0.3))
+        ]),
+        "ic_timeseries": pd.DataFrame([
+            {"factor_id": factor_id, "horizon": 60, "asof_date": "2026-01-02", "raw_ic": 0.01, "aligned_ic": 0.02, "raw_rolling_ic": 0.01, "aligned_rolling_ic": 0.02}
+            for factor_id in ("candidate_a", "candidate_b", "weak")
+        ]),
+        "quantile_timeseries": pd.DataFrame([
+            {"factor_id": factor_id, "horizon": 60, "asof_date": "2026-01-02", "raw_q5_minus_q1": 0.01, "aligned_long_short_spread": 0.02}
+            for factor_id in ("candidate_a", "candidate_b", "weak")
+        ]),
+        "annual_results": pd.DataFrame([
+            {"factor_id": factor_id, "year": 2026, "raw_mean_ic": 0.01, "aligned_mean_ic": 0.02}
+            for factor_id in ("candidate_a", "candidate_b", "weak")
+        ]),
+        "rank_autocorrelation": pd.DataFrame([
+            {"factor_id": factor_id, "asof_date": "2026-01-02", "rank_autocorrelation": 0.5}
+            for factor_id in ("candidate_a", "candidate_b", "weak")
+        ]),
+        "top_n_retention": pd.DataFrame([
+            {"factor_id": factor_id, "asof_date": "2026-01-02", "top_n_retention": 0.5}
+            for factor_id in ("candidate_a", "candidate_b", "weak")
+        ]),
+        "factor_correlation": pd.DataFrame([
+            {"factor_id": "candidate_a", "other_factor_id": "candidate_b", "correlation": 0.2},
+            {"factor_id": "candidate_b", "other_factor_id": "candidate_a", "correlation": 0.2},
+        ]),
+    }
+
+    comparison = comparison_frame(tables, scoreboard).set_index("factor_id")
+    assert comparison.loc["candidate_a", ["mean_rank_ic", "icir", "q5_minus_q1", "turnover", "coverage"]].tolist() == [0.02, 0.2, 0.05, 0.1, 0.7]
+    assert comparison.loc["candidate_b", "mean_rank_ic"] == 0.03
+
+    write_charts(output, tables=tables, scoreboard=scoreboard, source_run_id="d3", evaluation_run_id="d4")
+    for filename in CANDIDATE_CHARTS:
+        assert (output / "charts" / "candidates" / filename).is_file()
+    write_evaluation_artifacts(output, manifest={"status": "success", "evaluation_run_id": "d4"}, tables=tables, scoreboard=scoreboard)
+    report = (output / "FACTOR_RESEARCH_REPORT.md").read_text(encoding="utf-8")
+    assert "## All Factors — 60D" in report
+    assert "## D4 Candidates — 60D" in report
+    assert "## Individual Factor Tear Sheets" in report
+    assert "candidate_a" in report and "candidate_b" in report

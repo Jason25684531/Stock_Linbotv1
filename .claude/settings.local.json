@@ -1,7 +1,4 @@
 {
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787"
-  },
   "permissions": {
     "allow": [
       "Bash(source:*)",
@@ -43,7 +40,12 @@
       "Bash(echo \"EXIT_CODE=$?\")",
       "Bash(git *)",
       "Bash(python jobs/run_factor_research.py --start 2023-01-03 --end 2026-07-28 --run-id full_20260731)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(awk -F, 'NR>1 {print $1, $2}' \"D:\\\\01_Project\\\\Stocke\\\\Stock_Linbotv1\\\\outputs\\\\factor_research\\\\d4_acceptance_20260811_v8\\\\application_candidates.csv\")",
+      "Bash(awk *)"
     ]
+  },
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8787"
   }
 }

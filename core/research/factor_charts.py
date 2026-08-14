@@ -1,4 +1,4 @@
-"""Matplotlib/Agg chart generation for immutable D4 evaluation tables."""
+"""Matplotlib/Agg presentation charts for immutable D4 evaluation tables."""
 
 from pathlib import Path
 
@@ -17,68 +17,155 @@ GLOBAL_CHARTS = (
     "factor_ic_comparison.png", "factor_icir_comparison.png", "factor_spread_comparison.png",
     "factor_turnover_comparison.png", "factor_coverage_comparison.png", "factor_correlation_heatmap.png",
 )
+CANDIDATE_CHARTS = (
+    "factor_ic_comparison.png", "factor_icir_comparison.png", "factor_spread_comparison.png",
+    "factor_turnover_comparison.png", "factor_correlation_heatmap.png",
+)
+COMPARISON_HORIZON = 60
 
 
-def _save(path: Path, title: str, *, x: object = None, y: object = None, ylabel: str = "value") -> None:
+def _factor_rows(frame: pd.DataFrame, factor_id: str) -> pd.DataFrame:
+    return frame.loc[frame.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not frame.empty else frame
+
+
+def _preferred(frame: pd.DataFrame, aligned: str, raw: str) -> pd.Series:
+    return frame[aligned] if aligned in frame and frame[aligned].notna().any() else frame.get(raw, pd.Series(dtype=float))
+
+
+def _horizon_groups(frame: pd.DataFrame):
+    return frame.groupby("horizon") if "horizon" in frame else ((COMPARISON_HORIZON, frame),)
+
+
+def comparison_frame(tables: dict[str, pd.DataFrame], scoreboard: pd.DataFrame) -> pd.DataFrame:
+    """Return presentation-only cross-factor values from their D4 source tables."""
+
+    result = scoreboard.loc[:, [column for column in ("factor_id", "status") if column in scoreboard]].copy()
+    if "factor_id" not in result:
+        return pd.DataFrame(columns=("factor_id", "status", "mean_rank_ic", "icir", "q5_minus_q1", "turnover", "coverage"))
+    summary = tables.get("ic_summary", pd.DataFrame())
+    summary = summary.loc[summary.get("horizon", pd.Series(dtype=int)).eq(COMPARISON_HORIZON)]
+    if not summary.empty:
+        summary = summary.loc[:, ["factor_id"]].assign(
+            mean_rank_ic=_preferred(summary, "aligned_mean_ic", "raw_mean_ic").to_numpy(),
+            icir=_preferred(summary, "aligned_icir", "raw_icir").to_numpy(),
+        )
+        result = result.merge(summary, on="factor_id", how="left")
+    quantiles = tables.get("quantile_returns", pd.DataFrame())
+    quantiles = quantiles.loc[quantiles.get("horizon", pd.Series(dtype=int)).eq(COMPARISON_HORIZON)]
+    if not quantiles.empty:
+        means = quantiles.groupby(["factor_id", "quantile"])["mean_return"].mean().unstack("quantile")
+        spread = (means.get(5, pd.Series(dtype=float)) - means.get(1, pd.Series(dtype=float))).rename("q5_minus_q1")
+        result = result.merge(spread, left_on="factor_id", right_index=True, how="left")
+    coverage = tables.get("coverage", pd.DataFrame())
+    coverage = coverage.loc[coverage.get("horizon", pd.Series(dtype=int)).eq(COMPARISON_HORIZON)]
+    if not coverage.empty:
+        result = result.merge(coverage.loc[:, ["factor_id", "average_coverage"]].rename(columns={"average_coverage": "coverage"}), on="factor_id", how="left")
+    turnover = tables.get("turnover", pd.DataFrame())
+    if not turnover.empty:
+        values = turnover.groupby("factor_id")["equal_weight_turnover"].mean().rename("turnover")
+        result = result.merge(values, left_on="factor_id", right_index=True, how="left")
+    return result
+
+
+def _save_lines(path: Path, title: str, *, series: dict[str, tuple[object, object]], ylabel: str, xlabel: str = "Date") -> None:
     figure, axis = plt.subplots(figsize=(8, 4.5))
-    if x is not None and y is not None and len(x):
-        axis.plot(x, y, label="D4 evaluation")
-        axis.legend()
-    else:
-        axis.text(0.5, 0.5, "No eligible observations", ha="center", va="center", transform=axis.transAxes)
-    axis.set_title(title)
-    axis.set_xlabel("D3 as-of date / factor")
-    axis.set_ylabel(ylabel)
-    axis.grid(alpha=0.25)
-    figure.tight_layout()
-    figure.savefig(path, dpi=120)
-    plt.close(figure)
-
-
-def _save_lines(path: Path, title: str, *, x: object, series: dict[str, object], ylabel: str) -> None:
-    figure, axis = plt.subplots(figsize=(8, 4.5))
-    for label, values in series.items():
+    for label, (x, values) in series.items():
         if values is not None and len(values):
             axis.plot(x, values, label=label)
     if axis.lines:
-        axis.legend()
+        axis.legend(fontsize=8)
     else:
         axis.text(0.5, 0.5, "No eligible observations", ha="center", va="center", transform=axis.transAxes)
-    axis.set_title(title)
-    axis.set_xlabel("D3 as-of date / factor")
-    axis.set_ylabel(ylabel)
+    axis.set(title=title, xlabel=xlabel, ylabel=ylabel)
+    axis.tick_params(axis="x", rotation=30)
     axis.grid(alpha=0.25)
     figure.tight_layout()
     figure.savefig(path, dpi=120)
     plt.close(figure)
 
 
-def _save_heatmap(path: Path, title: str, correlation: pd.DataFrame) -> None:
-    figure, axis = plt.subplots(figsize=(8, 6))
-    if not correlation.empty:
-        matrix = correlation.pivot(index="factor_id", columns="other_factor_id", values="correlation")
-        image = axis.imshow(matrix, vmin=-1, vmax=1, cmap="coolwarm")
-        axis.set_xticks(range(len(matrix.columns)), matrix.columns, rotation=90, fontsize=7)
-        axis.set_yticks(range(len(matrix.index)), matrix.index, fontsize=7)
-        figure.colorbar(image, ax=axis, label="Spearman correlation")
+def _save_bars(path: Path, title: str, values: pd.DataFrame, *, value: str, ylabel: str, xlabel: str = "Factor") -> None:
+    figure, axis = plt.subplots(figsize=(8, 4.5))
+    if not values.empty and value in values:
+        numeric = pd.to_numeric(values[value], errors="coerce")
+        bars = axis.bar(values["factor_id"].astype(str), numeric.fillna(0.0))
+        for bar, missing in zip(bars, numeric.isna()):
+            if missing:
+                axis.text(bar.get_x() + bar.get_width() / 2, 0, "N/A", ha="center", va="bottom", fontsize=8)
     else:
         axis.text(0.5, 0.5, "No eligible observations", ha="center", va="center", transform=axis.transAxes)
-    axis.set_title(title)
-    axis.set_xlabel("Factor")
-    axis.set_ylabel("Factor")
+    axis.set(title=title, xlabel=xlabel, ylabel=ylabel)
+    axis.tick_params(axis="x", rotation=30)
+    axis.grid(axis="y", alpha=0.25)
     figure.tight_layout()
     figure.savefig(path, dpi=120)
     plt.close(figure)
 
 
+def _save_quantile_bars(path: Path, title: str, returns: pd.DataFrame) -> None:
+    figure, axis = plt.subplots(figsize=(8, 4.5))
+    means = returns.groupby(["horizon", "quantile"])["mean_return"].mean().unstack("quantile") if not returns.empty else pd.DataFrame()
+    if not means.empty:
+        quantiles = sorted(means.columns)
+        width = 0.8 / len(means)
+        for index, (horizon, row) in enumerate(means.iterrows()):
+            axis.bar([q + (index - (len(means) - 1) / 2) * width for q in quantiles], row.reindex(quantiles), width=width, label=f"{horizon}D")
+        axis.set_xticks(quantiles, [f"Q{quantile}" for quantile in quantiles])
+        axis.legend(title="Horizon", fontsize=8)
+    else:
+        axis.text(0.5, 0.5, "No eligible observations", ha="center", va="center", transform=axis.transAxes)
+    axis.set(title=title, xlabel="Quantile", ylabel="Full-period mean return")
+    axis.grid(axis="y", alpha=0.25)
+    figure.tight_layout()
+    figure.savefig(path, dpi=120)
+    plt.close(figure)
+
+
+def _save_heatmap(path: Path, title: str, correlation: pd.DataFrame, factor_ids: list[str]) -> None:
+    figure, axis = plt.subplots(figsize=(8, 6))
+    matrix = correlation.pivot(index="factor_id", columns="other_factor_id", values="correlation").reindex(index=factor_ids, columns=factor_ids) if not correlation.empty else pd.DataFrame(index=factor_ids, columns=factor_ids)
+    if factor_ids:
+        image = axis.imshow(matrix.astype(float), vmin=-1, vmax=1, cmap="coolwarm")
+        axis.set_xticks(range(len(factor_ids)), factor_ids, rotation=90, fontsize=7)
+        axis.set_yticks(range(len(factor_ids)), factor_ids, fontsize=7)
+        for row, factor_id in enumerate(factor_ids):
+            for column, other_id in enumerate(factor_ids):
+                if pd.isna(matrix.loc[factor_id, other_id]):
+                    axis.text(column, row, "N/A", ha="center", va="center", fontsize=6)
+        figure.colorbar(image, ax=axis, label="Spearman correlation")
+    else:
+        axis.text(0.5, 0.5, "No eligible observations", ha="center", va="center", transform=axis.transAxes)
+    axis.set(title=title, xlabel="Factor", ylabel="Factor")
+    figure.tight_layout()
+    figure.savefig(path, dpi=120)
+    plt.close(figure)
+
+
+def _write_comparison_charts(root: Path, values: pd.DataFrame, correlation: pd.DataFrame, title_prefix: str, *, include_coverage: bool) -> list[Path]:
+    root.mkdir(parents=True, exist_ok=True)
+    charts = (("factor_ic_comparison.png", "mean_rank_ic", "Mean Rank IC"), ("factor_icir_comparison.png", "icir", "ICIR"), ("factor_spread_comparison.png", "q5_minus_q1", "Q5-Q1 Spread"), ("factor_turnover_comparison.png", "turnover", "Equal-weight Turnover"))
+    if include_coverage:
+        charts += (("factor_coverage_comparison.png", "coverage", "Coverage"),)
+    written = []
+    for filename, column, label in charts:
+        path = root / filename
+        _save_bars(path, f"{title_prefix} — {label} — 60D" if column not in {"turnover"} else f"{title_prefix} — {label}", values, value=column, ylabel=label)
+        written.append(path)
+    path = root / "factor_correlation_heatmap.png"
+    _save_heatmap(path, f"{title_prefix} — Correlation", correlation, values["factor_id"].astype(str).tolist())
+    written.append(path)
+    return written
+
+
 def write_charts(output_dir: Path, *, tables: dict[str, pd.DataFrame], scoreboard: pd.DataFrame, source_run_id: str, evaluation_run_id: str) -> list[Path]:
-    """Write all required non-interactive charts, with meaningful data where present."""
+    """Write presentation-only charts from existing D4 artifact tables."""
 
     root = output_dir / "charts"
     root.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
+    written = []
     daily = tables.get("ic_timeseries", pd.DataFrame())
     summary = tables.get("ic_summary", pd.DataFrame())
+    quantile_returns = tables.get("quantile_returns", pd.DataFrame())
     quantiles = tables.get("quantile_timeseries", pd.DataFrame())
     annual = tables.get("annual_results", pd.DataFrame())
     coverage = tables.get("coverage", pd.DataFrame())
@@ -87,56 +174,38 @@ def write_charts(output_dir: Path, *, tables: dict[str, pd.DataFrame], scoreboar
     for factor_id in scoreboard.get("factor_id", pd.Series(dtype=str)):
         directory = root / "factors" / str(factor_id)
         directory.mkdir(parents=True, exist_ok=True)
-        factor_daily = daily.loc[daily.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not daily.empty else daily
-        factor_persistence = persistence.loc[persistence.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not persistence.empty else persistence
-        factor_retention = retention.loc[retention.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not retention.empty else retention
-        factor_summary = summary.loc[summary.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not summary.empty else summary
-        factor_quantiles = quantiles.loc[quantiles.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not quantiles.empty else quantiles
-        factor_annual = annual.loc[annual.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not annual.empty else annual
-        factor_coverage = coverage.loc[coverage.get("factor_id", pd.Series(dtype=str)).eq(factor_id)] if not coverage.empty else coverage
-        for filename in FACTOR_CHARTS:
-            if "retention" in filename and not factor_retention.empty:
-                x, y, ylabel = factor_retention["asof_date"], factor_retention["top_n_retention"], "retention"
-            elif "autocorrelation" in filename and not factor_persistence.empty:
-                x, y, ylabel = factor_persistence["asof_date"], factor_persistence["rank_autocorrelation"], "Spearman correlation"
-            elif filename == "rolling_ic.png" and not factor_daily.empty:
-                path = directory / filename
-                _save_lines(path, f"{factor_id} ??rolling ic\nD3 {source_run_id} | D4 {evaluation_run_id}", x=factor_daily["asof_date"], series={"raw rolling IC": factor_daily["raw_rolling_ic"], "aligned rolling IC": factor_daily["aligned_rolling_ic"]}, ylabel="rolling rank IC")
-                written.append(path)
-                continue
-            elif filename in {"ic_by_horizon.png", "factor_decay.png"} and not factor_summary.empty:
-                value = "aligned_mean_ic" if factor_summary["aligned_mean_ic"].notna().any() else "raw_mean_ic"
-                x, y, ylabel = factor_summary["horizon"], factor_summary[value], value
-            elif filename in {"quantile_returns.png", "q5_q1_cumulative.png"} and not factor_quantiles.empty:
-                value = "aligned_long_short_spread" if factor_quantiles["aligned_long_short_spread"].notna().any() else "raw_q5_minus_q1"
-                x, y, ylabel = factor_quantiles["asof_date"], factor_quantiles[value].cumsum() if filename == "q5_q1_cumulative.png" else factor_quantiles[value], value
-            elif filename == "annual_ic.png" and not factor_annual.empty:
-                value = "aligned_mean_ic" if factor_annual["aligned_mean_ic"].notna().any() else "raw_mean_ic"
-                x, y, ylabel = factor_annual["year"], factor_annual[value], value
-            elif filename == "coverage_timeseries.png" and not factor_coverage.empty:
-                x, y, ylabel = factor_coverage["horizon"], factor_coverage["average_coverage"], "coverage"
-            elif not factor_daily.empty:
-                value = "aligned_ic" if factor_daily["aligned_ic"].notna().any() else "raw_ic"
-                x, y, ylabel = factor_daily["asof_date"], factor_daily[value], value
-            else:
-                x = y = None
-                ylabel = "value"
-            path = directory / filename
-            _save(path, f"{factor_id} — {filename[:-4]}\nD3 {source_run_id} | D4 {evaluation_run_id}", x=x, y=y, ylabel=ylabel)
-            written.append(path)
-    global_metrics = {
-        "factor_ic_comparison.png": ("aligned_mean_ic", "raw_mean_ic", "mean rank IC"),
-        "factor_icir_comparison.png": ("aligned_icir", "raw_icir", "ICIR"),
-        "factor_spread_comparison.png": ("q5_minus_q1", None, "Q5-Q1 spread"),
-        "factor_turnover_comparison.png": ("turnover", None, "equal-weight turnover"),
-        "factor_coverage_comparison.png": ("average_coverage", None, "coverage"),
-    }
-    for filename, (preferred, fallback, ylabel) in global_metrics.items():
-        value = preferred if preferred in scoreboard and scoreboard[preferred].notna().any() else fallback
-        path = root / filename
-        _save(path, f"{filename[:-4]}\nD3 {source_run_id} | D4 {evaluation_run_id}", x=scoreboard.get("factor_id"), y=scoreboard.get(value) if value else None, ylabel=ylabel)
-        written.append(path)
-    path = root / "factor_correlation_heatmap.png"
-    _save_heatmap(path, f"factor correlation heatmap\nD3 {source_run_id} | D4 {evaluation_run_id}", tables.get("factor_correlation", pd.DataFrame()))
-    written.append(path)
+        factor_daily = _factor_rows(daily, factor_id)
+        factor_summary = _factor_rows(summary, factor_id)
+        factor_returns = _factor_rows(quantile_returns, factor_id)
+        factor_quantiles = _factor_rows(quantiles, factor_id)
+        factor_annual = _factor_rows(annual, factor_id)
+        factor_coverage = _factor_rows(coverage, factor_id)
+        factor_persistence = _factor_rows(persistence, factor_id)
+        factor_retention = _factor_rows(retention, factor_id)
+        value = "aligned_ic" if "aligned_ic" in factor_daily and factor_daily["aligned_ic"].notna().any() else "raw_ic"
+        lines = {f"{horizon}D": (group["asof_date"], group[value]) for horizon, group in _horizon_groups(factor_daily)}
+        _save_lines(directory / "ic_timeseries.png", f"{factor_id} — Rank IC\nD3 {source_run_id} | D4 {evaluation_run_id}", series=lines, ylabel="rank IC")
+        rolling = "aligned_rolling_ic" if "aligned_rolling_ic" in factor_daily and factor_daily["aligned_rolling_ic"].notna().any() else "raw_rolling_ic"
+        lines = {f"{horizon}D": (group["asof_date"], group[rolling]) for horizon, group in _horizon_groups(factor_daily)}
+        _save_lines(directory / "rolling_ic.png", f"{factor_id} — Rolling IC\nD3 {source_run_id} | D4 {evaluation_run_id}", series=lines, ylabel="rolling rank IC")
+        summary_value = "aligned_mean_ic" if "aligned_mean_ic" in factor_summary and factor_summary["aligned_mean_ic"].notna().any() else "raw_mean_ic"
+        _save_bars(directory / "ic_by_horizon.png", f"{factor_id} — Mean Rank IC by Horizon", factor_summary.loc[:, ["horizon", summary_value]].rename(columns={"horizon": "factor_id", summary_value: "value"}), value="value", ylabel="mean rank IC", xlabel="Horizon")
+        _save_quantile_bars(directory / "quantile_returns.png", f"{factor_id} — Quantile Returns", factor_returns)
+        spread = "aligned_long_short_spread" if "aligned_long_short_spread" in factor_quantiles and factor_quantiles["aligned_long_short_spread"].notna().any() else "raw_q5_minus_q1"
+        lines = {f"{horizon}D": (group["asof_date"], group[spread].cumsum()) for horizon, group in _horizon_groups(factor_quantiles)}
+        _save_lines(directory / "q5_q1_cumulative.png", f"{factor_id} — Cumulative Q5-Q1 Spread", series=lines, ylabel="cumulative spread")
+        _save_bars(directory / "factor_decay.png", f"{factor_id} — Factor Decay", factor_summary.loc[:, ["horizon", summary_value]].rename(columns={"horizon": "factor_id", summary_value: "value"}), value="value", ylabel="mean rank IC", xlabel="Horizon")
+        _save_lines(directory / "rank_autocorrelation.png", f"{factor_id} — Rank Autocorrelation", series={"Spearman": (factor_persistence.get("asof_date", []), factor_persistence.get("rank_autocorrelation", []))}, ylabel="Spearman correlation")
+        _save_lines(directory / "top_n_retention.png", f"{factor_id} — Top-N Retention", series={"Top-N retention": (factor_retention.get("asof_date", []), factor_retention.get("top_n_retention", []))}, ylabel="retention")
+        annual_value = "aligned_mean_ic" if "aligned_mean_ic" in factor_annual and factor_annual["aligned_mean_ic"].notna().any() else "raw_mean_ic"
+        _save_bars(directory / "annual_ic.png", f"{factor_id} — Annual Rank IC", factor_annual.loc[:, ["year", annual_value]].rename(columns={"year": "factor_id", annual_value: "value"}), value="value", ylabel="mean rank IC", xlabel="Year")
+        _save_bars(directory / "coverage_timeseries.png", f"{factor_id} — Coverage by Horizon", factor_coverage.loc[:, ["horizon", "average_coverage"]].rename(columns={"horizon": "factor_id", "average_coverage": "value"}), value="value", ylabel="coverage", xlabel="Horizon")
+        written.extend(directory / filename for filename in FACTOR_CHARTS)
+    values = comparison_frame(tables, scoreboard)
+    correlation = tables.get("factor_correlation", pd.DataFrame())
+    written.extend(_write_comparison_charts(root, values, correlation, "All Factors", include_coverage=True))
+    candidates = values.loc[values["status"].eq("CANDIDATE")] if "status" in values else values.iloc[0:0]
+    candidate_ids = candidates["factor_id"].astype(str)
+    candidate_correlation = correlation.loc[correlation.get("factor_id", pd.Series(dtype=str)).isin(candidate_ids) & correlation.get("other_factor_id", pd.Series(dtype=str)).isin(candidate_ids)] if not correlation.empty else correlation
+    written.extend(_write_comparison_charts(root / "candidates", candidates, candidate_correlation, "D4 Candidates", include_coverage=False))
     return written

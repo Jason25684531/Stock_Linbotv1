@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from core.research.factor_charts import COMPARISON_HORIZON, comparison_frame
+
 
 def _safe_csv(frame: pd.DataFrame, path: Path) -> None:
     result = frame.copy()
@@ -149,23 +151,25 @@ def write_evaluation_artifacts(output_dir: Path, *, manifest: dict[str, object],
     for _, row in scoreboard.iterrows():
         (reports / f"{row.factor_id}.md").write_text(_factor_report(row, tables, manifest), encoding="utf-8")
     counts = scoreboard["status"].value_counts().to_dict() if not scoreboard.empty else {}
+    comparison = comparison_frame(tables, scoreboard)
+    candidates = comparison.loc[comparison["status"].eq("CANDIDATE")] if "status" in comparison else comparison.iloc[0:0]
+    factor_links = "\n".join(f"- [{factor_id}](reports/factors/{factor_id}.md)" for factor_id in scoreboard.get("factor_id", pd.Series(dtype=str)))
     global_report = output_dir / "FACTOR_RESEARCH_REPORT.md"
-    candidates = scoreboard.loc[scoreboard.get("status", pd.Series(dtype=str)).eq("CANDIDATE")] if not scoreboard.empty else scoreboard
     global_report.write_text(
         "# Factor Research Report\n\n"
         f"D3 Source Run: {manifest.get('d3_source_run_id')}\n\nEvaluation Run: {manifest.get('evaluation_run_id')}\n\n"
         f"## Executive Summary\n\n{json.dumps(counts, ensure_ascii=False)}\n\n"
+        f"## All Factors — {COMPARISON_HORIZON}D\n\n"
+        "Cross-factor IC, ICIR, Q5-Q1 spread, and coverage use the common 60D horizon. Turnover uses the D4 turnover artifact.\n\n"
+        + _table(comparison) + "\n\n"
+        "### Correlation\n\n" + _table(tables.get("factor_correlation", pd.DataFrame())) + "\n\n"
+        f"## D4 Candidates — {COMPARISON_HORIZON}D\n\n"
+        "Candidates are derived only from `status == CANDIDATE`; this is not a Top-N or production selection.\n\n"
+        + _table(candidates) + "\n\n"
+        "## Individual Factor Tear Sheets\n\n"
+        "Individual tear sheets retain all research horizons for diagnosis; cross-factor charts do not mix horizons.\n\n"
+        + factor_links + "\n\n"
         "## Factor Scoreboard\n\n" + _table(scoreboard) + "\n\n"
-        "## Rank IC Comparison\n\n" + _table(tables.get("ic_summary", pd.DataFrame())) + "\n\n"
-        "## ICIR Comparison\n\nSee Rank IC Comparison (`raw_icir` and `aligned_icir`).\n\n"
-        "## Quantile Spread Comparison\n\n" + _table(tables.get("quantile_timeseries", pd.DataFrame())) + "\n\n"
-        "## Turnover Comparison\n\n" + _table(tables.get("turnover", pd.DataFrame())) + "\n\n"
-        "## Coverage Comparison\n\n" + _table(tables.get("coverage", pd.DataFrame())) + "\n\n"
-        "## Factor Correlation\n\n" + _table(tables.get("factor_correlation", pd.DataFrame())) + "\n\n"
-        "## Candidate Factors\n\n" + _table(candidates) + "\n\n"
-        "## Review Factors\n\n" + _table(scoreboard.loc[scoreboard.get("status", pd.Series(dtype=str)).eq("REVIEW")]) + "\n\n"
-        "## Weak / Invalid / Untested\n\n" + _table(scoreboard.loc[scoreboard.get("status", pd.Series(dtype=str)).isin(["WEAK", "INVALID", "UNTESTED"])]) + "\n\n"
-        "## Application Map\n\n" + _table(scoreboard.loc[:, [c for c in ("factor_id", "status", "application_role", "next_stage") if c in scoreboard]]) + "\n\n"
         "## Known Research Limitations\n\nD3 forward-return tail coverage is incomplete near requested_end because no +61 trading-day post-window was loaded. D4 does not imply portfolio, cost, OOS, or production readiness.\n",
         encoding="utf-8",
     )
