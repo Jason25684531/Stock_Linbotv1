@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-def build_factor_weights(candidates: pd.DataFrame, correlation: pd.DataFrame, method: str) -> pd.DataFrame:
+def build_factor_weights(candidates: pd.DataFrame, correlation: pd.DataFrame, method: str, *, source_handoff_id: str | None = None) -> pd.DataFrame:
     """Build auditable quality weights; UNKNOWN redundancy remains neutral."""
     ids = candidates["factor_id"].tolist()
     quality_col = {"equal": None, "ic": "mean_ic", "icir": "icir", "redundancy_adjusted": "mean_ic"}.get(method)
@@ -28,10 +28,10 @@ def build_factor_weights(candidates: pd.DataFrame, correlation: pd.DataFrame, me
             final[known] = raw[known] / raw[known].sum() * remaining if raw[known].sum() else base[known] / base[known].sum() * remaining
     else:
         final = raw / raw.sum()
-    return pd.DataFrame({"combination_method": method, "factor_id": ids, "base_quality_weight": base, "redundancy_adjustment": penalties, "final_factor_weight": final, "redundancy_status": ["UNKNOWN_NEUTRAL" if item else "KNOWN" for item in unknown]})
+    return pd.DataFrame({"combination_method": method, "factor_id": ids, "base_quality_weight": base, "redundancy_adjustment": penalties, "final_factor_weight": final, "redundancy_status": ["UNKNOWN_NEUTRAL" if item else "KNOWN" for item in unknown], "source_handoff_id": source_handoff_id})
 
 
-def build_composite_scores(ranks: pd.DataFrame, weights: pd.DataFrame, method: str) -> pd.DataFrame:
+def build_composite_scores(ranks: pd.DataFrame, weights: pd.DataFrame, method: str, *, source_handoff_id: str | None = None) -> pd.DataFrame:
     frame = ranks.merge(weights[["factor_id", "final_factor_weight"]], on="factor_id", how="inner")
     frame = frame.loc[frame["direction_adjusted_rank"].notna()].copy()
     group = frame.groupby(["asof_date", "asset_id"])["final_factor_weight"]
@@ -39,7 +39,8 @@ def build_composite_scores(ranks: pd.DataFrame, weights: pd.DataFrame, method: s
     frame["part"] = frame["direction_adjusted_rank"] * frame["available_weight"]
     result = frame.groupby(["asof_date", "asset_id"], as_index=False).agg(composite_score=("part", "sum"), factor_count=("factor_id", "nunique"))
     result["combination_method"] = method
+    result["source_handoff_id"] = source_handoff_id
     result["composite_score"] = result["composite_score"].replace([np.inf, -np.inf], np.nan)
     if result.duplicated(["asof_date", "asset_id", "combination_method"]).any():
         raise ValueError("duplicate composite canonical key")
-    return result[["asof_date", "asset_id", "combination_method", "composite_score", "factor_count"]]
+    return result[["asof_date", "asset_id", "combination_method", "composite_score", "factor_count", "source_handoff_id"]]

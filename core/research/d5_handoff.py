@@ -17,6 +17,10 @@ class FrozenHandoff:
     def candidate_count(self) -> int:
         return int(self.manifest["candidate_count"])
 
+    @property
+    def handoff_id(self) -> str:
+        return str(self.manifest["handoff_id"])
+
 
 def load_frozen_handoff(path: Path) -> FrozenHandoff:
     """Load a D4 handoff; its own manifest defines the candidate cardinality."""
