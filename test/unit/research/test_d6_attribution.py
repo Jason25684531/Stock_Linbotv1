@@ -1,4 +1,6 @@
 import json
+import importlib.util
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -68,3 +70,34 @@ def test_attribution_requires_minimum_observations():
     short = pd.Series([0.01, 0.02, -0.01], index=pd.date_range("2023-01-01", periods=3))
     with pytest.raises(ValueError, match="insufficient"):
         run_attribution("cfg", short, short)
+
+
+def test_canonical_run_stops_when_benchmark_missing(tmp_path):
+    job_path = Path(__file__).parents[3] / "jobs" / "run_portfolio_validation.py"
+    spec = importlib.util.spec_from_file_location("run_portfolio_validation", job_path)
+    job = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(job)
+    output = job.run(
+        day2_dir=tmp_path / "missing-day2",
+        dataset_path=tmp_path / "missing-dataset",
+        raw_cache_dir=tmp_path / "empty-cache",
+        output_dir=tmp_path / "stopped-run",
+    )
+    manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["final_status"] == "STOPPED"
+    assert manifest["stop_reason"] == "BENCHMARK_UNAVAILABLE"
+
+
+def test_reproducibility_comparison_counts_exact_matches(tmp_path):
+    job_path = Path(__file__).parents[3] / "jobs" / "run_portfolio_validation.py"
+    spec = importlib.util.spec_from_file_location("run_portfolio_validation_repro", job_path)
+    job = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(job)
+    reference, repro = tmp_path / "reference", tmp_path / "repro"
+    reference.mkdir()
+    repro.mkdir()
+    (reference / "value.csv").write_text("value\n1\n", encoding="utf-8")
+    (repro / "value.csv").write_text("value\n1\n", encoding="utf-8")
+    (reference / "run_manifest.json").write_text(json.dumps({"artifact_sha256": job._artifact_hashes(reference)}), encoding="utf-8")
+    comparison = job._compare_reproducibility(reference, repro)
+    assert comparison == {"status": "PASS", "compared_artifact_count": 1, "exact_match_count": 1, "mismatch_count": 0}

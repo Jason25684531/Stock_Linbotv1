@@ -18,7 +18,8 @@ def test_structural_parity_passes_for_identical_data(tmp_path):
     rows = [("2023-01-02", "2023-01-03", "A", 0.5), ("2023-01-02", "2023-01-03", "B", 0.5)]
     frozen_path = _write_frozen(tmp_path, rows)
     replay_targets = pd.DataFrame(rows, columns=["asof_date", "execution_date", "asset_id", "target_weight"])
-    check_structural_parity(replay_targets, frozen_path)  # must not raise
+    evidence = check_structural_parity(replay_targets, frozen_path)
+    assert evidence.iloc[0]["target_intent_parity_status"] == "PASS"
 
 
 def test_structural_parity_fails_when_replay_diverges(tmp_path):

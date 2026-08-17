@@ -34,6 +34,7 @@ class ReplayResult:
     positions: pd.DataFrame
     transactions: pd.DataFrame
     execution_log: pd.DataFrame
+    consumed_targets: pd.DataFrame
     performance_metrics: PerformanceMetrics
 
 
@@ -65,8 +66,8 @@ def replay_config(
     if slippage < 0:
         raise ValueError("slippage must be non-negative")
     targets = _validate_targets(target_weights)
-    rebalance_dates = sorted(targets["execution_date"].unique())
-    calendar = sorted(set(price_matrix.index) | set(rebalance_dates))
+    rebalance_dates = [pd.Timestamp(date) for date in targets["execution_date"].unique()]
+    calendar = sorted({pd.Timestamp(date) for date in price_matrix.index} | set(rebalance_dates))
 
     portfolio = Portfolio(initial_capital)
     last_price: dict[object, float] = {}
@@ -76,19 +77,22 @@ def replay_config(
     values: list[float] = []
     dates: list = []
 
-    targets_by_date = {date: group for date, group in targets.groupby("execution_date")}
+    targets_by_date = {pd.Timestamp(date): group for date, group in targets.groupby("execution_date")}
 
     for current_date in calendar:
+        current_prices = {}
         if current_date in price_matrix.index:
             for asset_id, price in price_matrix.loc[current_date].items():
                 if pd.notna(price):
+                    current_prices[asset_id] = float(price)
                     last_price[asset_id] = float(price)
 
         if current_date in targets_by_date:
             _execute_rebalance(
                 portfolio=portfolio,
                 targets=targets_by_date[current_date],
-                last_price=last_price,
+                execution_prices=current_prices,
+                last_mark_prices=last_price,
                 cost_model=cost_model,
                 slippage=slippage,
                 current_date=current_date,
@@ -124,6 +128,7 @@ def replay_config(
         positions=pd.DataFrame(positions_rows),
         transactions=transactions_df,
         execution_log=pd.DataFrame(execution_log),
+        consumed_targets=targets.loc[:, REQUIRED_COLUMNS].copy(),
         performance_metrics=metrics,
     )
 
@@ -135,25 +140,25 @@ def _mark_to_market(portfolio: Portfolio, last_price: dict) -> float:
     return total
 
 
-def _execute_rebalance(*, portfolio, targets, last_price, cost_model, slippage, current_date, config_id, transactions, execution_log) -> None:
+def _execute_rebalance(*, portfolio, targets, execution_prices, last_mark_prices, cost_model, slippage, current_date, config_id, transactions, execution_log) -> None:
     # Snapshot total value before touching positions; every buy sizes off this,
     # not off cash freed incrementally, so weights reflect the whole portfolio.
-    portfolio_value = _mark_to_market(portfolio, last_price)
+    portfolio_value = _mark_to_market(portfolio, last_mark_prices)
     target_weight_by_asset = dict(zip(targets["asset_id"], targets["target_weight"]))
 
     # Sell every currently held position first (full liquidate-and-rebuild); assets
     # missing a price on this execution date stay held and are logged as UNFILLED.
     for asset_id in sorted(portfolio.positions.keys(), key=str):
-        price = last_price.get(asset_id)
+        price = execution_prices.get(asset_id)
         if price is None:
-            execution_log.append({"execution_date": current_date, "config_id": config_id, "asset_id": asset_id, "side": "sell", "status": "UNFILLED", "reason": "no price on execution date"})
+            execution_log.append({"execution_date": current_date, "config_id": config_id, "asset_id": asset_id, "side": "sell", "status": "UNFILLED", "reason": "MISSING_EXECUTION_PRICE"})
             continue
         _sell(portfolio, asset_id, price, slippage, cost_model, current_date, config_id, transactions)
 
     for asset_id, weight in target_weight_by_asset.items():
-        price = last_price.get(asset_id)
+        price = execution_prices.get(asset_id)
         if price is None:
-            execution_log.append({"execution_date": current_date, "config_id": config_id, "asset_id": asset_id, "side": "buy", "status": "UNFILLED", "reason": "no price on execution date"})
+            execution_log.append({"execution_date": current_date, "config_id": config_id, "asset_id": asset_id, "side": "buy", "status": "UNFILLED", "reason": "MISSING_EXECUTION_PRICE"})
             continue
         _buy(portfolio, asset_id, price, weight, portfolio_value, slippage, cost_model, current_date, config_id, transactions)
 
@@ -184,7 +189,13 @@ def _buy(portfolio, asset_id, price, weight, portfolio_value, slippage, cost_mod
     cost = shares * buy_price
     fee = cost_model.buy_cost(cost)
     if cost + fee > portfolio.cash:
-        shares = int(portfolio.cash // (buy_price * (1 + cost_model.fee_rate)))
+        shares = min(shares, int(portfolio.cash // buy_price))
+        while shares > 0:
+            cost = shares * buy_price
+            fee = cost_model.buy_cost(cost)
+            if cost + fee <= portfolio.cash:
+                break
+            shares -= 1
         if shares <= 0:
             return
         cost = shares * buy_price

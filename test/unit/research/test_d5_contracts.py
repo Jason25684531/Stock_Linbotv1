@@ -176,3 +176,31 @@ def test_vectorbt_adapter_closes_assets_absent_from_the_next_target():
     result = run_vectorbt(close, weights, fee_rate=0.0, tax_rate=0.0)
 
     assert len(result["orders"]) == 3
+
+
+def test_vectorbt_sparse_instructions_are_exactly_scheduled_dates_and_orders_are_a_subset():
+    from core.research.vectorbt_adapter import run_vectorbt
+
+    dates = pd.to_datetime(["2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07"])
+    close = pd.DataFrame({"A": [10.0, 10.0, 11.0, 11.0], "B": [10.0, 10.0, 10.0, 10.0]}, index=dates)
+    targets = pd.DataFrame({"execution_date": pd.to_datetime(["2026-01-05", "2026-01-07"]), "asset_id": ["A", "B"], "target_weight": [1.0, 1.0]})
+
+    result = run_vectorbt(close, targets, fee_rate=0.0, tax_rate=0.0, sparse_rebalance=True)
+
+    instruction_dates = result["instruction_matrix"].dropna(how="all").index
+    assert instruction_dates.equals(result["scheduled_instruction_dates"])
+    assert result["instruction_matrix"].loc[~result["instruction_matrix"].index.isin(instruction_dates)].isna().all().all()
+    assert result["actual_order_dates"].isin(result["scheduled_instruction_dates"]).all()
+    assert result["orders_on_non_rebalance_dates"] == 0
+
+
+def test_corrected_d5_repro_requires_exact_csv_artifacts(tmp_path):
+    from jobs.run_portfolio_research import verify_repro
+
+    canonical, repro = tmp_path / "canonical", tmp_path / "repro"
+    canonical.mkdir()
+    repro.mkdir()
+    pd.DataFrame({"value": [1.0]}).to_csv(canonical / "scoreboard.csv", index=False)
+    pd.DataFrame({"value": [1.0]}).to_csv(repro / "scoreboard.csv", index=False)
+
+    assert verify_repro(canonical, repro) == {"canonical_run_id": "canonical", "repro_run_id": "repro", "artifact_count": 1, "exact_match_count": 1, "mismatch_count": 0, "mismatching_artifacts": []}

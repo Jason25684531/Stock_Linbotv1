@@ -130,7 +130,58 @@ def _write_pyfolio_diagnostics(config_id: str, returns: pd.Series, benchmark_ret
     return skipped
 
 
+def _artifact_hashes(output_dir: Path) -> dict[str, str]:
+    """Freeze every deterministic run artifact; PNG bytes are presentation-only."""
+    return {
+        path.relative_to(output_dir).as_posix(): sha256_of(path)
+        for path in sorted(output_dir.rglob("*"))
+        if path.is_file() and path.name != "run_manifest.json" and path.suffix.lower() != ".png"
+    }
+
+
+def _write_stopped_run(output_dir: Path, reason: str) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=False)
+    (output_dir / "FINAL_RESEARCH_REPORT.md").write_text(
+        "# Day 3 Final Research Report\n\n"
+        "FINAL_STATUS = STOPPED\n"
+        "RESEARCH_PIPELINE = NOT_COMPLETE\n"
+        "READY_FOR_NEXT_STAGE = NO\n"
+        "READY_FOR_LIVE_TRADING = NO\n\n"
+        f"BENCHMARK_UNAVAILABLE: {reason}\n",
+        encoding="utf-8",
+    )
+    manifest = {
+        "schema_version": 1,
+        "run_id": output_dir.name,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "final_status": "STOPPED",
+        "stop_reason": "BENCHMARK_UNAVAILABLE",
+        "benchmark_provenance": {"status": "BENCHMARK_UNAVAILABLE", "reason": reason},
+        "artifact_sha256": _artifact_hashes(output_dir),
+    }
+    (output_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return output_dir
+
+
+def _compare_reproducibility(reference_dir: Path, output_dir: Path) -> dict[str, int | str]:
+    reference = json.loads((reference_dir / "run_manifest.json").read_text(encoding="utf-8"))["artifact_sha256"]
+    actual = _artifact_hashes(output_dir)
+    keys = sorted(set(reference) | set(actual))
+    matches = sum(reference.get(key) == actual.get(key) for key in keys)
+    return {
+        "status": "PASS" if matches == len(keys) else "FAIL",
+        "compared_artifact_count": len(keys),
+        "exact_match_count": matches,
+        "mismatch_count": len(keys) - matches,
+    }
+
+
 def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: Path, initial_capital: float = 1_000_000.0) -> Path:
+    try:
+        benchmark_returns, benchmark_provenance = load_benchmark_returns(raw_cache_dir, Config.MARKET_SYMBOL)
+    except BenchmarkUnavailableError as caught:
+        return _write_stopped_run(output_dir, str(caught))
+
     day2_manifest = verify_day2_run(day2_dir)
     shortlist_ids = day2_manifest["shortlist_config_ids"]
     candidate_ids = day2_manifest["candidate_ids"]
@@ -147,27 +198,25 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
     price_matrix = load_price_matrix(dataset_path, candidate_ids)
     cost_model = CostModel(Config.FEE_RATE, Config.TAX_RATE, 20.0)
 
-    try:
-        benchmark_returns, benchmark_provenance = load_benchmark_returns(raw_cache_dir, Config.MARKET_SYMBOL)
-    except BenchmarkUnavailableError as caught:
-        benchmark_returns, benchmark_provenance = None, {"status": "BENCHMARK_UNAVAILABLE", "reason": str(caught)}
-
     output_dir.mkdir(parents=True, exist_ok=False)
     custom_root, pyfolio_root, statsmodels_root = output_dir / "custom_engine", output_dir / "pyfolio", output_dir / "statsmodels"
     for path in (custom_root, pyfolio_root, statsmodels_root):
         path.mkdir()
+    benchmark_root = output_dir / "benchmark"
+    benchmark_root.mkdir()
+    benchmark_returns.rename_axis("date").to_csv(benchmark_root / "returns.csv", header=["daily_return"])
+    (benchmark_root / "provenance.json").write_text(json.dumps(benchmark_provenance, indent=2), encoding="utf-8")
 
     day2_scoreboard = pd.read_csv(day2_dir / "portfolio_scoreboard.csv").set_index("config_id")
-    engine_comparisons, crosschecks, temporal_rows, cost_rows, attribution_rows, scoreboard_rows = [], [], [], [], [], []
+    engine_comparisons, crosschecks, temporal_rows, cost_rows, attribution_rows, parity_rows, scoreboard_rows = [], [], [], [], [], [], []
 
     strict_oos_feasible, strict_oos_reason = assess_strict_oos_feasibility(handoff_path / "candidate_factors.csv")
 
     for config_id in shortlist_ids:
         target_path = day2_dir / "target_weights" / f"{config_id}.csv"
         targets = pd.read_csv(target_path, parse_dates=["asof_date", "execution_date"])
-        check_structural_parity(targets, target_path)
-
         replay = replay_config(targets, price_matrix, cost_model, config_id=config_id, source_run_id=day2_manifest["run_id"], initial_capital=initial_capital, slippage=0.0)
+        parity_rows.append(check_structural_parity(replay.consumed_targets, target_path))
         config_dir = custom_root / config_id
         config_dir.mkdir(parents=True)
         replay.daily_returns.rename_axis("date").to_csv(config_dir / "daily_returns.csv", header=["daily_return"])
@@ -196,21 +245,19 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
         cost_sensitivity = run_cost_sensitivity(config_id, targets, price_matrix, cost_model, initial_capital=initial_capital)
         cost_rows.append(cost_sensitivity)
 
-        hac_alpha = hac_p_value = None
-        if benchmark_returns is not None:
-            attribution = run_attribution(config_id, replay.daily_returns, benchmark_returns)
-            attribution_rows.append(attribution)
-            attribution_dir = statsmodels_root / config_id
-            attribution_dir.mkdir(parents=True)
-            pd.DataFrame([attribution]).to_csv(attribution_dir / "regression_attribution.csv", index=False)
-            (attribution_dir / "regression_summary.txt").write_text(
-                f"config_id={config_id}\nalpha={attribution['alpha']:.6f} (HAC p={attribution['alpha_p_hac']:.4f})\n"
-                f"beta={attribution['beta']:.4f} (HAC p={attribution['beta_p_hac']:.4f})\n"
-                f"r_squared={attribution['r_squared']:.4f} n_obs={attribution['n_obs']} hac_maxlags={attribution['hac_maxlags']}\n"
-                "p<0.05 alone is not proof of a production alpha; see FINAL_RESEARCH_REPORT.md for economic-magnitude and multi-config context.\n",
-                encoding="utf-8",
-            )
-            hac_alpha, hac_p_value = attribution["alpha"], attribution["alpha_p_hac"]
+        attribution = run_attribution(config_id, replay.daily_returns, benchmark_returns)
+        attribution_rows.append(attribution)
+        attribution_dir = statsmodels_root / config_id
+        attribution_dir.mkdir(parents=True)
+        pd.DataFrame([attribution]).to_csv(attribution_dir / "regression_attribution.csv", index=False)
+        (attribution_dir / "regression_summary.txt").write_text(
+            f"config_id={config_id}\nalpha={attribution['alpha']:.6f} (HAC p={attribution['alpha_p_hac']:.4f})\n"
+            f"beta={attribution['beta']:.4f} (HAC p={attribution['beta_p_hac']:.4f})\n"
+            f"r_squared={attribution['r_squared']:.4f} n_obs={attribution['n_obs']} hac_maxlags={attribution['hac_maxlags']}\n"
+            "p<0.05 alone is not proof of a production alpha; see FINAL_RESEARCH_REPORT.md for economic-magnitude and multi-config context.\n",
+            encoding="utf-8",
+        )
+        hac_alpha, hac_p_value = attribution["alpha"], attribution["alpha_p_hac"]
 
         _write_pyfolio_diagnostics(config_id, replay.daily_returns, benchmark_returns, pyfolio_root)
 
@@ -224,13 +271,20 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "config_id": config_id,
             "vectorbt_sharpe": vbt_row["sharpe"], "custom_sharpe": custom_row["sharpe"],
             "engine_comparison_status": engine_status,
-            "empyrical_status": "OK",
+            "target_intent_parity_status": parity_rows[-1].iloc[0]["target_intent_parity_status"],
+            "unfilled_count": int(replay.execution_log["status"].eq("UNFILLED").sum()) if not replay.execution_log.empty else 0,
+            "daily_return_correlation": comparison.loc[comparison["metric"].eq("daily_return_correlation"), "custom_value"].iloc[0],
+            "empyrical_status": "PASS" if not crosscheck["status"].eq("FAIL").any() else "FAIL",
+            "custom_total_return": custom_row["total_return"],
+            "custom_max_drawdown": custom_row["max_drawdown"],
             "temporal_late_sharpe": temporal.loc[temporal["segment"] == "late_20pct", "sharpe"].iloc[0],
             "strict_oos_status": "STRICT_OOS_NOT_ESTABLISHED" if not strict_oos_feasible else "ESTABLISHED",
             "cost_base_total_return": cost_sensitivity.loc[cost_sensitivity["scenario"] == "BASE", "total_return"].iloc[0],
             "cost_stress_total_return": cost_sensitivity.loc[cost_sensitivity["scenario"] == "STRESS", "total_return"].iloc[0],
             "cost_pessimistic_total_return": cost_sensitivity.loc[cost_sensitivity["scenario"] == "PESSIMISTIC", "total_return"].iloc[0],
-            "hac_alpha": hac_alpha, "hac_alpha_p_value": hac_p_value,
+            "beta": attribution["beta"], "hac_t_stat": attribution["alpha_t_hac"],
+            "hac_alpha": hac_alpha, "hac_p_value": hac_p_value,
+            "temporal_stability_status": "PASS" if (temporal["sharpe"] >= 0).all() else "WEAK",
             "validation_status": status,
         })
 
@@ -245,6 +299,7 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
     temporal_frame.to_csv(output_dir / "temporal_stability.csv", index=False)
     cost_frame.to_csv(output_dir / "cost_sensitivity.csv", index=False)
     scoreboard_frame.to_csv(output_dir / "validation_scoreboard.csv", index=False)
+    pd.concat(parity_rows, ignore_index=True).to_csv(output_dir / "structural_parity.csv", index=False)
     pd.DataFrame([{
         "status": "STRICT_OOS_NOT_ESTABLISHED" if not strict_oos_feasible else "ESTABLISHED",
         "reason": strict_oos_reason,
@@ -252,23 +307,17 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
     if attribution_rows:
         pd.DataFrame(attribution_rows).to_csv(output_dir / "statsmodels" / "attribution_summary.csv", index=False)
 
-    _write_final_report(output_dir, day2_manifest, scoreboard_frame, strict_oos_feasible, strict_oos_reason, benchmark_provenance)
-
-    artifact_names = ["vectorbt_vs_custom.csv", "metric_crosscheck.csv", "temporal_stability.csv", "cost_sensitivity.csv", "validation_scoreboard.csv", "is_oos_comparison.csv", "FINAL_RESEARCH_REPORT.md"]
-    artifact_hashes = {name: sha256_of(output_dir / name) for name in artifact_names}
-    for config_id in shortlist_ids:
-        for artifact in ("daily_returns.csv", "portfolio_value.csv", "positions.csv", "transactions.csv", "execution_log.csv", "performance_metrics.csv"):
-            artifact_hashes[f"custom_engine/{config_id}/{artifact}"] = sha256_of(custom_root / config_id / artifact)
+    _write_final_report(output_dir, day2_manifest, scoreboard_frame, strict_oos_feasible, strict_oos_reason, benchmark_provenance, final_status="COMPLETE")
 
     manifest = {
-        "schema_version": 1, "run_id": output_dir.name, "generated_at": datetime.now(timezone.utc).isoformat(), "status": "success",
+        "schema_version": 1, "run_id": output_dir.name, "generated_at": datetime.now(timezone.utc).isoformat(), "final_status": "COMPLETE",
         "provenance": {
             "source_day2_run_id": day2_manifest["run_id"], "source_day2_manifest_sha256": sha256_of(day2_dir / "run_manifest.json"),
             "source_day2_shortlist_sha256": sha256_of(day2_dir / "shortlisted_configs.csv"),
             "source_handoff_id": day2_manifest["provenance"]["source_handoff_id"], "git_commit": _git_commit(),
         },
         "shortlisted_config_ids": shortlist_ids,
-        "custom_engine_settings": {"initial_capital": initial_capital, "execution_lag": "T+1", "slippage_base": 0.0},
+        "custom_engine_settings": {"initial_capital": initial_capital, "execution_lag": "T+1", "slippage_base": 0.0, "execution_price": "genuine execution-date price only", "mark_price": "last known price for valuation only"},
         "cost_model_settings": {"fee_rate": Config.FEE_RATE, "tax_rate": Config.TAX_RATE, "minimum_fee": 20.0},
         "benchmark_provenance": benchmark_provenance,
         "environment": {"python": platform.python_version(), "numpy": _version("numpy"), "pandas": _version("pandas"), "vectorbt": _version("vectorbt"), "numba": _version("numba"), "empyrical": _version("empyrical-reloaded") or _version("empyrical"), "pyfolio": _version("pyfolio-reloaded") or _version("pyfolio"), "statsmodels": _version("statsmodels")},
@@ -278,11 +327,13 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "hac": "Newey-West maxlags = floor(4*(n/100)**(2/9)); see design.md decision E",
             "temporal_validation": "60/20/20 chronological split labeled temporal stability, not OOS; see design.md decision F",
             "cost_stress": "BASE/STRESS/PESSIMISTIC slippage 0/0.001/0.002 on the frozen CostModel; see design.md decision G",
+            "sizing": "integer shares reduced until shares * execution_price + CostModel.buy_cost(notional) <= cash",
         },
         "strict_oos_status": "STRICT_OOS_NOT_ESTABLISHED" if not strict_oos_feasible else "ESTABLISHED",
         "strict_oos_reason": strict_oos_reason,
         "upstream_hashes": {"handoff": handoff_hash_before, "d3_dataset": dataset_hash_before, "d4_accepted_run": d3_run_hash_before},
-        "artifact_sha256": artifact_hashes,
+        "unfilled": {"per_config": dict(zip(scoreboard_frame["config_id"], scoreboard_frame["unfilled_count"])), "total": int(scoreboard_frame["unfilled_count"].sum())},
+        "artifact_sha256": _artifact_hashes(output_dir),
         "known_limitations": [
             "VectorBT remains a research approximation; Custom Engine replay uses full liquidate-and-rebuild rebalancing (declared model difference)",
             "benchmark is a single-stock proxy (2330), not a market-weighted index",
@@ -290,7 +341,15 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "no final production-readiness claim; READY_FOR_LIVE_TRADING = NO",
         ],
     }
+    reference_dir = output_dir.parent / output_dir.name.replace("_repro", "_v1") if output_dir.name.endswith("_repro") else None
+    if reference_dir and reference_dir.is_dir():
+        manifest["reproducibility"] = _compare_reproducibility(reference_dir, output_dir)
+        if manifest["reproducibility"]["status"] == "FAIL":
+            manifest["final_status"] = "STOPPED"
     (output_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+
+    if manifest.get("reproducibility", {}).get("status") == "FAIL":
+        raise ValueError("STOP: reproducibility comparison found numeric artifact mismatches")
 
     handoff_hash_after, dataset_hash_after = tree_sha256(handoff_path), tree_sha256(dataset_path)
     if handoff_hash_after != handoff_hash_before or dataset_hash_after != dataset_hash_before:
@@ -299,12 +358,13 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
     return output_dir
 
 
-def _write_final_report(output_dir, day2_manifest, scoreboard, strict_oos_feasible, strict_oos_reason, benchmark_provenance) -> None:
+def _write_final_report(output_dir, day2_manifest, scoreboard, strict_oos_feasible, strict_oos_reason, benchmark_provenance, *, final_status: str) -> None:
     lines = [
         "# Day 3 Final Research Report",
         "",
         f"Source Day 2 run: `{day2_manifest['run_id']}`",
         f"Frozen shortlist ({len(day2_manifest['shortlist_config_ids'])} configs): {', '.join(day2_manifest['shortlist_config_ids'])}",
+        f"FINAL_STATUS = {final_status}",
         "",
         "## Validation scoreboard",
         "",

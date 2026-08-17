@@ -89,15 +89,15 @@ def load_price_matrix(dataset_path: Path, factor_ids: list[str]) -> pd.DataFrame
         execution_date=("execution_date", "first"), entry_price=("entry_price", "first")
     )
     universe["execution_date"] = pd.to_datetime(universe["execution_date"])
-    return universe.pivot(index="execution_date", columns="asset_id", values="entry_price").sort_index().ffill()
+    return universe.pivot(index="execution_date", columns="asset_id", values="entry_price").sort_index()
 
 
 # ---------------------------------------------------------------------------
 # Phase 3: two-layer engine comparison (design.md decision B)
 # ---------------------------------------------------------------------------
 
-def check_structural_parity(replay_targets: pd.DataFrame, frozen_target_path: Path) -> None:
-    """Level A: replay inputs must exactly match the frozen Day 2 target-weight artifact."""
+def check_structural_parity(replay_targets: pd.DataFrame, frozen_target_path: Path) -> pd.DataFrame:
+    """Level A: compare frozen intent against evidence consumed by the replay."""
     frozen = pd.read_csv(frozen_target_path, parse_dates=["asof_date", "execution_date"])
     if (frozen["execution_date"] <= frozen["asof_date"]).any():
         raise ValueError("structural parity failed: same-close or lookahead execution in frozen artifact")
@@ -106,8 +106,19 @@ def check_structural_parity(replay_targets: pd.DataFrame, frozen_target_path: Pa
     candidate_cmp["asof_date"] = pd.to_datetime(candidate_cmp["asof_date"])
     candidate_cmp["execution_date"] = pd.to_datetime(candidate_cmp["execution_date"])
     candidate_cmp = candidate_cmp.sort_values(["execution_date", "asset_id"]).reset_index(drop=True)
-    if not candidate_cmp.equals(frozen_cmp):
+    status = "PASS" if candidate_cmp.equals(frozen_cmp) else "FAIL"
+    evidence = pd.DataFrame([{
+        "config_id": replay_targets["config_id"].iloc[0] if "config_id" in replay_targets and not replay_targets.empty else None,
+        "frozen_target_sha256": sha256_of(frozen_target_path),
+        "replay_consumed_row_count": len(candidate_cmp),
+        "frozen_row_count": len(frozen_cmp),
+        "target_intent_parity_status": status,
+        "execution_outcome": "SEE_EXECUTION_LOG",
+        "difference_reason": None if status == "PASS" else "REPLAY_CONSUMED_TARGETS_DIFFER",
+    }])
+    if status == "FAIL":
         raise ValueError("structural parity failed: replay target weights differ from the frozen Day 2 artifact")
+    return evidence
 
 
 RETURN_METRICS = ("total_return", "annualized_return", "annualized_volatility", "sharpe", "sortino", "max_drawdown", "calmar")

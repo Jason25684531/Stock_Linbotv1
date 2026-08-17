@@ -29,6 +29,7 @@ def test_replay_consumes_frozen_weights_without_reranking():
     assert set(held) == {"A", "B"}
     # frozen weights are consumed as-is: no third asset introduced, no reranking
     assert result.transactions["asset_id"].isin(["A", "B"]).all()
+    assert result.transactions["execution_date"].eq(pd.Timestamp("2023-01-03")).all()
 
 
 def test_execution_date_must_be_after_asof_date():
@@ -63,6 +64,40 @@ def test_unfilled_execution_is_logged_not_shifted():
 
     assert (result.execution_log["status"] == "UNFILLED").all()
     assert (result.execution_log["execution_date"] == pd.Timestamp("2023-01-03")).all()
+    assert result.transactions.empty
+
+
+def test_missing_execution_day_price_is_unfilled():
+    targets = _targets([("2023-01-02", "2023-01-03", "A", "cfg", 1.0)])
+    prices = _prices(["2023-01-02", "2023-01-03"], {"A": [100.0, float("nan")]})
+    result = replay_config(targets, prices, COST, config_id="cfg", source_run_id="d5_run")
+    assert result.transactions.empty
+    assert result.execution_log.iloc[0]["reason"] == "MISSING_EXECUTION_PRICE"
+
+
+def test_future_price_never_used_for_execution():
+    targets = _targets([("2023-01-02", "2023-01-03", "A", "cfg", 1.0)])
+    prices = _prices(["2023-01-02", "2023-01-03", "2023-01-04"], {"A": [100.0, float("nan"), 110.0]})
+    result = replay_config(targets, prices, COST, config_id="cfg", source_run_id="d5_run")
+    assert result.transactions.empty
+    assert result.execution_log.iloc[0]["execution_date"] == pd.Timestamp("2023-01-03")
+
+
+def test_buy_sizing_respects_minimum_fee():
+    targets = _targets([("2023-01-02", "2023-01-03", "A", "cfg", 1.0)])
+    result = replay_config(targets, _prices(["2023-01-03"], {"A": [100.0]}), COST, config_id="cfg", source_run_id="d5_run", initial_capital=101.0)
+    assert result.transactions.empty
+
+
+def test_buy_sizing_never_produces_negative_cash():
+    targets = _targets([("2023-01-02", "2023-01-03", "A", "cfg", 1.0)])
+    result = replay_config(targets, _prices(["2023-01-03"], {"A": [100.0]}), COST, config_id="cfg", source_run_id="d5_run", initial_capital=119.0)
+    assert result.transactions.empty
+
+
+def test_zero_affordable_shares_does_not_create_invalid_trade():
+    targets = _targets([("2023-01-02", "2023-01-03", "A", "cfg", 1.0)])
+    result = replay_config(targets, _prices(["2023-01-03"], {"A": [100.0]}), COST, config_id="cfg", source_run_id="d5_run", initial_capital=20.0)
     assert result.transactions.empty
 
 
