@@ -17,18 +17,29 @@ import pandas as pd
 
 
 def verify_day2_run(run_dir: Path) -> dict:
-    """Recompute every Day 2 artifact SHA-256 and shortlist identity; raise on mismatch."""
+    """Validate the corrected D5 contract before any downstream output is created."""
     run_dir = Path(run_dir)
     manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    execution = manifest.get("execution", {})
+    gate = manifest.get("execution_gate", {})
+    if manifest.get("schema_version") != 2 or manifest.get("status") != "success":
+        raise ValueError("SOURCE_D5_INTEGRITY STOP: corrected D5 schema/status required")
+    if execution.get("execution_semantics_version") != "DISCRETE_EXECUTION_DATE_ONLY" or execution.get("rebalance_semantics") != "DISCRETE_EXECUTION_DATE_ONLY":
+        raise ValueError("SOURCE_D5_INTEGRITY STOP: corrected discrete execution semantics required")
+    if gate.get("configs_passed") != manifest.get("configuration_count") or gate.get("scheduled_instruction_date_parity") is not True or gate.get("orders_on_non_rebalance_dates") != 0:
+        raise ValueError("SOURCE_D5_INTEGRITY STOP: D5 execution gate failed")
+    shortlist_ids = manifest.get("shortlist_config_ids", [])
+    if not 3 <= len(shortlist_ids) <= 5:
+        raise ValueError("SOURCE_D5_INTEGRITY STOP: frozen shortlist must contain 3 to 5 configs")
     mismatches = [
         rel_path for rel_path, expected in manifest["artifact_sha256"].items()
-        if hashlib.sha256((run_dir / rel_path).read_bytes()).hexdigest() != expected
+        if not (run_dir / rel_path).is_file() or hashlib.sha256((run_dir / rel_path).read_bytes()).hexdigest() != expected
     ]
     if mismatches:
-        raise ValueError(f"Day 2 artifact hash mismatch: {mismatches}")
-    shortlist_ids = pd.read_csv(run_dir / "shortlisted_configs.csv")["config_id"].tolist()
-    if shortlist_ids != manifest["shortlist_config_ids"]:
-        raise ValueError("Day 2 shortlist config IDs differ from the frozen manifest")
+        raise ValueError(f"SOURCE_D5_INTEGRITY STOP: artifact hash mismatch: {mismatches}")
+    shortlist_ids_from_csv = pd.read_csv(run_dir / "shortlisted_configs.csv")["config_id"].tolist()
+    if shortlist_ids_from_csv != shortlist_ids:
+        raise ValueError("SOURCE_D5_INTEGRITY STOP: shortlist config IDs differ from the frozen manifest")
     for config_id in shortlist_ids:
         target_path = run_dir / "target_weights" / f"{config_id}.csv"
         if not target_path.is_file():
@@ -119,6 +130,20 @@ def check_structural_parity(replay_targets: pd.DataFrame, frozen_target_path: Pa
     if status == "FAIL":
         raise ValueError("structural parity failed: replay target weights differ from the frozen Day 2 artifact")
     return evidence
+
+
+def check_execution_gate(result: dict[str, object]) -> dict[str, object]:
+    """Enforce sparse VectorBT orders only on frozen instruction dates."""
+    scheduled = pd.DatetimeIndex(result["scheduled_instruction_dates"])
+    actual = pd.DatetimeIndex(result["actual_order_dates"])
+    non_rebalance = int(result["orders_on_non_rebalance_dates"])
+    if non_rebalance or not actual.isin(scheduled).all():
+        raise ValueError("VECTORBT_EXECUTION_GATE STOP: orders occurred outside instruction dates")
+    return {
+        "instruction_date_parity_status": "PASS",
+        "orders_on_non_rebalance_dates": non_rebalance,
+        "actual_order_dates_subset_of_scheduled": True,
+    }
 
 
 RETURN_METRICS = ("total_return", "annualized_return", "annualized_volatility", "sharpe", "sortino", "max_drawdown", "calmar")

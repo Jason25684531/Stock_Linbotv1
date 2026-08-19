@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 
-def run_vectorbt(close: pd.DataFrame, target_weights: pd.DataFrame, *, fee_rate: float, tax_rate: float, initial_capital: float = 1_000_000.0, sparse_rebalance: bool = False) -> dict[str, object]:
+def run_vectorbt(close: pd.DataFrame, target_weights: pd.DataFrame, *, fee_rate: float, tax_rate: float, initial_capital: float = 1_000_000.0, sparse_rebalance: bool) -> dict[str, object]:
     """Execute T+1 target weights with VectorBT; caller supplies execution-date prices."""
     import vectorbt as vbt
 

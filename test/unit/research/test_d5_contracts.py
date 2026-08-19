@@ -162,7 +162,7 @@ def test_vectorbt_adapter_executes_only_on_execution_date():
     close = pd.DataFrame({"A": [10.0, 11.0]}, index=pd.to_datetime(["2026-01-02", "2026-01-05"]))
     weights = pd.DataFrame({"execution_date": pd.to_datetime(["2026-01-05"]), "asset_id": ["A"], "target_weight": [1.0]})
 
-    result = run_vectorbt(close, weights, fee_rate=0.0, tax_rate=0.0)
+    result = run_vectorbt(close, weights, fee_rate=0.0, tax_rate=0.0, sparse_rebalance=False)
 
     assert result["orders"].iloc[0]["Timestamp"] == pd.Timestamp("2026-01-05")
 
@@ -173,7 +173,7 @@ def test_vectorbt_adapter_closes_assets_absent_from_the_next_target():
     close = pd.DataFrame({"A": [10.0, 10.0], "B": [10.0, 10.0]}, index=pd.to_datetime(["2026-01-05", "2026-01-06"]))
     weights = pd.DataFrame({"execution_date": pd.to_datetime(["2026-01-05", "2026-01-06"]), "asset_id": ["A", "B"], "target_weight": [1.0, 1.0]})
 
-    result = run_vectorbt(close, weights, fee_rate=0.0, tax_rate=0.0)
+    result = run_vectorbt(close, weights, fee_rate=0.0, tax_rate=0.0, sparse_rebalance=False)
 
     assert len(result["orders"]) == 3
 

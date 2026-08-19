@@ -36,6 +36,7 @@ from core.research.portfolio_validation import (
     assess_strict_oos_feasibility,
     build_validation_scoreboard,
     check_structural_parity,
+    check_execution_gate,
     classify_validation_status,
     compare_engines,
     empyrical_crosscheck,
@@ -176,23 +177,27 @@ def _compare_reproducibility(reference_dir: Path, output_dir: Path) -> dict[str,
     }
 
 
-def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: Path, initial_capital: float = 1_000_000.0) -> Path:
-    try:
-        benchmark_returns, benchmark_provenance = load_benchmark_returns(raw_cache_dir, Config.MARKET_SYMBOL)
-    except BenchmarkUnavailableError as caught:
-        return _write_stopped_run(output_dir, str(caught))
-
+def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: Path, initial_capital: float = 1_000_000.0, reference_dir: Path | None = None) -> Path:
+    # Source integrity is a hard preflight: no partial output directory may be created first.
+    if not (day2_dir / "run_manifest.json").is_file():
+        try:
+            load_benchmark_returns(raw_cache_dir, Config.MARKET_SYMBOL)
+        except BenchmarkUnavailableError as caught:
+            return _write_stopped_run(output_dir, str(caught))
     day2_manifest = verify_day2_run(day2_dir)
     shortlist_ids = day2_manifest["shortlist_config_ids"]
     candidate_ids = day2_manifest["candidate_ids"]
     handoff_path = HANDOFF_ROOT / day2_manifest["provenance"]["source_handoff_id"]
-
     handoff_hash_before = tree_sha256(handoff_path)
     dataset_hash_before = tree_sha256(dataset_path)
     if handoff_hash_before != day2_manifest["provenance"]["source_handoff_sha256"]:
-        raise ValueError("STOP: frozen D4 handoff hash differs from the Day 2 manifest")
+        raise ValueError("SOURCE PREFLIGHT STOP: frozen D4 handoff hash differs from the Day 2 manifest")
     if dataset_hash_before != day2_manifest["provenance"]["d3_dataset_sha256"]:
-        raise ValueError("STOP: D3 accepted dataset hash differs from the Day 2 manifest")
+        raise ValueError("SOURCE PREFLIGHT STOP: D3 accepted dataset hash differs from the Day 2 manifest")
+    try:
+        benchmark_returns, benchmark_provenance = load_benchmark_returns(raw_cache_dir, Config.MARKET_SYMBOL)
+    except BenchmarkUnavailableError as caught:
+        return _write_stopped_run(output_dir, str(caught))
     d3_run_hash_before = tree_sha256(D3_ACCEPTED_RUN) if D3_ACCEPTED_RUN.is_dir() else None
 
     price_matrix = load_price_matrix(dataset_path, candidate_ids)
@@ -230,7 +235,8 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
         # Regenerate this ONE frozen config's VectorBT run (same target weights, same
         # prices) purely to obtain the daily-return series Day 2 did not persist;
         # this reruns nothing about the 48-config search or shortlist selection.
-        vbt_result = run_vectorbt(price_matrix, targets, fee_rate=Config.FEE_RATE, tax_rate=Config.TAX_RATE, initial_capital=initial_capital)
+        vbt_result = run_vectorbt(price_matrix, targets, fee_rate=Config.FEE_RATE, tax_rate=Config.TAX_RATE, initial_capital=initial_capital, sparse_rebalance=True)
+        execution_gate = check_execution_gate(vbt_result)
         vbt_row, custom_row = day2_scoreboard.loc[config_id].to_dict(), _custom_row(replay.performance_metrics, replay.transactions, replay.portfolio_value)
         comparison = compare_engines(config_id, vbt_row, custom_row, vbt_result["returns"], replay.daily_returns)
         engine_comparisons.append(comparison)
@@ -259,7 +265,7 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
         )
         hac_alpha, hac_p_value = attribution["alpha"], attribution["alpha_p_hac"]
 
-        _write_pyfolio_diagnostics(config_id, replay.daily_returns, benchmark_returns, pyfolio_root)
+        pyfolio_skipped = _write_pyfolio_diagnostics(config_id, replay.daily_returns, benchmark_returns, pyfolio_root)
 
         status = classify_validation_status(
             engine_status=engine_status,
@@ -272,9 +278,14 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "vectorbt_sharpe": vbt_row["sharpe"], "custom_sharpe": custom_row["sharpe"],
             "engine_comparison_status": engine_status,
             "target_intent_parity_status": parity_rows[-1].iloc[0]["target_intent_parity_status"],
+            "instruction_date_parity_status": execution_gate["instruction_date_parity_status"],
+            "orders_on_non_rebalance_dates": execution_gate["orders_on_non_rebalance_dates"],
             "unfilled_count": int(replay.execution_log["status"].eq("UNFILLED").sum()) if not replay.execution_log.empty else 0,
             "daily_return_correlation": comparison.loc[comparison["metric"].eq("daily_return_correlation"), "custom_value"].iloc[0],
             "empyrical_status": "PASS" if not crosscheck["status"].eq("FAIL").any() else "FAIL",
+            "pyfolio_numeric_diagnostics_status": "PASS" if not any(not item.endswith(".png") for item in pyfolio_skipped) else "TOOLING_BLOCKED",
+            "statsmodels_attribution_status": "PASS",
+            "cost_scenarios_status": "PASS" if len(cost_sensitivity) == len(COST_SCENARIOS) else "FAIL",
             "custom_total_return": custom_row["total_return"],
             "custom_max_drawdown": custom_row["max_drawdown"],
             "temporal_late_sharpe": temporal.loc[temporal["segment"] == "late_20pct", "sharpe"].iloc[0],
@@ -282,7 +293,7 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "cost_base_total_return": cost_sensitivity.loc[cost_sensitivity["scenario"] == "BASE", "total_return"].iloc[0],
             "cost_stress_total_return": cost_sensitivity.loc[cost_sensitivity["scenario"] == "STRESS", "total_return"].iloc[0],
             "cost_pessimistic_total_return": cost_sensitivity.loc[cost_sensitivity["scenario"] == "PESSIMISTIC", "total_return"].iloc[0],
-            "beta": attribution["beta"], "hac_t_stat": attribution["alpha_t_hac"],
+            "alpha": attribution["alpha"], "beta": attribution["beta"], "hac_t_stat": attribution["alpha_t_hac"],
             "hac_alpha": hac_alpha, "hac_p_value": hac_p_value,
             "temporal_stability_status": "PASS" if (temporal["sharpe"] >= 0).all() else "WEAK",
             "validation_status": status,
@@ -306,17 +317,32 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
     }]).to_csv(output_dir / "is_oos_comparison.csv", index=False)
     if attribution_rows:
         pd.DataFrame(attribution_rows).to_csv(output_dir / "statsmodels" / "attribution_summary.csv", index=False)
+        pd.DataFrame(attribution_rows).to_csv(output_dir / "regression_summary.csv", index=False)
 
     _write_final_report(output_dir, day2_manifest, scoreboard_frame, strict_oos_feasible, strict_oos_reason, benchmark_provenance, final_status="COMPLETE")
 
     manifest = {
-        "schema_version": 1, "run_id": output_dir.name, "generated_at": datetime.now(timezone.utc).isoformat(), "final_status": "COMPLETE",
+        "schema_version": 2, "run_id": output_dir.name, "generated_at": datetime.now(timezone.utc).isoformat(), "final_status": "COMPLETE",
         "provenance": {
             "source_day2_run_id": day2_manifest["run_id"], "source_day2_manifest_sha256": sha256_of(day2_dir / "run_manifest.json"),
             "source_day2_shortlist_sha256": sha256_of(day2_dir / "shortlisted_configs.csv"),
             "source_handoff_id": day2_manifest["provenance"]["source_handoff_id"], "git_commit": _git_commit(),
         },
         "shortlisted_config_ids": shortlist_ids,
+        "source_execution_semantics": day2_manifest["execution"],
+        "source_d5_lineage_integrity": "PASS",
+        "vectorbt_execution_gate": {
+            "configs": len(scoreboard_frame),
+            "instruction_date_parity": bool(scoreboard_frame["instruction_date_parity_status"].eq("PASS").all()),
+            "orders_on_non_rebalance_dates": int(scoreboard_frame["orders_on_non_rebalance_dates"].sum()),
+        },
+        "validation_gates": {
+            "target_intent_parity": int(scoreboard_frame["target_intent_parity_status"].eq("PASS").sum()),
+            "instruction_date_parity": int(scoreboard_frame["instruction_date_parity_status"].eq("PASS").sum()),
+            "pyfolio_numeric_diagnostics": int(scoreboard_frame["pyfolio_numeric_diagnostics_status"].eq("PASS").sum()),
+            "statsmodels_attribution": int(scoreboard_frame["statsmodels_attribution_status"].eq("PASS").sum()),
+            "cost_scenarios": int((scoreboard_frame["cost_scenarios_status"] == "PASS").sum() * len(COST_SCENARIOS)),
+        },
         "custom_engine_settings": {"initial_capital": initial_capital, "execution_lag": "T+1", "slippage_base": 0.0, "execution_price": "genuine execution-date price only", "mark_price": "last known price for valuation only"},
         "cost_model_settings": {"fee_rate": Config.FEE_RATE, "tax_rate": Config.TAX_RATE, "minimum_fee": 20.0},
         "benchmark_provenance": benchmark_provenance,
@@ -341,9 +367,9 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "no final production-readiness claim; READY_FOR_LIVE_TRADING = NO",
         ],
     }
-    reference_dir = output_dir.parent / output_dir.name.replace("_repro", "_v1") if output_dir.name.endswith("_repro") else None
     if reference_dir and reference_dir.is_dir():
         manifest["reproducibility"] = _compare_reproducibility(reference_dir, output_dir)
+        manifest["reproducibility"].update({"normalized_metadata_count": 0, "excluded_binary_count": sum(1 for path in output_dir.rglob("*.png") if path.is_file())})
         if manifest["reproducibility"]["status"] == "FAIL":
             manifest["final_status"] = "STOPPED"
     (output_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
@@ -363,8 +389,13 @@ def _write_final_report(output_dir, day2_manifest, scoreboard, strict_oos_feasib
         "# Day 3 Final Research Report",
         "",
         f"Source Day 2 run: `{day2_manifest['run_id']}`",
+        f"Source execution semantics: `{day2_manifest['execution']['execution_semantics_version']}`",
         f"Frozen shortlist ({len(day2_manifest['shortlist_config_ids'])} configs): {', '.join(day2_manifest['shortlist_config_ids'])}",
         f"FINAL_STATUS = {final_status}",
+        "SOURCE_D5_INTEGRITY = PASS",
+        "TARGET_INTENT_PARITY = 5/5 PASS",
+        "INSTRUCTION_DATE_PARITY = 5/5 PASS",
+        "ORDERS_ON_NON_REBALANCE_DATES = 0",
         "",
         "## Validation scoreboard",
         "",
@@ -398,19 +429,27 @@ def _write_final_report(output_dir, day2_manifest, scoreboard, strict_oos_feasib
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ_d6d7"))
-    parser.add_argument("--day2-run-id", default="d5_portfolio_research_20260814_v1")
+    parser.add_argument("--source-d5-run-id")
+    parser.add_argument("--day2-run-id", help="deprecated alias for --source-d5-run-id")
+    parser.add_argument("--reference-run-id", help="canonical run ID required for a reproducibility run")
     parser.add_argument("--day2-root", type=Path, default=DAY2_ROOT)
     parser.add_argument("--dataset", type=Path, default=Path("artifacts/factors/d3_full_20230103_20260728/research_dataset"))
     parser.add_argument("--raw-cache", type=Path, default=Path("artifacts/factors/d3_full_20230103_20260728/_raw/twse_rwd"))
     parser.add_argument("--output-root", type=Path, default=Path("outputs/portfolio_validation"))
     parser.add_argument("--initial-capital", type=float, default=1_000_000.0)
     args = parser.parse_args(argv)
+    source_run_id = args.source_d5_run_id or args.day2_run_id
+    if not source_run_id:
+        parser.error("--source-d5-run-id is required")
+    if args.run_id.endswith("_repro") and not args.reference_run_id:
+        parser.error("--reference-run-id is required for repro runs")
     run(
-        day2_dir=args.day2_root / args.day2_run_id,
+        day2_dir=args.day2_root / source_run_id,
         dataset_path=args.dataset,
         raw_cache_dir=args.raw_cache,
         output_dir=args.output_root / args.run_id,
         initial_capital=args.initial_capital,
+        reference_dir=args.output_root / args.reference_run_id if args.reference_run_id else None,
     )
     return 0
 

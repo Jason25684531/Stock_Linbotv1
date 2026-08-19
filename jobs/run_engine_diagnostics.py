@@ -57,7 +57,7 @@ def run(*, output_dir: Path, day2_dir: Path = DEFAULT_DAY2, day3_dir: Path = DEF
     normalized_rows, semantics_rows, sparse_rows, provenance = [], [], [], []
     for config_id in manifest["shortlist_config_ids"]:
         targets = pd.read_csv(day2_dir / "target_weights" / f"{config_id}.csv", parse_dates=["asof_date", "execution_date"])
-        vbt = run_vectorbt(price_matrix, targets, fee_rate=Config.FEE_RATE, tax_rate=Config.TAX_RATE)
+        vbt = run_vectorbt(price_matrix, targets, fee_rate=Config.FEE_RATE, tax_rate=Config.TAX_RATE, sparse_rebalance=False)
         custom_returns_path = day3_dir / "custom_engine" / config_id / "daily_returns.csv"
         custom_returns = pd.read_csv(custom_returns_path, index_col="date", parse_dates=True).iloc[:, 0]
         vbt_returns = pd.Series(vbt["returns"]).dropna()
