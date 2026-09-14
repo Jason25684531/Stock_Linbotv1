@@ -87,6 +87,31 @@ def test_score_weighted_targets_fall_back_to_equal_when_scores_are_zero():
     assert weights.target_weight.tolist() == [pytest.approx(0.5), pytest.approx(0.5)]
 
 
+def test_score_weighted_targets_clip_negative_scores_then_normalize_positives():
+    from core.research.target_weights import build_target_weights
+
+    scores = pd.DataFrame({"asof_date": ["2026-01-02"] * 3, "asset_id": ["A", "B", "C"], "composite_score": [2.0, 1.0, -1.0]})
+    universe = pd.DataFrame({"asof_date": ["2026-01-02"] * 3, "asset_id": ["A", "B", "C"], "member": [True] * 3, "is_tradable_t1": [True] * 3, "execution_date": ["2026-01-05"] * 3})
+
+    weights = build_target_weights(scores, universe, config_id="c", top_n=3, stock_weighting="score_weighted")
+
+    result = weights.set_index("asset_id")["target_weight"]
+    assert result["A"] == pytest.approx(2 / 3)
+    assert result["B"] == pytest.approx(1 / 3)
+    assert result["C"] == pytest.approx(0.0)
+
+
+def test_score_weighted_targets_fall_back_to_equal_when_all_scores_negative():
+    from core.research.target_weights import build_target_weights
+
+    scores = pd.DataFrame({"asof_date": ["2026-01-02"] * 3, "asset_id": ["A", "B", "C"], "composite_score": [-1.0, -2.0, -3.0]})
+    universe = pd.DataFrame({"asof_date": ["2026-01-02"] * 3, "asset_id": ["A", "B", "C"], "member": [True] * 3, "is_tradable_t1": [True] * 3, "execution_date": ["2026-01-05"] * 3})
+
+    weights = build_target_weights(scores, universe, config_id="c", top_n=3, stock_weighting="score_weighted")
+
+    assert weights.target_weight.tolist() == [pytest.approx(1 / 3)] * 3
+
+
 def test_rebalance_calendar_uses_actual_trading_days():
     from core.research.target_weights import build_rebalance_calendar
 

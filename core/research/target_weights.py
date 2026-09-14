@@ -20,9 +20,13 @@ def build_target_weights(scores: pd.DataFrame, universe: pd.DataFrame, *, config
     if stock_weighting == "equal":
         selected["target_weight"] = 1 / selected.groupby("asof_date")["asset_id"].transform("size")
     elif stock_weighting == "score_weighted":
-        total = selected.groupby("asof_date")["composite_score"].transform("sum")
-        selected["target_weight"] = selected["composite_score"] / total
-        selected.loc[total.eq(0), "target_weight"] = 1 / selected.groupby("asof_date")["asset_id"].transform("size")
+        # Remediation (MINOR-2): frozen design is clip-to-zero then normalize
+        # positive scores to 1; if every score in the day is <= 0, fall back
+        # to equal weight instead of dividing by a non-positive total.
+        clipped = selected["composite_score"].clip(lower=0)
+        total = clipped.groupby(selected["asof_date"]).transform("sum")
+        fallback = 1 / selected.groupby("asof_date")["asset_id"].transform("size")
+        selected["target_weight"] = (clipped / total).where(total > 0, fallback)
     else:
         raise ValueError(f"unsupported stock weighting: {stock_weighting}")
     selected["config_id"], selected["combination_method"] = config_id, combination_method
