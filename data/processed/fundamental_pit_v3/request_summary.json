@@ -1,0 +1,35 @@
+{
+  "change_id": "add-fundamental-pit-v3-and-full-coverage-v1",
+  "schema_version": "fundamental-pit-v3",
+  "dataset_version": "fundamental-pit-v3",
+  "dataset_revision": 1,
+  "target_ticker_count": 890,
+  "target_ticker_sha256": "d311c1fea8c3110c1d9b940798040b8867d9c2ed5d9eefbd3447bd01d1c87594",
+  "planned_request_count": 46280,
+  "ledger_row_count": 46280,
+  "unaccounted_requests": 0,
+  "request_status_counts": {
+    "FETCHED": 37151,
+    "FAILED": 7666,
+    "CACHED": 1463
+  },
+  "quarantined_request_count": 0,
+  "invalid_response_count": 0,
+  "publication_record_count": 38614,
+  "normalized_record_count": 259054,
+  "matrix_row_count": 764510,
+  "matrix_nan_count": 1745545,
+  "missingness_row_count": 1745545,
+  "missingness_reason_counts": {
+    "DERIVED_METRIC_NOT_APPLICABLE": 1069672,
+    "NO_SOURCE_RECORD": 487053,
+    "PRIOR_PERIOD_UNAVAILABLE": 112918,
+    "NOT_YET_PUBLISHED": 74184,
+    "REPORTING_BASIS_NOT_APPLICABLE": 1718
+  },
+  "raw_source_exists_false_no_source_record": 0,
+  "cache_write_race_failure_count": 0,
+  "1108_2014_Q1_recovered": true,
+  "network_fetch_requests": 0,
+  "cache_only_network_fetch_requests": 0
+}

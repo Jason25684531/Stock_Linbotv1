@@ -1,0 +1,39 @@
+{
+  "schema_version": "fundamental-pit-v3",
+  "dataset_version": "fundamental-pit-v3",
+  "dataset_revision": 1,
+  "remediation_revision": "fundamental-pit-v3-r1",
+  "target_ticker_count": 890,
+  "target_ticker_sha256": "d311c1fea8c3110c1d9b940798040b8867d9c2ed5d9eefbd3447bd01d1c87594",
+  "supported_metrics": [
+    "eps",
+    "eps_yoy",
+    "operating_income_cumulative_yoy",
+    "operating_income_yoy",
+    "operating_margin",
+    "operating_profit",
+    "revenue",
+    "revenue_cumulative_yoy",
+    "revenue_yoy"
+  ],
+  "blocked_metrics": [
+    "net_income",
+    "total_assets",
+    "total_liabilities",
+    "total_equity",
+    "shares_outstanding",
+    "market_cap"
+  ],
+  "normalized_record_count": 259054,
+  "matrix_row_count": 764510,
+  "artifact_sha256": {
+    "fundamental_records.parquet": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+    "fundamental_matrix.parquet": "87f9614fecde2abc9ce02eae4015d31a3aaf1ce4b35872763d63394535e0d4cc",
+    "fundamental_missingness_report.csv": "2dcab4ef0595e9f2c70d6e3060abdfa201a2d2307833e724aa11366fca281a45",
+    "fundamental_coverage_by_metric.csv": "4ce8c2a5288de8a5e9d05801ced2d1de8cb7d9acb141049aa5c50dd1464ecbcf",
+    "fundamental_coverage_by_ticker.csv": "c705e631aefa7fdd66680a42055de95ec77899a360d38f91b45de3fbe8431488",
+    "fundamental_coverage_yearly.csv": "ff3bce4934028b92f119b878384663c339547539aa961e3a43d8a7ffe198d1a0",
+    "publication_mapping.csv": "ee0100f5c930f8e1189814285a00b97df5efc0ad70b5742ccf9914cb563587e7",
+    "metric_lineage.csv": "b9ce584efe4d262c7da589ac00ab5df904f10c10cd02cff93a38e8125ea12412"
+  }
+}
