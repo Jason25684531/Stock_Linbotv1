@@ -72,8 +72,8 @@ def discover_universe_lineage(
 
     root = Path(repo_root)
     run = root / Path(source_run)
-    builder_file = root / "core/research/universe.py"
-    pipeline_file = root / "core/research/pipeline.py"
+    builder_file = root / "core/research/selection/universe.py"
+    pipeline_file = root / "core/research/pipeline/orchestrator.py"
     cli_file = root / "jobs/run_factor_research.py"
     manifest_file = run / "run_manifest.json"
     membership_file = run / "universe_membership.csv"

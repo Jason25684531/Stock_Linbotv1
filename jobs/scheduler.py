@@ -45,6 +45,14 @@ JOBS: dict[str, JobSpec] = {
     'run_backtest': JobSpec('jobs/run_backtest.py', 'Run backtest'),
     'push_to_line': JobSpec('jobs/push_to_line.py', 'Push to Line'),
     'optimize_params': JobSpec('jobs/optimize_params.py', 'Optimize params'),
+    # Explicit-only: not part of a production pipeline and cannot submit orders.
+    'fundamental_shadow': JobSpec('jobs/runtime/fundamental_shadow.py', 'Run Fundamental shadow'),
+    # Explicit-only refresh/ledger advancement; never included in legacy pipelines.
+    'fundamental_advancement': JobSpec('jobs/advance_fundamental_pit_shadow.py', 'Advance Fundamental PIT/OOS'),
+    # Explicit-only continuation; promotion remains advisory and broker-disabled.
+    'fundamental_oos_promotion': JobSpec('jobs/accumulate_fresh_oos_and_promotion.py', 'Accumulate Fundamental Fresh OOS'),
+    # Explicit-only operation cycle; never part of legacy live pipelines.
+    'fundamental_shadow_operation': JobSpec('jobs/operate_fundamental_shadow.py', 'Operate Fundamental shadow/OOS'),
 }
 
 DRY_RUN_SUPPORTED_JOBS = {

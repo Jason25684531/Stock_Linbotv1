@@ -1,0 +1,12 @@
+# Direct dependencies for services/mcp/server.py.
+# This is the MCP service deployment manifest; requirements.txt remains the
+# broader development/research environment.
+beautifulsoup4==4.12.3
+Flask==3.1.2
+httpx==0.28.1
+lxml==5.3.0
+numpy==1.26.4
+pandas==2.2.3
+PyMySQL==1.1.0
+requests==2.31.0
+SQLAlchemy==2.0.23

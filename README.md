@@ -1,5 +1,35 @@
 # Stock AI Line Bot V38
 
+## Research pipeline ownership (2026-09-18)
+
+```text
+TWSE official data -> normalization/provenance -> Adjustment (as-of constrained)
+-> L2 + L4 (versioned contracts) -> S3 -> deterministic rank -> Top5
+-> target weights -> shadow/runtime evidence
+```
+
+`L2`, `L4`, and `S3` are contract labels. Their business meaning is not
+inferred from the existing D2/D3/D4 names; see
+[`docs/refactor/twse_pipeline_stage_catalog.md`](docs/refactor/twse_pipeline_stage_catalog.md).
+
+- `core/research/` owns pure source, normalization, adjustment, factor,
+  selection, and PIT transformations; `core/runtime/` owns frozen shadow
+  controls; `jobs/scheduler.py` remains the only scheduler owner.
+- Canonical research boundaries are grouped under
+  `core/research/{sources,market,adjustment,factors,selection,fundamentals,pipeline,artifacts}/`.
+  The former flat module paths remain thin compatibility re-exports.
+- The only grouped runtime adapter currently needed is under `jobs/runtime/`;
+  legacy `jobs/*.py` entrypoints remain supported.
+- `data/processed/` is immutable research evidence. `outputs/` is reproducible
+  run output. `artifacts/` is for review reports and resumable source cache.
+  Temporary files are not evidence; consult the inventory before cleanup.
+- `4_run_backtest.py`, `5_push_to_line.py`, legacy imports, scheduler commands,
+  and old strategy keys remain compatibility paths until separately approved
+  removal evidence exists.
+- Compose service dependency manifests must exist in a clean checkout:
+  `requirements.runtime.txt` for the application and `requirements.mcp.txt`
+  for MCP. Credentials are supplied through environment variables.
+
 > 回測執行檔輸出至 `artifacts/backtests/`。正式回測引擎為 `core/backtest/runner.py`;`jobs/run_backtest.py`、`4_run_backtest.py`、`5_push_to_line.py` 為相容入口。IS/OOS、walk-forward 與 bootstrap 用法見 [`docs/stability_validation_guide.md`](docs/stability_validation_guide.md)。
 
 > 🧠 **Multi-Model Pipeline** | 每策略獨立 AI 模型，動態載入推論

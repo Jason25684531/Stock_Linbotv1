@@ -98,6 +98,20 @@ class StrategyManager:
     }
     STRATEGY_REGISTRY = {**CANONICAL_REGISTRY, **LEGACY_STRATEGY_REGISTRY}
 
+    # Shadow-only runtime registrations are deliberately separate from the
+    # public legacy registry: enabling the Fundamental adapter cannot alter
+    # existing CLI/Web/LINE strategy resolution or persisted keys.
+    FUNDAMENTAL_RUNTIME_STRATEGY_ID = 'fundamental_g2g3_top5_reb60_score_weighted_v1'
+
+    @classmethod
+    def runtime_strategy_registrations(cls) -> Dict[str, Dict[str, Any]]:
+        """Return non-live runtime registrations without mutating legacy keys."""
+        from core.runtime.fundamental_shadow import flags, registration
+
+        if not flags()['FUNDAMENTAL_STRATEGY_ENABLED']:
+            return {}
+        return {cls.FUNDAMENTAL_RUNTIME_STRATEGY_ID: registration()}
+
     def resolve(self, strategy_id: str, warn_legacy: bool = True) -> str:
         """Resolve canonical and legacy IDs without changing persisted data."""
         for canonical, metadata in self.STRATEGY_METADATA.items():

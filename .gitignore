@@ -60,5 +60,15 @@ Thumbs.db
 
 *.codex/
 .claude/*
+# Keep archived/generated OpenSpec material local, but expose active changes for review.
 openspec/*
+!openspec/changes/
+openspec/changes/*
+!openspec/changes/twse-pipeline-boundaries-and-hygiene/
+!openspec/changes/twse-pipeline-boundaries-and-hygiene/**
+!openspec/changes/operate-fundamental-shadow-until-oos-ready-v1/
+!openspec/changes/operate-fundamental-shadow-until-oos-ready-v1/**
+!openspec/changes/expand-fundamental-pit-coverage-v1/
+!openspec/changes/expand-fundamental-pit-coverage-v1/**
 outputs/*
+openspec/*
