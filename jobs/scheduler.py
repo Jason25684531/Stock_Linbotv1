@@ -64,12 +64,14 @@ DRY_RUN_SUPPORTED_JOBS = {
 PIPELINES: dict[str, tuple[ScheduledStep, ...]] = {
     'daily': (
         ScheduledStep('update_database'),
+        ScheduledStep('fundamental_shadow_operation'),
         ScheduledStep('run_daily'),
         ScheduledStep('daily_backtest_validation'),
         ScheduledStep('push_to_line', ('--time', 'evening')),
     ),
     'evening': (
         ScheduledStep('update_database'),
+        ScheduledStep('fundamental_shadow_operation'),
         ScheduledStep('run_daily'),
         ScheduledStep('daily_backtest_validation'),
         ScheduledStep('push_to_line', ('--time', 'evening')),

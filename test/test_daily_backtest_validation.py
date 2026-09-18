@@ -171,6 +171,7 @@ def test_scheduler_daily_pipeline_runs_validation_before_push_and_returns_failur
 
     assert executed_targets == [
         'update_database',
+        'fundamental_shadow_operation',
         'run_daily',
         'daily_backtest_validation',
         'push_to_line',

@@ -734,6 +734,42 @@ def run_strategy(strategy, df, date_str, engine, dry_run: bool = False):
     return candidates
 
 
+def run_fundamental_production(date_str: str, engine=None, dry_run: bool = False) -> dict[str, object]:
+    """Evaluate the frozen Fundamental gate through the canonical runtime only."""
+    from core.runtime.fundamental_production import evaluate_production
+
+    result = evaluate_production(
+        date_str,
+        write_status=not dry_run,
+    )
+    status = result.get("status") or {}
+    if status.get("production_eligibility") != "PASS":
+        print(
+            "[FUNDAMENTAL] production blocked: "
+            f"{status.get('block_reason') or 'UNKNOWN'}; no official rows written"
+        )
+        return result
+
+    rows = result.get("rows")
+    if not isinstance(rows, pd.DataFrame) or rows.empty:
+        print(f"[FUNDAMENTAL] {status.get('rebalance_flag') and 'no candidates' or 'NO_REBALANCE_ACTION'}")
+        return result
+
+    if dry_run:
+        print(f"[DRY-RUN] Fundamental production persistence skipped (preview_rows={len(rows)})")
+        return result
+
+    written, _ = _persist_strategy_recommendations(
+        rows,
+        "fundamental_g2g3_top5_reb60_score_weighted_v1",
+        date_str,
+        engine,
+    )
+    status["recommendation_count"] = written
+    print(f"[FUNDAMENTAL] canonical recommendation rows written: {written}")
+    return result
+
+
 def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
     print("\n" + "="*50)
     print("🤖 Stock AI 每日選股執行中...")
@@ -879,6 +915,8 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
             strategy_errors[strategy.name] = str(exc)
             print(f"[DRY-RUN] strategy error recorded: {strategy.name}: {exc}")
         all_results[strategy.name] = candidates
+
+    fundamental_result = run_fundamental_production(date_str, engine=engine, dry_run=dry_run)
     
     # 9. 總結
     print("\n" + "="*50)
@@ -909,6 +947,8 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
         'preview_recommendation_count': preview_count,
         'skipped_persistence': dry_run,
         'strategy_errors': strategy_errors,
+        'fundamental_production': fundamental_result.get('status', {}),
+        'fundamental_recommendation_count': int((fundamental_result.get('status') or {}).get('recommendation_count') or 0),
         'supplement_columns': {
             'present': present_supplement_cols,
             'missing': missing_supplement_cols,

@@ -379,12 +379,15 @@ def api_daily_signals():
         df = app_pkg.supplement_financial_data(df)
 
         try:
+            from core.runtime.fundamental_production import STRATEGY_ID as FUNDAMENTAL_STRATEGY_ID
+
             mgr = app_pkg.StrategyManager()
             if requested_strategy:
                 key = requested_strategy.lower().strip()
                 strategy_key = strategy_alias.get(key, key)
-                active = mgr.get_strategy(strategy_key)
-                if active is None:
+                fundamental_requested = strategy_key == FUNDAMENTAL_STRATEGY_ID
+                active = None if fundamental_requested else mgr.get_strategy(strategy_key)
+                if active is None and not fundamental_requested:
                     return jsonify(
                         {
                             'error': f'無效策略: {requested_strategy}',
@@ -399,8 +402,9 @@ def api_daily_signals():
                 active = mgr.get_active_strategy()
                 names = mgr.get_active_strategy_names()
                 strategy_key = names[0] if names else 'v31_hybrid'
+                fundamental_requested = False
 
-            strategy_name = active.display_name
+            strategy_name = 'Fundamental G2/G3 Top5 REB60' if fundamental_requested else active.display_name
             candidates, fallback_meta, has_persisted = app_pkg._load_strategy_candidates(
                 active=active,
                 strategy_key=strategy_key,

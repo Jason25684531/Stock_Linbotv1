@@ -833,8 +833,10 @@ app.py
 
 - Official daily command: `python jobs/scheduler.py daily`
 - Official daily flow: `jobs/update_database.py` -> `jobs/run_daily.py` -> `jobs/run_daily_backtest_validation.py` -> `jobs/push_to_line.py`
+- Fundamental daily prerequisite: `jobs/update_database.py` -> `jobs/operate_fundamental_shadow.py` (cache-only) -> `jobs/run_daily.py`; the Fundamental production gate remains fail-closed until Fresh OOS passes.
 - `jobs/scheduler.py` is the only official daily scheduler entrypoint.
 - `daily_recommendations` remains the recommendation persistence contract.
+- Fundamental production flag: `ENABLE_FUNDAMENTAL_PRODUCTION=false` by default; it never enables broker submission.
 - `pipeline_runs` remains the operational run-state surface.
 - `/health` remains the compose container readiness endpoint.
 - `/api/dashboard/health-check` remains a dashboard payload API and is not the container health endpoint.

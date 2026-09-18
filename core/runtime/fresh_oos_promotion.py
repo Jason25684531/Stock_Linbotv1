@@ -545,6 +545,25 @@ def run_accumulation(*, current_run_date: object | None = None, output_root: Pat
         "KILL_SWITCH": "PASS", "ROLLBACK": "PASS", "LEGACY_STRATEGY_REGRESSION": "PASS", "INDEPENDENT_REVIEW": "APPROVED",
     }
     promotion = _promotion(evidence, str(fresh.get("status", oos["availability"]["status"])))
+    promotion.update(
+        {
+            "strategy_id": shadow.RUNTIME_STRATEGY_ID,
+            "strategy_fingerprint": shadow.FINGERPRINT,
+            "evaluation_window": {
+                "cutoff": CUTOFF.date().isoformat(),
+                "fresh_start": oos["availability"].get("fresh_start"),
+                "latest_available_date": oos["availability"].get("latest_available_date"),
+                "trading_days": oos["availability"].get("trading_days", 0),
+                "calendar_months": oos["availability"].get("calendar_months", 0),
+                "rebalance_count": oos["availability"].get("rebalance_count", 0),
+            },
+            "artifact_identity": {
+                "fundamental_runtime_spec_sha256": _sha256(output_root / "FundamentalRuntimeSpec.json"),
+                "fresh_oos_availability_sha256": _sha256(output_root / "FreshOOSAvailabilityReport.json"),
+                "runtime_replay_manifest_sha256": _sha256(output_root / "runtime_replay_manifest.json"),
+            },
+        }
+    )
     monitoring = _monitor(output_root, oos["availability"], int(oos["appended_rows"]))
     review_ok = all(value == "PASS" or (key == "INDEPENDENT_REVIEW" and value == "APPROVED") for key, value in evidence.items()) and oos["lineage"]["FRESH_OOS_LINEAGE"] == "PASS" and fresh.get("status") != "INVALIDATED"
     review_text = ["# Independent Review", "", "Review mode: read-only.", "", f"- Frozen strategy identity: {'APPROVED' if contract['identity_checks'] and immutable['ARCHIVED_RESEARCH_DATASET_IMMUTABLE'] == 'PASS' else 'CHANGES_REQUIRED'}.", f"- PIT snapshot lineage, cutoff isolation, ledger idempotence, parity, replay, shadow order isolation, monitoring, and promotion safety: {'APPROVED' if review_ok else 'CHANGES_REQUIRED'}.", "- Strategy, cutoff, universe, PIT policy, thresholds, and risk policy changes: NONE.", "", f"INDEPENDENT_REVIEW={'APPROVED' if review_ok else 'CHANGES_REQUIRED'}", "BLOCKING_FINDINGS=0" if review_ok else "BLOCKING_FINDINGS=1", "MAJOR_FINDINGS=0", ""]

@@ -9,12 +9,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def test_scheduler_daily_pipeline_preserves_official_step_order():
     assert [step.target for step in scheduler.PIPELINES['daily']] == [
         'update_database',
+        'fundamental_shadow_operation',
         'run_daily',
         'daily_backtest_validation',
         'push_to_line',
     ]
     assert scheduler.JOBS['update_database'].script_path == 'jobs/update_database.py'
     assert scheduler.JOBS['run_daily'].script_path == 'jobs/run_daily.py'
+    assert scheduler.JOBS['fundamental_shadow_operation'].script_path == 'jobs/operate_fundamental_shadow.py'
     assert scheduler.JOBS['daily_backtest_validation'].script_path == 'jobs/run_daily_backtest_validation.py'
     assert scheduler.JOBS['push_to_line'].script_path == 'jobs/push_to_line.py'
 

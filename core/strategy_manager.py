@@ -105,12 +105,15 @@ class StrategyManager:
 
     @classmethod
     def runtime_strategy_registrations(cls) -> Dict[str, Dict[str, Any]]:
-        """Return non-live runtime registrations without mutating legacy keys."""
-        from core.runtime.fundamental_shadow import flags, registration
+        """Return immutable non-live registrations without mutating legacy keys."""
+        from core.runtime.fundamental_production import registration
 
-        if not flags()['FUNDAMENTAL_STRATEGY_ENABLED']:
-            return {}
         return {cls.FUNDAMENTAL_RUNTIME_STRATEGY_ID: registration()}
+
+    @classmethod
+    def is_runtime_strategy(cls, strategy_id: str) -> bool:
+        """Return whether ``strategy_id`` is a registered non-legacy runtime."""
+        return strategy_id in cls.runtime_strategy_registrations()
 
     def resolve(self, strategy_id: str, warn_legacy: bool = True) -> str:
         """Resolve canonical and legacy IDs without changing persisted data."""

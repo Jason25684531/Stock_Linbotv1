@@ -406,13 +406,19 @@ def get_v30_recommendation():
 
 def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None = None):
     try:
+        from core.runtime.fundamental_production import STRATEGY_ID as FUNDAMENTAL_STRATEGY_ID
+
         mgr = StrategyManager()
-        active = mgr.get_strategy(strategy_key) if strategy_key else mgr.get_active_strategy()
-        if active is None:
+        fundamental_requested = strategy_key == FUNDAMENTAL_STRATEGY_ID
+        active = None if fundamental_requested else (mgr.get_strategy(strategy_key) if strategy_key else mgr.get_active_strategy())
+        if active is None and not fundamental_requested:
             return '❌ 策略載入失敗，請先輸入「切換V30」設定策略'
 
-        strategy_name = active.display_name
-        active_strategy_key = active.name
+        strategy_name = 'Fundamental G2/G3 Top5 REB60' if fundamental_requested else active.display_name
+        active_strategy_key = FUNDAMENTAL_STRATEGY_ID if fundamental_requested else active.name
+        stop_loss = Config.V30_STOP_LOSS if fundamental_requested else active.stop_loss
+        take_profit = Config.V30_TAKE_PROFIT if fundamental_requested else active.take_profit
+        max_hold_days = Config.V30_MAX_HOLD_DAYS if fundamental_requested else active.max_hold_days
 
         requested_date = _current_line_date()
         baseline_date = _resolve_ui_baseline_date()
@@ -478,8 +484,8 @@ def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None 
                         'news_reason_items': news_info['items'],
                         'news_signal_title': news_info['title'],
                         'news_is_bearish': news_info['is_bearish'],
-                        'stop_loss_price': close * (1 - active.stop_loss),
-                        'take_profit_price': close * (1 + active.take_profit) if active.take_profit > 0 else 0,
+                        'stop_loss_price': close * (1 - stop_loss),
+                        'take_profit_price': close * (1 + take_profit) if take_profit > 0 else 0,
                     }
                 )
             return create_recommendation_carousel(
@@ -505,8 +511,8 @@ def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None 
             news_info = _resolve_signal_news_info(row, display_date, stock_mentions_map)
             news_reason = news_info['raw']
 
-            sl_price = close * (1 - active.stop_loss)
-            tp_price = close * (1 + active.take_profit) if active.take_profit > 0 else 0
+            sl_price = close * (1 - stop_loss)
+            tp_price = close * (1 + take_profit) if take_profit > 0 else 0
 
             reply += f"{'🥇🥈🥉'[i-1] if i <= 3 else '▪️'} {i}. {stock_id}（{sector}）\n"
             reply += f'   💰 收盤：{close:.2f}'
@@ -531,7 +537,7 @@ def get_strategy_recommendation(as_flex: bool = False, strategy_key: str | None 
         reply += f'📊 共篩選出 {total_count} 檔'
         if total_count > 5:
             reply += '（顯示前 5 名）'
-        reply += f'\n⏰ 最長持有：{active.max_hold_days} 天\n'
+        reply += f'\n⏰ 最長持有：{max_hold_days} 天\n'
         reply += '⚠️ 僅供參考，請自行評估風險'
         return reply
     except Exception as exc:

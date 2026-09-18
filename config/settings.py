@@ -279,6 +279,12 @@ class Config:
         "ENABLE_DAILY_BACKTEST_VALIDATION",
         False,
     )
+    # Fundamental production remains explicitly disabled until Fresh OOS and
+    # promotion evidence satisfy the frozen production gate.
+    ENABLE_FUNDAMENTAL_PRODUCTION = _env_flag(
+        "ENABLE_FUNDAMENTAL_PRODUCTION",
+        False,
+    )
     DAILY_BACKTEST_WINDOW_DAYS = int(os.getenv("DAILY_BACKTEST_WINDOW_DAYS", "60"))
     DAILY_BACKTEST_STRATEGIES = os.getenv("DAILY_BACKTEST_STRATEGIES", "v34_turbo")
     DAILY_BACKTEST_UNIVERSE = os.getenv("DAILY_BACKTEST_UNIVERSE", "2330,2317,2454")
