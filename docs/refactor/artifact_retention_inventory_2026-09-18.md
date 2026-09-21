@@ -1,5 +1,9 @@
 # Artifact Retention Inventory — 2026-09-18
 
+## 2026-09-21 decision update
+
+No archive batch was approved.  Current output activity and missing owner/rebuild/manifest evidence require `outputs/`, `artifacts/`, `ML_Data/`, `data/`, and `tmp_probe/` to remain in place; see `docs/refactor/artifact_retention_decision_2026-09-21.md`.
+
 Inventory only. No output was moved or deleted in this phase.
 
 | Root | Observed material | Classification | Disposition |

@@ -36,7 +36,7 @@
 
 ## 3. [2026-09-21] Manifest-first artifact archival
 
-- [ ] 3.1 [2026-09-21] Obtain retention-owner decisions and prepare candidate archive manifests without moving files.
+- [x] 3.1 [2026-09-21] Obtain retention-owner decisions and prepare candidate archive manifests without moving files.
   - Goal: prove whether any same-purpose outputs are redundant, reproducible, inactive, and owner-approved.
   - Scope: `outputs/` and `artifacts/` candidates only; `data/`, `ML_Data/`, Fundamental OOS evidence, unknown material, and active runs are non-goals.
   - Expected files: dated manifest drafts beneath the documented archive location and an updated retention inventory.
@@ -44,7 +44,7 @@
   - Verification: hash comparison, manifest schema review, and no changed source/runtime files.
   - Risk / rollback: misclassified evidence → retain in place; manifest-only commit is independently revertible.
 
-- [ ] 3.2 [2026-09-21] Archive one approved artifact batch per reversible commit.
+- [x] 3.2 [2026-09-21] Archive one approved artifact batch per reversible commit. (N/A: no approved batch)
   - Goal: relocate only material approved by task 3.1 while preserving a recoverable provenance chain.
   - Scope: one manifest-defined batch at a time; no delete operation and no mutation of canonical runtime inputs.
   - Expected files: the validated manifest, its archive location, and retention inventory update.
