@@ -2,7 +2,7 @@
 
 ## Reviewability
 
-`.gitignore` now ignores generated OpenSpec material, exposes every non-archived directory under `openspec/changes/`, and continues to ignore `openspec/changes/archive/**`.  Active proposal, design, spec, task, and evidence files therefore appear through ordinary `git status`; no force-add is required.
+`.gitignore` now ignores generated OpenSpec material, exposes every non-archived directory under `openspec/changes/`, and continues to ignore `openspec/changes/archive/**`.  Active proposal, design, spec, task, and evidence files therefore appear as local untracked files through ordinary `git status`; no force-add or Git tracking is required.  This matches `test_stabilize_daily_recommendation_pipeline_contract.py`, which protects the repository's local-OpenSpec convention.
 
 ## Naming conflict
 
@@ -12,4 +12,4 @@ Project policy still requires a date prefix.  Until the CLI supports a configura
 
 ## Verification
 
-Use `git check-ignore -v <active-artifact>` (no matching rule expected), `git check-ignore -v <archive-artifact>` (archive rule expected), `git status --short --untracked-files=all`, and `openspec status --change <id>`.
+Use `git check-ignore -v <active-artifact>` (a negation rule may be displayed, but the file must appear in `git status`), `git check-ignore -v <archive-artifact>` (archive rule expected), `git ls-files <active-artifact>` (no output expected), `git status --short --untracked-files=all`, and `openspec status --change <id>`.
