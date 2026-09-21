@@ -1,5 +1,9 @@
 # Deletion Candidates
 
+## 2026-09-21 refresh
+
+The current reference map is `docs/refactor/repository_hygiene_reference_map_2026-09-21.md`.  It found no source or non-cache candidate with complete no-reference evidence.  `4_run_backtest.py`, `5_push_to_line.py`, `app.py`, `config.py`, `init_settings.py`, `core/viz_helper.py`, `core/report_helper.py`, `jobs/run_candidate_redundancy.py`, `jobs/run_engine_diagnostics.py`, `scripts/diagnose_strategies.py`, and `tmp_probe/` are retained under their recorded classifications.  Only confirmed idle cache paths may be removed in this change.
+
 > 此文件是證據閘門，不是刪除授權。除 CACHE 外，任何 `UNKNOWN` 或 `LEGACY_COMPATIBILITY` 檔案均不得在本 Phase 刪除。
 
 | 路徑／模式 | 分類 | 引用證據 | 刪除理由 | 影響 | 回復方式 | 決定 |
