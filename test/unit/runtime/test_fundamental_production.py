@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -12,10 +11,12 @@ from core.runtime.fundamental_shadow import FINGERPRINT, RUNTIME_STRATEGY_ID
 from core.strategy_manager import StrategyManager
 
 
-EVIDENCE_ROOT = production.OPERATION_ROOT
+FIXTURE = Path(__file__).parents[2] / "fixtures" / "baseline" / "fundamental_production_evidence_2026-09-17.json"
 
 
 def _copy_evidence(tmp_path: Path) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    fixture = _read(FIXTURE)
     for name in (
         "runtime_validation_manifest.json",
         "promotion_review.json",
@@ -23,7 +24,8 @@ def _copy_evidence(tmp_path: Path) -> Path:
         "FundamentalRuntimeSpec.json",
         "runtime_replay_manifest.json",
     ):
-        shutil.copy2(EVIDENCE_ROOT / name, tmp_path / name)
+        (tmp_path / name).write_text(json.dumps(fixture[name]), encoding="utf-8")
+    _refresh_promotion_identity(tmp_path)
     return tmp_path
 
 
@@ -67,8 +69,8 @@ def test_registration_is_exact_and_legacy_listing_is_unchanged():
     assert len(StrategyManager().list_strategies()) == 7
 
 
-def test_current_evidence_blocks_on_insufficient_oos():
-    result = production.check_production_eligibility(evidence_root=EVIDENCE_ROOT, enable_production=True)
+def test_frozen_evidence_blocks_on_insufficient_oos(tmp_path):
+    result = production.check_production_eligibility(evidence_root=_copy_evidence(tmp_path), enable_production=True)
     assert result.eligible is False
     assert result.reason == "INSUFFICIENT_OOS"
 
@@ -137,10 +139,11 @@ def test_normalize_recommendations_preserves_canonical_fields():
 
 
 def test_blocked_evaluation_writes_zero_status(tmp_path):
+    evidence_root = _copy_evidence(tmp_path / "evidence")
     result = production.evaluate_production(
         "2026-09-17",
         output_root=tmp_path,
-        evidence_root=EVIDENCE_ROOT,
+        evidence_root=evidence_root,
         enable_production=True,
     )
     assert result["rows"].empty

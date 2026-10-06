@@ -1,0 +1,33 @@
+{
+  "source": "outputs/fundamental_runtime_shadow/operate-fundamental-shadow-and-complete-fresh-oos-v1 (2026-09-17 immutable evidence)",
+  "runtime_validation_manifest.json": {
+    "strategy_id": "fundamental_g2g3_top5_reb60_score_weighted_v1",
+    "strategy_fingerprint": "cb7c0d88e58533123d9622315464e82be4a6de636264ba17c0efa4e73c31cc5f",
+    "PIT_INTEGRITY": "PASS",
+    "DATA_FRESHNESS_GATE": "PASS",
+    "FACTOR_HEALTH_GATE": "PASS",
+    "RESEARCH_RUNTIME_PARITY": "PASS",
+    "RUNTIME_REPLAY": "PASS",
+    "HISTORICAL_SELECTION_DRIFT": 0,
+    "BROKER_ORDER_SUBMISSION": "DISABLED"
+  },
+  "promotion_review.json": {
+    "PRODUCTION_PROMOTION_STATUS": "SHADOW_APPROVED",
+    "PRODUCTION_READY": "NO",
+    "BROKER_ORDER_SUBMISSION": "DISABLED"
+  },
+  "FreshOOSAvailabilityReport.json": {
+    "fresh_start": "2026-07-29",
+    "latest_available_date": "2026-09-17",
+    "trading_days": 37,
+    "calendar_months": 3,
+    "rebalance_count": 1,
+    "minimum_requirement": {"months": 9, "rebalances": 3, "trading_days": 180},
+    "status": "INSUFFICIENT_DATA"
+  },
+  "FundamentalRuntimeSpec.json": {
+    "strategy_id": "fundamental_g2g3_top5_reb60_score_weighted_v1",
+    "strategy_fingerprint": "cb7c0d88e58533123d9622315464e82be4a6de636264ba17c0efa4e73c31cc5f"
+  },
+  "runtime_replay_manifest.json": {"offline": true, "status": "PASS"}
+}

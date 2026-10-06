@@ -19,8 +19,11 @@ import json
 import os
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from typing import TYPE_CHECKING, Optional, Dict, Any, List
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from core.strategy.registry import StrategyRegistry
 
 
 @dataclass(frozen=True)
@@ -494,6 +497,22 @@ class StrategyManager:
 
     def list_canonical_strategies(self) -> List[str]:
         return list(self.CANONICAL_REGISTRY)
+
+    def get_platform_registry(self) -> "StrategyRegistry":
+        """Return the opt-in C2 registry without changing legacy behavior.
+
+        Existing callers continue to use this manager's legacy methods.  The
+        registry is built lazily only for callers explicitly requesting the
+        platform seam, so settings, activation, and strategy caches remain
+        owned by the compatibility facade.
+        """
+        registry = getattr(self, "_platform_registry", None)
+        if registry is None:
+            from core.strategy.adapters.legacy import build_legacy_registry
+
+            registry = build_legacy_registry()
+            self._platform_registry = registry
+        return registry
 
     # ============================================
     # Rich Menu 盲盒池 (V4 新增)
