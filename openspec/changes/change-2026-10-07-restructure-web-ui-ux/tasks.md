@@ -41,7 +41,7 @@
 - [x] 4.7 Render separate technical, institutional, and Strategy Matches cards from authoritative evidence; preserve independent strategy identities and never calculate a unified score.
 - [x] 4.8 If no authoritative persisted strategy-match source exists, render and document an unavailable limitation instead of rerunning strategies or inventing matches.
 - [x] 4.9 Add Flask payload/route tests and a JavaScript DOM test that stubs Lightweight Charts and proves creation/population of candlestick, MA5, MA20, MA60, and volume series for normal and degraded data.
-- [ ] 4.10 Run Phase 4 focused tests and `git diff --check`, then create an independently revertible Phase 4 commit.
+- [x] 4.10 Run Phase 4 focused tests and `git diff --check`, then create an independently revertible Phase 4 commit.
 
 ## 5. Phase 5 — Unified Strategy Center (2026-10-07)
 
