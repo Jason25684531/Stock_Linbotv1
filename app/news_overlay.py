@@ -7,9 +7,8 @@ from contextlib import contextmanager
 
 import pandas as pd
 
-import app as app_pkg
 from config import Config
-from core.db_helper import get_news_sentiment, get_stock_sector, safe_float, safe_int
+from core.db_helper import safe_float, safe_int
 
 
 _stock_news_runtime = threading.local()
@@ -89,7 +88,7 @@ def _get_sector_news_summary(sector: str, date_str: str = None) -> dict:
     if not Config.is_news_boost_enabled():
         return payload
 
-    sentiment = app_pkg.get_news_sentiment(date_str)
+    sentiment = services.get_news_sentiment(date_str)
     bull_sectors = sentiment.get('bull_sectors', [])
     bear_sectors = sentiment.get('bear_sectors', [])
 
@@ -152,9 +151,9 @@ def _get_stock_specific_news_summary(stock_id: str, stock_mentions_map: dict) ->
 
 def _resolve_signal_news_info(row, date_str: str, stock_mentions_map: dict) -> dict:
     stock_id = str(row.get('stock_id', '')).strip()
-    sector = app_pkg.get_stock_sector(stock_id)
+    sector = services.get_stock_sector(stock_id)
 
-    sector_info = app_pkg._get_sector_news_summary(sector, date_str)
+    sector_info = services._get_sector_news_summary(sector, date_str)
     if sector_info['items']:
         return sector_info
 
@@ -179,19 +178,19 @@ def _apply_news_sentiment_overlay(candidates: pd.DataFrame, date_str: str) -> pd
         return boosted
 
     try:
-        sentiment = app_pkg.get_news_sentiment(date_str)
+        sentiment = services.get_news_sentiment(date_str)
         bull_sectors = set(sentiment.get('bull_sectors') or [])
         bear_sectors = set(sentiment.get('bear_sectors') or [])
         bull_theme_map = sentiment.get('bull_theme_map') or {}
         bear_theme_map = sentiment.get('bear_theme_map') or {}
-        stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in boosted['stock_id'].tolist()])
+        stock_mentions_map = services._get_stock_mentions_map([str(sid) for sid in boosted['stock_id'].tolist()])
 
         bull_factor = min(Config.NEWS_BOOST_FACTOR, Config.NEWS_BOOST_MAX)
         bear_factor = Config.NEWS_PENALTY_FACTOR
 
         for idx, row in boosted.iterrows():
             stock_id = str(row.get('stock_id', '')).strip()
-            sector = app_pkg.get_stock_sector(stock_id)
+            sector = services.get_stock_sector(stock_id)
             score = safe_float(row.get('ai_score')) or 0.0
             reason_parts: list[str] = []
 

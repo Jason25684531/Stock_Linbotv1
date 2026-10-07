@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pandas as pd
+from core.strategy import SelectionResult
 
 
 def test_scheduler_accepts_dry_run_and_keeps_canonical_launchers():
@@ -93,6 +94,22 @@ def test_run_daily_dry_run_records_strategy_error_without_stopping(monkeypatch):
 
         def get_active_strategy_names(self):
             return ['v33_low_vol']
+
+        def get_strategy_runner(self):
+            strategies = {
+                'bad_strategy': _BadStrategy(),
+                'v33_low_vol': _GoodStrategy(),
+            }
+
+            class _Runner:
+                def execute(self, strategy_name, context):
+                    return SelectionResult(
+                        metadata={
+                            'legacy_result': strategies[strategy_name].filter_candidates(context.data.copy())
+                        }
+                    )
+
+            return _Runner()
 
     monkeypatch.setattr(run_daily, 'StrategyManager', _Manager)
     monkeypatch.setattr(run_daily, 'get_db_engine', lambda: object())

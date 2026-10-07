@@ -24,6 +24,7 @@ from pathlib import Path
 
 if TYPE_CHECKING:
     from core.strategy.registry import StrategyRegistry
+    from core.strategy.runner import StrategyRunner
 
 
 @dataclass(frozen=True)
@@ -513,6 +514,21 @@ class StrategyManager:
             registry = build_legacy_registry()
             self._platform_registry = registry
         return registry
+
+    def get_strategy_runner(self) -> "StrategyRunner":
+        """Return the opt-in platform runner without changing legacy callers.
+
+        StrategyManager remains the settings, cache, and legacy-object facade;
+        the runner is created only by callers explicitly adopting C4 selection
+        dispatch.
+        """
+        runner = getattr(self, "_strategy_runner", None)
+        if runner is None:
+            from core.strategy.runner import StrategyRunner
+
+            runner = StrategyRunner(self.get_platform_registry())
+            self._strategy_runner = runner
+        return runner
 
     # ============================================
     # Rich Menu 盲盒池 (V4 新增)

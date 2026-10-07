@@ -30,6 +30,7 @@ from core.db_helper import (
     record_pipeline_step_start,
 )
 from core.strategy_manager import StrategyManager
+from core.strategy import StrategyContext
 from core.calc_indicators import (
     calculate_ratio_features,
     calculate_rsi, calculate_macd, calculate_kd,
@@ -546,18 +547,8 @@ def _persist_strategy_recommendations(
         )
     else:
         for _, row in candidates.head(10).iterrows():
-            ai_score = row.get('ai_score', None)
             rows_to_insert.append(
-                {
-                    'stock_id': row['stock_id'],
-                    'date': date_str,
-                    'strategy': strategy_name,
-                    'price': row['close_price'],
-                    'score': float(ai_score) if ai_score is not None else None,
-                    'rsi': row.get('rsi', None),
-                    'volume': row.get('volume', None),
-                    'reason': row.get('news_boost_reason', '') or None,
-                }
+                _normalize_recommendation_for_persistence(row, strategy_name, date_str)
             )
 
     wrote_heartbeat = rows_to_insert[0]['stock_id'] == RECOMMENDATION_HEARTBEAT_STOCK_ID
@@ -585,7 +576,54 @@ def _persist_strategy_recommendations(
 
     return len(rows_to_insert), wrote_heartbeat
 
-def run_strategy(strategy, df, date_str, engine, dry_run: bool = False):
+
+def _normalize_recommendation_for_persistence(row, strategy_name: str, date_str: str) -> dict:
+    """Map an enriched legacy row through the canonical recommendation boundary."""
+    from core.recommendation.normalizer import normalize_legacy_row, to_legacy_mapping
+
+    normalized = normalize_legacy_row(
+        {
+            'stock_id': row['stock_id'],
+            'trade_date': date_str,
+            'strategy': strategy_name,
+            'close_price': row.get('close_price'),
+            'ai_score': row.get('ai_score'),
+            'rsi': row.get('rsi'),
+            'volume': row.get('volume'),
+            'news_boost_reason': row.get('news_boost_reason') or None,
+        },
+        default_strategy_id=strategy_name,
+    )
+    legacy = to_legacy_mapping(normalized, include_none=True)
+    score = legacy['ai_score']
+    return {
+        'stock_id': legacy['stock_id'],
+        'date': legacy['trade_date'],
+        'strategy': legacy['strategy'],
+        'price': legacy['close_price'],
+        'score': float(score) if score is not None else None,
+        'rsi': legacy['rsi'],
+        'volume': legacy['volume'],
+        'reason': legacy['news_boost_reason'],
+    }
+
+def _select_legacy_candidates(strategy, df: pd.DataFrame, date_str: str, runner) -> pd.DataFrame:
+    """Execute legacy selection through the approved platform seam.
+
+    The returned DataFrame is the adapter's opaque compatibility result; Daily
+    remains owner of model/news enrichment and persistence.
+    """
+    selection = runner.execute(
+        strategy.name,
+        StrategyContext(asof_date=date_str, data=df),
+    )
+    candidates = selection.metadata.get("legacy_result")
+    if not isinstance(candidates, pd.DataFrame):
+        raise TypeError("legacy platform selection must expose a DataFrame result")
+    return candidates
+
+
+def run_strategy(strategy, df, date_str, engine, dry_run: bool = False, *, runner=None):
     """執行單一策略的選股流程（自動載入策略專屬模型）"""
     print(f"\n{'='*40}")
     print(f"📊 執行策略: {strategy.display_name} ({strategy.name})")
@@ -594,7 +632,11 @@ def run_strategy(strategy, df, date_str, engine, dry_run: bool = False):
     print(f"{'='*40}")
     
     # 策略篩選
-    candidates = strategy.filter_candidates(df.copy())
+    candidates = (
+        _select_legacy_candidates(strategy, df, date_str, runner)
+        if runner is not None
+        else strategy.filter_candidates(df.copy())
+    )
     print(f"✅ 篩選出 {len(candidates)} 檔候選股票")
     
     if candidates.empty:
@@ -736,9 +778,9 @@ def run_strategy(strategy, df, date_str, engine, dry_run: bool = False):
 
 def run_fundamental_production(date_str: str, engine=None, dry_run: bool = False) -> dict[str, object]:
     """Evaluate the frozen Fundamental gate through the canonical runtime only."""
-    from core.runtime.fundamental_production import evaluate_production
+    from core.runtime.fundamental_adapter import FundamentalRuntimeAdapter
 
-    result = evaluate_production(
+    result = FundamentalRuntimeAdapter().evaluate_production(
         date_str,
         write_status=not dry_run,
     )
@@ -782,6 +824,7 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
     strategies = manager.get_persistence_strategies()
     strategy_names = manager.get_persistence_strategy_names()
     active_strategy_names = manager.get_active_strategy_names()
+    strategy_runner = manager.get_strategy_runner()
     
     print(f"📊 落庫策略數量: {len(strategies)}")
     print(f"📋 落庫策略列表: {', '.join(strategy_names)}")
@@ -878,7 +921,9 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
             pre_ids = []
             for strat in strategies:
                 try:
-                    cands = strat.filter_candidates(df.copy())
+                    cands = _select_legacy_candidates(
+                        strat, df, date_str, strategy_runner
+                    )
                     if not cands.empty:
                         pre_ids.extend(cands['stock_id'].head(5).tolist())
                 except Exception:
@@ -907,7 +952,14 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
     strategy_errors = {}
     for strategy in strategies:
         try:
-            candidates = run_strategy(strategy, df, date_str, engine, dry_run=dry_run)
+            candidates = run_strategy(
+                strategy,
+                df,
+                date_str,
+                engine,
+                dry_run=dry_run,
+                runner=strategy_runner,
+            )
         except Exception as exc:
             if not dry_run:
                 raise

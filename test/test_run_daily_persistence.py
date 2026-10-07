@@ -1,5 +1,6 @@
 import pandas as pd
 
+from core.strategy import SelectionResult
 from jobs import run_daily
 
 
@@ -45,6 +46,19 @@ def test_run_daily_for_date_persists_every_persistence_strategy(monkeypatch):
 
         def get_active_strategy_names(self):
             return ['v34_turbo']
+
+        def get_strategy_runner(self):
+            by_name = {strategy.name: strategy for strategy in persistence_strategies}
+
+            class _Runner:
+                def execute(self, strategy_name, context):
+                    return SelectionResult(
+                        metadata={
+                            'legacy_result': by_name[strategy_name].filter_candidates(context.data.copy())
+                        }
+                    )
+
+            return _Runner()
 
     monkeypatch.setattr(run_daily, 'StrategyManager', _FakeManager)
     monkeypatch.setattr(run_daily, 'get_db_engine', lambda: object())

@@ -89,6 +89,14 @@ class LegacyStrategyAdapter:
         if data is None:
             raise ValueError("legacy strategy execution requires context.data")
 
+        runtime_overrides = context.settings.get("runtime_overrides")
+        if runtime_overrides is not None:
+            if not isinstance(runtime_overrides, Mapping):
+                raise ValueError("runtime_overrides must be a mapping")
+            set_overrides = getattr(self._strategy, "set_runtime_overrides", None)
+            if callable(set_overrides):
+                set_overrides(dict(runtime_overrides))
+
         source = data.copy() if callable(getattr(data, "copy", None)) else data
         # Deliberately do not catch exceptions: legacy failure semantics remain
         # visible to callers and parity tests.

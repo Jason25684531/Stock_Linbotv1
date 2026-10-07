@@ -243,13 +243,17 @@ class TestRandomStrategyHandler:
             'close_price': [600.0],
             'stock_name': ['台積電'],
         })
-        strategy.filter_candidates.return_value = candidates
         mock_sm.get_strategy.return_value = strategy
+        mock_sm.get_strategy_runner.return_value.execute.return_value = SimpleNamespace(
+            metadata={'legacy_result': candidates}
+        )
         mock_gsd.return_value = (pd.DataFrame({'stock_id': ['2330']}), '2026-04-02')
 
         from linebot.v3.messaging import TextMessage as V3TextMessage
         result = self._run()
         assert isinstance(result[0], V3TextMessage)
+        mock_sm.get_strategy_runner.return_value.execute.assert_called_once()
+        assert mock_sm.get_strategy_runner.return_value.execute.call_args.args[0] == 'v35_innovation'
         assert 'V35' in result[0].text or '策略盲盒' in result[0].text
 
     @patch('app.get_stock_data')
@@ -264,8 +268,10 @@ class TestRandomStrategyHandler:
     def test_all_strategies_empty_returns_no_candidate_message(self, mock_sm, mock_gsd):
         mock_sm.get_random_strategy_pool.return_value = ['v35_innovation']
         strategy = MagicMock()
-        strategy.filter_candidates.return_value = pd.DataFrame()
         mock_sm.get_strategy.return_value = strategy
+        mock_sm.get_strategy_runner.return_value.execute.return_value = SimpleNamespace(
+            metadata={'legacy_result': pd.DataFrame()}
+        )
         mock_gsd.return_value = (pd.DataFrame({'stock_id': ['2330']}), '2026-04-02')
 
         result = self._run()

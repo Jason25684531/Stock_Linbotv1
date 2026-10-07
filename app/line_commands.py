@@ -2,7 +2,7 @@
 
 Single source of truth for command matching, dispatch priority, and help
 text (replaces the previous 450-line if/elif chain in ``line_bot.py``).
-No app_pkg / Flask / LINE SDK dependency here — handlers receive a
+No services / Flask / LINE SDK dependency here — handlers receive a
 ``LineCommandContext`` carrying whatever they need.
 """
 
@@ -18,7 +18,7 @@ class LineCommandContext:
     event: Any
     msg_text: str
     msg_key: str
-    app_pkg: Any
+    services: Any
     reply_message: Callable[[str, Any], None]
     reply_stock_diagnosis: Callable[[str, str], bool]
 
@@ -138,7 +138,7 @@ def _param_command(command_id: str, spec: ParamSpec, priority: int, help_lines: 
     return LineCommand(
         command_id=command_id,
         matcher=lambda ctx: bool(re.match(spec.match_pattern, ctx.msg_text)),
-        handler=lambda ctx: parse_and_apply(spec, ctx.msg_text, ctx.app_pkg.update_setting),
+        handler=lambda ctx: parse_and_apply(spec, ctx.msg_text, ctx.services.update_setting),
         priority=priority,
         help_lines=help_lines,
     )
@@ -160,24 +160,24 @@ _QUICK_MODE_LABELS = {
 
 
 def _handle_mode_switch(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
-    mode_label, preset_key = app_pkg.MODE_CMD_MAP[ctx.msg_key]
-    emoji = app_pkg.MODE_EMOJI.get(preset_key, '')
-    if not app_pkg.update_setting('mode', preset_key):
+    services = ctx.services
+    mode_label, preset_key = services.MODE_CMD_MAP[ctx.msg_key]
+    emoji = services.MODE_EMOJI.get(preset_key, '')
+    if not services.update_setting('mode', preset_key):
         return '❌ 切換失敗，請稍後再試'
-    updates = {**app_pkg.V34_MODE_PRESETS[preset_key], **app_pkg.V35_MODE_PRESETS[preset_key]}
-    if app_pkg._apply_settings_batch(updates):
-        return f"{emoji} {app_pkg.MODE_REPLY_TEMPLATE[preset_key]}\n💡 直接輸入「推薦」即可生效"
+    updates = {**services.V34_MODE_PRESETS[preset_key], **services.V35_MODE_PRESETS[preset_key]}
+    if services._apply_settings_batch(updates):
+        return f"{emoji} {services.MODE_REPLY_TEMPLATE[preset_key]}\n💡 直接輸入「推薦」即可生效"
     return f'⚠️ 模式已切換至{mode_label}，但部分 V34/V35 參數更新失敗'
 
 
 def _handle_quick_mode(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     for ver, style in _QUICK_MODE_COMBOS:
-        if app_pkg._is_quick_mode_cmd(ctx.msg_text, ver, style):
-            presets = app_pkg.V34_MODE_PRESETS if ver == '34' else app_pkg.V35_MODE_PRESETS
-            all_ok = app_pkg._apply_settings_batch(presets[style])
-            emoji = app_pkg.MODE_EMOJI.get(style, '')
+        if services._is_quick_mode_cmd(ctx.msg_text, ver, style):
+            presets = services.V34_MODE_PRESETS if ver == '34' else services.V35_MODE_PRESETS
+            all_ok = services._apply_settings_batch(presets[style])
+            emoji = services.MODE_EMOJI.get(style, '')
             style_label = _QUICK_MODE_LABELS[style]
             if all_ok:
                 return f'{emoji} V{ver} 已設為{style_label}檔位'
@@ -186,14 +186,14 @@ def _handle_quick_mode(ctx: LineCommandContext) -> str:
 
 
 def _handle_set_confidence(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     try:
         value_str = ctx.msg_text.replace('設定信心', '').strip()
         value = float(value_str) / 100
-        is_valid, err_msg = app_pkg.validate_setting('ai_threshold', str(value))
+        is_valid, err_msg = services.validate_setting('ai_threshold', str(value))
         if not is_valid:
             return f'❌ {err_msg}\n範例：設定信心 60（代表60%）'
-        if app_pkg.update_setting('ai_threshold', str(value)):
+        if services.update_setting('ai_threshold', str(value)):
             return f'🧠 AI 信心門檻已設為 {int(value*100)}%\n將只推薦高於此門檻的股票'
         return '❌ 設定失敗'
     except ValueError:
@@ -201,12 +201,12 @@ def _handle_set_confidence(ctx: LineCommandContext) -> str:
 
 
 def _handle_set_stop_loss(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     try:
         value_str = ctx.msg_text.replace('設定停損', '').strip()
         value = float(value_str) / 100
         if 0.01 <= value <= 0.20:
-            if app_pkg.update_setting('v30_stop_loss', str(value)):
+            if services.update_setting('v30_stop_loss', str(value)):
                 return f'🛡️ V30停損已設為 {int(value*100)}%\n下次選股將使用新參數'
             return '❌ 設定失敗'
         return '❌ 停損需在 1%-20% 之間\n範例：設定停損 5'
@@ -215,17 +215,17 @@ def _handle_set_stop_loss(ctx: LineCommandContext) -> str:
 
 
 def _handle_set_take_profit(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     try:
         value_str = ctx.msg_text.replace('設定停利', '').strip()
         if value_str == '0' or value_str.lower() == '不停利':
-            if app_pkg.update_setting('v30_take_profit', '0.0'):
-                params = app_pkg.get_v30_params_from_db()
+            if services.update_setting('v30_take_profit', '0.0'):
+                params = services.get_v30_params_from_db()
                 return f'🎯 V30停利已取消\n將持有至停損或到期（{params["MAX_HOLD_DAYS"]}天）'
             return '❌ 設定失敗'
         value = float(value_str) / 100
         if 0.05 <= value <= 0.50:
-            if app_pkg.update_setting('v30_take_profit', str(value)):
+            if services.update_setting('v30_take_profit', str(value)):
                 return f'🎯 V30停利已設為 {int(value*100)}%\n下次選股將使用新參數'
             return '❌ 設定失敗'
         return '❌ 停利需在 5%-50% 之間\n範例：設定停利 20（代表20%）\n或輸入「設定停利 0」取消停利'
@@ -234,14 +234,14 @@ def _handle_set_take_profit(ctx: LineCommandContext) -> str:
 
 
 def _handle_view_settings(ctx: LineCommandContext) -> str:
-    return ctx.app_pkg.get_settings_info()
+    return ctx.services.get_settings_info()
 
 
 def _handle_strategy_switch(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
-    strategy_key, strategy_display, features_text = app_pkg._match_strategy_switch(ctx.msg_text.lower())
+    services = ctx.services
+    strategy_key, strategy_display, features_text = services._match_strategy_switch(ctx.msg_text.lower())
     try:
-        mgr = app_pkg.StrategyManager()
+        mgr = services.StrategyManager()
         if mgr.set_active_strategy(strategy_key):
             return f'🔄 已切換至【{strategy_display}】\n\n🎯 特色：\n{features_text}\n💡 輸入「推薦」開始選股'
         return '❌ 切換失敗，請稍後再試'
@@ -250,9 +250,9 @@ def _handle_strategy_switch(ctx: LineCommandContext) -> str:
 
 
 def _handle_view_strategy(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     try:
-        mgr = app_pkg.StrategyManager()
+        mgr = services.StrategyManager()
         active = mgr.get_active_strategy()
         reply = '📊 【目前使用策略】\n\n'
         reply += f'🎯 策略：{active.display_name}\n'
@@ -274,24 +274,24 @@ def _handle_view_strategy(ctx: LineCommandContext) -> str:
 
 
 def _handle_v30(ctx: LineCommandContext) -> str:
-    return ctx.app_pkg.get_v30_recommendation()
+    return ctx.services.get_v30_recommendation()
 
 
 def _handle_recommend(ctx: LineCommandContext) -> Optional[str]:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     try:
-        flex_msg = app_pkg.get_strategy_recommendation(as_flex=True)
+        flex_msg = services.get_strategy_recommendation(as_flex=True)
         if isinstance(flex_msg, str):
             return flex_msg
         ctx.reply_message(ctx.event.reply_token, [flex_msg])
         return None
     except Exception as exc:
         print(f'⚠️ Flex Carousel 建構失敗，降級為純文字: {exc}')
-        return app_pkg.get_strategy_recommendation(as_flex=False)
+        return services.get_strategy_recommendation(as_flex=False)
 
 
 def _handle_strategy_picker(ctx: LineCommandContext) -> None:
-    messages = ctx.app_pkg._build_strategy_picker_messages()
+    messages = ctx.services._build_strategy_picker_messages()
     ctx.reply_message(ctx.event.reply_token, messages)
     return None
 
@@ -304,16 +304,16 @@ def _handle_stock_code(ctx: LineCommandContext) -> None:
 def _handle_query_stock(ctx: LineCommandContext) -> str:
     stock_id = ctx.msg_text.replace('查詢', '').strip()
     if stock_id.isdigit():
-        return ctx.app_pkg.query_stock(stock_id)
+        return ctx.services.query_stock(stock_id)
     return '❌ 請輸入正確的股票代號'
 
 
 def _handle_holdings(ctx: LineCommandContext) -> Optional[str]:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     import pandas as pd
 
     try:
-        rows = app_pkg.get_open_holdings(limit=10)
+        rows = services.get_open_holdings(limit=10)
         if rows:
             holdings_list = []
             for row in rows:
@@ -332,10 +332,10 @@ def _handle_holdings(ctx: LineCommandContext) -> Optional[str]:
                         'strategy': str(row[1]) if row[1] else '',
                     }
                 )
-            flex_msg = app_pkg.create_holdings_flex(
+            flex_msg = services.create_holdings_flex(
                 holdings=holdings_list,
                 strategy_name=holdings_list[0].get('strategy', ''),
-                date_str=app_pkg._resolve_ui_baseline_date() or str(pd.Timestamp.now().date()),
+                date_str=services._resolve_ui_baseline_date() or str(pd.Timestamp.now().date()),
             )
             ctx.reply_message(ctx.event.reply_token, [flex_msg])
             return None
@@ -346,12 +346,12 @@ def _handle_holdings(ctx: LineCommandContext) -> Optional[str]:
 
 
 def _handle_journal(ctx: LineCommandContext) -> None:
-    ctx.reply_message(ctx.event.reply_token, ctx.app_pkg._build_journal_reflection_messages())
+    ctx.reply_message(ctx.event.reply_token, ctx.services._build_journal_reflection_messages())
     return None
 
 
 def _handle_backtest(ctx: LineCommandContext) -> Optional[str]:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     try:
         from core.viz_helper import get_backtest_summary
 
@@ -365,10 +365,10 @@ def _handle_backtest(ctx: LineCommandContext) -> Optional[str]:
                 'total_trades': summary.get('trade_count', 0),
                 'period': summary.get('period', '最近回測'),
             }
-            mgr = app_pkg.StrategyManager()
+            mgr = services.StrategyManager()
             active = mgr.get_active_strategy()
             sname = active.display_name if active else ''
-            flex_msg = app_pkg.create_backtest_summary_flex(metrics, strategy_name=sname)
+            flex_msg = services.create_backtest_summary_flex(metrics, strategy_name=sname)
             ctx.reply_message(ctx.event.reply_token, [flex_msg])
             return None
         return '📊 尚無回測數據\n請先執行 python jobs/run_backtest.py'
@@ -378,8 +378,8 @@ def _handle_backtest(ctx: LineCommandContext) -> Optional[str]:
 
 
 def _handle_dashboard(ctx: LineCommandContext) -> str:
-    app_pkg = ctx.app_pkg
-    dashboard_base = app_pkg.get_ngrok_url()
+    services = ctx.services
+    dashboard_base = services.get_ngrok_url()
     dashboard_url = f'{dashboard_base}/dashboard'
     is_ngrok = 'ngrok' in dashboard_base
     url_hint = '（ngrok 公開連結，可直接點擊）' if is_ngrok else '（本機連結，需在同一網路）'
@@ -396,7 +396,7 @@ def _handle_dashboard(ctx: LineCommandContext) -> str:
 
 
 def _handle_news(ctx: LineCommandContext) -> Optional[str]:
-    app_pkg = ctx.app_pkg
+    services = ctx.services
     import datetime as _dt
     import traceback
 
@@ -405,8 +405,8 @@ def _handle_news(ctx: LineCommandContext) -> Optional[str]:
 
         news_summary = get_morning_news_summary()
         today_str = _dt.datetime.now().strftime('%Y-%m-%d')
-        news_flex = app_pkg.create_news_flex(news_summary, today_str)
-        picks_flex = app_pkg.get_strategy_recommendation(as_flex=True)
+        news_flex = services.create_news_flex(news_summary, today_str)
+        picks_flex = services.get_strategy_recommendation(as_flex=True)
 
         messages = [news_flex]
         if not isinstance(picks_flex, str):
@@ -421,7 +421,7 @@ def _handle_news(ctx: LineCommandContext) -> Optional[str]:
             from core.news_agent import get_morning_news_summary
 
             news_summary = get_morning_news_summary()
-            picks_text = app_pkg.get_strategy_recommendation(as_flex=False)
+            picks_text = services.get_strategy_recommendation(as_flex=False)
             divider = '=' * 28
             reply = f'📰 【今日新聞摘要】\n\n{news_summary}\n\n{divider}\n\n{picks_text}'
             if len(reply) > 4900:
@@ -438,7 +438,7 @@ def _handle_news(ctx: LineCommandContext) -> Optional[str]:
 REGISTRY = (
     LineCommand(
         command_id='mode_switch',
-        matcher=lambda ctx: ctx.msg_key in ctx.app_pkg.MODE_CMD_MAP,
+        matcher=lambda ctx: ctx.msg_key in ctx.services.MODE_CMD_MAP,
         handler=_handle_mode_switch,
         priority=10,
         help_lines=('• 切換積極 / 切換平衡 / 切換寬鬆\n',),
@@ -446,7 +446,7 @@ REGISTRY = (
     LineCommand(
         command_id='quick_mode',
         matcher=lambda ctx: any(
-            ctx.app_pkg._is_quick_mode_cmd(ctx.msg_text, ver, style) for ver, style in _QUICK_MODE_COMBOS
+            ctx.services._is_quick_mode_cmd(ctx.msg_text, ver, style) for ver, style in _QUICK_MODE_COMBOS
         ),
         handler=_handle_quick_mode,
         priority=20,
@@ -485,7 +485,7 @@ REGISTRY = (
     ),
     LineCommand(
         command_id='strategy_switch',
-        matcher=lambda ctx: bool(ctx.app_pkg._match_strategy_switch(ctx.msg_text.lower())),
+        matcher=lambda ctx: bool(ctx.services._match_strategy_switch(ctx.msg_text.lower())),
         handler=_handle_strategy_switch,
         priority=110,
         help_lines=(
@@ -596,10 +596,10 @@ _HELP_SECTIONS = (
 )
 
 
-def build_help_message(app_pkg) -> str:
+def build_help_message(services) -> str:
     by_id = {command.command_id: command for command in REGISTRY}
     try:
-        mgr = app_pkg.StrategyManager()
+        mgr = services.StrategyManager()
         current = mgr.get_active_strategy()
         current_name = current.display_name if current else 'V31 混合策略'
     except Exception:

@@ -415,6 +415,12 @@ def test_api_daily_signals_returns_fallback_metadata(monkeypatch):
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 
@@ -508,6 +514,12 @@ def test_api_daily_signals_uses_stock_news_when_sector_not_matched(monkeypatch):
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 
@@ -599,6 +611,12 @@ def test_api_daily_signals_uses_actual_latest_date(monkeypatch):
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 
@@ -691,6 +709,12 @@ def test_api_daily_signals_soft_fails_when_stock_news_lookup_raises(monkeypatch)
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 
@@ -767,6 +791,12 @@ def test_api_daily_signals_returns_degraded_payload_when_news_timeout(monkeypatc
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 

@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-import app as app_pkg
 from config import Config
 from core.calc_indicators import calculate_kd_full, calculate_rsi
 from core.db_helper import (
@@ -18,7 +17,7 @@ from core.db_helper import (
     safe_int,
 )
 from core.mcp_client import MCPClientError
-from app.news_overlay import _get_stock_specific_news_summary, _live_signal_news_timeout_scope
+from . import services
 
 
 class _PostbackCache:
@@ -87,9 +86,9 @@ def _build_market_snapshot() -> dict[str, object]:
     if isinstance(cached, dict) and cached:
         return dict(cached)
 
-    trade_date = app_pkg._current_line_date()
+    trade_date = services._current_line_date()
     try:
-        result = app_pkg.MCPClient().get_market_statistics_sync(trade_date)
+        result = services.get_mcp_client().get_market_statistics_sync(trade_date)
         if result is None:
             return {
                 'status': 'error',
@@ -141,9 +140,9 @@ def _build_chip_snapshot() -> dict[str, object]:
     if isinstance(cached, dict) and cached:
         return dict(cached)
 
-    trade_date = app_pkg._current_line_date()
+    trade_date = services._current_line_date()
     try:
-        result = app_pkg.MCPClient().get_foreign_investment_sync(trade_date)
+        result = services.get_mcp_client().get_foreign_investment_sync(trade_date)
         if result is None:
             return {
                 'status': 'error',
@@ -1292,7 +1291,7 @@ def _build_dashboard_health_check_payload_local(
     panes=None,
 ) -> dict[str, object]:
     normalized_stock_id = str(stock_id or '').strip()
-    normalized_requested_date = normalize_date_str(requested_date) or app_pkg._current_line_date()
+    normalized_requested_date = normalize_date_str(requested_date) or services._current_line_date()
     normalized_period = _normalize_war_room_period(period)
     selected_overlays = _normalize_war_room_selection(
         overlays,
@@ -1330,29 +1329,29 @@ def _build_dashboard_health_check_payload_local(
         payload['message'] = '缺少股票代號。'
         return payload
 
-    history_df = app_pkg.get_stock_history(normalized_stock_id, limit=360, end_date=normalized_requested_date)
+    history_df = services.get_stock_history(normalized_stock_id, limit=360, end_date=normalized_requested_date)
     prepared_history = _prepare_dashboard_history_frame(history_df)
     aggregated_history = _aggregate_dashboard_history(prepared_history, normalized_period)
     if aggregated_history.empty:
         payload['message'] = f'查無 {normalized_stock_id} 的可用行情資料。'
-        payload['llm_report'] = app_pkg._build_dashboard_llm_report(normalized_stock_id, {}, {}, {}, {})
+        payload['llm_report'] = services._build_dashboard_llm_report(normalized_stock_id, {}, {}, {}, {})
         return payload
 
     latest_row = aggregated_history.iloc[-1]
     as_of_date = normalize_date_str(latest_row.get('trade_date'))
     fallback_used = as_of_date != normalized_requested_date
-    report = app_pkg.get_stock_report(normalized_stock_id, as_of_date=as_of_date) or {'stock_id': normalized_stock_id, 'trade_date': as_of_date}
+    report = services.get_stock_report(normalized_stock_id, as_of_date=as_of_date) or {'stock_id': normalized_stock_id, 'trade_date': as_of_date}
 
-    sector = app_pkg.get_stock_sector(normalized_stock_id)
-    market_snapshot = app_pkg._build_market_snapshot()
-    chip_snapshot = app_pkg._build_chip_snapshot()
-    with _live_signal_news_timeout_scope():
-        stock_mentions_map = app_pkg._get_stock_mentions_map([normalized_stock_id])
-    news_info = _get_stock_specific_news_summary(normalized_stock_id, stock_mentions_map)
+    sector = services.get_stock_sector(normalized_stock_id)
+    market_snapshot = services._build_market_snapshot()
+    chip_snapshot = services._build_chip_snapshot()
+    with services._live_signal_news_timeout_scope():
+        stock_mentions_map = services._get_stock_mentions_map([normalized_stock_id])
+    news_info = services._get_stock_specific_news_summary(normalized_stock_id, stock_mentions_map)
     if not news_info.get('items'):
-        news_info = app_pkg._get_sector_news_summary(sector, as_of_date)
+        news_info = services._get_sector_news_summary(sector, as_of_date)
 
-    rule_report = app_pkg._build_dashboard_rule_report(
+    rule_report = services._build_dashboard_rule_report(
         normalized_stock_id,
         report,
         latest_row,
@@ -1360,7 +1359,7 @@ def _build_dashboard_health_check_payload_local(
         market_snapshot,
         chip_snapshot,
     )
-    llm_report = app_pkg._build_dashboard_llm_report(
+    llm_report = services._build_dashboard_llm_report(
         normalized_stock_id,
         report,
         rule_report,
@@ -1507,7 +1506,7 @@ def _build_dashboard_health_check_payload(
     panes=None,
 ) -> dict[str, object]:
     normalized_stock_id = str(stock_id or '').strip()
-    normalized_requested_date = normalize_date_str(requested_date) or app_pkg._current_line_date()
+    normalized_requested_date = normalize_date_str(requested_date) or services._current_line_date()
     normalized_period = _normalize_war_room_period(period)
     if not normalized_stock_id:
         return _build_dashboard_health_check_payload_local(
@@ -1518,9 +1517,9 @@ def _build_dashboard_health_check_payload(
             panes=panes,
         )
 
-    client = app_pkg.MCPClient()
+    client = services.get_mcp_client()
 
-    trend_payload = app_pkg.resolve_dashboard_aggregation_cache(
+    trend_payload = services.resolve_dashboard_aggregation_cache(
         'twse_stock_trend',
         stock_id=normalized_stock_id,
         market='ALL',
@@ -1531,7 +1530,7 @@ def _build_dashboard_health_check_payload(
         ),
         ttl_seconds=300,
     )
-    screening_payload = app_pkg.resolve_dashboard_aggregation_cache(
+    screening_payload = services.resolve_dashboard_aggregation_cache(
         'investment_screening',
         stock_id=normalized_stock_id,
         market='ALL',
@@ -1580,9 +1579,9 @@ def _build_dashboard_health_check_payload(
 
 
 def _build_dashboard_macro_payload_local() -> dict[str, object]:
-    market_snapshot = app_pkg._build_market_snapshot()
-    chip_snapshot = app_pkg._build_chip_snapshot()
-    display_date = str(market_snapshot.get('date_str') or chip_snapshot.get('date_str') or app_pkg._current_line_date())
+    market_snapshot = services._build_market_snapshot()
+    chip_snapshot = services._build_chip_snapshot()
+    display_date = str(market_snapshot.get('date_str') or chip_snapshot.get('date_str') or services._current_line_date())
     try:
         from core.news_agent import get_morning_news_summary
 
@@ -1606,10 +1605,10 @@ def _build_dashboard_macro_payload_local() -> dict[str, object]:
 
 
 def _build_dashboard_macro_payload(requested_date: str | None = None) -> dict[str, object]:
-    normalized_requested_date = normalize_date_str(requested_date) or app_pkg._current_line_date()
-    client = app_pkg.MCPClient()
+    normalized_requested_date = normalize_date_str(requested_date) or services._current_line_date()
+    client = services.get_mcp_client()
 
-    hotspot_payload = app_pkg.resolve_dashboard_aggregation_cache(
+    hotspot_payload = services.resolve_dashboard_aggregation_cache(
         'market_hotspot',
         market='ALL',
         requested_date=normalized_requested_date,

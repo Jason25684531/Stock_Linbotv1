@@ -48,6 +48,7 @@ from core.db_helper import (
     save_backtest_results,
 )
 from core.strategy_manager import StrategyManager
+from core.strategy import StrategyContext
 from core.backtest.metrics import calculate_metrics
 from core.backtest.costs import CostModel
 from core.backtest.execution import apply_slippage
@@ -362,6 +363,48 @@ def build_strategy_runtime_overrides(strategy_name: str, strategy_filter_mode: s
     return dict(presets[strategy_filter_mode])
 
 
+def execute_backtest_selection(
+    runner,
+    strategy_name: str,
+    data: pd.DataFrame,
+    asof_date: str,
+    runtime_overrides: dict | None = None,
+) -> pd.DataFrame:
+    """Obtain legacy candidates through the platform without owning accounting."""
+    selection = runner.execute(
+        strategy_name,
+        StrategyContext(
+            asof_date=asof_date,
+            data=data,
+            settings={"runtime_overrides": runtime_overrides or {}},
+        ),
+    )
+    candidates = selection.metadata.get("legacy_result")
+    if not isinstance(candidates, pd.DataFrame):
+        raise TypeError("legacy platform selection must expose a DataFrame result")
+    return candidates
+
+
+def select_backtest_candidates(
+    strategy,
+    runner,
+    strategy_name: str,
+    data: pd.DataFrame,
+    asof_date: str,
+    runtime_overrides: dict | None = None,
+) -> pd.DataFrame:
+    """Select candidates through Platform, with a direct rollback seam."""
+    if runner is None:
+        return strategy.filter_candidates(data)
+    return execute_backtest_selection(
+        runner,
+        strategy_name,
+        data,
+        asof_date,
+        runtime_overrides,
+    )
+
+
 class BacktestEngine:
     """
     多策略回測引擎
@@ -411,6 +454,9 @@ class BacktestEngine:
         # 🔥 快取：避免回測 177 天重複查詢同一張表
         self._revenue_cache = None      # monthly_revenue 快取
         self._financial_cache = None    # financial_statements 快取
+        self.strategy_runner = None
+        self._selection_strategy_name = None
+        self._strategy_runtime_overrides = {}
         
         # 載入策略物件（用於 check_exit_signal 委派）
         self.strategy_obj = self._load_strategy_object()
@@ -461,6 +507,9 @@ class BacktestEngine:
                 if self.strategy_filter_mode and registry_name in STRATEGY_MODE_PRESETS:
                     print(f"🎛️ [{registry_name}] 套用 {self.strategy_filter_mode} 模式參數")
 
+                self.strategy_runner = mgr.get_strategy_runner()
+                self._selection_strategy_name = registry_name
+                self._strategy_runtime_overrides = merged_overrides
                 return strategy
         except Exception as e:
             print(f"⚠️ 策略物件載入失敗 ({self.mode}): {e}")
@@ -773,10 +822,16 @@ class BacktestEngine:
         # 依據策略模式選擇篩選邏輯
         if self.strategy_obj is not None:
             try:
-                candidates = self.strategy_obj.filter_candidates(df)
+                candidates = select_backtest_candidates(
+                    self.strategy_obj,
+                    getattr(self, "strategy_runner", None),
+                    getattr(self, "_selection_strategy_name", self.mode),
+                    df,
+                    date_str,
+                    getattr(self, "_strategy_runtime_overrides", {}),
+                )
             except Exception as e:
-                print(f"⚠️ [{self.mode}] 策略篩選失敗: {e}")
-                return []
+                raise
         else:
             candidates = get_v30_candidates(df)
         

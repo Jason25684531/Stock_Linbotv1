@@ -54,6 +54,12 @@ def test_line_web_and_push_share_same_fallback_metadata(monkeypatch):
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 
@@ -152,6 +158,12 @@ def test_line_web_and_push_share_same_day_heartbeat_state(monkeypatch):
             return df
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v38_value_dividend' else None
 

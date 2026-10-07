@@ -13,7 +13,6 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-import app as app_pkg
 from config import Config
 from core.db_helper import (
     get_backtest_summary_from_db,
@@ -29,8 +28,9 @@ from core.line_message_builder import (
     create_empty_state_flex,
 )
 from core.mcp_client import MCPClientError
-from core.strategy import format_v31_recommendation
+from core.strategy import StrategyContext, format_v31_recommendation
 from linebot.v3.messaging import TextMessage as V3TextMessage
+from . import services
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -116,7 +116,7 @@ def _parse_postback_payload(data: str) -> dict[str, str]:
 
 
 def _get_strategy_display_name(strategy_key: str) -> str:
-    strategy = app_pkg.strategy_manager.get_strategy(strategy_key)
+    strategy = services.strategy_manager.get_strategy(strategy_key)
     if strategy is None:
         return strategy_key
     return getattr(strategy, 'display_name', strategy_key)
@@ -136,12 +136,12 @@ def _normalize_strategy_request_key(strategy_value: str) -> str:
         return ''
 
     lowered = raw.lower()
-    for canonical, metadata in app_pkg.strategy_manager.STRATEGY_METADATA.items():
+    for canonical, metadata in services.strategy_manager.STRATEGY_METADATA.items():
         if lowered == canonical or lowered in metadata.legacy_ids:
             return canonical
         if re.fullmatch(r'v\d+', lowered) and any(key.startswith(f'{lowered}_') for key in metadata.legacy_ids):
             return canonical
-    strategy_keys = app_pkg.strategy_manager.list_strategies()
+    strategy_keys = services.strategy_manager.list_strategies()
     for strategy_key in strategy_keys:
         if strategy_key.lower() == lowered:
             return strategy_key
@@ -165,15 +165,15 @@ def _build_postback_empty_state(title: str, message: str, subtitle: str = ''):
     return create_empty_state_flex(
         title=title,
         message=message,
-        date_str=app_pkg._current_line_date(),
+        date_str=services._current_line_date(),
         subtitle=subtitle,
     )
 
 
 def _list_strategy_picker_options() -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
-    for strategy_key in app_pkg.strategy_manager.list_strategies():
-        strategy = app_pkg.strategy_manager.get_strategy(strategy_key)
+    for strategy_key in services.strategy_manager.list_strategies():
+        strategy = services.strategy_manager.get_strategy(strategy_key)
         if strategy is None:
             continue
         display_name = getattr(strategy, 'display_name', strategy_key)
@@ -194,7 +194,7 @@ def _list_strategy_picker_options() -> list[dict[str, str]]:
 def _summarize_today_pick_status(strategy_keys: list[str], date_str: str) -> str:
     ready_labels: list[str] = []
     for strategy_key in strategy_keys:
-        df = app_pkg.get_daily_recommendations(date_str=date_str, strategy=strategy_key, limit=1)
+        df = services.get_daily_recommendations(date_str=date_str, strategy=strategy_key, limit=1)
         if not df.empty:
             ready_labels.append(_get_strategy_display_name(strategy_key))
 
@@ -219,9 +219,9 @@ def _load_backtest_summary_snapshot() -> dict | None:
 
 
 def _build_journal_reflection_snapshot() -> dict[str, object]:
-    active_keys = app_pkg.strategy_manager.get_active_strategy_names()
+    active_keys = services.strategy_manager.get_active_strategy_names()
     active_labels = [_get_strategy_display_name(key) for key in active_keys] or ['尚未啟用策略']
-    date_str = app_pkg._resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+    date_str = services._resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
     today_pick_status = _summarize_today_pick_status(active_keys, date_str)
 
     try:
@@ -417,7 +417,7 @@ def _build_strategy_backtest_snapshot(strategy_key: str) -> dict[str, object]:
             'has_data': False,
             'strategy_key': normalized_key,
             'strategy_name': display_name,
-            'date_str': app_pkg._current_line_date(),
+            'date_str': services._current_line_date(),
         }
 
     prepared = trades_df.copy()
@@ -434,7 +434,7 @@ def _build_strategy_backtest_snapshot(strategy_key: str) -> dict[str, object]:
             'has_data': False,
             'strategy_key': normalized_key,
             'strategy_name': display_name,
-            'date_str': app_pkg._current_line_date(),
+            'date_str': services._current_line_date(),
         }
 
     total_roi, max_drawdown = _calculate_trade_sequence_drawdown(valid_profits)
@@ -446,7 +446,7 @@ def _build_strategy_backtest_snapshot(strategy_key: str) -> dict[str, object]:
     latest_trade = prepared.sort_values(sort_columns, ascending=False, na_position='last').iloc[0] if sort_columns else prepared.iloc[0]
     latest_trade_summary = _format_backtest_trade_summary(latest_trade)
     latest_date = latest_trade.get('sell_date') if 'sell_date' in latest_trade.index else None
-    date_str = latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') and not pd.isna(latest_date) else app_pkg._current_line_date()
+    date_str = latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') and not pd.isna(latest_date) else services._current_line_date()
 
     return {
         'has_data': True,
@@ -464,9 +464,9 @@ def _build_strategy_backtest_snapshot(strategy_key: str) -> dict[str, object]:
 
 
 def _build_macro_news_messages() -> list:
-    market_snapshot = app_pkg._build_market_snapshot()
-    chip_snapshot = app_pkg._build_chip_snapshot()
-    display_date = str(market_snapshot.get('date_str') or chip_snapshot.get('date_str') or app_pkg._current_line_date())
+    market_snapshot = services._build_market_snapshot()
+    chip_snapshot = services._build_chip_snapshot()
+    display_date = str(market_snapshot.get('date_str') or chip_snapshot.get('date_str') or services._current_line_date())
 
     try:
         from core.news_agent import get_morning_news_summary
@@ -496,7 +496,7 @@ def _build_stock_diagnosis_prompt_messages(source_id: str = '') -> list:
 
 
 def _build_strategy_picker_messages() -> list:
-    options = app_pkg._list_strategy_picker_options()
+    options = services._list_strategy_picker_options()
     if not options:
         return [
             _build_postback_empty_state(
@@ -510,7 +510,7 @@ def _build_strategy_picker_messages() -> list:
             prompt_text='請選擇您要觀看的策略選股盤勢。',
             strategies=options,
             action='strategy_select',
-            date_str=app_pkg._current_line_date(),
+            date_str=services._current_line_date(),
             subtitle='固定列出所有已註冊策略（V31~V38），結果階段將沿用既有選股 Flex 樣板。',
             alt_text='🎯 策略選股',
         )
@@ -529,13 +529,13 @@ def _build_selected_strategy_messages(payload: dict[str, str] | None = None) -> 
 
     strategy_key = _normalize_strategy_request_key(raw_strategy_key)
     display_name = _get_strategy_display_name(strategy_key or raw_strategy_key)
-    recommendation = app_pkg.get_strategy_recommendation(as_flex=True, strategy_key=strategy_key)
+    recommendation = services.get_strategy_recommendation(as_flex=True, strategy_key=strategy_key)
     if isinstance(recommendation, str):
         return [
             create_empty_state_flex(
                 title=f'🎯 {display_name}',
                 message=recommendation,
-                date_str=app_pkg._current_line_date(),
+                date_str=services._current_line_date(),
                 subtitle='請重新選擇策略，或稍後再試。',
             )
         ]
@@ -543,7 +543,7 @@ def _build_selected_strategy_messages(payload: dict[str, str] | None = None) -> 
 
 
 def _build_journal_reflection_messages() -> list:
-    options = app_pkg._list_strategy_picker_options()
+    options = services._list_strategy_picker_options()
     if not options:
         return [
             _build_postback_empty_state(
@@ -558,7 +558,7 @@ def _build_journal_reflection_messages() -> list:
             prompt_text='請選擇您要查看回測數據與反思的策略。',
             strategies=options,
             action='backtest_reflect',
-            date_str=app_pkg._current_line_date(),
+            date_str=services._current_line_date(),
             subtitle='固定列出所有已註冊策略；若該策略暫無回測資料，將回傳 Empty State Flex Card。',
             alt_text='📝 日誌反思',
         )
@@ -575,14 +575,14 @@ def _build_backtest_reflection_messages(payload: dict[str, str] | None = None) -
             )
         ]
 
-    snapshot = app_pkg._build_strategy_backtest_snapshot(raw_strategy_key)
+    snapshot = services._build_strategy_backtest_snapshot(raw_strategy_key)
     strategy_name = str(snapshot.get('strategy_name') or raw_strategy_key.upper())
     if not snapshot.get('has_data'):
         return [
             create_empty_state_flex(
                 title=f'📝 {strategy_name}',
                 message='尚無該策略回測資料，可先執行該策略回測後再查看。',
-                date_str=str(snapshot.get('date_str') or app_pkg._current_line_date()),
+                date_str=str(snapshot.get('date_str') or services._current_line_date()),
                 subtitle='系統仍保留該策略在清單中，方便你直接檢查是否已有新資料。',
             )
         ]
@@ -594,23 +594,23 @@ def _build_backtest_reflection_messages(payload: dict[str, str] | None = None) -
             win_rate=safe_float(snapshot.get('win_rate')),
             max_drawdown=safe_float(snapshot.get('max_drawdown')),
             trade_count=safe_int(snapshot.get('trade_count')),
-            date_str=str(snapshot.get('date_str') or app_pkg._current_line_date()),
+            date_str=str(snapshot.get('date_str') or services._current_line_date()),
             avg_hold_days=safe_float(snapshot.get('avg_hold_days')),
             latest_trade_summary=str(snapshot.get('latest_trade_summary') or ''),
-            suggestions=app_pkg._build_strategy_reflection_suggestions(snapshot),
+            suggestions=services._build_strategy_reflection_suggestions(snapshot),
             source_label=str(snapshot.get('source_label') or ''),
         )
     ]
 
 
 def _build_market_summary_messages() -> list:
-    cached = app_pkg._postback_cache.get('market_summary')
+    cached = services._postback_cache.get('market_summary')
     if cached is not None:
         return [V3TextMessage(text=cached)]
 
     try:
-        trade_date = app_pkg._resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
-        result = app_pkg.MCPClient().get_market_statistics_sync(trade_date)
+        trade_date = services._resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        result = services.get_mcp_client().get_market_statistics_sync(trade_date)
         if result is None:
             return [V3TextMessage(text='📊 大盤快照\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。')]
         records: list[dict] = result.get('records') or []
@@ -634,7 +634,7 @@ def _build_market_summary_messages() -> list:
             f'💹 總成交量 {total_vol_b:.1f} 億股\n'
             '\n💡 資料來源：TWSE MCP Server'
         )
-        app_pkg._postback_cache.set('market_summary', body)
+        services._postback_cache.set('market_summary', body)
         return [V3TextMessage(text=body)]
     except MCPClientError as exc:
         print(f'⚠️ MCP 大盤快照失敗: {exc}')
@@ -645,13 +645,13 @@ def _build_market_summary_messages() -> list:
 
 
 def _build_chip_trend_messages() -> list:
-    cached = app_pkg._postback_cache.get('chip_trend')
+    cached = services._postback_cache.get('chip_trend')
     if cached is not None:
         return [V3TextMessage(text=cached)]
 
     try:
-        trade_date = app_pkg._resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
-        result = app_pkg.MCPClient().get_foreign_investment_sync(trade_date)
+        trade_date = services._resolve_ui_baseline_date() or datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        result = services.get_mcp_client().get_foreign_investment_sync(trade_date)
         if result is None:
             return [V3TextMessage(text='🏦 籌碼動向\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。')]
         records: list[dict] = result.get('records') or []
@@ -681,7 +681,7 @@ def _build_chip_trend_messages() -> list:
             f'合計   {_fmt(total_net)} 張\n'
             '\n💡 資料來源：TWSE MCP Server'
         )
-        app_pkg._postback_cache.set('chip_trend', body)
+        services._postback_cache.set('chip_trend', body)
         return [V3TextMessage(text=body)]
     except MCPClientError as exc:
         print(f'⚠️ MCP 籌碼動向失敗: {exc}')
@@ -691,16 +691,36 @@ def _build_chip_trend_messages() -> list:
         return [V3TextMessage(text='🏦 籌碼動向\n\n資料處理異常，請稍後再試。')]
 
 
+def _select_random_strategy_candidates(
+    strategy,
+    strategy_key: str,
+    df: pd.DataFrame,
+    date_str: str,
+    runner=None,
+) -> pd.DataFrame:
+    """Return random-picker candidates through Platform or direct rollback seam."""
+    if runner is None:
+        return strategy.filter_candidates(df.copy())
+    selection = runner.execute(
+        strategy_key,
+        StrategyContext(asof_date=date_str, data=df),
+    )
+    candidates = selection.metadata.get('legacy_result')
+    if not isinstance(candidates, pd.DataFrame):
+        raise TypeError('legacy platform selection must expose a DataFrame result')
+    return candidates
+
+
 def _build_random_strategy_messages() -> list:
     try:
-        sm = app_pkg.strategy_manager
+        sm = services.strategy_manager
         pool = sm.get_random_strategy_pool()
         if not pool:
             return [V3TextMessage(text='🎲 策略盲盒\n\n目前策略池為空，請至設定頁面配置可用策略。')]
 
         shuffled = random.sample(pool, len(pool))
-        baseline_date = app_pkg._resolve_ui_baseline_date()
-        df, date_str = app_pkg.get_stock_data(date_str=baseline_date) if baseline_date else app_pkg.get_stock_data()
+        baseline_date = services._resolve_ui_baseline_date()
+        df, date_str = services.get_stock_data(date_str=baseline_date) if baseline_date else services.get_stock_data()
         if df is None or df.empty:
             return [V3TextMessage(text='🎲 策略盲盒\n\n目前無法取得市場資料，請稍後再試。')]
         if not date_str:
@@ -711,7 +731,13 @@ def _build_random_strategy_messages() -> list:
                 strategy = sm.get_strategy(strategy_key)
                 if strategy is None:
                     continue
-                candidates = strategy.filter_candidates(df.copy())
+                candidates = _select_random_strategy_candidates(
+                    strategy,
+                    strategy_key,
+                    df,
+                    date_str,
+                    sm.get_strategy_runner(),
+                )
                 if candidates is None or candidates.empty:
                     continue
                 body = format_v31_recommendation(candidates.head(5), date_str)

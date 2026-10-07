@@ -93,6 +93,12 @@ def test_api_daily_signals_exposes_market_and_recommendation_price_provenance(mo
         features = []
 
     class FakeManager:
+        def get_strategy_runner(self):
+            class _Runner:
+                def resolve_spec(self, _key):
+                    return None
+            return _Runner()
+
         def get_strategy(self, key):
             return FakeStrategy() if key == 'v36_chip_momentum' else None
 

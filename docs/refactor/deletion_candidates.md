@@ -1,5 +1,27 @@
 # Deletion Candidates
 
+## 2026-10-07 architecture-simplification review
+
+- `app_pkg` and `sys.modules[__package__]` lookups are **SAFE_TO_REMOVE** and
+  were replaced by direct imports plus the small application composition proxy.
+  The compatibility seam is retained because existing Web/LINE/dashboard tests
+  patch symbols on `app`.
+- Dashboard and `jobs/run_daily.py` concentration are **DEFER**, not deletion
+  candidates. Their shared payload, persistence, fallback, and exception
+  contracts need isolated characterization before extraction.
+- Heavyweight packages without complete multi-surface evidence are **UNKNOWN**
+  and remain installed. Static no-import evidence alone is insufficient.
+
+Detailed ownership evidence is in
+[`dependency-ownership-inventory-2026-10-07.md`](dependency-ownership-inventory-2026-10-07.md).
+
+## 2026-10-06 C4 integration review
+
+No new source deletion candidate has complete no-reference evidence. The C4
+cutover retains `StrategyManager`, `BaseStrategy`, all seven legacy strategy
+implementations, alias modules, `core/strategy.py`, root CLI wrappers, and
+existing runtime owners for compatibility and rollback.
+
 ## 2026-09-21 refresh
 
 The current reference map is `docs/refactor/repository_hygiene_reference_map_2026-09-21.md`.  It found no source or non-cache candidate with complete no-reference evidence.  `4_run_backtest.py`, `5_push_to_line.py`, `app.py`, `config.py`, `init_settings.py`, `core/viz_helper.py`, `core/report_helper.py`, `jobs/run_candidate_redundancy.py`, `jobs/run_engine_diagnostics.py`, `scripts/diagnose_strategies.py`, and `tmp_probe/` are retained under their recorded classifications.  Only confirmed idle cache paths may be removed in this change.

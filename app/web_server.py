@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import json
-import sys
 import traceback
 
 import pandas as pd
@@ -14,9 +13,7 @@ from sqlalchemy import text
 
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
-from . import app
-
-app_pkg = sys.modules[__package__]
+from . import app, services
 
 
 def _parse_csv_query_values(*keys: str) -> list[str] | None:
@@ -34,7 +31,7 @@ def _parse_csv_query_values(*keys: str) -> list[str] | None:
 
 
 def _dashboard_json_response(payload: dict[str, object], status_code: int = 200):
-    sanitized = app_pkg._sanitize_dashboard_json(payload)
+    sanitized = services._sanitize_dashboard_json(payload)
     return app.response_class(
         json.dumps(sanitized, ensure_ascii=False, allow_nan=False),
         status=status_code,
@@ -70,8 +67,8 @@ def login():
 
     if request.method == 'POST':
         password = request.form.get('password', '')
-        if app_pkg.User.validate_password(password):
-            user = app_pkg.User('admin')
+        if services.User.validate_password(password):
+            user = services.User('admin')
             login_user(user)
             flash('✅ 登入成功！', 'success')
             next_page = request.args.get('next')
@@ -101,14 +98,14 @@ def index():
 @login_required
 def dashboard():
     """Dashboard 主頁面。"""
-    active_strategies = app_pkg.strategy_manager.get_active_strategy_names()
-    strategy_options = app_pkg.strategy_manager.list_strategies()
+    active_strategies = services.strategy_manager.get_active_strategy_names()
+    strategy_options = services.strategy_manager.list_strategies()
     return render_template(
         'dashboard.html',
         active_strategies=active_strategies,
         strategy_options=strategy_options,
         current_strategy=active_strategies[0] if active_strategies else 'v31_hybrid',
-        current_mode=str(app_pkg.get_setting('mode', 'balanced')),
+        current_mode=str(services.get_setting('mode', 'balanced')),
     )
 
 
@@ -122,10 +119,10 @@ def update_strategy():
             flash('請至少選擇一個策略', 'error')
             return redirect(url_for('dashboard'))
 
-        success = app_pkg.strategy_manager.set_active_strategies(selected_strategies)
+        success = services.strategy_manager.set_active_strategies(selected_strategies)
         if success:
             if len(selected_strategies) == 1:
-                strategy_obj = app_pkg.strategy_manager.get_active_strategy()
+                strategy_obj = services.strategy_manager.get_active_strategy()
                 flash(f'✅ 已切換至 {strategy_obj.display_name}', 'success')
             else:
                 flash(f'✅ 已啟用 {len(selected_strategies)} 個策略', 'success')
@@ -157,8 +154,8 @@ def update_mode():
 
         mode_label, preset_key = mode_map[req_mode]
         updates = {**V34_MODE_PRESETS[preset_key], **V35_MODE_PRESETS[preset_key]}
-        ok_mode = app_pkg.update_setting('mode', req_mode)
-        ok_params = app_pkg._apply_settings_batch(updates)
+        ok_mode = services.update_setting('mode', req_mode)
+        ok_params = services._apply_settings_batch(updates)
 
         if ok_mode and ok_params:
             flash(f'✅ 已切換至【{mode_label}模式】（V34/V35 同步更新）', 'success')
@@ -181,7 +178,7 @@ def favicon():
 def api_performance():
     """取得回測資產曲線數據。"""
     try:
-        db_curve = app_pkg.get_backtest_equity_curve()
+        db_curve = services.get_backtest_equity_curve()
         if db_curve.get('dates'):
             return jsonify(db_curve)
 
@@ -205,7 +202,7 @@ def api_performance():
 def api_trades():
     """取得交易明細（最近 50 筆）。"""
     try:
-        db_trades = app_pkg.get_recent_backtest_trades(limit=50)
+        db_trades = services.get_recent_backtest_trades(limit=50)
         if db_trades:
             return jsonify(db_trades)
 
@@ -229,10 +226,10 @@ def api_trades():
 def api_summary():
     """取得回測摘要統計。"""
     try:
-        summary, error_response = app_pkg._load_backtest_summary_or_error('回測數據不存在')
+        summary, error_response = services._load_backtest_summary_or_error('回測數據不存在')
         if error_response:
             return error_response
-        return jsonify(app_pkg._build_summary_response(summary))
+        return jsonify(services._build_summary_response(summary))
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
@@ -256,7 +253,7 @@ def api_user_trade():
         if not all([user_id, stock_id, buy_price, buy_date]):
             return jsonify({'error': '缺少必要參數'}), 400
 
-        if not app_pkg.create_user_simulation_trade(
+        if not services.create_user_simulation_trade(
             user_id=user_id,
             stock_id=stock_id,
             buy_price=buy_price,
@@ -304,7 +301,7 @@ def api_pk_battle():
 def api_strategies():
     """取得所有策略清單及當前啟用策略。"""
     try:
-        mgr = app_pkg.StrategyManager()
+        mgr = services.StrategyManager()
         available = {
             name: getattr(mgr.get_strategy(name), 'display_name', name)
             for name in mgr.list_strategies()
@@ -361,9 +358,9 @@ def api_daily_signals():
             'v38': 'v38_value_dividend',
         }
 
-        requested_date = app_pkg._current_line_date()
-        baseline_date = app_pkg._resolve_ui_baseline_date()
-        df, date_str = app_pkg.get_stock_data(date_str=baseline_date) if baseline_date else app_pkg.get_stock_data()
+        requested_date = services._current_line_date()
+        baseline_date = services._resolve_ui_baseline_date()
+        df, date_str = services.get_stock_data(date_str=baseline_date) if baseline_date else services.get_stock_data()
         if df.empty:
             return jsonify(
                 {
@@ -376,12 +373,13 @@ def api_daily_signals():
                 }
             )
 
-        df = app_pkg.supplement_financial_data(df)
+        df = services.supplement_financial_data(df)
 
         try:
             from core.runtime.fundamental_production import STRATEGY_ID as FUNDAMENTAL_STRATEGY_ID
 
-            mgr = app_pkg.StrategyManager()
+            mgr = services.StrategyManager()
+            runner = mgr.get_strategy_runner()
             if requested_strategy:
                 key = requested_strategy.lower().strip()
                 strategy_key = strategy_alias.get(key, key)
@@ -404,8 +402,10 @@ def api_daily_signals():
                 strategy_key = names[0] if names else 'v31_hybrid'
                 fundamental_requested = False
 
+            if not fundamental_requested:
+                runner.resolve_spec(strategy_key)
             strategy_name = 'Fundamental G2/G3 Top5 REB60' if fundamental_requested else active.display_name
-            candidates, fallback_meta, has_persisted = app_pkg._load_strategy_candidates(
+            candidates, fallback_meta, has_persisted = services._load_strategy_candidates(
                 active=active,
                 strategy_key=strategy_key,
                 market_df=df,
@@ -426,7 +426,7 @@ def api_daily_signals():
                         'strategy_display': strategy_name,
                         'top_n': top_n,
                         'fallback_used': fallback_meta.get('fallback_used', False),
-                        'market_warning': app_pkg.format_market_fallback_notice(fallback_meta, strategy_name),
+                        'market_warning': services.format_market_fallback_notice(fallback_meta, strategy_name),
                         'signals': [],
                         'message': f'今日 {strategy_name} 無符合條件的股票',
                     }
@@ -434,12 +434,17 @@ def api_daily_signals():
 
             picks = candidates.head(top_n)
             active_strategy = active
-        except Exception:
-            picks = app_pkg.get_v30_candidates(df).head(top_n)
-            strategy_key = 'v31_hybrid'
-            strategy_name = 'V31 混合策略'
-            active_strategy = None
-            fallback_meta = {}
+        except Exception as exc:
+            return jsonify(
+                {
+                    'error': str(exc),
+                    'date': date_str,
+                    'strategy_key': requested_strategy or None,
+                    'strategy_display': None,
+                    'top_n': top_n,
+                    'signals': [],
+                }
+            ), 500
 
         if picks.empty:
             return jsonify(
@@ -455,29 +460,29 @@ def api_daily_signals():
 
         signals = []
         signal_date = fallback_meta.get('recommendation_date') or date_str
-        with app_pkg._live_signal_news_timeout_scope():
+        with services._live_signal_news_timeout_scope():
             try:
-                stock_mentions_map = app_pkg._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
+                stock_mentions_map = services._get_stock_mentions_map([str(sid) for sid in picks['stock_id'].tolist()])
             except Exception as news_exc:
                 print(f'⚠️ /api/daily-signals 個股新聞讀取失敗: {news_exc}')
                 stock_mentions_map = {}
 
             for _, row in picks.iterrows():
                 close_price = float(row['close_price'])
-                market_anchor_date = app_pkg.normalize_date_str(
+                market_anchor_date = services.normalize_date_str(
                     fallback_meta.get('market_anchor_date') if fallback_meta else date_str
                 )
-                price_trade_date = app_pkg.normalize_date_str(
+                price_trade_date = services.normalize_date_str(
                     row.get('price_trade_date')
                     or row.get('market_trade_date')
                     or signal_date
                 )
-                recommendation_trade_date = app_pkg.normalize_date_str(
+                recommendation_trade_date = services.normalize_date_str(
                     row.get('recommendation_trade_date')
                     or fallback_meta.get('recommendation_date')
                     or signal_date
                 )
-                recommendation_close_price = app_pkg.safe_float(
+                recommendation_close_price = services.safe_float(
                     row.get('recommendation_close_price')
                 )
                 if recommendation_close_price is None:
@@ -495,10 +500,10 @@ def api_daily_signals():
                 stop_loss_rate = float(getattr(active_strategy, 'stop_loss', Config.V30_STOP_LOSS)) if active_strategy else Config.V30_STOP_LOSS
                 take_profit_rate = float(getattr(active_strategy, 'take_profit', Config.V30_TAKE_PROFIT)) if active_strategy else Config.V30_TAKE_PROFIT
                 try:
-                    news_info = app_pkg._resolve_signal_news_info(row, signal_date, stock_mentions_map)
+                    news_info = services._resolve_signal_news_info(row, signal_date, stock_mentions_map)
                 except Exception as news_exc:
                     print(f"⚠️ /api/daily-signals {row.get('stock_id')} 新聞摘要失敗: {news_exc}")
-                    news_info = app_pkg._parse_news_reason(row.get('news_boost_reason') or '')
+                    news_info = services._parse_news_reason(row.get('news_boost_reason') or '')
 
                 signal = {
                     'stock_id': row['stock_id'],
@@ -515,16 +520,16 @@ def api_daily_signals():
                     'recommendation_is_stale': recommendation_is_stale,
                     'strategy': strategy_name,
                     'strategy_key': strategy_key,
-                    'ai_score': app_pkg.safe_float(row.get('ai_score')) if 'ai_score' in row else None,
-                    'rsi': app_pkg.safe_float(row.get('rsi')) if 'rsi' in row else None,
-                    'volume': app_pkg.safe_int(row.get('volume')) if 'volume' in row else None,
-                    'ma20': app_pkg.safe_float(row.get('ma20')) if 'ma20' in row else None,
-                    'ma60': app_pkg.safe_float(row.get('ma60')) if 'ma60' in row else None,
-                    'bias': app_pkg.safe_float(row.get('bias')) if 'bias' in row else None,
-                    'op_profit_margin': app_pkg.safe_float(row.get('op_profit_margin')) if 'op_profit_margin' in row else None,
-                    'revenue_yoy': app_pkg.safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
-                    'chip_score': app_pkg.safe_float(row.get('chip_score')) if 'chip_score' in row else None,
-                    'foreign_buy': app_pkg.safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
+                    'ai_score': services.safe_float(row.get('ai_score')) if 'ai_score' in row else None,
+                    'rsi': services.safe_float(row.get('rsi')) if 'rsi' in row else None,
+                    'volume': services.safe_int(row.get('volume')) if 'volume' in row else None,
+                    'ma20': services.safe_float(row.get('ma20')) if 'ma20' in row else None,
+                    'ma60': services.safe_float(row.get('ma60')) if 'ma60' in row else None,
+                    'bias': services.safe_float(row.get('bias')) if 'bias' in row else None,
+                    'op_profit_margin': services.safe_float(row.get('op_profit_margin')) if 'op_profit_margin' in row else None,
+                    'revenue_yoy': services.safe_float(row.get('revenue_yoy')) if 'revenue_yoy' in row else None,
+                    'chip_score': services.safe_float(row.get('chip_score')) if 'chip_score' in row else None,
+                    'foreign_buy': services.safe_int(row.get('foreign_buy')) if 'foreign_buy' in row else None,
                     'news_boost_reason': news_info['raw'],
                     'news_reason_items': news_info['items'],
                     'news_signal_title': news_info['title'],
@@ -548,7 +553,7 @@ def api_daily_signals():
                 'strategy_display': strategy_name,
                 'top_n': top_n,
                 'fallback_used': fallback_meta.get('fallback_used', False) if fallback_meta else False,
-                'market_warning': app_pkg.format_market_fallback_notice(fallback_meta, strategy_name) if fallback_meta else '',
+                'market_warning': services.format_market_fallback_notice(fallback_meta, strategy_name) if fallback_meta else '',
                 'signals': signals,
                 'count': len(signals),
             }
@@ -563,7 +568,7 @@ def api_daily_signals():
 def api_news_sentiment():
     """回傳指定日期（或最新）消息面情緒摘要。"""
     date_str = request.args.get('date')
-    data = app_pkg.get_news_sentiment(date_str)
+    data = services.get_news_sentiment(date_str)
     return jsonify(data)
 
 
@@ -575,7 +580,7 @@ def api_dashboard_health_check():
         return jsonify({'error': '缺少股票代號 symbol'}), 400
 
     try:
-        payload = app_pkg._build_dashboard_health_check_payload(
+        payload = services._build_dashboard_health_check_payload(
             stock_id=stock_id,
             requested_date=request.args.get('date'),
             period=request.args.get('period'),
@@ -644,7 +649,7 @@ def api_stock_analysis():
         return jsonify({'status': 'error', 'error': 'missing required stock id query parameter: id'}), 400
 
     try:
-        health_payload = app_pkg._build_dashboard_health_check_payload(
+        health_payload = services._build_dashboard_health_check_payload(
             stock_id=stock_id,
             requested_date=request.args.get('date'),
             period=request.args.get('period'),
@@ -662,7 +667,7 @@ def api_stock_analysis():
 def api_dashboard_macro():
     """回傳 dashboard beta 大盤總經 payload。"""
     try:
-        payload = app_pkg._build_dashboard_macro_payload(request.args.get('date'))
+        payload = services._build_dashboard_macro_payload(request.args.get('date'))
         return _dashboard_json_response(payload)
     except Exception as exc:
         traceback.print_exc()
@@ -682,19 +687,19 @@ def _market_envelope(status: str, as_of_date: str | None, source: list[str], dat
 
 def _load_market_frame() -> tuple[pd.DataFrame, str | None, list[str]]:
     warnings: list[str] = []
-    requested_date = app_pkg.normalize_date_str(request.args.get('date')) or app_pkg._resolve_ui_baseline_date() or app_pkg._current_line_date()
+    requested_date = services.normalize_date_str(request.args.get('date')) or services._resolve_ui_baseline_date() or services._current_line_date()
     try:
-        df, date_str = app_pkg.get_stock_data(date_str=requested_date)
+        df, date_str = services.get_stock_data(date_str=requested_date)
     except Exception as exc:
         warnings.append(f'market data load failed: {exc}')
         return pd.DataFrame(), requested_date, warnings
 
     if not isinstance(df, pd.DataFrame):
-        return pd.DataFrame(), app_pkg.normalize_date_str(date_str) or requested_date, ['market data returned no frame']
+        return pd.DataFrame(), services.normalize_date_str(date_str) or requested_date, ['market data returned no frame']
 
-    resolved_date = app_pkg.normalize_date_str(date_str) or requested_date
+    resolved_date = services.normalize_date_str(date_str) or requested_date
     if not df.empty and 'trade_date' in df.columns:
-        latest_date = app_pkg.normalize_date_str(df['trade_date'].max())
+        latest_date = services.normalize_date_str(df['trade_date'].max())
         if latest_date:
             resolved_date = latest_date
     return df.copy(), resolved_date, warnings
@@ -720,9 +725,9 @@ def _record_from_row(row, fields: list[str]) -> dict[str, object]:
         if field in {'stock_id', 'stock_name', 'strategy', 'strategy_key', 'strategy_display', 'recommendation_date'}:
             record[field] = None if value is None or pd.isna(value) else str(value)
         elif field.endswith('_buy') or field in {'volume', 'margin_balance', 'short_balance'}:
-            record[field] = app_pkg.safe_int(value)
+            record[field] = services.safe_int(value)
         else:
-            record[field] = app_pkg.safe_float(value)
+            record[field] = services.safe_float(value)
     return record
 
 
@@ -742,7 +747,7 @@ def _recommendation_factor_fields(row) -> dict[str, object]:
         if value is None or pd.isna(value):
             factors[key] = None
             continue
-        numeric = app_pkg.safe_float(value)
+        numeric = services.safe_float(value)
         factors[key] = numeric if numeric is not None else str(value)
     return factors
 
@@ -829,10 +834,10 @@ def api_market_recommendations():
     except (TypeError, ValueError):
         top_n = 10
     strategy = (request.args.get('strategy') or '').strip() or None
-    as_of_date = app_pkg.normalize_date_str(request.args.get('date')) or app_pkg._resolve_ui_baseline_date() or app_pkg._current_line_date()
+    as_of_date = services.normalize_date_str(request.args.get('date')) or services._resolve_ui_baseline_date() or services._current_line_date()
     warnings: list[str] = []
     try:
-        rows = app_pkg.get_daily_recommendations(date_str=as_of_date, strategy=strategy, limit=top_n)
+        rows = services.get_daily_recommendations(date_str=as_of_date, strategy=strategy, limit=top_n)
     except Exception as exc:
         warnings.append(f'recommendations load failed: {exc}')
         rows = pd.DataFrame()
@@ -1014,12 +1019,12 @@ def _build_system_status_payload() -> tuple[dict[str, object], int]:
                 'alias': alias,
                 'step_name': step_name,
                 'status': _format_pipeline_status(row.get('status')),
-                'run_date': app_pkg.normalize_date_str(row.get('run_date')),
-                'trade_date': app_pkg.normalize_date_str(row.get('trade_date')),
+                'run_date': services.normalize_date_str(row.get('run_date')),
+                'trade_date': services.normalize_date_str(row.get('trade_date')),
                 'started_at': str(row.get('started_at')) if row.get('started_at') is not None else None,
                 'finished_at': str(row.get('finished_at')) if row.get('finished_at') is not None else None,
-                'rows_inserted': app_pkg.safe_int(row.get('rows_inserted')),
-                'rows_updated': app_pkg.safe_int(row.get('rows_updated')),
+                'rows_inserted': services.safe_int(row.get('rows_inserted')),
+                'rows_updated': services.safe_int(row.get('rows_updated')),
                 'error_summary': row.get('error_summary'),
             }
         )
@@ -1030,7 +1035,7 @@ def _build_system_status_payload() -> tuple[dict[str, object], int]:
     heartbeat_state = 'failed' if has_failed else ('not_run' if has_missing else 'success')
     payload = {
         'status': status,
-        'as_of_date': latest_run_date or app_pkg._current_line_date(),
+        'as_of_date': latest_run_date or services._current_line_date(),
         'source': ['pipeline_runs'],
         'warnings': warnings,
         'data': {
@@ -1052,7 +1057,7 @@ def api_market_system_status():
 def backtest():
     """回測頁面。"""
     if request.method == 'GET':
-        available_strategies = app_pkg.strategy_manager.list_strategies()
+        available_strategies = services.strategy_manager.list_strategies()
         return render_template('backtest.html', strategies=available_strategies)
 
     try:
@@ -1069,7 +1074,7 @@ def backtest():
             flash('請至少選擇一個策略', 'error')
             return redirect(url_for('backtest'))
 
-        result, start_date, end_date = app_pkg._run_portfolio_backtest(
+        result, start_date, end_date = services._run_portfolio_backtest(
             selected_strategies,
             start_date=start_date,
             end_date=end_date,
@@ -1113,7 +1118,7 @@ def api_run_backtest():
 
         persist_to_db = bool(data.get('persist', False))
 
-        result, _, _ = app_pkg._run_portfolio_backtest(
+        result, _, _ = services._run_portfolio_backtest(
             selected_strategies,
             start_date=start_date,
             end_date=end_date,

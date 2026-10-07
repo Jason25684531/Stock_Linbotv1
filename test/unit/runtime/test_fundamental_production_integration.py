@@ -57,3 +57,31 @@ def test_run_daily_fundamental_block_is_status_only(monkeypatch):
     result = run_daily.run_fundamental_production("2026-09-17", engine=object())
     assert result["status"]["block_reason"] == "INSUFFICIENT_OOS"
     assert persisted == []
+
+
+def test_run_daily_consumes_fundamental_through_c3_adapter(monkeypatch):
+    from jobs import run_daily
+
+    calls = []
+
+    class _Adapter:
+        def evaluate_production(self, asof_date, *, write_status):
+            calls.append((asof_date, write_status))
+            return {
+                "status": {
+                    "production_eligibility": "BLOCKED",
+                    "block_reason": "INSUFFICIENT_OOS",
+                    "broker_submission_status": "DISABLED",
+                },
+                "rows": pd.DataFrame(),
+                "BROKER_ORDER_SUBMISSION": "DISABLED",
+            }
+
+    monkeypatch.setattr(
+        "core.runtime.fundamental_adapter.FundamentalRuntimeAdapter", _Adapter
+    )
+
+    result = run_daily.run_fundamental_production("2026-10-06", engine=object(), dry_run=True)
+
+    assert calls == [("2026-10-06", False)]
+    assert result["BROKER_ORDER_SUBMISSION"] == "DISABLED"

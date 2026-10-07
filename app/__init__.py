@@ -145,103 +145,22 @@ strategy_manager = StrategyManager()
 print(f"[OK] 當前策略: {strategy_manager.get_active_strategy_name()}")
 
 
-from .news_overlay import (  # noqa: E402
-    _apply_news_sentiment_overlay,
-    _get_current_stock_news_deadline,
-    _get_sector_news_summary,
-    _get_stock_mentions_map,
-    _get_stock_specific_news_summary,
-    _live_signal_news_timeout_scope,
-    _parse_news_reason,
-    _resolve_signal_news_info,
-    _stock_news_runtime,
-)
-from .dashboard_payloads import (  # noqa: E402
-    _PostbackCache,
-    _postback_cache,
-    _WAR_ROOM_DEFAULT_OVERLAYS,
-    _WAR_ROOM_DEFAULT_PANES,
-    _WAR_ROOM_OVERLAY_OPTIONS,
-    _WAR_ROOM_PANE_OPTIONS,
-    _WAR_ROOM_PERIOD_LABELS,
-    _aggregate_dashboard_history,
-    _build_chip_snapshot,
-    _build_dashboard_action_scripts,
-    _build_dashboard_health_check_payload,
-    _build_dashboard_health_check_payload_local,
-    _build_dashboard_llm_report,
-    _build_dashboard_macro_payload,
-    _build_dashboard_macro_payload_local,
-    _build_dashboard_rule_report,
-    _build_dashboard_signal_light,
-    _build_empty_war_room_payload,
-    _build_market_snapshot,
-    _build_war_room_chip_flow_summary,
-    _build_war_room_flow_pane,
-    _build_war_room_fundamentals,
-    _build_war_room_price_map,
-    _build_war_room_quant_status,
-    _build_war_room_selected_panes,
-    _build_war_room_structure,
-    _build_war_room_tactical_summary,
-    _build_war_room_view_state,
-    _calculate_macd_components,
-    _count_dashboard_series_points,
-    _format_price,
-    _format_price_range,
-    _format_war_room_levels,
-    _merge_dashboard_series_payload,
-    _merge_unique_strings,
-    _normalize_war_room_period,
-    _normalize_war_room_selection,
-    _overlay_dashboard_health_check_payload,
-    _overlay_dashboard_macro_payload,
-    _prepare_dashboard_history_frame,
-    _safe_price,
-    _sanitize_dashboard_json,
-    _select_dashboard_status,
-    _serialize_dashboard_value_series,
-    _summarize_chip_snapshot,
-    _summarize_market_snapshot,
-)
-from .line_flows import (  # noqa: E402
-    _alias,
-    _info,
-    _key,
-    _STRATEGY_ALIAS_INDEX,
-    _STRATEGY_SWITCH_MAP,
-    _LineInteractionStateStore,
-    _build_backtest_reflection_messages,
-    _build_chip_trend_messages,
-    _build_journal_reflection_messages,
-    _build_journal_reflection_snapshot,
-    _build_journal_reflection_text,
-    _build_macro_news_messages,
-    _build_market_summary_messages,
-    _build_postback_empty_state,
-    _build_random_strategy_messages,
-    _build_selected_strategy_messages,
-    _build_stock_diagnosis_prompt_messages,
-    _build_strategy_backtest_snapshot,
-    _build_strategy_picker_messages,
-    _build_strategy_reflection_suggestions,
-    _calculate_trade_sequence_drawdown,
-    _compact_command_key,
-    _extract_line_source_id,
-    _format_backtest_trade_summary,
-    _get_strategy_display_name,
-    _get_strategy_payload_key,
-    _is_quick_mode_cmd,
-    _line_interaction_state,
-    _list_strategy_picker_options,
-    _load_backtest_summary_snapshot,
-    _load_strategy_backtest_frame,
-    _match_strategy_switch,
-    _normalize_line_text,
-    _normalize_strategy_request_key,
-    _parse_postback_payload,
-    _summarize_today_pick_status,
-)
+class _ApplicationServices:
+    """Small composition context preserving the legacy patch seam."""
+
+    def __getattr__(self, name):
+        try:
+            return globals()[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+
+services = _ApplicationServices()
+
+
+def get_mcp_client():
+    """Create the MCP client through the application composition seam."""
+    return MCPClient()
 
 
 def get_ngrok_url() -> str:
@@ -636,6 +555,110 @@ def get_settings_info():
         return msg
     except Exception as exc:
         return f'❌ 讀取設定失敗: {exc}'
+
+
+from .news_overlay import (  # noqa: E402
+    _apply_news_sentiment_overlay,
+    _get_current_stock_news_deadline,
+    _get_sector_news_summary,
+    _get_stock_mentions_map,
+    _get_stock_specific_news_summary,
+    _live_signal_news_timeout_scope,
+    _parse_news_reason,
+    _resolve_signal_news_info,
+    _stock_news_runtime,
+)
+from .dashboard_payloads import (  # noqa: E402
+    _PostbackCache,
+    _postback_cache,
+    _WAR_ROOM_DEFAULT_OVERLAYS,
+    _WAR_ROOM_DEFAULT_PANES,
+    _WAR_ROOM_OVERLAY_OPTIONS,
+    _WAR_ROOM_PANE_OPTIONS,
+    _WAR_ROOM_PERIOD_LABELS,
+    _aggregate_dashboard_history,
+    _build_chip_snapshot,
+    _build_dashboard_action_scripts,
+    _build_dashboard_health_check_payload,
+    _build_dashboard_health_check_payload_local,
+    _build_dashboard_llm_report,
+    _build_dashboard_macro_payload,
+    _build_dashboard_macro_payload_local,
+    _build_dashboard_rule_report,
+    _build_dashboard_signal_light,
+    _build_empty_war_room_payload,
+    _build_market_snapshot,
+    _build_war_room_chip_flow_summary,
+    _build_war_room_flow_pane,
+    _build_war_room_fundamentals,
+    _build_war_room_price_map,
+    _build_war_room_quant_status,
+    _build_war_room_selected_panes,
+    _build_war_room_structure,
+    _build_war_room_tactical_summary,
+    _build_war_room_view_state,
+    _calculate_macd_components,
+    _count_dashboard_series_points,
+    _format_price,
+    _format_price_range,
+    _format_war_room_levels,
+    _merge_dashboard_series_payload,
+    _merge_unique_strings,
+    _normalize_war_room_period,
+    _normalize_war_room_selection,
+    _overlay_dashboard_health_check_payload,
+    _overlay_dashboard_macro_payload,
+    _prepare_dashboard_history_frame,
+    _safe_price,
+    _sanitize_dashboard_json,
+    _select_dashboard_status,
+    _serialize_dashboard_value_series,
+    _summarize_chip_snapshot,
+    _summarize_market_snapshot,
+)
+from .line_flows import (  # noqa: E402
+    _alias,
+    _info,
+    _key,
+    _STRATEGY_ALIAS_INDEX,
+    _STRATEGY_SWITCH_MAP,
+    _LineInteractionStateStore,
+    _build_backtest_reflection_messages,
+    _build_chip_trend_messages,
+    _build_journal_reflection_messages,
+    _build_journal_reflection_snapshot,
+    _build_journal_reflection_text,
+    _build_macro_news_messages,
+    _build_market_summary_messages,
+    _build_postback_empty_state,
+    _build_random_strategy_messages,
+    _build_selected_strategy_messages,
+    _build_stock_diagnosis_prompt_messages,
+    _build_strategy_backtest_snapshot,
+    _build_strategy_picker_messages,
+    _build_strategy_reflection_suggestions,
+    _calculate_trade_sequence_drawdown,
+    _compact_command_key,
+    _extract_line_source_id,
+    _format_backtest_trade_summary,
+    _get_strategy_display_name,
+    _get_strategy_payload_key,
+    _is_quick_mode_cmd,
+    _line_interaction_state,
+    _list_strategy_picker_options,
+    _load_backtest_summary_snapshot,
+    _load_strategy_backtest_frame,
+    _match_strategy_switch,
+    _normalize_line_text,
+    _normalize_strategy_request_key,
+    _parse_postback_payload,
+    _summarize_today_pick_status,
+)
+
+
+def create_app():
+    """Return the initialized application while preserving the legacy global API."""
+    return app
 
 
 def main() -> int:

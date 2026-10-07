@@ -31,6 +31,7 @@ from .registry import (
     StrategyRegistryError,
     UnknownStrategyError,
 )
+from .runner import StrategyRunner
 from .spec import StrategySpec, StrategySpecValidationError
 
 _LEGACY_MODULE: ModuleType | None = None
@@ -82,6 +83,7 @@ __all__ = [
     "StrategyRegistration",
     "StrategyRegistry",
     "StrategyRegistryError",
+    "StrategyRunner",
     "StrategySpec",
     "StrategySpecValidationError",
     "UnknownStrategyError",
