@@ -79,10 +79,10 @@
 
 ## 8. Phase 8 — Full Regression and UI Review Handoff (2026-10-07)
 
-- [ ] 8.1 Run the full test suite and confirm zero unexpected failures, retaining explicit evidence for any pre-existing expected failures.
-- [ ] 8.2 Run focused compatibility regression for `4_run_backtest.py`, `5_push_to_line.py`, legacy aliases, CLI, Web, LINE Bot, `jobs/scheduler.py`, Strategy Registry/Runner, Fundamental gates, DB schema expectations, and broker-disabled state.
-- [ ] 8.3 Run `git diff --check` and OpenSpec strict validation for `change-2026-10-07-restructure-web-ui-ux`.
-- [ ] 8.4 Review the final diff to confirm no Strategy algorithm, runtime routing, adapter semantics, fingerprint, OOS, promotion gate, DB schema, historical strategy ID, Backtest accounting, scheduler ownership, or broker setting changed.
-- [ ] 8.5 Produce the final implementation report covering A Route Map, B New Page Structure, C Modified Files, D Dashboard, E Stock Analysis/K-line, F Strategy Center, G Fundamental integration, H Backtest, I Navigation, J Responsive behavior, K Tests, L Full regression, M Broker state, N Remaining limitations, and O Before/After architecture.
-- [ ] 8.6 End the implementation report with exactly `READY_FOR_UI_REVIEW` only if all acceptance evidence passes; otherwise end with `NOT_READY_FOR_UI_REVIEW` and list blockers.
+- [x] 8.1 Run the full test suite and confirm zero unexpected failures, retaining explicit evidence for any pre-existing expected failures.
+- [x] 8.2 Run focused compatibility regression for `4_run_backtest.py`, `5_push_to_line.py`, legacy aliases, CLI, Web, LINE Bot, `jobs/scheduler.py`, Strategy Registry/Runner, Fundamental gates, DB schema expectations, and broker-disabled state.
+- [x] 8.3 Run `git diff --check` and OpenSpec strict validation for `change-2026-10-07-restructure-web-ui-ux`.
+- [x] 8.4 Review the final diff to confirm no Strategy algorithm, runtime routing, adapter semantics, fingerprint, OOS, promotion gate, DB schema, historical strategy ID, Backtest accounting, scheduler ownership, or broker setting changed.
+- [x] 8.5 Produce the final implementation report covering A Route Map, B New Page Structure, C Modified Files, D Dashboard, E Stock Analysis/K-line, F Strategy Center, G Fundamental integration, H Backtest, I Navigation, J Responsive behavior, K Tests, L Full regression, M Broker state, N Remaining limitations, and O Before/After architecture.
+- [x] 8.6 End the implementation report with exactly `READY_FOR_UI_REVIEW` only if all acceptance evidence passes; otherwise end with `NOT_READY_FOR_UI_REVIEW` and list blockers.
 - [ ] 8.7 Create the final independently revertible Phase 8 verification/documentation commit after all required evidence is recorded.

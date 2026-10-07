@@ -519,7 +519,7 @@ def test_dashboard_json_sanitizer_handles_pandas_missing_scalars():
     }
 
 
-def test_dashboard_template_installs_lightweight_charts_legacy_patch():
+def test_dashboard_template_does_not_render_legacy_chart_workspace():
     from flask import render_template
     from app import app as flask_app
 
@@ -532,8 +532,8 @@ def test_dashboard_template_installs_lightweight_charts_legacy_patch():
             current_mode='balanced',
         )
 
-    assert '__stockLinbotLegacyPatch' in html
-    assert 'addCandlestickSeries' in html
+    assert '__stockLinbotLegacyPatch' not in html
+    assert 'addCandlestickSeries' not in html
 
 
 def test_dashboard_health_check_api_accepts_war_room_query_state(monkeypatch):

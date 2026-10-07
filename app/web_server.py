@@ -116,11 +116,9 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
     """Build the presentation catalog from the existing runtime contracts."""
     from core.backtest.runner import get_registered_strategy_names
     from core.runtime import fundamental_production
-    from core.strategy.adapters.legacy import build_legacy_specs
 
     manager = services.StrategyManager()
     active = set(manager.get_active_strategy_names())
-    specs = build_legacy_specs()
     backtest_ids = set(get_registered_strategy_names(manager))
     category_labels = {
         'flow': 'Institutional',
@@ -129,30 +127,30 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
     }
     catalog: list[dict[str, object]] = []
 
-    for strategy_id, spec in specs.items():
+    for strategy_id, metadata in manager.STRATEGY_METADATA.items():
         strategy = manager.get_strategy(strategy_id)
         info = strategy.get_strategy_info() if hasattr(strategy, 'get_strategy_info') else {}
         daily_available = strategy is not None and strategy_id in manager.list_strategies()
         backtest_available = strategy_id in backtest_ids
         aliases = [
             alias.upper()
-            for alias in spec.legacy_aliases
+            for alias in metadata.legacy_ids
             if alias.lower().startswith('v') and alias[1:].isdigit()
         ]
         catalog.append(
             {
                 'strategy_id': strategy_id,
                 'name': strategy_id,
-                'display_name': getattr(strategy, 'display_name', spec.display_name),
-                'display_name_en': spec.display_name,
-                'display_name_zh': spec.metadata.get('display_name_zh', ''),
+                'display_name': getattr(strategy, 'display_name', metadata.display_name_en),
+                'display_name_en': metadata.display_name_en,
+                'display_name_zh': metadata.display_name_zh,
                 'type': info.get('type', ''),
                 'risk_level': info.get('risk_level', ''),
                 'description': info.get('description', getattr(strategy, 'description', '')),
                 'aliases': aliases,
-                'category_key': spec.metadata.get('category', 'unknown'),
-                'category': category_labels.get(spec.metadata.get('category'), 'Technical'),
-                'lifecycle': spec.lifecycle.value,
+                'category_key': metadata.category,
+                'category': category_labels.get(metadata.category, 'Technical'),
+                'lifecycle': 'PRODUCTION',
                 'eligibility': 'PRODUCTION',
                 'available_for_daily': daily_available,
                 'daily_reason': None if daily_available else 'Daily contract rejected this legacy identity',
