@@ -28,7 +28,7 @@
 - [x] 3.5 Remove the full K-line workspace, complete Strategy table, full Backtest UI, detailed market tabs, and primary raw JSON from Dashboard; keep any required diagnostics collapsed and development-labeled.
 - [x] 3.6 Preserve existing market/recommendation/system API response compatibility even when detailed endpoints are no longer rendered by Dashboard.
 - [x] 3.7 Update Dashboard tests to assert summary content, quick-search routing, degraded/empty recommendation resilience, absence of a large chart/createChart call, and absence of primary raw JSON.
-- [ ] 3.8 Run Phase 3 focused tests and `git diff --check`, then create an independently revertible Phase 3 commit.
+- [x] 3.8 Run Phase 3 focused tests and `git diff --check`, then create an independently revertible Phase 3 commit.
 
 ## 4. Phase 4 — Dedicated Stock Analysis and K-Line (2026-10-07)
 
