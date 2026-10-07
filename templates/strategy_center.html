@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Strategy Center - Stock Linbot{% endblock %}
+{% block nav_strategies %}active{% endblock %}
+
+{% block content %}
+<div
+    x-data="strategyCenter({{ strategy_catalog|tojson }})"
+    class="space-y-6 pb-28"
+    data-testid="strategy-center"
+>
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
+            <h1 class="mt-1 text-2xl font-semibold text-white">Strategy Center</h1>
+            <p class="mt-1 text-sm text-gray-400">Canonical identities stay separate from their runtime adapters.</p>
+        </div>
+        <span class="status-badge status-unknown"><span x-text="catalog.length"></span> Strategies</span>
+    </div>
+
+    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Strategy categories">
+        <template x-for="tab in tabs" :key="tab.key">
+            <button
+                type="button"
+                role="tab"
+                class="rounded-md border px-3 py-2 text-xs transition-colors"
+                :class="filter === tab.key ? 'border-blue-500 bg-blue-500/15 text-blue-300' : 'border-gray-700 text-gray-400 hover:border-gray-500'"
+                :aria-selected="filter === tab.key"
+                @click="filter = tab.key"
+                x-text="tab.label"
+            ></button>
+        </template>
+    </div>
+
+    <div class="hidden overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/40 md:block">
+        <table class="min-w-[900px] w-full text-left text-sm" data-testid="strategy-catalog-table">
+            <thead class="border-b border-gray-800 bg-gray-900/80 text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                    <th class="px-4 py-3">Select</th>
+                    <th class="px-4 py-3">Strategy</th>
+                    <th class="px-4 py-3">Category</th>
+                    <th class="px-4 py-3">Lifecycle / Eligibility</th>
+                    <th class="px-4 py-3">Daily</th>
+                    <th class="px-4 py-3">Backtest</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                <template x-for="item in filteredItems" :key="item.strategy_id">
+                    <tr class="text-gray-300 hover:bg-gray-800/40">
+                        <td class="px-4 py-4 align-top">
+                            <input
+                                type="checkbox"
+                                class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                                :value="item.strategy_id"
+                                x-model="selected"
+                                :aria-label="`Select ${item.display_name_en}`"
+                            >
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                            <div class="font-medium text-white" x-text="item.display_name_en"></div>
+                            <div class="mt-1 font-mono text-xs text-blue-300" x-text="item.strategy_id"></div>
+                            <div class="mt-1 text-xs text-gray-500" x-show="item.aliases.length">
+                                Alias: <span x-text="item.aliases.join(', ')"></span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                            <span class="status-badge status-unknown" x-text="item.category"></span>
+                        </td>
+                        <td class="px-4 py-4 align-top text-xs">
+                            <div x-text="item.lifecycle"></div>
+                            <div class="mt-1 text-gray-500" x-text="item.eligibility"></div>
+                            <div class="mt-1 max-w-xs text-amber-300" x-show="item.eligibility_reason" x-text="item.eligibility_reason"></div>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                            <span class="status-badge" :class="item.available_for_daily ? 'status-ok' : 'status-degraded'" x-text="item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE'"></span>
+                            <div class="mt-1 max-w-xs text-xs text-gray-500" x-show="!item.available_for_daily" x-text="item.daily_reason"></div>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                            <span class="status-badge" :class="item.available_for_backtest ? 'status-ok' : 'status-degraded'" x-text="item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE'"></span>
+                            <div class="mt-1 max-w-xs text-xs text-gray-500" x-show="!item.available_for_backtest" x-text="item.backtest_reason"></div>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="grid gap-3 md:hidden" data-testid="strategy-catalog-cards">
+        <template x-for="item in filteredItems" :key="item.strategy_id">
+            <article class="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+                <div class="flex items-start gap-3">
+                    <input
+                        type="checkbox"
+                        class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                        :value="item.strategy_id"
+                        x-model="selected"
+                        :aria-label="`Select ${item.display_name_en}`"
+                    >
+                    <div class="min-w-0 flex-1">
+                        <div class="font-medium text-white" x-text="item.display_name_en"></div>
+                        <div class="mt-1 break-all font-mono text-xs text-blue-300" x-text="item.strategy_id"></div>
+                    </div>
+                    <span class="status-badge status-unknown" x-text="item.category"></span>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-400">
+                    <div>Lifecycle <span class="block text-gray-200" x-text="item.lifecycle"></span></div>
+                    <div>Eligibility <span class="block text-gray-200" x-text="item.eligibility"></span></div>
+                    <div>Daily <span class="block" :class="item.available_for_daily ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
+                    <div>Backtest <span class="block" :class="item.available_for_backtest ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
+                </div>
+                <p class="mt-3 text-xs text-amber-300" x-show="!item.available_for_daily || !item.available_for_backtest" x-text="item.daily_reason || item.backtest_reason"></p>
+            </article>
+        </template>
+    </div>
+
+    <div class="sticky bottom-4 z-20 rounded-lg border border-blue-500/30 bg-gray-950/95 p-4 shadow-xl backdrop-blur" data-testid="strategy-actions">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <div class="text-sm font-medium text-white">已選擇 <span x-text="selectedItems.length"></span> 個策略</div>
+                <div class="mt-1 flex flex-wrap gap-2" aria-live="polite">
+                    <template x-for="item in selectedItems" :key="item.strategy_id">
+                        <span class="rounded bg-gray-800 px-2 py-1 font-mono text-xs text-gray-300">
+                            <span x-text="item.aliases.length ? item.aliases[0] : 'Fundamental'"></span>
+                            <span class="text-gray-500" x-text="` · ${item.strategy_id}`"></span>
+                        </span>
+                    </template>
+                    <span x-show="!selectedItems.length" class="text-xs text-gray-500">請選擇策略</span>
+                </div>
+                <p x-show="selectedItems.length && !dailyAllowed" class="mt-2 text-xs text-amber-300">Daily unavailable: <span x-text="dailyBlockReason"></span></p>
+                <p x-show="selectedItems.length && !backtestAllowed" class="mt-1 text-xs text-amber-300">Backtest unavailable: <span x-text="backtestBlockReason"></span></p>
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row">
+                <form method="post" action="{{ url_for('update_strategy') }}" x-ref="dailyForm" class="hidden">
+                    <template x-for="item in selectedItems" :key="item.strategy_id">
+                        <input type="hidden" name="strategies" :value="item.strategy_id">
+                    </template>
+                </form>
+                <button
+                    type="button"
+                    class="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="!dailyAllowed"
+                    @click="$refs.dailyForm.submit()"
+                >套用到 Daily</button>
+                <button
+                    type="button"
+                    class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="!backtestAllowed"
+                    @click="openBacktest()"
+                >執行組合回測</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function strategyCenter(catalog) {
+    return {
+        catalog,
+        filter: 'all',
+        selected: [],
+        tabs: [
+            {key: 'all', label: '全部'},
+            {key: 'Technical', label: '技術'},
+            {key: 'Fundamental', label: '基本面'},
+            {key: 'Institutional', label: '籌碼'},
+        ],
+        get filteredItems() {
+            if (this.filter === 'all') return this.catalog;
+            if (this.filter === 'Technical') return this.catalog.filter(item => !['Fundamental', 'Institutional'].includes(item.category));
+            return this.catalog.filter(item => item.category === this.filter);
+        },
+        get selectedItems() {
+            return this.catalog.filter(item => this.selected.includes(item.strategy_id));
+        },
+        get dailyAllowed() {
+            return this.selectedItems.length > 0 && this.selectedItems.every(item => item.available_for_daily);
+        },
+        get backtestAllowed() {
+            return this.selectedItems.length > 0 && this.selectedItems.every(item => item.available_for_backtest);
+        },
+        get dailyBlockReason() {
+            return this.selectedItems.filter(item => !item.available_for_daily).map(item => `${item.display_name_en}: ${item.daily_reason}`).join('; ');
+        },
+        get backtestBlockReason() {
+            return this.selectedItems.filter(item => !item.available_for_backtest).map(item => `${item.display_name_en}: ${item.backtest_reason}`).join('; ');
+        },
+        openBacktest() {
+            if (!this.backtestAllowed) return;
+            window.location.href = `{{ url_for('backtest') }}?strategies=${encodeURIComponent(this.selected.join(','))}`;
+        },
+    };
+}
+</script>
+{% endblock %}

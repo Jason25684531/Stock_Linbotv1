@@ -109,6 +109,101 @@ def dashboard():
     )
 
 
+FUNDAMENTAL_STRATEGY_ID = 'fundamental_g2g3_top5_reb60_score_weighted_v1'
+
+
+def _build_strategy_catalog() -> list[dict[str, object]]:
+    """Build the presentation catalog from the existing runtime contracts."""
+    from core.backtest.runner import get_registered_strategy_names
+    from core.runtime import fundamental_production
+    from core.strategy.adapters.legacy import build_legacy_specs
+
+    manager = services.StrategyManager()
+    active = set(manager.get_active_strategy_names())
+    specs = build_legacy_specs()
+    backtest_ids = set(get_registered_strategy_names(manager))
+    category_labels = {
+        'flow': 'Institutional',
+        'quality': 'Quality / Growth',
+        'value': 'Quality / Value',
+    }
+    catalog: list[dict[str, object]] = []
+
+    for strategy_id, spec in specs.items():
+        strategy = manager.get_strategy(strategy_id)
+        info = strategy.get_strategy_info() if hasattr(strategy, 'get_strategy_info') else {}
+        daily_available = strategy is not None and strategy_id in manager.list_strategies()
+        backtest_available = strategy_id in backtest_ids
+        aliases = [
+            alias.upper()
+            for alias in spec.legacy_aliases
+            if alias.lower().startswith('v') and alias[1:].isdigit()
+        ]
+        catalog.append(
+            {
+                'strategy_id': strategy_id,
+                'name': strategy_id,
+                'display_name': getattr(strategy, 'display_name', spec.display_name),
+                'display_name_en': spec.display_name,
+                'display_name_zh': spec.metadata.get('display_name_zh', ''),
+                'type': info.get('type', ''),
+                'risk_level': info.get('risk_level', ''),
+                'description': info.get('description', getattr(strategy, 'description', '')),
+                'aliases': aliases,
+                'category_key': spec.metadata.get('category', 'unknown'),
+                'category': category_labels.get(spec.metadata.get('category'), 'Technical'),
+                'lifecycle': spec.lifecycle.value,
+                'eligibility': 'PRODUCTION',
+                'available_for_daily': daily_available,
+                'daily_reason': None if daily_available else 'Daily contract rejected this legacy identity',
+                'available_for_backtest': backtest_available,
+                'backtest_reason': None if backtest_available else 'Backtest registry does not expose this identity',
+                'reason': None,
+                'active': strategy_id in active,
+            }
+        )
+
+    registration = manager.runtime_strategy_registrations().get(FUNDAMENTAL_STRATEGY_ID, {})
+    try:
+        gate = fundamental_production.check_production_eligibility()
+        eligibility = 'ELIGIBLE' if gate.eligible else 'BLOCKED'
+        eligibility_reason = gate.reason or 'No production gate reason was provided'
+    except Exception as exc:
+        eligibility = 'UNKNOWN'
+        eligibility_reason = f'Eligibility evidence unavailable: {exc}'
+    shadow_enabled = registration.get('ENABLED_FOR_SHADOW') == 'YES'
+    fundamental_reason = (
+        'Shadow runtime only; live execution is disabled'
+        if shadow_enabled
+        else 'Fundamental runtime registration is unavailable'
+    )
+    catalog.append(
+        {
+            'strategy_id': FUNDAMENTAL_STRATEGY_ID,
+            'name': FUNDAMENTAL_STRATEGY_ID,
+            'display_name': 'Fundamental G2/G3',
+            'display_name_en': 'Fundamental G2/G3',
+            'display_name_zh': '基本面 G2/G3',
+            'type': 'fundamental',
+            'risk_level': '',
+            'description': fundamental_reason,
+            'aliases': [],
+            'category_key': 'fundamental',
+            'category': 'Fundamental',
+            'lifecycle': 'SHADOW' if shadow_enabled else 'UNKNOWN',
+            'eligibility': eligibility,
+            'eligibility_reason': eligibility_reason,
+            'available_for_daily': False,
+            'daily_reason': 'Daily setter accepts legacy StrategyManager identities only',
+            'available_for_backtest': False,
+            'backtest_reason': 'Backtest Engine supports the seven legacy identities only',
+            'reason': fundamental_reason,
+            'active': False,
+        }
+    )
+    return catalog
+
+
 @app.route('/stock-analysis')
 @login_required
 def stock_analysis():
@@ -120,7 +215,7 @@ def stock_analysis():
 @login_required
 def strategy_center():
     """Render the unified strategy catalog."""
-    return render_template('strategy_center.html')
+    return render_template('strategy_center.html', strategy_catalog=_build_strategy_catalog())
 
 
 @app.context_processor
@@ -331,11 +426,13 @@ def api_strategies():
     """取得所有策略清單及當前啟用策略。"""
     try:
         mgr = services.StrategyManager()
+        catalog = _build_strategy_catalog()
+        active_names = [item['strategy_id'] for item in catalog if item.get('active')]
         available = {
             name: getattr(mgr.get_strategy(name), 'display_name', name)
             for name in mgr.list_strategies()
+            if name in {item['strategy_id'] for item in catalog}
         }
-        active_names = mgr.get_active_strategy_names()
 
         strategies = []
         for name, display in available.items():
@@ -361,6 +458,11 @@ def api_strategies():
                     }
                 )
 
+        catalog_by_id = {item['strategy_id']: item for item in catalog}
+        strategies = [catalog_by_id.get(row['name'], row) for row in strategies]
+        for item in catalog:
+            if item['strategy_id'] not in {row['name'] for row in strategies}:
+                strategies.append(item)
         return jsonify({'strategies': strategies, 'active': active_names, 'count': len(strategies)})
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
@@ -1102,8 +1204,18 @@ def system_status_page():
 def backtest():
     """回測頁面。"""
     if request.method == 'GET':
-        available_strategies = services.strategy_manager.list_strategies()
-        return render_template('backtest.html', strategies=available_strategies)
+        catalog = _build_strategy_catalog()
+        available = [item for item in catalog if item.get('available_for_backtest')]
+        requested = _parse_csv_query_values('strategies') or []
+        selected = [item['strategy_id'] for item in available if item['strategy_id'] in requested]
+        if not selected and available:
+            selected = [available[0]['strategy_id']]
+        return render_template(
+            'backtest.html',
+            strategies=[item['strategy_id'] for item in available],
+            strategy_catalog=catalog,
+            selected_strategies=selected,
+        )
 
     try:
         from core.viz_helper import generate_report_from_csv

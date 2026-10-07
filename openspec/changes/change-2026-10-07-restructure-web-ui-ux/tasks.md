@@ -45,16 +45,16 @@
 
 ## 5. Phase 5 — Unified Strategy Center (2026-10-07)
 
-- [ ] 5.1 Implement a backward-compatible presentation catalog assembled from authoritative legacy StrategySpec/Manager metadata and Fundamental registration/eligibility evidence.
-- [ ] 5.2 Enrich `/api/strategies` or reuse a verified richer endpoint so catalog rows expose canonical ID, display name, optional aliases, category, lifecycle/eligibility, Daily capability, Backtest capability, and reason text without changing existing fields.
-- [ ] 5.3 Add the authenticated `/strategies` route and `templates/strategy_center.html` with All/Technical/Fundamental/Institutional-or-verified-category filters and responsive table/card presentation.
-- [ ] 5.4 Show exactly seven legacy-backed canonical strategies plus Fundamental; render V31/V33/V34/V35/V36/V37/V38 only as aliases and prove Fundamental has no V32 or other V alias.
-- [ ] 5.5 Implement transient cross-category multi-selection and a sticky action bar that displays selected canonical identities and presentation aliases without merging runtime adapters.
-- [ ] 5.6 Gate `套用到 Daily` on all-selected Daily capability, use the existing compatible setter only for accepted identities, and prevent Fundamental from entering the legacy-only settings contract.
-- [ ] 5.7 Gate `執行組合回測` on all-selected Backtest capability, pass only supported canonical identities to `/backtest`, and show explicit unsupported/unknown reasons.
-- [ ] 5.8 Add API, template, and frontend tests for the eight-entry catalog, categories, cross-type selection, canonical action payloads, alias-only presentation, no Fundamental V32, truthful lifecycle, and both action gates.
-- [ ] 5.9 Run existing Strategy Registry/Runner, Legacy adapter, Fundamental fingerprint/OOS/gate, settings, and scheduler compatibility tests to prove runtime semantics are unchanged.
-- [ ] 5.10 Run Phase 5 focused tests and `git diff --check`, then create an independently revertible Phase 5 commit.
+- [x] 5.1 Implement a backward-compatible presentation catalog assembled from authoritative legacy StrategySpec/Manager metadata and Fundamental registration/eligibility evidence.
+- [x] 5.2 Enrich `/api/strategies` or reuse a verified richer endpoint so catalog rows expose canonical ID, display name, optional aliases, category, lifecycle/eligibility, Daily capability, Backtest capability, and reason text without changing existing fields.
+- [x] 5.3 Add the authenticated `/strategies` route and `templates/strategy_center.html` with All/Technical/Fundamental/Institutional-or-verified-category filters and responsive table/card presentation.
+- [x] 5.4 Show exactly seven legacy-backed canonical strategies plus Fundamental; render V31/V33/V34/V35/V36/V37/V38 only as aliases and prove Fundamental has no V32 or other V alias.
+- [x] 5.5 Implement transient cross-category multi-selection and a sticky action bar that displays selected canonical identities and presentation aliases without merging runtime adapters.
+- [x] 5.6 Gate `套用到 Daily` on all-selected Daily capability, use the existing compatible setter only for accepted identities, and prevent Fundamental from entering the legacy-only settings contract.
+- [x] 5.7 Gate `執行組合回測` on all-selected Backtest capability, pass only supported canonical identities to `/backtest`, and show explicit unsupported/unknown reasons.
+- [x] 5.8 Add API, template, and frontend tests for the eight-entry catalog, categories, cross-type selection, canonical action payloads, alias-only presentation, no Fundamental V32, truthful lifecycle, and both action gates.
+- [x] 5.9 Run existing Strategy Registry/Runner, Legacy adapter, Fundamental fingerprint/OOS/gate, settings, and scheduler compatibility tests to prove runtime semantics are unchanged.
+- [x] 5.10 Run Phase 5 focused tests and `git diff --check`, then create an independently revertible Phase 5 commit.
 
 ## 6. Phase 6 — Backtest UI Organization (2026-10-07)
 
