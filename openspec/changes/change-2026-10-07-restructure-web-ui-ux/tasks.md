@@ -32,15 +32,15 @@
 
 ## 4. Phase 4 — Dedicated Stock Analysis and K-Line (2026-10-07)
 
-- [ ] 4.1 Add the authenticated `/stock-analysis` route and `templates/stock_analysis.html`, supporting an optional validated `id` query parameter without duplicating the existing stock-analysis API.
-- [ ] 4.2 Implement stock search/header presentation for authoritative identity, exchange, quote, change, OHLC, volume, turnover, and unavailable values.
-- [ ] 4.3 Implement a reusable Lightweight Charts component that calls `createChart`, adds and populates candlestick, MA5, MA20, MA60, and volume histogram series from the existing schema.
-- [ ] 4.4 Add 1M/3M/6M/1Y/ALL controls using the verified API timeframe contract or consistent browser filtering of returned history without changing K-line algorithms or field meanings.
-- [ ] 4.5 Render valid local fallback candles during MCP failure with `DEGRADED — Local fallback data`; render explicit unavailable state only when no valid candles exist.
-- [ ] 4.6 Add responsive chart sizing with a usable minimum height, volume visibility, resize handling, and cleanup of chart/observer instances.
-- [ ] 4.7 Render separate technical, institutional, and Strategy Matches cards from authoritative evidence; preserve independent strategy identities and never calculate a unified score.
-- [ ] 4.8 If no authoritative persisted strategy-match source exists, render and document an unavailable limitation instead of rerunning strategies or inventing matches.
-- [ ] 4.9 Add Flask payload/route tests and a JavaScript DOM test that stubs Lightweight Charts and proves creation/population of candlestick, MA5, MA20, MA60, and volume series for normal and degraded data.
+- [x] 4.1 Add the authenticated `/stock-analysis` route and `templates/stock_analysis.html`, supporting an optional validated `id` query parameter without duplicating the existing stock-analysis API.
+- [x] 4.2 Implement stock search/header presentation for authoritative identity, exchange, quote, change, OHLC, volume, turnover, and unavailable values.
+- [x] 4.3 Implement a reusable Lightweight Charts component that calls `createChart`, adds and populates candlestick, MA5, MA20, MA60, and volume histogram series from the existing schema.
+- [x] 4.4 Add 1M/3M/6M/1Y/ALL controls using the verified API timeframe contract or consistent browser filtering of returned history without changing K-line algorithms or field meanings.
+- [x] 4.5 Render valid local fallback candles during MCP failure with `DEGRADED — Local fallback data`; render explicit unavailable state only when no valid candles exist.
+- [x] 4.6 Add responsive chart sizing with a usable minimum height, volume visibility, resize handling, and cleanup of chart/observer instances.
+- [x] 4.7 Render separate technical, institutional, and Strategy Matches cards from authoritative evidence; preserve independent strategy identities and never calculate a unified score.
+- [x] 4.8 If no authoritative persisted strategy-match source exists, render and document an unavailable limitation instead of rerunning strategies or inventing matches.
+- [x] 4.9 Add Flask payload/route tests and a JavaScript DOM test that stubs Lightweight Charts and proves creation/population of candlestick, MA5, MA20, MA60, and volume series for normal and degraded data.
 - [ ] 4.10 Run Phase 4 focused tests and `git diff --check`, then create an independently revertible Phase 4 commit.
 
 ## 5. Phase 5 — Unified Strategy Center (2026-10-07)
