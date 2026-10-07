@@ -12,11 +12,11 @@
 
 ## 2. Phase 2 — Shared Shell and Navigation (2026-10-07)
 
-- [ ] 2.1 Refactor `templates/base.html` to own the restrained dark-quant theme, JetBrains Mono typography, shared cards/status badges, header, sidebar, and main-content layout using the existing frontend stack.
-- [ ] 2.2 Add verified links for Dashboard, Stock Analysis, Strategy Center, Backtest, and System with route-based active navigation; do not add Trades without a formal HTML route.
-- [ ] 2.3 Implement fixed desktop navigation, tablet collapse, and an accessible Alpine.js mobile drawer with keyboard/focus behavior and no page-wide horizontal overflow.
-- [ ] 2.4 Bind the global system label to verified health evidence, display Unknown/Degraded when evidence is insufficient, remove any `LIVE TRADING` presentation, and show broker submission as expected `DISABLED` configuration.
-- [ ] 2.5 Add Flask/template tests for shared shell inheritance, all verified navigation targets, exactly one active item, responsive controls, truthful health states, and broker-disabled presentation.
+- [x] 2.1 Refactor `templates/base.html` to own the restrained dark-quant theme, JetBrains Mono typography, shared cards/status badges, header, sidebar, and main-content layout using the existing frontend stack.
+- [x] 2.2 Add verified links for Dashboard, Stock Analysis, Strategy Center, Backtest, and System with route-based active navigation; do not add Trades without a formal HTML route.
+- [x] 2.3 Implement fixed desktop navigation, tablet collapse, and an accessible Alpine.js mobile drawer with keyboard/focus behavior and no page-wide horizontal overflow.
+- [x] 2.4 Bind the global system label to verified health evidence, display Unknown/Degraded when evidence is insufficient, remove any `LIVE TRADING` presentation, and show broker submission as expected `DISABLED` configuration.
+- [x] 2.5 Add Flask/template tests for shared shell inheritance, all verified navigation targets, exactly one active item, responsive controls, truthful health states, and broker-disabled presentation.
 - [ ] 2.6 Run Phase 2 focused tests and `git diff --check`, then create an independently revertible Phase 2 commit.
 
 ## 3. Phase 3 — Summary Dashboard (2026-10-07)

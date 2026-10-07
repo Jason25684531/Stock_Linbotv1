@@ -4,19 +4,16 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-
-def test_phase1_html_route_inventory_is_explicit():
+def test_primary_html_route_inventory_is_explicit_after_migration():
     from app import app as flask_app
 
     routes = {rule.rule for rule in flask_app.url_map.iter_rules()}
 
     assert "/dashboard" in routes
     assert "/backtest" in routes
-    assert "/stock-analysis" not in routes
-    assert "/strategies" not in routes
-    assert "/system" not in routes
+    assert "/stock-analysis" in routes
+    assert "/strategies" in routes
+    assert "/system" in routes
     assert "/api/trades" in routes
 
 

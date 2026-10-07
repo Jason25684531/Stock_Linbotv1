@@ -109,6 +109,35 @@ def dashboard():
     )
 
 
+@app.route('/stock-analysis')
+@login_required
+def stock_analysis():
+    """Render the dedicated stock analysis workspace."""
+    return render_template('stock_analysis.html', stock_id=str(request.args.get('id') or '').strip())
+
+
+@app.route('/strategies')
+@login_required
+def strategy_center():
+    """Render the unified strategy catalog."""
+    return render_template('strategy_center.html')
+
+
+@app.context_processor
+def inject_shell_status():
+    """Expose one evidence-backed status badge to every rendered page."""
+    try:
+        payload, _ = _build_system_status_payload()
+        state = payload.get('status')
+        if state == 'ok':
+            return {'shell_status': {'state': 'ok', 'label': 'SYSTEM ONLINE'}}
+        if state == 'degraded':
+            return {'shell_status': {'state': 'degraded', 'label': 'DEGRADED'}}
+    except Exception:
+        pass
+    return {'shell_status': {'state': 'unknown', 'label': 'UNKNOWN'}}
+
+
 @app.route('/update_strategy', methods=['POST'])
 @login_required
 def update_strategy():
@@ -1050,6 +1079,22 @@ def _build_system_status_payload() -> tuple[dict[str, object], int]:
 def api_market_system_status():
     payload, status_code = _build_system_status_payload()
     return _dashboard_json_response(payload, status_code)
+
+
+@app.route('/system')
+@login_required
+def system_status_page():
+    payload, _ = _build_system_status_payload()
+    steps = payload.get('data', {}).get('steps', []) if isinstance(payload.get('data'), dict) else []
+    components = [
+        {'name': 'Market Data', 'status': 'UNKNOWN', 'reason': 'No independent health contract'},
+        {'name': 'Strategy Engine', 'status': 'UNKNOWN', 'reason': 'No independent health contract'},
+        {'name': 'Backtest Engine', 'status': 'UNKNOWN', 'reason': 'No independent health contract'},
+        {'name': 'Database', 'status': 'UNKNOWN', 'reason': 'Only pipeline query evidence is available'},
+        {'name': 'Scheduler', 'status': 'UNKNOWN', 'reason': 'No live scheduler heartbeat endpoint'},
+        {'name': 'Broker Order Submission', 'status': 'DISABLED', 'reason': 'Expected safety configuration'},
+    ]
+    return render_template('system.html', system_payload=payload, pipeline_steps=steps, system_components=components)
 
 
 @app.route('/backtest', methods=['GET', 'POST'])
