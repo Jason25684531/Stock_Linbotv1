@@ -42,6 +42,7 @@ def test_backtest_configuration_uses_capability_catalog(monkeypatch):
 
 def test_backtest_post_blocks_unsupported_catalog_selection(monkeypatch):
     import app.web_server as web_server
+    import app as app_module
     from app import app as flask_app
 
     monkeypatch.setattr(web_server, '_build_strategy_catalog', _catalog)
@@ -52,7 +53,7 @@ def test_backtest_post_blocks_unsupported_catalog_selection(monkeypatch):
         called = True
         raise AssertionError('unsupported strategy reached the engine')
 
-    monkeypatch.setattr(web_server.services, '_run_portfolio_backtest', fail_if_called)
+    monkeypatch.setattr(app_module, '_run_portfolio_backtest', fail_if_called)
     client = flask_app.test_client()
     _login(client)
 

@@ -68,14 +68,14 @@
 
 ## 7. Phase 7 — Frontend and Integration Verification (2026-10-07)
 
-- [ ] 7.1 Add navigation integration tests proving Dashboard, Stock Analysis, Strategy Center, Backtest, and System routes switch correctly and preserve authentication behavior.
-- [ ] 7.2 Add responsive structure tests for fixed/collapsible/drawer navigation, horizontally scrollable tables, Strategy Center mobile cards, and chart minimum sizing.
-- [ ] 7.3 Add integration coverage from Dashboard stock search/recommendation link through Stock Analysis normal and degraded chart rendering.
-- [ ] 7.4 Add integration coverage from Strategy Center selection through Daily and Backtest capability gating, including mixed legacy/Fundamental selections.
-- [ ] 7.5 Add status integration tests proving unverified components remain Unknown, broker submission remains Disabled, and the UI never displays `LIVE TRADING`.
-- [ ] 7.6 Perform browser-level desktop, tablet, and mobile smoke validation with the repository's existing browser tooling when available, recording screenshots or evidence for the supplied reference's information architecture.
-- [ ] 7.7 Run accessibility smoke checks for landmarks, navigation labels, active state, keyboard drawer operation, focus visibility, tables, controls, and status text independent of color.
-- [ ] 7.8 Run Phase 7 frontend/integration tests and `git diff --check`, then create an independently revertible Phase 7 commit.
+- [x] 7.1 Add navigation integration tests proving Dashboard, Stock Analysis, Strategy Center, Backtest, and System routes switch correctly and preserve authentication behavior.
+- [x] 7.2 Add responsive structure tests for fixed/collapsible/drawer navigation, horizontally scrollable tables, Strategy Center mobile cards, and chart minimum sizing.
+- [x] 7.3 Add integration coverage from Dashboard stock search/recommendation link through Stock Analysis normal and degraded chart rendering.
+- [x] 7.4 Add integration coverage from Strategy Center selection through Daily and Backtest capability gating, including mixed legacy/Fundamental selections.
+- [x] 7.5 Add status integration tests proving unverified components remain Unknown, broker submission remains Disabled, and the UI never displays `LIVE TRADING`.
+- [x] 7.6 Perform browser-level desktop, tablet, and mobile smoke validation with the repository's existing browser tooling when available, recording screenshots or evidence for the supplied reference's information architecture.
+- [x] 7.7 Run accessibility smoke checks for landmarks, navigation labels, active state, keyboard drawer operation, focus visibility, tables, controls, and status text independent of color.
+- [x] 7.8 Run Phase 7 frontend/integration tests and `git diff --check`, then create an independently revertible Phase 7 commit.
 
 ## 8. Phase 8 — Full Regression and UI Review Handoff (2026-10-07)
 

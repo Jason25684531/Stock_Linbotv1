@@ -30,6 +30,7 @@
         .status-unknown { color:var(--text-secondary); background:rgba(145,167,186,.1); }
         .status-disabled { color:var(--accent-amber); background:rgba(244,183,64,.1); }
         .nav-item { display:flex; align-items:center; gap:.7rem; border:1px solid transparent; border-radius:.45rem; color:var(--text-secondary); padding:.65rem .75rem; transition:background .15s,color .15s; }
+        .nav-item:focus-visible, button:focus-visible, a:focus-visible { outline:2px solid var(--accent-blue); outline-offset:2px; }
         .nav-item:hover { background:rgba(25,140,255,.08); color:var(--text-primary); }
         .nav-item.active { background:rgba(25,140,255,.2); border-color:rgba(25,140,255,.32); color:#8ec8ff; }
         .chart-shell { min-height:430px; }
