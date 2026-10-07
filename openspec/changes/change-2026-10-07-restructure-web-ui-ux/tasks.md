@@ -8,7 +8,7 @@
 - [x] 1.6 Characterize Backtest-supported strategy identities, request/response schema, metric `None` behavior, run-specific trade availability, charts, accounting, and compatibility entry points before changing shared selection presentation.
 - [x] 1.7 Add and run characterization tests for current stock-analysis payload meaning, strategy alias resolution, Fundamental gates, Daily selection rejection/acceptance, and Backtest outputs without changing production behavior.
 - [x] 1.8 Record baseline focused and full-suite test results, existing expected failures, current broker-disabled evidence, and unresolved contract limitations in the change evidence.
-- [ ] 1.9 Create the independently revertible Phase 1 commit containing only inventory evidence and characterization tests after focused verification passes.
+- [x] 1.9 Create the independently revertible Phase 1 commit containing only inventory evidence and characterization tests after focused verification passes.
 
 ## 2. Phase 2 — Shared Shell and Navigation (2026-10-07)
 
