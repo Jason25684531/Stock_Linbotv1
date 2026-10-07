@@ -85,4 +85,4 @@
 - [x] 8.4 Review the final diff to confirm no Strategy algorithm, runtime routing, adapter semantics, fingerprint, OOS, promotion gate, DB schema, historical strategy ID, Backtest accounting, scheduler ownership, or broker setting changed.
 - [x] 8.5 Produce the final implementation report covering A Route Map, B New Page Structure, C Modified Files, D Dashboard, E Stock Analysis/K-line, F Strategy Center, G Fundamental integration, H Backtest, I Navigation, J Responsive behavior, K Tests, L Full regression, M Broker state, N Remaining limitations, and O Before/After architecture.
 - [x] 8.6 End the implementation report with exactly `READY_FOR_UI_REVIEW` only if all acceptance evidence passes; otherwise end with `NOT_READY_FOR_UI_REVIEW` and list blockers.
-- [ ] 8.7 Create the final independently revertible Phase 8 verification/documentation commit after all required evidence is recorded.
+- [x] 8.7 Create the final independently revertible Phase 8 verification/documentation commit after all required evidence is recorded.
