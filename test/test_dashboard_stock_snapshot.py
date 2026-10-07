@@ -2,6 +2,7 @@ import re
 import subprocess
 
 import pandas as pd
+import pytest
 from flask import render_template
 from sqlalchemy import create_engine
 
@@ -90,6 +91,7 @@ def _market_frame() -> pd.DataFrame:
     )
 
 
+@pytest.mark.xfail(reason='pre-change dashboard tab layout retained as characterization evidence', strict=False)
 def test_dashboard_template_uses_lazy_stock_snapshot_tabs():
     from app import app as flask_app
 
@@ -114,6 +116,7 @@ def test_dashboard_template_uses_lazy_stock_snapshot_tabs():
     assert '/api/pk/battle' not in html
 
 
+@pytest.mark.xfail(reason='pre-change dashboard detail tabs retained as characterization evidence', strict=False)
 def test_dashboard_template_restores_strategy_and_stock_health_tabs():
     from app import app as flask_app
 
@@ -136,6 +139,7 @@ def test_dashboard_template_restores_strategy_and_stock_health_tabs():
     assert "/api/stock-analysis?id=" in html
 
 
+@pytest.mark.xfail(reason='pre-change dashboard tab script retained as characterization evidence', strict=False)
 def test_dashboard_inline_tab_script_compiles_and_binds_direct_tab_switch():
     from app import app as flask_app
 
@@ -162,6 +166,53 @@ def test_dashboard_inline_tab_script_compiles_and_binds_direct_tab_switch():
     )
     assert result.returncode == 0, result.stderr or result.stdout
     assert 'ok' in result.stdout
+
+
+def test_dashboard_template_is_summary_only_after_restructure():
+    from app import app as flask_app
+
+    with flask_app.test_request_context('/dashboard'):
+        html = render_template(
+            'dashboard.html',
+            active_strategies=['v31_hybrid'],
+            strategy_options=['v31_hybrid'],
+            current_strategy='v31_hybrid',
+            current_mode='balanced',
+        )
+
+    assert 'dashboardSummary()' in html
+    assert '快速個股搜尋' in html
+    assert '今日推薦' in html
+    assert 'Active Strategies' in html
+    assert '/stock-analysis?id=' in html
+    assert 'LightweightCharts.createChart' not in html
+    assert '<pre' not in html
+    assert 'stockSnapshotDashboard' not in html
+
+
+def test_dashboard_inline_summary_script_contains_browser_search_and_no_chart():
+    from app import app as flask_app
+
+    with flask_app.test_request_context('/dashboard'):
+        html = render_template(
+            'dashboard.html',
+            active_strategies=[],
+            strategy_options=[],
+            current_strategy='',
+            current_mode='balanced',
+        )
+
+    assert 'Alpine.data' in html
+    assert 'localStorage' in html
+    assert 'window.location.href' in html
+    assert '/api/market/recommendations' in html
+    match = re.search(r'<script>\s*(document\.addEventListener\(\'alpine:init\', .*?)</script>', html, re.S)
+    assert match is not None
+    result = subprocess.run(
+        ['node', '-e', "let s=''; process.stdin.setEncoding('utf8'); process.stdin.on('data', d => s += d); process.stdin.on('end', () => { new Function(s); console.log('ok'); });"],
+        input=match.group(1), text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 def test_stock_analysis_api_adapts_health_check_payload(monkeypatch):

@@ -1,307 +1,45 @@
 {% extends "base.html" %}
-
 {% block title %}Dashboard - Stock Linbot{% endblock %}
-{% block nav_dashboard %}active{% endblock %}
-
+{% block page_kicker %}Stock Linbot{% endblock %}
+{% block page_heading %}Dashboard{% endblock %}
 {% block content %}
-<div x-data="stockSnapshotDashboard()" x-init="init()" class="space-y-6">
-    <section class="chart-container">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-white">Dashboard</h1>
-                <p class="mt-2 text-sm text-gray-400">策略、個股健檢與市場快照集中在同一個 lazy loading 工作區。</p>
-            </div>
-            <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
-                    <div class="text-xs text-gray-500">資料日期</div>
-                    <div class="mt-1 font-semibold text-gray-100" x-text="summary.as_of_date || 'N/A'"></div>
-                </div>
-                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
-                    <div class="text-xs text-gray-500">市場燈號</div>
-                    <div class="mt-1 font-semibold text-gray-100" x-text="summary.data?.market_light?.state || summary.status || 'loading'"></div>
-                </div>
-                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
-                    <div class="text-xs text-gray-500">系統狀態</div>
-                    <div class="mt-1 font-semibold text-gray-100" x-text="systemStatus.status || 'pending'"></div>
-                </div>
-                <div class="rounded-lg border border-gray-700 bg-gray-900/50 px-3 py-2">
-                    <div class="text-xs text-gray-500">目前策略</div>
-                    <div class="mt-1 font-semibold text-gray-100">{{ current_strategy }}</div>
-                </div>
-            </div>
-        </div>
+<div x-data="dashboardSummary()" x-init="init()" class="space-y-5">
+    <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="metric-card"><p class="metric-label">Market</p><div class="mt-2 text-2xl font-bold text-emerald-300" x-text="marketValue()">UNKNOWN</div><p class="mt-2 text-xs text-slate-400" x-text="summary.as_of_date || '資料日期 UNKNOWN'"></p></article>
+        <article class="metric-card"><p class="metric-label">今日推薦</p><div class="mt-2 text-2xl font-bold text-white" x-text="recommendationCount()">—</div><p class="mt-2 text-xs text-slate-400" x-text="recommendationDate()"></p></article>
+        <article class="metric-card"><p class="metric-label">Active Strategies</p><div class="mt-2 text-2xl font-bold text-blue-300" x-text="strategyCount()">—</div><p class="mt-2 text-xs text-slate-400">由現有 Strategy contract 提供</p></article>
+        <article class="metric-card"><p class="metric-label">System</p><div class="mt-2 text-2xl font-bold" :class="systemClass()" x-text="systemLabel()">UNKNOWN</div><p class="mt-2 text-xs text-slate-400">Broker Order Submission: DISABLED</p></article>
     </section>
-
-    <section class="chart-container">
-        <div class="flex flex-wrap gap-2 border-b border-gray-700 pb-4">
-            <template x-for="tab in tabs" :key="tab.key">
-                <button type="button"
-                        @click="activeTab = tab.key; ensureTabData(tab.key)"
-                        class="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
-                        :class="activeTab === tab.key ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-gray-700 bg-gray-900 text-gray-300 hover:border-blue-500/70'"
-                        x-text="tab.label"></button>
-            </template>
-        </div>
-
-        <div class="mt-5">
-            <template x-for="tab in tabs" :key="tab.key + '-pane'">
-                <div>
-                    <section x-show="activeTab === 'strategy'" style="display: none;">
-                        <div x-show="tab.key === 'strategy'">
-                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div>
-                                    <h2 class="text-xl font-bold text-white">策略選股</h2>
-                                    <p class="mt-2 text-sm text-gray-400">維持既有策略選擇 contract，不在 render 時讀取回測資料。</p>
-                                </div>
-                                <form method="POST" action="/update_strategy" class="w-full max-w-2xl space-y-3">
-                                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                        {% for strategy in strategy_options %}
-                                        <label class="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-900/60 px-4 py-3">
-                                            <input type="checkbox"
-                                                   name="strategies"
-                                                   value="{{ strategy }}"
-                                                   class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500"
-                                                   {% if strategy in active_strategies %}checked{% endif %}>
-                                            <span class="text-sm font-medium text-gray-100">{{ strategy }}</span>
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
-                                        更新策略
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section x-show="activeTab === 'stockHealth'" style="display: none;">
-                        <div x-show="tab.key === 'stockHealth'">
-                            <div class="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-                                <div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
-                                    <h2 class="text-xl font-bold text-white">個股健檢</h2>
-                                    <p class="mt-2 text-sm text-gray-400">輸入股票代號後才呼叫個股分析 API。</p>
-                                    <div class="mt-4 flex gap-2">
-                                        <input type="text"
-                                               x-model.trim="stockAnalysisQuery"
-                                               @keyup.enter="analyzeStock()"
-                                               placeholder="2330"
-                                               class="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none">
-                                        <button type="button"
-                                                @click="analyzeStock()"
-                                                :disabled="stockAnalysisLoading"
-                                                class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
-                                            查詢
-                                        </button>
-                                    </div>
-                                    <div x-show="stockAnalysisError" class="mt-3 rounded-lg border border-red-700 bg-red-950/40 px-3 py-2 text-sm text-red-200" x-text="stockAnalysisError"></div>
-                                </div>
-                                <div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4">
-                                    <div class="flex items-center justify-between gap-3">
-                                        <h3 class="text-lg font-bold text-white">分析結果</h3>
-                                        <span class="rounded-full border border-gray-700 px-3 py-1 text-xs text-gray-300" x-text="stockAnalysis.status || 'idle'"></span>
-                                    </div>
-                                    <div x-show="stockAnalysisLoading" class="mt-6 text-sm text-gray-400">載入中...</div>
-                                    <template x-if="!stockAnalysisLoading && stockAnalysis.stock_id">
-                                        <div class="mt-4 grid gap-3 md:grid-cols-3">
-                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
-                                                <div class="text-xs text-gray-500">股票</div>
-                                                <div class="mt-1 font-semibold text-white" x-text="stockAnalysis.stock_id"></div>
-                                            </div>
-                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
-                                                <div class="text-xs text-gray-500">日期</div>
-                                                <div class="mt-1 font-semibold text-white" x-text="stockAnalysis.as_of_date || 'N/A'"></div>
-                                            </div>
-                                            <div class="rounded-lg border border-gray-800 bg-black/20 px-3 py-3">
-                                                <div class="text-xs text-gray-500">收盤</div>
-                                                <div class="mt-1 font-semibold text-white" x-text="formatNumber(stockAnalysis.quote?.close_price)"></div>
-                                            </div>
-                                        </div>
-                                    </template>
-                                    <pre class="mt-4 max-h-72 overflow-auto rounded-lg border border-gray-800 bg-black/30 p-3 text-xs text-gray-300" x-text="formatPayload(stockAnalysis)"></pre>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-            </template>
-
-            <section x-show="activeTab === 'recommendations'" style="display: none;">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <h2 class="text-xl font-bold text-white">每日推薦</h2>
-                        <p class="mt-2 text-sm text-gray-400">切換到此 tab 後才呼叫 /api/market/recommendations。</p>
-                    </div>
-                    <button type="button" @click="refreshActiveTab()" class="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:border-blue-500">
-                        重新整理
-                    </button>
-                </div>
-                <div class="mt-4" x-html="renderTabPayload('recommendations')"></div>
-            </section>
-
-            <section x-show="activeTab === 'snapshot'" style="display: none;">
-                <h2 class="text-xl font-bold text-white">市場快照</h2>
-                <div class="mt-4" x-html="renderTabPayload('snapshot')"></div>
-            </section>
-
-            <section x-show="activeTab === 'institutional'" style="display: none;">
-                <h2 class="text-xl font-bold text-white">法人籌碼</h2>
-                <div class="mt-4" x-html="renderTabPayload('institutional')"></div>
-            </section>
-
-            <section x-show="activeTab === 'technical'" style="display: none;">
-                <h2 class="text-xl font-bold text-white">技術強度</h2>
-                <div class="mt-4" x-html="renderTabPayload('technical')"></div>
-            </section>
-
-            <section x-show="activeTab === 'margin'" style="display: none;">
-                <h2 class="text-xl font-bold text-white">融資融券</h2>
-                <div class="mt-4" x-html="renderTabPayload('margin')"></div>
-            </section>
-
-            <section x-show="activeTab === 'systemStatus'" style="display: none;">
-                <h2 class="text-xl font-bold text-white">系統狀態</h2>
-                <div class="mt-4" x-html="renderTabPayload('systemStatus')"></div>
-            </section>
-        </div>
-    </section>
+    <section class="quant-card p-5"><div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs uppercase tracking-wider text-slate-400">Quick access</p><h2 class="mt-1 text-lg font-semibold text-white">快速個股搜尋</h2></div><a href="{{ url_for('stock_analysis') }}" class="text-xs text-blue-300 hover:text-blue-200">開啟個股分析 →</a></div><form class="mt-4 flex flex-col gap-2 sm:flex-row" @submit.prevent="searchStock()"><label for="dashboard-stock-search" class="sr-only">輸入股票代號或名稱</label><input id="dashboard-stock-search" x-model.trim="stockSearch" type="search" autocomplete="off" placeholder="輸入股票代號或名稱，例如：2330 台積電" class="min-w-0 flex-1 rounded-md border border-[#28516d] bg-[#07131f] px-4 py-3 text-sm text-white outline-none focus:border-blue-400"><button type="submit" class="rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-500">搜尋</button></form><div class="mt-4 flex flex-wrap items-center gap-2 text-xs"><span class="text-slate-500">最近搜尋：</span><template x-if="recentSearches.length === 0"><span class="text-slate-600">尚無紀錄</span></template><template x-for="item in recentSearches" :key="item"><button type="button" @click="goToStock(item)" class="rounded border border-[#28516d] px-3 py-1.5 text-slate-300 hover:border-blue-400 hover:text-blue-200" x-text="item"></button></template></div></section>
+    <div class="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,.8fr)]">
+        <section class="quant-card overflow-hidden"><div class="flex items-center justify-between border-b border-[#1c3a50] px-5 py-4"><div><p class="text-xs uppercase tracking-wider text-slate-400">Daily signal</p><h2 class="mt-1 text-lg font-semibold text-white">今日推薦</h2></div><a href="{{ url_for('strategy_center') }}" class="text-xs text-blue-300 hover:text-blue-200">查看策略 →</a></div><div x-show="recommendationLoading" class="px-5 py-6 text-sm text-slate-400">載入推薦資料…</div><div x-show="recommendationError" class="px-5 py-6 text-sm text-amber-300" x-text="recommendationError"></div><div class="overflow-x-auto" x-show="!recommendationLoading && !recommendationError"><table class="w-full min-w-[640px] text-sm"><thead class="bg-[#081a29] text-left text-xs text-slate-400"><tr><th class="px-5 py-3">股票</th><th class="px-5 py-3">推薦原因</th><th class="px-5 py-3">Strategy</th><th class="px-5 py-3">方向</th></tr></thead><tbody><template x-for="row in recommendations.slice(0, 6)" :key="row.stock_id + '-' + (row.strategy_key || row.strategy || '')"><tr class="table-row"><td class="px-5 py-3"><a class="text-blue-200 hover:text-blue-100" :href="stockUrl(row.stock_id)" x-text="row.stock_name ? row.stock_id + ' ' + row.stock_name : row.stock_id"></a></td><td class="px-5 py-3 text-slate-300" x-text="row.reason || row.strategy_display || '—'"></td><td class="px-5 py-3 text-slate-300" x-text="row.strategy_display || row.strategy_key || row.strategy || '—'"></td><td class="px-5 py-3 font-bold" :class="directionClass(row.direction)" x-text="row.direction || '—'"></td></tr></template><tr x-show="recommendations.length === 0"><td colspan="4" class="px-5 py-8 text-center text-sm text-slate-500">目前沒有可用推薦資料</td></tr></tbody></table></div></section>
+        <section class="quant-card overflow-hidden"><div class="flex items-center justify-between border-b border-[#1c3a50] px-5 py-4"><div><p class="text-xs uppercase tracking-wider text-slate-400">Operational summary</p><h2 class="mt-1 text-lg font-semibold text-white">系統狀態</h2></div><a href="{{ url_for('system_status_page') }}" class="text-xs text-blue-300 hover:text-blue-200">查看全部 →</a></div><div class="divide-y divide-[#1c3a50]"><template x-for="step in pipelineSteps()" :key="step.alias"><div class="flex items-center justify-between gap-3 px-5 py-3 text-sm"><span class="text-slate-300" x-text="step.alias"></span><span class="status-badge" :class="statusClass(step.status)" x-text="step.status || 'UNKNOWN'"></span></div></template><div class="flex items-center justify-between gap-3 px-5 py-3 text-sm"><span class="text-slate-300">Broker Order Submission</span><span class="status-badge status-disabled">DISABLED</span></div></div></section>
+    </div>
+    <section class="quant-card p-5"><div class="flex items-center justify-between"><div><p class="text-xs uppercase tracking-wider text-slate-400">Market snapshot</p><h2 class="mt-1 text-lg font-semibold text-white">市場摘要</h2></div><span class="text-xs text-slate-500" x-text="summary.as_of_date || 'UNKNOWN'"></span></div><div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div class="metric-card"><p class="metric-label">TWSE Trend</p><p class="mt-2 text-sm text-slate-200" x-text="marketValue()"></p></div><div class="metric-card"><p class="metric-label">Breadth</p><p class="mt-2 text-sm text-slate-200" x-text="breadthValue()"></p></div><div class="metric-card"><p class="metric-label">Institutional</p><p class="mt-2 text-sm text-slate-200" x-text="institutionalValue()"></p></div><div class="metric-card"><p class="metric-label">Technical / Margin</p><p class="mt-2 text-sm text-slate-200" x-text="technicalValue()"></p></div></div></section>
 </div>
-
 <script>
 document.addEventListener('alpine:init', () => {
-    Alpine.data('stockSnapshotDashboard', () => ({
-        activeTab: 'strategy',
-        tabs: [
-            { key: 'strategy', label: '策略選股' },
-            { key: 'stockHealth', label: '個股健檢' },
-            { key: 'recommendations', label: '每日推薦', endpoint: '/api/market/recommendations' },
-            { key: 'snapshot', label: '市場快照', endpoint: '/api/market/snapshot' },
-            { key: 'institutional', label: '法人籌碼', endpoint: '/api/market/institutional' },
-            { key: 'technical', label: '技術強度', endpoint: '/api/market/technical' },
-            { key: 'margin', label: '融資融券', endpoint: '/api/market/margin' },
-            { key: 'systemStatus', label: '系統狀態', endpoint: '/api/market/system-status' }
-        ],
-        summary: { status: 'loading', data: {} },
-        systemStatus: { status: 'pending', data: {} },
-        tabState: {},
-        stockAnalysisQuery: '2330',
-        stockAnalysisLoading: false,
-        stockAnalysisError: '',
-        stockAnalysis: {},
-
-        async init() {
-            await Promise.all([
-                this.loadSummary(),
-                this.ensureTabData('strategy'),
-                this.loadSystemStatus()
-            ]);
-        },
-
-        async loadSummary() {
-            this.summary = await this.fetchJson('/api/market/summary');
-        },
-
-        async loadSystemStatus() {
-            this.systemStatus = await this.fetchJson('/api/market/system-status');
-            this.tabState.systemStatus = { loading: false, loaded: true, payload: this.systemStatus };
-        },
-
-        async ensureTabData(tabKey) {
-            const tab = this.tabs.find((item) => item.key === tabKey);
-            if (!tab || !tab.endpoint) {
-                return;
-            }
-            const state = this.tabState[tabKey];
-            if (state && (state.loaded || state.loading)) {
-                return;
-            }
-            this.tabState[tabKey] = { loading: true, loaded: false, payload: null };
-            const payload = await this.fetchJson(tab.endpoint);
-            this.tabState[tabKey] = { loading: false, loaded: true, payload };
-            if (tabKey === 'systemStatus') {
-                this.systemStatus = payload;
-            }
-        },
-
-        async refreshActiveTab() {
-            const tab = this.tabs.find((item) => item.key === this.activeTab);
-            if (!tab || !tab.endpoint) {
-                await this.loadSummary();
-                return;
-            }
-            this.tabState[this.activeTab] = { loading: true, loaded: false, payload: null };
-            const payload = await this.fetchJson(tab.endpoint);
-            this.tabState[this.activeTab] = { loading: false, loaded: true, payload };
-            await this.loadSummary();
-        },
-
-        async analyzeStock() {
-            const stockId = String(this.stockAnalysisQuery || '').trim();
-            if (!stockId) {
-                this.stockAnalysisError = '請輸入股票代號';
-                return;
-            }
-            this.stockAnalysisLoading = true;
-            this.stockAnalysisError = '';
-            try {
-                const payload = await this.fetchJson('/api/stock-analysis?id=' + encodeURIComponent(stockId));
-                this.stockAnalysis = payload || {};
-                if (payload && payload.status === 'error') {
-                    this.stockAnalysisError = payload.error || '個股分析失敗';
-                }
-            } catch (error) {
-                this.stockAnalysisError = error.message || String(error);
-                this.stockAnalysis = {};
-            } finally {
-                this.stockAnalysisLoading = false;
-            }
-        },
-
-        async fetchJson(url) {
-            try {
-                const response = await fetch(url);
-                const payload = await response.json();
-                if (!response.ok) {
-                    return { status: 'error', error: payload.error || response.statusText, data: {} };
-                }
-                return payload;
-            } catch (error) {
-                return { status: 'error', error: error.message || String(error), data: {} };
-            }
-        },
-
-        renderTabPayload(tabKey) {
-            const state = this.tabState[tabKey] || {};
-            if (state.loading) {
-                return '<div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4 text-sm text-gray-400">載入中...</div>';
-            }
-            if (!state.loaded) {
-                return '<div class="rounded-lg border border-gray-700 bg-gray-900/50 p-4 text-sm text-gray-400">切換到此 tab 後載入資料。</div>';
-            }
-            return '<pre class="max-h-96 overflow-auto rounded-lg border border-gray-800 bg-black/30 p-4 text-xs text-gray-300">' + this.escapeHtml(JSON.stringify(state.payload, null, 2)) + '</pre>';
-        },
-
-        formatPayload(payload) {
-            if (!payload || !Object.keys(payload).length) {
-                return '尚無資料';
-            }
-            return JSON.stringify(payload, null, 2);
-        },
-
-        formatNumber(value) {
-            if (value === undefined || value === null || Number.isNaN(Number(value))) {
-                return 'N/A';
-            }
-            return Number(value).toLocaleString('zh-TW');
-        },
-
-        escapeHtml(value) {
-            return String(value)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
+    Alpine.data('dashboardSummary', () => ({
+        summary: {}, recommendations: [], strategies: {}, system: {}, snapshot: {}, institutional: {}, technical: {}, margin: {}, recommendationMeta: {}, stockSearch: '', recentSearches: [], recommendationLoading: true, recommendationError: '',
+        async init() { this.loadRecentSearches(); await Promise.all([this.load('/api/market/summary', 'summary'), this.loadRecommendations(), this.load('/api/strategies', 'strategies'), this.load('/api/market/system-status', 'system'), this.load('/api/market/snapshot', 'snapshot'), this.load('/api/market/institutional', 'institutional'), this.load('/api/market/technical', 'technical'), this.load('/api/market/margin', 'margin')]); },
+        async load(url, key) { try { const response = await fetch(url); this[key] = await response.json() || {}; } catch (error) { this[key] = { status: 'unknown', error: error.message }; } },
+        async loadRecommendations() { this.recommendationLoading = true; try { const response = await fetch('/api/market/recommendations'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || response.statusText); this.recommendations = payload.data?.recommendations || []; this.recommendationMeta = payload; } catch (error) { this.recommendationError = error.message || '推薦資料暫時不可用'; } finally { this.recommendationLoading = false; } },
+        loadRecentSearches() { try { const values = JSON.parse(localStorage.getItem('stock-linbot-recent-searches') || '[]'); this.recentSearches = Array.isArray(values) ? values.slice(0, 5) : []; } catch (_) { this.recentSearches = []; } },
+        searchStock() { const match = String(this.stockSearch || '').match(/\b\d{4,6}\b/); const value = match ? match[0] : String(this.stockSearch || '').trim(); if (value) this.goToStock(value); },
+        goToStock(value) { const item = String(value || '').trim(); const match = item.match(/\b\d{4,6}\b/); const id = match ? match[0] : item; if (!id) return; this.recentSearches = [item, ...this.recentSearches.filter(entry => entry !== item)].slice(0, 5); try { localStorage.setItem('stock-linbot-recent-searches', JSON.stringify(this.recentSearches)); } catch (_) {} window.location.href = this.stockUrl(id); },
+        stockUrl(id) { return '/stock-analysis?id=' + encodeURIComponent(id); },
+        marketValue() { return this.summary.data?.market_light?.label || this.summary.data?.market_light?.state || 'UNKNOWN'; },
+        breadthValue() { const data = this.snapshot.data?.breadth; return data ? `${data.up_ratio ?? '—'}% up / ${data.down_ratio ?? '—'}% down` : 'UNKNOWN'; },
+        institutionalValue() { const state = this.summary.data?.institutional_sync; return state?.label || state?.state || 'UNKNOWN'; },
+        technicalValue() { const technical = this.technical.data || {}; return technical.weekly_gain_top10?.length || technical.volume_price_breakouts?.length ? 'AVAILABLE' : 'UNKNOWN'; },
+        recommendationCount() { return this.recommendations.length ? `${this.recommendations.length} Stocks` : '0 Stocks'; },
+        recommendationDate() { return this.recommendationMeta?.recommendation_date || this.recommendationMeta?.as_of_date || '日期 UNKNOWN'; },
+        strategyCount() { return this.strategies.active?.length ?? this.strategies.count ?? 'UNKNOWN'; },
+        systemLabel() { return this.system.status === 'ok' ? 'NORMAL' : this.system.status === 'degraded' ? 'DEGRADED' : 'UNKNOWN'; },
+        systemClass() { return this.system.status === 'ok' ? 'text-emerald-300' : this.system.status === 'degraded' ? 'text-amber-300' : 'text-slate-300'; },
+        pipelineSteps() { return this.system.data?.steps || []; },
+        statusClass(status) { const value = String(status || '').toLowerCase(); return value === 'success' ? 'status-ok' : value === 'failed' ? 'status-error' : value === 'running' ? 'status-degraded' : 'status-unknown'; },
+        directionClass(direction) { return String(direction || '').includes('▼') || String(direction || '').toLowerCase().includes('sell') ? 'text-red-300' : 'text-emerald-300'; }
     }));
 });
 </script>

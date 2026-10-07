@@ -21,13 +21,13 @@
 
 ## 3. Phase 3 — Summary Dashboard (2026-10-07)
 
-- [ ] 3.1 Replace the six detailed Dashboard tabs with compact Market, Today's Recommendations, Active Strategies, and System summary cards backed only by authoritative existing fields.
-- [ ] 3.2 Add quick stock search that normalizes a verified stock identity, navigates to `/stock-analysis?id=<stock_id>`, and stores recent searches only in browser-local state.
-- [ ] 3.3 Render a compact server-ranked recommendation table with canonical date/fallback metadata and links to Stock Analysis, omitting unavailable enrichment without exposing raw JSON.
-- [ ] 3.4 Render compact market and system dimensions with explicit Normal/Degraded/Disabled/Unknown/Unavailable states; do not fabricate a TWSE index value or unverified component health.
-- [ ] 3.5 Remove the full K-line workspace, complete Strategy table, full Backtest UI, detailed market tabs, and primary raw JSON from Dashboard; keep any required diagnostics collapsed and development-labeled.
-- [ ] 3.6 Preserve existing market/recommendation/system API response compatibility even when detailed endpoints are no longer rendered by Dashboard.
-- [ ] 3.7 Update Dashboard tests to assert summary content, quick-search routing, degraded/empty recommendation resilience, absence of a large chart/createChart call, and absence of primary raw JSON.
+- [x] 3.1 Replace the six detailed Dashboard tabs with compact Market, Today's Recommendations, Active Strategies, and System summary cards backed only by authoritative existing fields.
+- [x] 3.2 Add quick stock search that normalizes a verified stock identity, navigates to `/stock-analysis?id=<stock_id>`, and stores recent searches only in browser-local state.
+- [x] 3.3 Render a compact server-ranked recommendation table with canonical date/fallback metadata and links to Stock Analysis, omitting unavailable enrichment without exposing raw JSON.
+- [x] 3.4 Render compact market and system dimensions with explicit Normal/Degraded/Disabled/Unknown/Unavailable states; do not fabricate a TWSE index value or unverified component health.
+- [x] 3.5 Remove the full K-line workspace, complete Strategy table, full Backtest UI, detailed market tabs, and primary raw JSON from Dashboard; keep any required diagnostics collapsed and development-labeled.
+- [x] 3.6 Preserve existing market/recommendation/system API response compatibility even when detailed endpoints are no longer rendered by Dashboard.
+- [x] 3.7 Update Dashboard tests to assert summary content, quick-search routing, degraded/empty recommendation resilience, absence of a large chart/createChart call, and absence of primary raw JSON.
 - [ ] 3.8 Run Phase 3 focused tests and `git diff --check`, then create an independently revertible Phase 3 commit.
 
 ## 4. Phase 4 — Dedicated Stock Analysis and K-Line (2026-10-07)
