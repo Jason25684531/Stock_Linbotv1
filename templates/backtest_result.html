@@ -1,189 +1,46 @@
 {% extends "base.html" %}
 
-{% block title %}回測結果 - Stock Linbot{% endblock %}
+{% block title %}Backtest Result - Stock Linbot{% endblock %}
 {% block nav_backtest %}active{% endblock %}
 
+{% macro metric(value, suffix='') -%}
+    {%- if value is undefined or value is none -%}<span class="text-gray-500">Unavailable</span>{%- else -%}{{ value }}{{ suffix }}{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
-<div>
-    <!-- 頁面標題 -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-        <div>
-            <h2 class="text-2xl font-bold flex items-center">
-                <span class="text-3xl mr-3">📊</span>
-                回測結果報告
-            </h2>
-            <p class="text-sm text-gray-400 mt-1">
-                {{ start_date }} ~ {{ end_date }} | 
-                {% for strategy in selected_strategies %}
-                <span class="px-2 py-0.5 rounded text-xs
-                    {% if strategy == 'v31_hybrid' %}badge-v31
-                    {% elif strategy == 'v33_low_vol' %}badge-v33
-                    {% elif strategy == 'v34_turbo' %}badge-v34
-                    {% elif strategy == 'v35_innovation' %}badge-v35
-                    {% elif strategy == 'v36_chip_momentum' %}badge-v36
-                    {% elif strategy == 'v37_mean_reversion' %}badge-v37
-                    {% elif strategy == 'v38_value_dividend' %}badge-v38
-                    {% else %}bg-gray-700 text-gray-300{% endif %}">{{ strategy }}</span>
-                {% endfor %}
-            </p>
-        </div>
-        <div class="flex gap-2">
-            <a href="{{ url_for('backtest') }}" class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/40 font-medium py-2 px-4 rounded-lg transition-colors text-sm">
-                🔄 重新回測
-            </a>
-            <a href="{{ url_for('dashboard') }}" class="bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 px-4 rounded-lg transition-colors text-sm">
-                ← Dashboard
-            </a>
-        </div>
+<div x-data="{ tab: 'overview' }" class="space-y-6" data-testid="backtest-result">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div><p class="text-xs uppercase tracking-[0.2em] text-blue-400">Backtest Result</p><h1 class="mt-1 text-2xl font-semibold text-white">回測結果</h1><p class="mt-1 text-sm text-gray-400">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="font-mono text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
+        <a href="{{ url_for('backtest') }}" class="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-gray-500">重新設定</a>
     </div>
-    
-    <!-- 績效指標卡片 -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="metric-card border-l-4 {% if metrics.total_return > 0 %}border-green-500{% else %}border-red-500{% endif %}">
-            <div class="metric-label">總報酬率</div>
-            <div class="text-3xl font-bold mt-2 {% if metrics.total_return > 0 %}positive{% else %}negative{% endif %}">
-                {{ metrics.total_return }}%
-            </div>
-            <div class="text-xs text-gray-400 mt-1">
-                ${{ "{:,}".format(metrics.initial_capital|int) }} → ${{ "{:,}".format(metrics.final_value|int) }}
-            </div>
+    <nav class="flex flex-wrap gap-2 border-b border-gray-800 pb-3" aria-label="Backtest result sections">
+        {% for key, label in [('overview', 'Overview'), ('equity', 'Equity'), ('drawdown', 'Drawdown'), ('monthly', 'Monthly') ] %}<button type="button" class="rounded-md px-3 py-2 text-xs" :class="tab === '{{ key }}' ? 'bg-blue-500/15 text-blue-300' : 'text-gray-400 hover:bg-gray-800'" @click="tab='{{ key }}'">{{ label }}</button>{% endfor %}
+        {% if trades %}<button type="button" class="rounded-md px-3 py-2 text-xs" :class="tab === 'trades' ? 'bg-blue-500/15 text-blue-300' : 'text-gray-400 hover:bg-gray-800'" @click="tab='trades'">Trades</button>{% endif %}
+    </nav>
+    <section x-show="tab === 'overview'" x-cloak data-testid="backtest-overview">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="metric-card"><div class="metric-label">Total Return</div><div class="mt-2 text-2xl font-semibold text-white">{{ metric(metrics.total_return, '%') }}</div></div>
+            <div class="metric-card"><div class="metric-label">MDD</div><div class="mt-2 text-2xl font-semibold text-white">{{ metric(metrics.max_drawdown, '%') }}</div></div>
+            <div class="metric-card"><div class="metric-label">Sharpe</div><div class="mt-2 text-2xl font-semibold text-white">{{ metric(metrics.sharpe_ratio) }}</div></div>
+            <div class="metric-card"><div class="metric-label">Win Rate</div><div class="mt-2 text-2xl font-semibold text-white">{{ metric(metrics.win_rate, '%') }}</div></div>
         </div>
-        
-        <div class="metric-card border-l-4 border-red-500">
-            <div class="metric-label">最大回撤 MDD</div>
-            <div class="text-3xl font-bold mt-2 negative">-{{ metrics.max_drawdown }}%</div>
-            <div class="text-xs text-gray-400 mt-1">風險控制指標</div>
+        <div class="mt-4 quant-card overflow-x-auto">
+            <table class="min-w-[640px] w-full text-sm"><thead class="border-b border-gray-800 text-xs uppercase tracking-wider text-gray-500"><tr><th class="px-4 py-3 text-left">Strategy</th><th class="px-4 py-3 text-right">ROI</th><th class="px-4 py-3 text-right">Win Rate</th><th class="px-4 py-3 text-right">Trades</th><th class="px-4 py-3 text-right">Wins</th></tr></thead><tbody class="divide-y divide-gray-800">
+                {% for strategy_name, perf in strategy_performance.items() %}<tr><td class="px-4 py-3 font-mono text-blue-300">{{ strategy_name }}</td><td class="px-4 py-3 text-right">{{ metric(perf.roi, '%') }}</td><td class="px-4 py-3 text-right">{{ metric(perf.win_rate, '%') }}</td><td class="px-4 py-3 text-right">{{ metric(perf.trade_count) }}</td><td class="px-4 py-3 text-right">{{ metric(perf.win_count) }}</td></tr>{% else %}<tr><td colspan="5" class="px-4 py-5 text-center text-gray-500">No strategy performance evidence.</td></tr>{% endfor %}
+            </tbody></table>
         </div>
-        
-        <div class="metric-card border-l-4 border-cyan-500">
-            <div class="metric-label">夏普比率</div>
-            <div class="text-3xl font-bold mt-2 text-cyan-400">{{ metrics.sharpe_ratio }}</div>
-            <div class="text-xs text-gray-400 mt-1">風險調整後報酬</div>
-        </div>
-        
-        <div class="metric-card border-l-4 {% if metrics.win_rate >= 50 %}border-green-500{% else %}border-amber-500{% endif %}">
-            <div class="metric-label">勝率</div>
-            <div class="text-3xl font-bold mt-2 {% if metrics.win_rate >= 50 %}positive{% else %}text-amber-400{% endif %}">
-                {{ metrics.win_rate }}%
-            </div>
-            <div class="text-xs text-gray-400 mt-1">共 {{ metrics.trade_count }} 筆交易</div>
-        </div>
-    </div>
-    
-    <!-- 各策略績效 -->
-    <div class="chart-container mb-6">
-        <h3 class="text-lg font-bold mb-4">📋 各策略績效分析</h3>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="table-header">
-                        <th class="px-4 py-3 text-left">策略名稱</th>
-                        <th class="px-4 py-3 text-right">報酬率</th>
-                        <th class="px-4 py-3 text-right">勝率</th>
-                        <th class="px-4 py-3 text-right">交易次數</th>
-                        <th class="px-4 py-3 text-right">獲利次數</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for strategy_name, perf in strategy_performance.items() %}
-                    <tr class="table-row">
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-1 rounded text-xs font-medium
-                                {% if 'v31' in strategy_name %}badge-v31
-                                {% elif 'v33' in strategy_name %}badge-v33
-                                {% elif 'v34' in strategy_name %}badge-v34
-                                {% elif 'v35' in strategy_name %}badge-v35
-                                {% elif 'v36' in strategy_name %}badge-v36
-                                {% elif 'v37' in strategy_name %}badge-v37
-                                {% elif 'v38' in strategy_name %}badge-v38
-                                {% else %}bg-gray-700 text-gray-300{% endif %}">{{ strategy_name }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-right font-bold {% if perf.roi > 0 %}positive{% else %}negative{% endif %}">
-                            {{ perf.roi|round(2) }}%
-                        </td>
-                        <td class="px-4 py-3 text-right text-gray-300">{{ perf.win_rate|round(1) }}%</td>
-                        <td class="px-4 py-3 text-right text-gray-300">{{ perf.trade_count }}</td>
-                        <td class="px-4 py-3 text-right text-gray-300">{{ perf.win_count }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    
-    <!-- 權益曲線圖 -->
-    <div class="chart-container mb-6">
-        <h3 class="text-lg font-bold mb-4">📈 權益曲線</h3>
-        <div id="equity-chart"></div>
-    </div>
-    
-    <!-- 回撤圖 -->
-    <div class="chart-container mb-6">
-        <h3 class="text-lg font-bold mb-4">📉 回撤分析</h3>
-        <div id="drawdown-chart"></div>
-    </div>
-    
-    <!-- 月度報酬熱力圖 -->
-    <div class="chart-container mb-6">
-        <h3 class="text-lg font-bold mb-4">📅 月度報酬熱力圖</h3>
-        <div id="monthly-chart"></div>
-    </div>
-    
-    <!-- 績效總結 -->
-    <div class="chart-container border-t-2 border-green-500">
-        <h3 class="text-lg font-bold mb-4">📝 績效總結</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <h4 class="text-sm font-bold text-green-400 mb-2">✅ 優點</h4>
-                <ul class="text-sm text-gray-400 space-y-1">
-                    {% if metrics.total_return > 10 %}
-                    <li>總報酬率達 {{ metrics.total_return }}%，表現優異</li>
-                    {% endif %}
-                    {% if metrics.win_rate >= 50 %}
-                    <li>勝率達 {{ metrics.win_rate }}%，策略穩定</li>
-                    {% endif %}
-                    {% if metrics.sharpe_ratio > 1 %}
-                    <li>夏普比率 {{ metrics.sharpe_ratio }}，風險調整後表現良好</li>
-                    {% endif %}
-                </ul>
-            </div>
-            <div>
-                <h4 class="text-sm font-bold text-amber-400 mb-2">⚠️ 風險提示</h4>
-                <ul class="text-sm text-gray-400 space-y-1">
-                    {% if metrics.max_drawdown > 15 %}
-                    <li class="text-red-400">最大回撤達 {{ metrics.max_drawdown }}%，需加強風控</li>
-                    {% endif %}
-                    {% if metrics.win_rate < 45 %}
-                    <li class="text-amber-400">勝率偏低（{{ metrics.win_rate }}%），建議優化策略</li>
-                    {% endif %}
-                    <li>回測結果僅供參考，實際交易請謹慎評估</li>
-                </ul>
-            </div>
-        </div>
-    </div>
+    </section>
+    <section x-show="tab === 'equity'" x-cloak class="quant-card p-4" data-testid="equity-section"><div id="equity-chart" class="min-h-[360px]"></div></section>
+    <section x-show="tab === 'drawdown'" x-cloak class="quant-card p-4" data-testid="drawdown-section"><div id="drawdown-chart" class="min-h-[360px]"></div></section>
+    <section x-show="tab === 'monthly'" x-cloak class="quant-card p-4" data-testid="monthly-section"><div id="monthly-chart" class="min-h-[360px]"></div></section>
+    {% if trades %}<section x-show="tab === 'trades'" x-cloak class="quant-card overflow-x-auto p-4" data-testid="trades-section"><h2 class="mb-3 text-base font-semibold text-white">Run Trades</h2><table class="min-w-[760px] w-full text-sm"><thead class="border-b border-gray-800 text-xs uppercase tracking-wider text-gray-500"><tr><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Stock</th><th class="px-3 py-2 text-left">Side</th><th class="px-3 py-2 text-right">Price</th><th class="px-3 py-2 text-right">Quantity</th></tr></thead><tbody class="divide-y divide-gray-800">{% for trade in trades %}<tr><td class="px-3 py-2">{{ trade.get('date', trade.get('trade_date', 'Unavailable')) }}</td><td class="px-3 py-2">{{ trade.get('stock_id', 'Unavailable') }}</td><td class="px-3 py-2">{{ trade.get('action', trade.get('side', 'Unavailable')) }}</td><td class="px-3 py-2 text-right">{{ metric(trade.get('price', trade.get('entry_price'))) }}</td><td class="px-3 py-2 text-right">{{ metric(trade.get('shares', trade.get('quantity'))) }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
 </div>
 
 <script>
-// Dark theme layout for Plotly
-const darkLayout = {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(26,33,50,0.5)',
-    font: { color: '#9ba3b4', family: 'JetBrains Mono' },
-    xaxis: { gridcolor: 'rgba(45,55,72,0.4)', linecolor: '#2d3748' },
-    yaxis: { gridcolor: 'rgba(45,55,72,0.4)', linecolor: '#2d3748' },
-    margin: { t: 30, r: 20, b: 40, l: 60 }
-};
-
-const equityData = {{ equity_chart|safe }};
-Object.assign(equityData.layout, darkLayout);
-Plotly.newPlot('equity-chart', equityData.data, equityData.layout, {responsive: true});
-
-const drawdownData = {{ drawdown_chart|safe }};
-Object.assign(drawdownData.layout, darkLayout);
-Plotly.newPlot('drawdown-chart', drawdownData.data, drawdownData.layout, {responsive: true});
-
-const monthlyData = {{ monthly_chart|safe }};
-Object.assign(monthlyData.layout, darkLayout, { xaxis: { ...darkLayout.xaxis }, yaxis: { ...darkLayout.yaxis } });
-Plotly.newPlot('monthly-chart', monthlyData.data, monthlyData.layout, {responsive: true});
+const darkLayout = {paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(26,33,50,0.5)',font:{color:'#9ba3b4',family:'JetBrains Mono'},xaxis:{gridcolor:'rgba(45,55,72,0.4)',linecolor:'#2d3748'},yaxis:{gridcolor:'rgba(45,55,72,0.4)',linecolor:'#2d3748'},margin:{t:30,r:20,b:40,l:60}};
+function renderBacktestPlot(elementId, payload) { if (!payload || !window.Plotly) return; const layout = Object.assign({}, payload.layout || {}, darkLayout); Plotly.newPlot(elementId, payload.data || [], layout, {responsive:true}); }
+renderBacktestPlot('equity-chart', {{ equity_chart|safe }});
+renderBacktestPlot('drawdown-chart', {{ drawdown_chart|safe }});
+renderBacktestPlot('monthly-chart', {{ monthly_chart|safe }});
 </script>
 {% endblock %}

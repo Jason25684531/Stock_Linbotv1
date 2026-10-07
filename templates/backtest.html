@@ -1,159 +1,46 @@
 {% extends "base.html" %}
 
-{% block title %}回測設定 - Stock Linbot{% endblock %}
+{% block title %}Backtest - Stock Linbot{% endblock %}
 {% block nav_backtest %}active{% endblock %}
 
 {% block content %}
-<div>
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h2 class="text-2xl font-bold flex items-center">
-                <span class="text-3xl mr-3">🔬</span>
-                多策略組合回測
-            </h2>
-            <p class="text-sm text-gray-400 mt-1">選擇策略組合，執行歷史回測分析</p>
-        </div>
+<div class="space-y-6" data-testid="backtest-config">
+    <div>
+        <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
+        <h1 class="mt-1 text-2xl font-semibold text-white">回測分析</h1>
+        <p class="mt-1 text-sm text-gray-400">使用已由 Backtest Engine 證明可用的 canonical strategy identity。</p>
     </div>
-
-    <!-- 說明卡片 -->
-    <div class="chart-container mb-6" style="margin-top:0; border-left: 3px solid var(--accent-blue);">
-        <h3 class="text-sm font-bold text-blue-400 mb-2">📋 策略說明</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-xs text-gray-400">
-            <div><span class="badge-v31 px-2 py-0.5 rounded text-xs">V31</span> 均線 + RSI + AI 排名</div>
-            <div><span class="badge-v33 px-2 py-0.5 rounded text-xs">V33</span> 低波動穩健策略</div>
-            <div><span class="badge-v34 px-2 py-0.5 rounded text-xs">V34</span> 高動能突破策略</div>
-            <div><span class="badge-v35 px-2 py-0.5 rounded text-xs">V35</span> 經營效益成長策略</div>
-            <div><span class="badge-v36 px-2 py-0.5 rounded text-xs">V36</span> 法人籌碼動能策略</div>
-            <div><span class="badge-v37 px-2 py-0.5 rounded text-xs">V37</span> KD + BB 均值回歸</div>
-            <div><span class="badge-v38 px-2 py-0.5 rounded text-xs">V38</span> 高殖利率價值股</div>
-        </div>
-    </div>
-
-    <!-- 回測設定表單 -->
-    <div class="chart-container" style="margin-top:0;">
-        <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6">
-            <!-- 策略選擇 -->
-            <div>
-                <label class="block text-sm font-bold text-gray-300 mb-3">🎯 選擇策略（可複選）</label>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {% for strategy in strategies %}
-                    <label class="flex items-center p-3 bg-gray-800/50 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors">
-                        <input type="checkbox" name="strategies" value="{{ strategy }}" 
-                               id="strategy_{{ strategy }}"
-                               class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                               {% if strategy == 'v31_hybrid' %}checked{% endif %}>
-                        <span class="ml-2 text-sm text-gray-300">
-                            {% if strategy == 'v31_hybrid' %}V31 混合策略
-                            {% elif strategy == 'v33_low_vol' %}V33 低波動
-                            {% elif strategy == 'v34_turbo' %}V34 雙渦輪
-                            {% elif strategy == 'v35_innovation' %}V35 經營效益
-                            {% elif strategy == 'v36_chip_momentum' %}V36 籌碼動能
-                            {% elif strategy == 'v37_mean_reversion' %}V37 均值回歸
-                            {% elif strategy == 'v38_value_dividend' %}V38 高殖利率
-                            {% else %}{{ strategy }}{% endif %}
+    <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6">
+        <section class="quant-card p-5">
+            <div class="mb-4 flex items-center justify-between">
+                <div><h2 class="text-base font-semibold text-white">選擇策略</h2><p class="mt-1 text-xs text-gray-500">Fundamental 保留在 catalog，但未有既有 Backtest capability 時不可執行。</p></div>
+                <span class="status-badge status-ok">{{ strategies|length }} available</span>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {% for item in strategy_catalog %}
+                <label class="rounded-lg border p-3 {% if item.available_for_backtest %}cursor-pointer border-gray-700 bg-gray-900/50 hover:border-blue-500{% else %}border-amber-500/30 bg-amber-500/5{% endif %}">
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" name="strategies" value="{{ item.strategy_id }}" class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500" {% if not item.available_for_backtest %}disabled{% endif %} {% if item.strategy_id in selected_strategies %}checked{% endif %}>
+                        <span class="min-w-0"><span class="block text-sm font-medium text-white">{{ item.display_name_en }}</span><span class="mt-1 block break-all font-mono text-[11px] text-blue-300">{{ item.strategy_id }}</span>
+                            {% if item.aliases %}<span class="mt-1 block text-xs text-gray-500">{{ item.aliases|join(', ') }}</span>{% endif %}
+                            <span class="mt-2 inline-flex status-badge {% if item.available_for_backtest %}status-ok{% else %}status-degraded{% endif %}">{% if item.available_for_backtest %}AVAILABLE{% else %}UNAVAILABLE{% endif %}</span>
+                            {% if not item.available_for_backtest %}<span class="mt-2 block text-xs text-amber-300">{{ item.backtest_reason }}</span>{% endif %}
                         </span>
-                    </label>
-                    {% endfor %}
-                </div>
+                    </div>
+                </label>
+                {% endfor %}
             </div>
-
-            <!-- 日期範圍 -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="start_date" class="block text-sm font-bold text-gray-300 mb-2">📅 開始日期</label>
-                    <input type="date" id="start_date" name="start_date" value="2025-06-01"
-                           class="w-full bg-gray-800 border border-gray-600 text-gray-300 rounded-lg px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                <div>
-                    <label for="end_date" class="block text-sm font-bold text-gray-300 mb-2">📅 結束日期</label>
-                    <input type="date" id="end_date" name="end_date" value="2026-02-11"
-                           class="w-full bg-gray-800 border border-gray-600 text-gray-300 rounded-lg px-4 py-2.5 focus:ring-blue-500 focus:border-blue-500">
-                </div>
+        </section>
+        <section class="quant-card p-5">
+            <h2 class="text-base font-semibold text-white">期間與執行設定</h2>
+            <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <label class="text-sm text-gray-300">開始日期<input type="date" name="start_date" value="2025-06-01" class="mt-2 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-200"></label>
+                <label class="text-sm text-gray-300">結束日期<input type="date" name="end_date" value="2026-02-11" class="mt-2 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-200"></label>
+                <label class="text-sm text-gray-300">Weights（可選）<input type="text" name="weights" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-200"></label>
+                <label class="flex items-end gap-2 pb-2 text-sm text-gray-300"><input type="checkbox" name="persist" value="1" class="h-4 w-4 rounded border-gray-600 bg-gray-900 text-blue-500">Persist result</label>
             </div>
-
-            <!-- 按鈕 -->
-            <div class="flex flex-col sm:flex-row gap-3">
-                <button type="submit" class="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-8 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] text-lg">
-                    🚀 執行回測
-                </button>
-                <a href="{{ url_for('dashboard') }}" class="text-center bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-3 px-6 rounded-lg transition-colors">
-                    ← 返回 Dashboard
-                </a>
-            </div>
-        </form>
-    </div>
-
-    <!-- 快速預設組合 -->
-    <div class="mt-6">
-        <h3 class="text-lg font-bold mb-4">⭐ 快速預設組合</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="metric-card border-t-2 border-blue-500 text-center">
-                <div class="text-2xl mb-2">🛡️</div>
-                <h4 class="font-bold text-white mb-1">穩健組合</h4>
-                <p class="text-xs text-gray-400 mb-3">V31 + V33 + V38<br>低波動 | 風險較低</p>
-                <button onclick="selectPreset(['v31_hybrid', 'v33_low_vol', 'v38_value_dividend'])" 
-                        class="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
-                    選擇此組合
-                </button>
-            </div>
-            <div class="metric-card border-t-2 border-orange-500 text-center">
-                <div class="text-2xl mb-2">⚡</div>
-                <h4 class="font-bold text-white mb-1">積極組合</h4>
-                <p class="text-xs text-gray-400 mb-3">V34 + V36<br>高動能 | 報酬潛力大</p>
-                <button onclick="selectPreset(['v34_turbo', 'v36_chip_momentum'])" 
-                        class="w-full bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
-                    選擇此組合
-                </button>
-            </div>
-            <div class="metric-card border-t-2 border-purple-500 text-center">
-                <div class="text-2xl mb-2">🔄</div>
-                <h4 class="font-bold text-white mb-1">反轉組合</h4>
-                <p class="text-xs text-gray-400 mb-3">V37 + V35<br>成長 + 均值回歸</p>
-                <button onclick="selectPreset(['v37_mean_reversion', 'v35_innovation'])" 
-                        class="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
-                    選擇此組合
-                </button>
-            </div>
-            <div class="metric-card border-t-2 border-green-500 text-center">
-                <div class="text-2xl mb-2">🎯</div>
-                <h4 class="font-bold text-white mb-1">全策略組合</h4>
-                <p class="text-xs text-gray-400 mb-3">V31~V38 全選<br>多元分散 | 風險中等</p>
-                <button onclick="selectAll()" 
-                        class="w-full bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-600/40 font-medium py-2 rounded-lg transition-colors text-sm">
-                    選擇此組合
-                </button>
-            </div>
-        </div>
-    </div>
+        </section>
+        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-gray-700 px-5 py-3 text-center text-sm text-gray-300 hover:border-gray-500">回到 Strategy Center</a></div>
+    </form>
 </div>
-
-<script>
-function selectPreset(strategies) {
-    document.querySelectorAll('input[name="strategies"]').forEach(cb => cb.checked = false);
-    strategies.forEach(s => {
-        const cb = document.getElementById('strategy_' + s);
-        if (cb) cb.checked = true;
-    });
-}
-
-function selectAll() {
-    document.querySelectorAll('input[name="strategies"]').forEach(cb => cb.checked = true);
-}
-
-document.querySelector('form').addEventListener('submit', function(e) {
-    const startDate = document.getElementById('start_date').value;
-    const endDate = document.getElementById('end_date').value;
-    
-    if (startDate && endDate && startDate > endDate) {
-        e.preventDefault();
-        alert('開始日期不能晚於結束日期');
-    }
-    
-    const checked = document.querySelectorAll('input[name="strategies"]:checked').length;
-    if (checked === 0) {
-        e.preventDefault();
-        alert('請至少選擇一個策略');
-    }
-});
-</script>
 {% endblock %}

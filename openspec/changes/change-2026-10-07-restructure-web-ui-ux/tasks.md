@@ -58,13 +58,13 @@
 
 ## 6. Phase 6 — Backtest UI Organization (2026-10-07)
 
-- [ ] 6.1 Update `templates/backtest.html` to source choices from the shared catalog's verified Backtest-capable entries while preserving the existing route, parameters, and engine invocation.
-- [ ] 6.2 Keep Fundamental disabled or unavailable with a reason unless Phase 1 proves an existing authoritative Backtest capability; do not add a presentation-only execution path.
-- [ ] 6.3 Reorganize `templates/backtest_result.html` into clear Overview, Equity, Drawdown, and Monthly sections or tabs while preserving backend metric and chart values.
-- [ ] 6.4 Add a Trades result section only if the current run supplies authoritative run-specific trades; otherwise omit it and record the limitation.
-- [ ] 6.5 Verify undefined metrics remain `value=None` with their reason and are never presented as zero or infinity.
-- [ ] 6.6 Update Backtest UI/contract tests and run existing accounting characterization to compare trade dates, symbols, directions, order, quantities, and floats at `rtol=1e-9`, `atol=1e-12`.
-- [ ] 6.7 Run Phase 6 focused tests and `git diff --check`, then create an independently revertible Phase 6 commit.
+- [x] 6.1 Update `templates/backtest.html` to source choices from the shared catalog's verified Backtest-capable entries while preserving the existing route, parameters, and engine invocation.
+- [x] 6.2 Keep Fundamental disabled or unavailable with a reason unless Phase 1 proves an existing authoritative Backtest capability; do not add a presentation-only execution path.
+- [x] 6.3 Reorganize `templates/backtest_result.html` into clear Overview, Equity, Drawdown, and Monthly sections or tabs while preserving backend metric and chart values.
+- [x] 6.4 Add a Trades result section only if the current run supplies authoritative run-specific trades; otherwise omit it and record the limitation.
+- [x] 6.5 Verify undefined metrics remain `value=None` with their reason and are never presented as zero or infinity.
+- [x] 6.6 Update Backtest UI/contract tests and run existing accounting characterization to compare trade dates, symbols, directions, order, quantities, and floats at `rtol=1e-9`, `atol=1e-12`.
+- [x] 6.7 Run Phase 6 focused tests and `git diff --check`, then create an independently revertible Phase 6 commit.
 
 ## 7. Phase 7 — Frontend and Integration Verification (2026-10-07)
 

@@ -1220,13 +1220,32 @@ def backtest():
     try:
         from core.viz_helper import generate_report_from_csv
 
-        selected_strategies = request.form.getlist('strategies')
+        catalog = _build_strategy_catalog()
+        catalog_by_id = {item['strategy_id']: item for item in catalog}
+        manager = services.StrategyManager()
+        selected_strategies = []
+        unsupported = []
+        for requested in request.form.getlist('strategies'):
+            try:
+                canonical = manager.resolve(requested, warn_legacy=False)
+            except KeyError:
+                canonical = requested.strip().lower()
+            item = catalog_by_id.get(canonical)
+            if not item or not item.get('available_for_backtest'):
+                unsupported.append(item or {'strategy_id': requested, 'backtest_reason': 'Unknown Backtest capability'})
+                continue
+            if canonical not in selected_strategies:
+                selected_strategies.append(canonical)
         start_date = request.form.get('start_date')
         end_date = request.form.get('end_date')
         weights_raw = (request.form.get('weights') or '').strip()
         weights = [float(w.strip()) for w in weights_raw.split(',') if w.strip()] if weights_raw else None
         persist_to_db = (request.form.get('persist') or '').strip().lower() in ('1', 'true', 'on')
 
+        if unsupported:
+            reasons = '; '.join(f"{item['strategy_id']}: {item.get('backtest_reason', 'unavailable')}" for item in unsupported)
+            flash(f'Backtest unavailable — {reasons}', 'error')
+            return redirect(url_for('backtest'))
         if not selected_strategies:
             flash('請至少選擇一個策略', 'error')
             return redirect(url_for('backtest'))
@@ -1246,6 +1265,7 @@ def backtest():
             equity_chart=report['equity_curve'],
             drawdown_chart=report['drawdown'],
             monthly_chart=report['monthly_returns'],
+            trades=result.get('trades') or [],
             selected_strategies=selected_strategies,
             start_date=start_date,
             end_date=end_date,
