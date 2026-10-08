@@ -98,15 +98,7 @@ def index():
 @login_required
 def dashboard():
     """Dashboard 主頁面。"""
-    active_strategies = services.strategy_manager.get_active_strategy_names()
-    strategy_options = services.strategy_manager.list_strategies()
-    return render_template(
-        'dashboard.html',
-        active_strategies=active_strategies,
-        strategy_options=strategy_options,
-        current_strategy=active_strategies[0] if active_strategies else 'v31_hybrid',
-        current_mode=str(services.get_setting('mode', 'balanced')),
-    )
+    return render_template('dashboard.html')
 
 
 FUNDAMENTAL_STRATEGY_ID = 'fundamental_g2g3_top5_reb60_score_weighted_v1'
@@ -118,6 +110,7 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
     from core.runtime import fundamental_production
 
     manager = services.StrategyManager()
+    registry = manager.get_platform_registry()
     active = set(manager.get_active_strategy_names())
     backtest_ids = set(get_registered_strategy_names(manager))
     category_labels = {
@@ -129,6 +122,7 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
 
     for strategy_id, metadata in manager.STRATEGY_METADATA.items():
         strategy = manager.get_strategy(strategy_id)
+        spec = registry.get_spec(strategy_id)
         info = strategy.get_strategy_info() if hasattr(strategy, 'get_strategy_info') else {}
         daily_available = strategy is not None and strategy_id in manager.list_strategies()
         backtest_available = strategy_id in backtest_ids
@@ -150,8 +144,8 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
                 'aliases': aliases,
                 'category_key': metadata.category,
                 'category': category_labels.get(metadata.category, 'Technical'),
-                'lifecycle': 'PRODUCTION',
-                'eligibility': 'PRODUCTION',
+                'lifecycle': spec.lifecycle.value,
+                'eligibility': spec.lifecycle.value,
                 'available_for_daily': daily_available,
                 'daily_reason': None if daily_available else 'Daily contract rejected this legacy identity',
                 'available_for_backtest': backtest_available,

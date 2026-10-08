@@ -4,7 +4,9 @@
 {% block nav_backtest %}active{% endblock %}
 
 {% macro metric(value, suffix='') -%}
-    {%- if value is undefined or value is none -%}<span class="text-gray-500">Unavailable</span>{%- else -%}{{ value }}{{ suffix }}{%- endif -%}
+    {%- set metric_value = value.value if value.value is defined else value -%}
+    {%- set reason = value.reason if value.reason is defined else none -%}
+    {%- if metric_value is undefined or metric_value is none -%}<span class="text-gray-500">Unavailable</span>{% if reason %}<span class="mt-1 block text-xs text-gray-500">{{ reason }}</span>{% endif %}{%- else -%}{{ metric_value }}{{ suffix }}{%- endif -%}
 {%- endmacro %}
 
 {% block content %}

@@ -71,7 +71,12 @@ def test_backtest_result_keeps_sections_and_omits_global_trades_without_run_evid
     with flask_app.test_request_context('/backtest'):
         html = render_template(
             'backtest_result.html',
-            metrics={'total_return': None, 'max_drawdown': -2.5, 'sharpe_ratio': None, 'win_rate': 0},
+            metrics={
+                'total_return': {'value': None, 'reason': 'equity history is unavailable'},
+                'max_drawdown': -2.5,
+                'sharpe_ratio': {'value': None, 'reason': 'return variance is zero'},
+                'win_rate': 0,
+            },
             strategy_performance={},
             equity_chart=chart,
             drawdown_chart=chart,
@@ -88,4 +93,6 @@ def test_backtest_result_keeps_sections_and_omits_global_trades_without_run_evid
     assert 'data-testid="monthly-section"' in html
     assert 'data-testid="trades-section"' not in html
     assert 'Unavailable' in html
+    assert 'equity history is unavailable' in html
+    assert 'return variance is zero' in html
     assert 'Infinity' not in html

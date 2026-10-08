@@ -34,11 +34,9 @@
         .nav-item:hover { background:rgba(25,140,255,.08); color:var(--text-primary); }
         .nav-item.active { background:rgba(25,140,255,.2); border-color:rgba(25,140,255,.32); color:#8ec8ff; }
         .chart-shell { min-height:430px; }
-        .chart-main { min-height:340px; }
-        .chart-volume { min-height:110px; }
         [x-cloak] { display:none !important; }
         @media (max-width:1023px) { .desktop-sidebar{width:4.5rem;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:none;} .desktop-sidebar .nav-item{justify-content:center;} .shell-main{margin-left:4.5rem;} }
-        @media (max-width:767px) { .desktop-sidebar{display:none;} .shell-main{margin-left:0;} .chart-shell{min-height:360px;} .chart-main{min-height:275px;} }
+        @media (max-width:767px) { .desktop-sidebar{display:none;} .shell-main{margin-left:0;} .chart-shell{min-height:360px;} }
     </style>
     {% block extra_head %}{% endblock %}
 </head>

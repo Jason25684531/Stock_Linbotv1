@@ -206,6 +206,10 @@ def test_dashboard_inline_summary_script_contains_browser_search_and_no_chart():
     assert 'localStorage' in html
     assert 'window.location.href' in html
     assert '/api/market/recommendations' in html
+    assert '/api/market/institutional' not in html
+    assert '/api/market/margin' in html
+    assert '>Technical<' in html
+    assert '>Margin<' in html
     match = re.search(r'<script>\s*(document\.addEventListener\(\'alpine:init\', .*?)</script>', html, re.S)
     assert match is not None
     result = subprocess.run(
@@ -213,6 +217,36 @@ def test_dashboard_inline_summary_script_contains_browser_search_and_no_chart():
         input=match.group(1), text=True, capture_output=True, check=False,
     )
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_dashboard_recommendation_metadata_handles_normal_and_degraded_sources():
+    from app import app as flask_app
+
+    with flask_app.test_request_context('/dashboard'):
+        html = render_template('dashboard.html')
+    match = re.search(r'<script>\s*(document\.addEventListener\(\'alpine:init\', .*?)</script>', html, re.S)
+    assert match is not None
+    harness = r"""
+const assert = require('node:assert/strict');
+const factories = {};
+global.document = {addEventListener(name, callback) { if (name === 'alpine:init') callback(); }};
+global.Alpine = {data(name, factory) { factories[name] = factory; }};
+__SCRIPT__
+const page = factories.dashboardSummary();
+page.recommendationMeta = {status: 'ok', source: ['daily_recommendations'], as_of_date: '2026-10-08'};
+page.recommendations = [{stock_id: '2330', fallback_used: false}];
+assert.equal(page.recommendationStatus(), 'NORMAL');
+assert.equal(page.recommendationSource(), 'daily_recommendations');
+assert.equal(page.recommendationDate(), '2026-10-08');
+page.recommendationMeta = {status: 'degraded', source: ['local_cache'], as_of_date: '2026-10-07'};
+page.recommendations = [{stock_id: '2330', fallback_used: true}];
+assert.equal(page.recommendationStatus(), 'DEGRADED');
+assert.equal(page.recommendationSource(), 'Local fallback');
+console.log('recommendation-meta-ok');
+""".replace('__SCRIPT__', match.group(1))
+    result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert 'recommendation-meta-ok' in result.stdout
 
 
 def test_stock_analysis_api_adapts_health_check_payload(monkeypatch):

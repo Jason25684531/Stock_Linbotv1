@@ -5,6 +5,7 @@ from flask import render_template
 
 def test_strategy_catalog_contains_seven_legacy_and_one_fundamental():
     from app.web_server import FUNDAMENTAL_STRATEGY_ID, _build_strategy_catalog
+    from core.strategy_manager import StrategyManager
 
     catalog = _build_strategy_catalog()
     assert len(catalog) == 8
@@ -23,6 +24,14 @@ def test_strategy_catalog_contains_seven_legacy_and_one_fundamental():
     assert fundamental['available_for_daily'] is False
     assert fundamental['available_for_backtest'] is False
     assert fundamental['lifecycle'] in {'SHADOW', 'UNKNOWN'}
+    registry = StrategyManager().get_platform_registry()
+    assert {
+        item['strategy_id']: item['lifecycle'] for item in catalog[:-1]
+    } == {
+        strategy_id: registry.get_spec(strategy_id).lifecycle.value
+        for strategy_id in registry.canonical_ids()
+    }
+    assert all(item['lifecycle'] == item['eligibility'] for item in catalog[:-1])
 
 
 def test_strategy_api_adds_capability_fields_without_dropping_legacy_fields(monkeypatch):

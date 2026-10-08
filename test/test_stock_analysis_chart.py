@@ -36,6 +36,12 @@ global.ResizeObserver = class { observe() {} disconnect() {} };
 global.Alpine = {data(name, factory) { factories[name] = factory; }};
 __SCRIPT__
 const page = factories.stockAnalysisPage({initialStockId: '2330'});
+page.payload = {quote: {price_change: 15, change_percent: 1.46}};
+assert.equal(page.changeValue(), '+15');
+assert.equal(page.changePercentValue(), '+1.46%');
+page.payload = {quote: {}};
+assert.equal(page.changeValue(), 'Unavailable');
+assert.equal(page.changePercentValue(), 'Unavailable');
 const series = {candles: [{time: '2026-10-05', open: 100, high: 105, low: 99, close: 104}, {time: '2026-10-06', open: 104, high: 108, low: 103, close: 107}], volume: [{time: '2026-10-05', value: 1000}, {time: '2026-10-06', value: 1200}], ma5: [{time: '2026-10-05', value: 101}, {time: '2026-10-06', value: 103}], ma20: [{time: '2026-10-05', value: 98}, {time: '2026-10-06', value: 100}], ma60: [{time: '2026-10-05', value: 95}, {time: '2026-10-06', value: 97}]};
 for (const status of ['ok', 'degraded']) { page.payload = {status, kline_ma: series, metadata: {fallback_used: status === 'degraded'}}; page.renderChart(); }
 assert.equal(calls.create, 2);
