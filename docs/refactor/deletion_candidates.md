@@ -1,5 +1,17 @@
 # Deletion Candidates
 
+## 2026-10-13 market-ingestion simplification
+
+`jobs/update_database.py::fetch_twse_data`, `fetch_tpex_data`, their private
+`HEADERS` constant and `requests` import are SAFE_TO_REMOVE code sections.
+Repository searches across source, tests, scripts and documents found only
+their definitions; the daily and backfill entry points call
+`fetch_market_data_with_mcp`, and official parsing belongs to
+`services/mcp/server.py`. They are not CLI wrappers or strategy aliases.
+Replacement is the already-used canonical MCP client. No file or dependency
+is deleted. Rollback is the source-phase commit revert. Existing market
+integrity, MCP-route, strategy-center and UI regression tests provide the gate.
+
 ## 2026-10-07 architecture-simplification review
 
 - `app_pkg` and `sys.modules[__package__]` lookups are **SAFE_TO_REMOVE** and

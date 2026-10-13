@@ -235,8 +235,10 @@ def _prepare_flow_frame(frame: pd.DataFrame, trade_date: str) -> pd.DataFrame:
     prepared['stock_id'] = prepared['stock_id'].astype(str).str.strip()
     for column in ['foreign_buy', 'trust_buy', 'dealer_buy']:
         if column not in prepared.columns:
-            prepared[column] = 0
-        prepared[column] = _coerce_numeric_series(prepared[column])
+            prepared[column] = None
+        prepared[column] = pd.to_numeric(
+            prepared[column].astype(str).str.replace(',', '', regex=False), errors='coerce'
+        )
     prepared['trade_date'] = trade_date
     return prepared[
         ['stock_id', 'trade_date', 'foreign_buy', 'trust_buy', 'dealer_buy']
@@ -896,6 +898,12 @@ def _dispatch_tool_request(tool_name: str) -> tuple[Any, int]:
         )
 
 
+def _validate_source_date(payload: dict[str, Any], trade_date: str) -> None:
+    source_date = normalize_date_str(payload.get('date') or payload.get('reportDate'))
+    if source_date != trade_date:
+        raise RuntimeError(f'Exchange source date {source_date!r} does not match requested date {trade_date}')
+
+
 def _fetch_twse_snapshot(trade_date: str) -> pd.DataFrame:
     clean_date = trade_date.replace('-', '')
     response = requests.get(
@@ -921,6 +929,7 @@ def _fetch_twse_snapshot(trade_date: str) -> pd.DataFrame:
     if target_table is None:
         return pd.DataFrame()
 
+    _validate_source_date(payload, trade_date)
     frame = pd.DataFrame(target_table['data'], columns=target_table['fields'])
     rename_map = {
         '證券代號': 'stock_id',
@@ -955,6 +964,7 @@ def _fetch_twse_flow(trade_date: str) -> pd.DataFrame:
     if payload.get('stat') != 'OK':
         return pd.DataFrame()
 
+    _validate_source_date(payload, trade_date)
     frame = pd.DataFrame(payload['data'], columns=payload['fields'])
     foreign_column = next(
         (
@@ -1031,6 +1041,7 @@ def _fetch_tpex_snapshot(
 
     frames: list[pd.DataFrame] = []
     if stock_raw:
+        _validate_source_date(stock_payload, trade_date)
         stock_frame = pd.DataFrame(stock_raw)
         stock_frame = stock_frame.iloc[:, [0, 4, 5, 6, 2, 8]].copy()
         stock_frame.columns = [
@@ -1065,6 +1076,7 @@ def _fetch_tpex_snapshot(
                     etf_raw = table['data']
                     break
         if etf_raw:
+            _validate_source_date(etf_payload, trade_date)
             etf_frame = pd.DataFrame(etf_raw)
             etf_frame = etf_frame.iloc[:, [0, 4, 5, 6, 2, 7]].copy()
             etf_frame.columns = [
@@ -1116,6 +1128,7 @@ def _fetch_tpex_flow(trade_date: str) -> pd.DataFrame:
     if not chips_raw:
         return pd.DataFrame()
 
+    _validate_source_date(payload, trade_date)
     frame = pd.DataFrame(chips_raw)
     if frame.shape[1] >= 17:
         selected = frame.iloc[:, [0, 10, 13, 16]].copy()
@@ -1129,9 +1142,15 @@ def _fetch_tpex_flow(trade_date: str) -> pd.DataFrame:
     if frame.shape[1] >= 14:
         selected = frame.iloc[:, [0, 10, 13]].copy()
         selected.columns = ['stock_id', 'foreign_buy', 'trust_buy']
-        selected['dealer_buy'] = 0
+        selected['dealer_buy'] = None
         return selected
     return pd.DataFrame()
+
+
+def _combine_market_frames(frames: list[pd.DataFrame], market: MarketCode) -> pd.DataFrame:
+    if market == 'ALL' and any(frame.empty for frame in frames) and not all(frame.empty for frame in frames):
+        raise RuntimeError('Incomplete ALL-market dataset: one exchange has no data')
+    return pd.concat(frames, ignore_index=True).drop_duplicates(subset=['stock_id', 'trade_date'])
 
 
 def fetch_stock_basic_snapshot(
@@ -1156,16 +1175,7 @@ def fetch_stock_basic_snapshot(
                 include_etfs,
             )
         )
-    frames = [frame for frame in frames if not frame.empty]
-    if not frames:
-        return _prepare_snapshot_frame(
-            pd.DataFrame(),
-            trade_date,
-            include_etfs,
-        )
-    return pd.concat(frames, ignore_index=True).drop_duplicates(
-        subset=['stock_id', 'trade_date']
-    )
+    return _combine_market_frames(frames, market)
 
 
 def fetch_foreign_investor_flow(
@@ -1187,12 +1197,7 @@ def fetch_foreign_investor_flow(
                 trade_date,
             )
         )
-    frames = [frame for frame in frames if not frame.empty]
-    if not frames:
-        return _prepare_flow_frame(pd.DataFrame(), trade_date)
-    return pd.concat(frames, ignore_index=True).drop_duplicates(
-        subset=['stock_id', 'trade_date']
-    )
+    return _combine_market_frames(frames, market)
 
 
 def fetch_historical_financial_statements(
