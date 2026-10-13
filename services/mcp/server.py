@@ -1006,95 +1006,24 @@ def _fetch_twse_flow(trade_date: str) -> pd.DataFrame:
     return selected
 
 
-def _fetch_tpex_snapshot(
-    trade_date: str,
-    include_etfs: bool,
-) -> pd.DataFrame:
-    dt = datetime.strptime(trade_date, '%Y-%m-%d')
-    minguo_date = f'{dt.year - 1911}/{dt.month:02d}/{dt.day:02d}'
-    headers = HEADERS.copy()
-    headers.update({
-        'Referer': (
-            'https://www.tpex.org.tw/web/stock/aftertrading/'
-            f'daily_close_quotes/stk_quote_result.php?l=zh-tw&d={minguo_date}'
-        ),
-        'Origin': 'https://www.tpex.org.tw',
-    })
-
-    stock_response = requests.get(
-        (
-            'https://www.tpex.org.tw/web/stock/aftertrading/'
-            'daily_close_quotes/stk_quote_result.php'
-            f'?l=zh-tw&d={minguo_date}&o=json'
-        ),
-        headers=headers,
+def _fetch_tpex_snapshot(trade_date: str) -> pd.DataFrame:
+    response = requests.get(
+        'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes',
+        params={'date': trade_date.replace('-', '/'), 'response': 'json'},
+        headers=HEADERS,
         timeout=20,
     )
-    stock_response.raise_for_status()
-    stock_payload = stock_response.json()
-    stock_raw = stock_payload.get('aaData')
-    if not stock_raw and stock_payload.get('tables'):
-        for table in stock_payload['tables']:
-            if isinstance(table, dict) and table.get('data'):
-                stock_raw = table['data']
-                break
-
-    frames: list[pd.DataFrame] = []
-    if stock_raw:
-        _validate_source_date(stock_payload, trade_date)
-        stock_frame = pd.DataFrame(stock_raw)
-        stock_frame = stock_frame.iloc[:, [0, 4, 5, 6, 2, 8]].copy()
-        stock_frame.columns = [
-            'stock_id',
-            'open_price',
-            'high_price',
-            'low_price',
-            'close_price',
-            'volume',
-        ]
-        frames.append(stock_frame)
-
-    if include_etfs:
-        etf_response = requests.get(
-            (
-                'https://www.tpex.org.tw/web/etf/etf_daily_close_quotes/'
-                'etf_quote_result.php'
-                f'?l=zh-tw&d={minguo_date}&o=json'
-            ),
-            headers=headers,
-            timeout=20,
-        )
-        etf_response.raise_for_status()
-        try:
-            etf_payload = etf_response.json()
-        except ValueError:
-            etf_payload = {}
-        etf_raw = etf_payload.get('aaData')
-        if not etf_raw and etf_payload.get('tables'):
-            for table in etf_payload['tables']:
-                if isinstance(table, dict) and table.get('data'):
-                    etf_raw = table['data']
-                    break
-        if etf_raw:
-            _validate_source_date(etf_payload, trade_date)
-            etf_frame = pd.DataFrame(etf_raw)
-            etf_frame = etf_frame.iloc[:, [0, 4, 5, 6, 2, 7]].copy()
-            etf_frame.columns = [
-                'stock_id',
-                'open_price',
-                'high_price',
-                'low_price',
-                'close_price',
-                'volume',
-            ]
-            frames.append(etf_frame)
-
-    if not frames:
+    response.raise_for_status()
+    payload = response.json()
+    raw = next((table['data'] for table in payload.get('tables', []) if table.get('data')), None)
+    if not raw:
         return pd.DataFrame()
-
-    snapshot_frame = pd.concat(frames, ignore_index=True)
-    snapshot_frame['pe_ratio'] = 0.0
-    return snapshot_frame
+    _validate_source_date(payload, trade_date)
+    frame = pd.DataFrame(raw).iloc[:, [0, 1, 4, 5, 6, 2, 8]].copy()
+    frame.columns = ['stock_id', 'stock_name', 'open_price', 'high_price',
+                     'low_price', 'close_price', 'volume']
+    frame['pe_ratio'] = 0.0
+    return frame
 
 
 def _fetch_tpex_flow(trade_date: str) -> pd.DataFrame:
@@ -1130,21 +1059,11 @@ def _fetch_tpex_flow(trade_date: str) -> pd.DataFrame:
 
     _validate_source_date(payload, trade_date)
     frame = pd.DataFrame(chips_raw)
-    if frame.shape[1] >= 17:
-        selected = frame.iloc[:, [0, 10, 13, 16]].copy()
-        selected.columns = [
-            'stock_id',
-            'foreign_buy',
-            'trust_buy',
-            'dealer_buy',
-        ]
-        return selected
-    if frame.shape[1] >= 14:
-        selected = frame.iloc[:, [0, 10, 13]].copy()
-        selected.columns = ['stock_id', 'foreign_buy', 'trust_buy']
-        selected['dealer_buy'] = None
-        return selected
-    return pd.DataFrame()
+    if frame.shape[1] != 24:
+        raise RuntimeError(f'Unexpected TPEx institutional schema: {frame.shape[1]} columns')
+    selected = frame.iloc[:, [0, 10, 13, 22]].copy()
+    selected.columns = ['stock_id', 'foreign_buy', 'trust_buy', 'dealer_buy']
+    return selected
 
 
 def _combine_market_frames(frames: list[pd.DataFrame], market: MarketCode) -> pd.DataFrame:
@@ -1170,7 +1089,7 @@ def fetch_stock_basic_snapshot(
     if market in {'TPEx', 'ALL'}:
         frames.append(
             _prepare_snapshot_frame(
-                _fetch_tpex_snapshot(trade_date, include_etfs),
+                _fetch_tpex_snapshot(trade_date),
                 trade_date,
                 include_etfs,
             )

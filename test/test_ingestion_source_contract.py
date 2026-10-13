@@ -68,3 +68,40 @@ def test_failed_flow_does_not_produce_market_batch():
 
     with pytest.raises(RuntimeError, match='Institutional data is unavailable'):
         fetch_market_data_with_mcp(Client(), '2026-10-13')
+
+
+def test_tpex_quotes_use_requested_date_and_include_etfs_in_one_request(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {'date': '20261012', 'tables': [{'data': [
+                ['00679B', 'ETF', 24, 0, 23, 25, 22, 24, 100] + [0] * 10]}]}
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs['params']))
+        return Response()
+
+    monkeypatch.setattr(server.requests, 'get', get)
+    frame = server._fetch_tpex_snapshot('2026-10-12')
+    assert calls == [('https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes',
+                      {'date': '2026/10/12', 'response': 'json'})]
+    assert frame.iloc[0][['stock_id', 'close_price', 'volume']].tolist() == ['00679B', 24, 100]
+
+
+def test_tpex_dealer_uses_total_instead_of_proprietary_only(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            row = ['5483', 'stock'] + [0] * 22
+            row[10], row[13], row[16], row[19], row[22] = 4, 5, 1, 2, 3
+            return {'date': '20261013', 'tables': [{'data': [row]}]}
+
+    monkeypatch.setattr(server.requests, 'get', lambda *a, **kw: Response())
+    frame = server._fetch_tpex_flow('2026-10-13')
+    assert frame.iloc[0][['foreign_buy', 'trust_buy', 'dealer_buy']].tolist() == [4, 5, 3]
