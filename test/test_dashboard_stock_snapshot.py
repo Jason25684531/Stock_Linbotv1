@@ -233,7 +233,8 @@ global.document = {addEventListener(name, callback) { if (name === 'alpine:init'
 global.Alpine = {data(name, factory) { factories[name] = factory; }};
 __SCRIPT__
 const page = factories.dashboardSummary();
-page.recommendationMeta = {status: 'ok', source: ['daily_recommendations'], as_of_date: '2026-10-08'};
+page.recommendationLoading = false;
+page.recommendationMeta = {status: 'ok', source: ['daily_recommendations'], recommendation_date: '2026-10-08', as_of_date: '2026-10-08'};
 page.recommendations = [{stock_id: '2330', fallback_used: false}];
 assert.equal(page.recommendationStatus(), 'NORMAL');
 assert.equal(page.recommendationSource(), 'daily_recommendations');
@@ -242,6 +243,20 @@ page.recommendationMeta = {status: 'degraded', source: ['local_cache'], as_of_da
 page.recommendations = [{stock_id: '2330', fallback_used: true}];
 assert.equal(page.recommendationStatus(), 'DEGRADED');
 assert.equal(page.recommendationSource(), 'Local fallback');
+page.recommendationMeta = {status: 'degraded', freshness_status: 'stale', last_available_recommendation_date: '2026-06-26'};
+page.recommendations = [];
+assert.equal(page.recommendationStatus(), 'STALE');
+assert.equal(page.recommendationCount(), '資料已過期');
+assert.equal(page.recommendationDate(), '2026-06-26');
+assert.match(page.recommendationMessage(), /不視為今日訊號/);
+page.recommendationMeta = {status: 'empty', as_of_date: '2026-10-08'};
+page.recommendations = [];
+assert.equal(page.recommendationCount(), '無可用推薦');
+assert.equal(page.recommendationDate(), '尚無推薦紀錄');
+assert.match(page.recommendationMessage(), /2026-10-08/);
+page.recommendationMeta = {status: 'error'};
+assert.equal(page.recommendationCount(), '資料暫不可用');
+assert.equal(page.recommendationDate(), '資料暫不可用');
 console.log('recommendation-meta-ok');
 """.replace('__SCRIPT__', match.group(1))
     result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
@@ -249,11 +264,130 @@ console.log('recommendation-meta-ok');
     assert 'recommendation-meta-ok' in result.stdout
 
 
+def test_dashboard_clears_previous_recommendations_after_refresh_failure():
+    from app import app as flask_app
+
+    with flask_app.test_request_context('/dashboard'):
+        html = render_template('dashboard.html')
+    match = re.search(r'<script>\s*(document\.addEventListener\(\'alpine:init\', .*?)</script>', html, re.S)
+    assert match is not None
+    harness = r"""
+const assert = require('node:assert/strict');
+const factories = {};
+global.document = {addEventListener(name, callback) { if (name === 'alpine:init') callback(); }};
+global.Alpine = {data(name, factory) { factories[name] = factory; }};
+__SCRIPT__
+const page = factories.dashboardSummary();
+page.recommendationMeta = {status: 'ok', recommendation_date: '2026-10-08'};
+page.recommendations = [{stock_id: '2330'}];
+page.strategies = {active: ['hybrid_trend_rank']};
+global.fetch = async () => { throw new Error('network down'); };
+(async () => {
+  await page.loadRecommendations();
+  assert.deepEqual(page.recommendations, []);
+  assert.deepEqual(page.recommendationMeta, {});
+  assert.equal(page.recommendationError, 'network down');
+  assert.equal(page.recommendationCount(), '資料暫不可用');
+  assert.equal(page.recommendationDate(), '資料暫不可用');
+  console.log('recommendation-refresh-error-ok');
+})().catch(error => { console.error(error); process.exitCode = 1; });
+""".replace('__SCRIPT__', match.group(1))
+    result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert 'recommendation-refresh-error-ok' in result.stdout
+
+
+def test_dashboard_keeps_successful_strategy_when_another_fails():
+    from app import app as flask_app
+
+    with flask_app.test_request_context('/dashboard'):
+        html = render_template('dashboard.html')
+    match = re.search(r'<script>\s*(document\.addEventListener\(\'alpine:init\', .*?)</script>', html, re.S)
+    assert match is not None
+    harness = r"""
+const assert = require('node:assert/strict');
+const factories = {};
+global.document = {addEventListener(name, callback) { if (name === 'alpine:init') callback(); }};
+global.Alpine = {data(name, factory) { factories[name] = factory; }};
+__SCRIPT__
+const page = factories.dashboardSummary();
+page.strategies = {active: ['hybrid_trend_rank', 'defensive_low_volatility']};
+global.fetch = async url => {
+  if (url.includes('defensive_low_volatility')) throw new Error('strategy unavailable');
+  return {ok: true, json: async () => ({status: 'ok', data: {recommendations: [{stock_id: '2330'}]}, recommendation_date: '2026-10-08', freshness_status: 'current'})};
+};
+(async () => {
+  await page.loadRecommendations();
+  assert.deepEqual(page.recommendations.map(row => [row.stock_id, row.strategy_id]), [['2330', 'hybrid_trend_rank']]);
+  assert.equal(page.recommendationMeta.status, 'degraded');
+  assert.deepEqual(page.recommendationMeta.warnings, ['defensive_low_volatility: strategy unavailable']);
+  console.log('dashboard-strategy-failure-isolated-ok');
+})().catch(error => { console.error(error); process.exitCode = 1; });
+""".replace('__SCRIPT__', match.group(1))
+    result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert 'dashboard-strategy-failure-isolated-ok' in result.stdout
+
+
+def test_market_recommendations_exposes_stale_data_without_relabeling(monkeypatch):
+    import app.web_server as web_server_module
+    import app as app_module
+    from app import app as flask_app
+
+    monkeypatch.setattr(web_server_module.db_helper, 'get_latest_valid_market_date', lambda **kwargs: '2026-10-08')
+    monkeypatch.setattr(
+        app_module,
+        'get_recommendations_with_market_fallback',
+        lambda **kwargs: (pd.DataFrame(), {
+            'recommendation_date': '2026-10-08',
+            'last_available_recommendation_date': '2026-06-26',
+            'fallback_used': False,
+            'fallback_too_old': True,
+            'fallback_age_days': 104,
+            'resolution_source': 'missing',
+        }),
+    )
+
+    payload = flask_app.test_client().get('/api/market/recommendations').get_json()
+
+    assert payload['status'] == 'degraded'
+    assert payload['as_of_date'] == '2026-10-08'
+    assert payload['freshness_status'] == 'stale'
+    assert payload['last_available_recommendation_date'] == '2026-06-26'
+    assert payload['data']['recommendations'] == []
+
+
+def test_market_recommendations_rejects_unknown_strategy():
+    from app import app as flask_app
+
+    response = flask_app.test_client().get('/api/market/recommendations?strategy=unknown_strategy')
+
+    assert response.status_code == 400
+    assert response.get_json()['status'] == 'error'
+
+
+def test_market_pages_anchor_to_latest_market_date_not_market_recommendation_intersection(monkeypatch):
+    import app as app_module
+    import app.web_server as web_server_module
+
+    requested_dates = []
+    market = _market_frame()
+    monkeypatch.setattr(web_server_module, '_latest_ui_market_date', lambda: '2026-10-08')
+    monkeypatch.setattr(app_module, '_resolve_ui_baseline_date', lambda: '2026-06-26')
+    monkeypatch.setattr(app_module, 'get_stock_data', lambda date_str=None: (requested_dates.append(date_str) or market.copy(), date_str))
+
+    with app_module.app.test_request_context('/api/market/summary'):
+        frame, as_of_date, _ = web_server_module._load_market_frame()
+
+    assert requested_dates == ['2026-10-08']
+    assert as_of_date == '2026-05-21'
+
+
 def test_stock_analysis_api_adapts_health_check_payload(monkeypatch):
     import app as app_module
     from app import app as flask_app
 
-    def fake_builder(stock_id, requested_date=None, period=None, overlays=None, panes=None):
+    def fake_builder(stock_id, requested_date=None, period=None, overlays=None, panes=None, basic_only=False):
         return {
             'status': 'ok',
             'symbol': stock_id,
@@ -273,7 +407,7 @@ def test_stock_analysis_api_adapts_health_check_payload(monkeypatch):
             'war_room': {'chip_flow': {'source_mode': 'direct'}, 'price_map': {'support': 950}},
         }
 
-    monkeypatch.setattr(app_module, '_build_dashboard_health_check_payload', fake_builder)
+    monkeypatch.setattr(app_module, '_build_dashboard_health_check_payload_local', fake_builder)
 
     response = flask_app.test_client().get('/api/stock-analysis?id=2330')
     payload = response.get_json()
@@ -304,7 +438,7 @@ def test_stock_analysis_api_marks_missing_quote_or_kline_as_degraded(monkeypatch
     import app as app_module
     from app import app as flask_app
 
-    def fake_builder(stock_id, requested_date=None, period=None, overlays=None, panes=None):
+    def fake_builder(stock_id, requested_date=None, period=None, overlays=None, panes=None, basic_only=False):
         return {
             'status': 'ok',
             'symbol': stock_id,
@@ -319,7 +453,7 @@ def test_stock_analysis_api_marks_missing_quote_or_kline_as_degraded(monkeypatch
             'war_room': {},
         }
 
-    monkeypatch.setattr(app_module, '_build_dashboard_health_check_payload', fake_builder)
+    monkeypatch.setattr(app_module, '_build_dashboard_health_check_payload_local', fake_builder)
 
     response = flask_app.test_client().get('/api/stock-analysis?id=2330')
     payload = response.get_json()
@@ -353,8 +487,18 @@ def test_market_snapshot_endpoints_return_normalized_envelopes(monkeypatch):
 
     monkeypatch.setattr(app_module, '_current_line_date', lambda: '2026-05-21')
     monkeypatch.setattr(app_module, '_resolve_ui_baseline_date', lambda: '2026-05-21')
+    import app.web_server as web_server_module
+    monkeypatch.setattr(web_server_module.db_helper, 'get_latest_valid_market_date', lambda **kwargs: '2026-05-21')
     monkeypatch.setattr(app_module, 'get_stock_data', lambda date_str=None, stock_id=None: (market_df.copy(), '2026-05-21'))
     monkeypatch.setattr(app_module, 'get_daily_recommendations', lambda **kwargs: recommendations_df.copy())
+    monkeypatch.setattr(
+        app_module,
+        'get_recommendations_with_market_fallback',
+        lambda **kwargs: (recommendations_df.copy(), {
+            'recommendation_date': '2026-05-21', 'fallback_used': False,
+            'resolution_source': 'persisted', 'current_day_recommendations_used': True,
+        }),
+    )
 
     client = flask_app.test_client()
 

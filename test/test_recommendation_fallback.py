@@ -18,7 +18,7 @@ def test_get_recommendations_with_market_fallback_uses_same_strategy_latest_snap
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-04-28'])
+    monkeypatch.setattr(db_helper, 'get_latest_valid_market_date', lambda end_date=None, min_row_count=0: '2026-04-28')
     monkeypatch.setattr(db_helper, 'get_latest_trade_date', lambda: '2026-04-28')
     monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BULL')
 
@@ -61,7 +61,7 @@ def test_get_recommendations_with_market_fallback_keeps_same_day_persisted_rows(
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-03-12'])
+    monkeypatch.setattr(db_helper, 'get_latest_valid_market_date', lambda end_date=None, min_row_count=0: '2026-03-12')
     monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BEAR')
 
     def fake_read_sql(sql, engine, params=None):
@@ -101,7 +101,7 @@ def test_get_recommendations_with_market_fallback_blocks_stale_data(monkeypatch)
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-03-12'])
+    monkeypatch.setattr(db_helper, 'get_latest_valid_market_date', lambda end_date=None, min_row_count=0: '2026-03-12')
     monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BEAR')
 
     def fake_read_sql(sql, engine, params=None):
@@ -145,7 +145,7 @@ def test_get_recommendations_with_market_fallback_returns_same_day_heartbeat(mon
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-04-28'])
+    monkeypatch.setattr(db_helper, 'get_latest_valid_market_date', lambda end_date=None, min_row_count=0: '2026-04-28')
     monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BULL')
     monkeypatch.setattr(db_helper.pd, 'read_sql', lambda sql, engine, params=None: heartbeat_rows.copy())
 
@@ -177,7 +177,7 @@ def test_get_recommendations_with_market_fallback_uses_strategy_only_history(mon
     ])
 
     monkeypatch.setattr(db_helper, 'get_db_engine', lambda: object())
-    monkeypatch.setattr(db_helper, 'get_valid_market_dates', lambda start_date=None, end_date=None, min_row_count=0: ['2026-04-28'])
+    monkeypatch.setattr(db_helper, 'get_latest_valid_market_date', lambda end_date=None, min_row_count=0: '2026-04-28')
     monkeypatch.setattr(db_helper, 'get_market_trend', lambda date_str: 'BULL')
 
     def fake_read_sql(sql, engine, params=None):

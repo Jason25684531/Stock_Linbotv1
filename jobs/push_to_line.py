@@ -40,6 +40,7 @@ from core.db_helper import (
     get_recommendations_with_market_fallback,
     get_stock_data,
     get_latest_trade_date,
+    get_latest_valid_market_date,
     normalize_date_str,
     record_pipeline_step_finish,
     record_pipeline_step_start,
@@ -68,6 +69,13 @@ def get_pipeline_baseline_date() -> str | None:
 
 def _current_push_request_date() -> str:
     return datetime.now().strftime('%Y-%m-%d')
+
+
+def _recommendation_freshness_issue() -> tuple[bool, str | None, str | None]:
+    """Return whether recommendations are stale and their authoritative dates."""
+    market_date = normalize_date_str(get_latest_valid_market_date(end_date=_current_push_request_date()))
+    recommendation_date = normalize_date_str(get_actual_latest_date())
+    return (not market_date or recommendation_date != market_date), market_date, recommendation_date
 
 
 def _resolve_push_strategy_rows(strategy_name: str, requested_date: str, limit: int) -> tuple[pd.DataFrame, dict]:
@@ -835,6 +843,25 @@ def main(argv=None):
     print(f"Run timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
+        if not args.dry_run:
+            is_stale, market_date, recommendation_date = _recommendation_freshness_issue()
+            if is_stale:
+                message = (
+                    f'recommendations stale: market={market_date or "unavailable"}, '
+                    f'recommendations={recommendation_date or "unavailable"}'
+                )
+                record_pipeline_step_finish(
+                    pipeline_name=pipeline_name,
+                    step_name=step_name,
+                    run_date=run_date,
+                    status='blocked',
+                    source_date=recommendation_date,
+                    trade_date=market_date,
+                    error_summary=message,
+                )
+                print(f'LINE push blocked: {message}')
+                return 2
+
         if args.time == 'morning':
             summary = run_morning(dry_run=args.dry_run)
         else:

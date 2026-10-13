@@ -9,7 +9,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def test_scheduler_daily_pipeline_preserves_official_step_order():
     assert [step.target for step in scheduler.PIPELINES['daily']] == [
         'update_database',
-        'fundamental_shadow_operation',
+        'run_daily',
+        'daily_backtest_validation',
+        'push_to_line',
+    ]
+    assert [step.target for step in scheduler.PIPELINES['evening']] == [
+        'update_database',
         'run_daily',
         'daily_backtest_validation',
         'push_to_line',
@@ -115,6 +120,8 @@ def test_evening_batch_wrapper_uses_canonical_evening_scheduler():
     assert 'jobs\\scheduler.py' in batch_text
     assert 'evening' in batch_text
     assert '--stop-on-error' in batch_text
+    assert 'set "SCHEDULER_EXIT=%ERRORLEVEL%"' in batch_text
+    assert 'exit /b %SCHEDULER_EXIT%' in batch_text
 
 
 def test_removed_numeric_wrappers_are_not_active_supported_commands():

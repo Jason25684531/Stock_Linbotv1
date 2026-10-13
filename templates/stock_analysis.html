@@ -3,21 +3,49 @@
 {% block page_kicker %}Market Intelligence{% endblock %}
 {% block page_heading %}個股分析{% endblock %}
 {% block content %}
-<div x-data="stockAnalysisPage({ initialStockId: {{ stock_id|tojson }} })" x-init="init()" class="space-y-5">
+<div x-data='stockAnalysisPage({ initialStockId: {{ stock_id|tojson }} })' class="space-y-5">
     <section class="quant-card p-5"><form class="flex flex-col gap-2 sm:flex-row" @submit.prevent="loadStock(searchValue)"><label for="stock-analysis-search" class="sr-only">輸入股票代號</label><input id="stock-analysis-search" x-model.trim="searchValue" type="search" placeholder="輸入股票代號或名稱，例如：2330 台積電" class="min-w-0 flex-1 rounded-md border border-[#28516d] bg-[#07131f] px-4 py-3 text-sm text-white outline-none focus:border-blue-400"><button type="submit" class="rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-500">搜尋</button></form></section>
 
     <template x-if="payload.stock_id"><section class="quant-card p-5"><div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><div class="flex flex-wrap items-center gap-2"><h2 class="text-2xl font-bold text-white" x-text="payload.stock_id"></h2><span class="rounded border border-[#28516d] px-2 py-1 text-xs text-slate-300">TWSE</span><span class="status-badge" :class="statusClass()"><span class="h-2 w-2 rounded-full bg-current"></span><span x-text="statusLabel()"></span></span></div><p class="mt-2 text-xs text-slate-400" x-text="payload.as_of_date || '資料日期 UNKNOWN'"></p></div><div class="text-left xl:text-right"><p class="text-3xl font-bold text-white" x-text="formatNumber(payload.quote?.close_price)"></p><div class="mt-1 flex gap-3 text-sm"><span><span class="text-slate-500">Change </span><span x-text="changeValue()"></span></span><span><span class="text-slate-500">Change % </span><span x-text="changePercentValue()"></span></span></div><p class="mt-1 text-sm text-slate-400" x-text="payload.metadata?.fallback_used ? 'Local fallback data' : (payload.quote?.data_source || 'daily_market_data')"></p></div></div><div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5"><template x-for="item in quoteItems()" :key="item.label"><div class="metric-card"><p class="metric-label" x-text="item.label"></p><p class="mt-2 text-sm font-semibold text-slate-100" x-text="item.value"></p></div></template></div><div x-show="payload.warnings?.length" class="mt-4 rounded border border-amber-700/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200" x-text="payload.warnings?.join(' · ')"></div></section></template>
 
-    <section class="quant-card p-4"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-lg font-semibold text-white">Candlestick</h2><p class="mt-1 text-xs text-slate-500">MA5 / MA20 / MA60 · Volume</p></div><div class="flex flex-wrap gap-1"><template x-for="range in ranges" :key="range"><button type="button" @click="selectedRange = range; renderChart()" class="rounded border px-3 py-1.5 text-xs" :class="selectedRange === range ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-[#28516d] text-slate-400 hover:text-white'" x-text="range"></button></template></div></div><div id="stock-analysis-chart" class="chart-shell mt-4 w-full"></div><div x-show="chartMessage" class="mt-3 rounded border border-[#28516d] px-3 py-2 text-sm text-slate-400" x-text="chartMessage"></div><div class="mt-3 flex flex-wrap gap-3 text-xs"><span class="text-amber-300">■ MA5</span><span class="text-sky-300">■ MA20</span><span class="text-purple-300">■ MA60</span><span class="text-slate-300">▉ Volume</span></div></section>
+    <section class="quant-card p-4"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-lg font-semibold text-white">Candlestick</h2><p class="mt-1 text-xs text-slate-500">MA5 / MA20 / MA60 · Volume</p></div><div class="flex flex-wrap gap-1"><template x-for="range in ranges" :key="range"><button type="button" @click="selectedRange = range; renderChart()" class="rounded border px-3 py-1.5 text-xs" :class="selectedRange === range ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-[#28516d] text-slate-400 hover:text-white'" x-text="range"></button></template></div></div><div id="stock-analysis-chart" class="chart-shell mt-4 w-full"></div><div x-show="chartMessage" class="mt-3 rounded border border-[#28516d] px-3 py-2 text-sm text-slate-400"><span x-text="chartMessage"></span><button type="button" class="ml-3 text-blue-300" x-show="searchValue" @click="loadStock(searchValue)">重試</button></div><div class="mt-3 flex flex-wrap gap-3 text-xs"><span class="text-amber-300">■ MA5</span><span class="text-sky-300">■ MA20</span><span class="text-purple-300">■ MA60</span><span class="text-slate-300">▉ Volume</span></div></section>
 
     <div class="grid gap-5 lg:grid-cols-3"><section class="quant-card p-5"><h2 class="text-lg font-semibold text-white">技術面</h2><div class="mt-4 space-y-3 text-sm"><div class="flex justify-between border-b border-[#1c3a50] pb-2"><span class="text-slate-400">RSI</span><span x-text="display(payload.technical?.rsi)"></span></div><div class="flex justify-between border-b border-[#1c3a50] pb-2"><span class="text-slate-400">MACD</span><span class="text-slate-500">Unavailable</span></div><div class="flex justify-between border-b border-[#1c3a50] pb-2"><span class="text-slate-400">KD</span><span class="text-slate-500">Unavailable</span></div><div class="flex justify-between"><span class="text-slate-400">MA Trend</span><span x-text="maTrend()"></span></div></div></section><section class="quant-card p-5"><h2 class="text-lg font-semibold text-white">法人籌碼</h2><div class="mt-4 space-y-3 text-sm"><template x-for="item in institutionItems()" :key="item.label"><div class="flex justify-between border-b border-[#1c3a50] pb-2"><span class="text-slate-400" x-text="item.label"></span><span x-text="item.value"></span></div></template></div></section><section class="quant-card p-5"><div class="flex items-center justify-between"><h2 class="text-lg font-semibold text-white">命中 Strategy</h2><span class="status-badge status-unknown">Unavailable</span></div><p class="mt-4 text-sm leading-6 text-slate-400">目前 `/api/stock-analysis` 沒有提供可驗證的 persisted strategy-match evidence，未在瀏覽器重新執行策略。</p></section></div>
 </div>
 <script>
 document.addEventListener('alpine:init', () => {
-    Alpine.data('stockAnalysisPage', (options = {}) => ({
+    Alpine.data('stockAnalysisPage', (options = {}) => {
+        let request = null;
+        let requestSeq = 0;
+        return ({
         initialStockId: options.initialStockId || '', searchValue: options.initialStockId || '', payload: {}, ranges: ['1M', '3M', '6M', '1Y', 'ALL'], selectedRange: '3M', chart: null, resizeObserver: null, chartMessage: '',
         async init() { if (this.initialStockId) await this.loadStock(this.initialStockId); },
-        async loadStock(value) { const match = String(value || '').match(/\b\d{4,6}\b/); const stockId = match ? match[0] : String(value || '').trim(); if (!stockId) { this.chartMessage = '請輸入股票代號或名稱'; return; } this.searchValue = stockId; this.chartMessage = '載入資料…'; try { const response = await fetch('/api/stock-analysis?id=' + encodeURIComponent(stockId) + '&period=daily'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || response.statusText); this.payload = payload || {}; this.renderChart(); } catch (error) { this.payload = {}; this.chartMessage = error.message || '資料暫時不可用'; } },
+        async loadStock(value) {
+            const match = String(value || '').match(/\b\d{4,6}\b/);
+            const stockId = match ? match[0] : String(value || '').trim();
+            if (!stockId) { this.chartMessage = '請輸入股票代號'; return; }
+            request?.abort();
+            const controller = new AbortController();
+            request = controller;
+            const seq = ++requestSeq;
+            const timer = setTimeout(() => controller.abort(), 10000);
+            this.clearChart();
+            this.payload = {};
+            this.searchValue = stockId;
+            this.chartMessage = '載入資料…';
+            try {
+                const response = await fetch('/api/stock-analysis?id=' + encodeURIComponent(stockId) + '&period=daily', { signal: controller.signal });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error || response.statusText);
+                if (seq !== requestSeq) return;
+                this.payload = payload || {};
+                this.renderChart();
+            } catch (error) {
+                if (seq === requestSeq) this.chartMessage = controller.signal.aborted ? '查詢逾時，請重試' : (error.message || '資料暫時不可用');
+            } finally { clearTimeout(timer); if (request === controller) request = null; }
+        },
+        clearChart() { if (this.chart) { (Alpine.raw?.(this.chart) || this.chart).remove(); this.chart = null; } if (this.resizeObserver) { (Alpine.raw?.(this.resizeObserver) || this.resizeObserver).disconnect(); this.resizeObserver = null; } },
+        destroy() { request?.abort(); this.clearChart(); },
         statusLabel() { return this.payload.status === 'ok' ? 'NORMAL' : this.payload.status === 'degraded' ? 'DEGRADED' : 'UNAVAILABLE'; },
         statusClass() { return this.payload.status === 'ok' ? 'status-ok' : this.payload.status === 'degraded' ? 'status-degraded' : 'status-unknown'; },
         changeValue() { return this.formatSigned(this.payload.quote?.price_change); },
@@ -29,9 +57,43 @@ document.addEventListener('alpine:init', () => {
         formatNumber(value) { return value === null || value === undefined || value === '' || Number.isNaN(Number(value)) ? 'Unavailable' : Number(value).toLocaleString('zh-TW'); },
         formatSigned(value) { return value === null || value === undefined || value === '' || Number.isNaN(Number(value)) ? 'Unavailable' : `${Number(value) > 0 ? '+' : ''}${Number(value).toLocaleString('zh-TW')}`; },
         rangeLimit() { return { '1M': 22, '3M': 66, '6M': 132, '1Y': 252, 'ALL': null }[this.selectedRange]; },
-        filterSeries(series) { const candles = Array.isArray(series?.candles) ? series.candles.filter(item => item && item.time && [item.open, item.high, item.low, item.close].every(value => Number.isFinite(Number(value)))) : []; const limit = this.rangeLimit(); const times = new Set((limit ? candles.slice(-limit) : candles).map(item => item.time)); const keep = item => item && times.has(item.time); const result = { candles: limit ? candles.slice(-limit) : candles, volume: (series?.volume || []).filter(keep), ma5: (series?.ma5 || []).filter(keep), ma20: (series?.ma20 || []).filter(keep), ma60: (series?.ma60 || []).filter(keep) }; return result; },
-        renderChart() { const container = document.getElementById('stock-analysis-chart'); if (!container) return; if (this.chart) { this.chart.remove(); this.chart = null; } if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; } const series = this.filterSeries(this.payload.kline_ma || {}); if (!series.candles.length || !window.LightweightCharts || typeof window.LightweightCharts.createChart !== 'function') { this.chartMessage = this.payload.kline_ma ? 'K 線資料不可用' : '請先搜尋股票'; return; } this.chartMessage = this.payload.metadata?.fallback_used || this.payload.status === 'degraded' ? 'DEGRADED · Local fallback data' : ''; this.chart = window.LightweightCharts.createChart(container, { width: container.clientWidth || 800, height: 500, layout: { background: { color: '#07131f' }, textColor: '#91a7ba' }, grid: { vertLines: { color: '#173246' }, horzLines: { color: '#173246' } }, rightPriceScale: { borderColor: '#28516d' }, timeScale: { borderColor: '#28516d' } }); const candle = this.chart.addCandlestickSeries({ upColor: '#35e58a', downColor: '#ff5263', borderUpColor: '#35e58a', borderDownColor: '#ff5263', wickUpColor: '#35e58a', wickDownColor: '#ff5263' }); candle.setData(series.candles); const ma5 = this.chart.addLineSeries({ color: '#f4b740', lineWidth: 1 }); ma5.setData(series.ma5); const ma20 = this.chart.addLineSeries({ color: '#38bdf8', lineWidth: 1 }); ma20.setData(series.ma20); const ma60 = this.chart.addLineSeries({ color: '#b088ff', lineWidth: 1 }); ma60.setData(series.ma60); const volume = this.chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '', scaleMargins: { top: .8, bottom: 0 } }); volume.setData(series.volume); this.chart.timeScale().fitContent(); this.resizeObserver = new ResizeObserver(() => { if (this.chart) this.chart.applyOptions({ width: container.clientWidth || 800 }); }); this.resizeObserver.observe(container); }
-    }));
+        filterSeries(series) {
+            const valid = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+            const candles = Array.isArray(series?.candles) ? series.candles : [];
+            let previous = '';
+            for (const item of candles) {
+                if (!item || !/^\d{4}-\d{2}-\d{2}$/.test(item.time) || item.time <= previous || ![item.open, item.high, item.low, item.close].every(valid) || Number(item.low) > Math.min(Number(item.open), Number(item.close)) || Number(item.high) < Math.max(Number(item.open), Number(item.close))) throw new Error('K 線資料格式或日期順序錯誤');
+                previous = item.time;
+            }
+            const limit = this.rangeLimit();
+            const visible = limit ? candles.slice(-limit) : candles;
+            const times = new Set(visible.map(item => item.time));
+            const keep = item => item && times.has(item.time) && valid(item.value);
+            return { candles: visible, volume: (series?.volume || []).filter(keep), ma5: (series?.ma5 || []).filter(keep), ma20: (series?.ma20 || []).filter(keep), ma60: (series?.ma60 || []).filter(keep) };
+        },
+        renderChart() {
+            const container = document.getElementById('stock-analysis-chart');
+            if (!container) return;
+            this.clearChart();
+            try {
+                const series = this.filterSeries(this.payload.kline_ma || {});
+                if (!series.candles.length) { this.chartMessage = this.payload.stock_id ? '這檔股票沒有可用 K 線資料' : '請先搜尋股票'; return; }
+                if (!window.LightweightCharts?.createChart) { this.chartMessage = '圖表套件載入失敗，請重試'; return; }
+                const chart = window.LightweightCharts.createChart(container, { width: container.clientWidth || 800, height: 500, layout: { background: { color: '#07131f' }, textColor: '#91a7ba' }, grid: { vertLines: { color: '#173246' }, horzLines: { color: '#173246' } }, rightPriceScale: { borderColor: '#28516d' }, timeScale: { borderColor: '#28516d' } });
+                this.chart = chart;
+                const candle = chart.addCandlestickSeries({ upColor: '#35e58a', downColor: '#ff5263', borderUpColor: '#35e58a', borderDownColor: '#ff5263', wickUpColor: '#35e58a', wickDownColor: '#ff5263' });
+                candle.setData(series.candles);
+                for (const [key, color] of [['ma5', '#f4b740'], ['ma20', '#38bdf8'], ['ma60', '#b088ff']]) chart.addLineSeries({ color, lineWidth: 1 }).setData(series[key]);
+                chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '', scaleMargins: { top: .8, bottom: 0 } }).setData(series.volume);
+                chart.timeScale().fitContent();
+                const observer = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth || 800 }));
+                this.resizeObserver = observer;
+                observer.observe(container);
+                this.chartMessage = this.payload.metadata?.fallback_used || this.payload.status === 'degraded' ? `行情日期 ${this.payload.as_of_date || '未知'} · 部分資料未載入` : '';
+            } catch (error) { this.clearChart(); this.chartMessage = error.message || '圖表繪製失敗'; }
+        }
+    });
+    });
 });
 </script>
 {% endblock %}

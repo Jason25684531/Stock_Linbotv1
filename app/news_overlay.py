@@ -14,6 +14,13 @@ from core.db_helper import safe_float, safe_int
 _stock_news_runtime = threading.local()
 
 
+def _application_services():
+    # Resolve lazily to avoid importing the Flask composition root at module load.
+    from app import services
+
+    return services
+
+
 def _get_current_stock_news_deadline() -> float | None:
     deadline = getattr(_stock_news_runtime, 'deadline_monotonic', None)
     if isinstance(deadline, (int, float)):
@@ -88,6 +95,7 @@ def _get_sector_news_summary(sector: str, date_str: str = None) -> dict:
     if not Config.is_news_boost_enabled():
         return payload
 
+    services = _application_services()
     sentiment = services.get_news_sentiment(date_str)
     bull_sectors = sentiment.get('bull_sectors', [])
     bear_sectors = sentiment.get('bear_sectors', [])
@@ -150,6 +158,7 @@ def _get_stock_specific_news_summary(stock_id: str, stock_mentions_map: dict) ->
 
 
 def _resolve_signal_news_info(row, date_str: str, stock_mentions_map: dict) -> dict:
+    services = _application_services()
     stock_id = str(row.get('stock_id', '')).strip()
     sector = services.get_stock_sector(stock_id)
 
@@ -178,6 +187,7 @@ def _apply_news_sentiment_overlay(candidates: pd.DataFrame, date_str: str) -> pd
         return boosted
 
     try:
+        services = _application_services()
         sentiment = services.get_news_sentiment(date_str)
         bull_sectors = set(sentiment.get('bull_sectors') or [])
         bear_sectors = set(sentiment.get('bear_sectors') or [])

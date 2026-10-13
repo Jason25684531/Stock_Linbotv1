@@ -18,7 +18,6 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
-from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -105,35 +104,6 @@ app = Flask(
     template_folder=str(REPO_ROOT / 'templates'),
 )
 app.secret_key = Config.FLASK_SECRET_KEY
-
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-login_manager.login_message = '請先登入以存取此頁面'
-login_manager.login_message_category = 'error'
-
-
-class User(UserMixin):
-    """簡易使用者類別 (基於環境變數驗證)"""
-
-    def __init__(self, user_id):
-        self.id = user_id
-
-    @staticmethod
-    def validate_password(password):
-        return password == Config.ADMIN_PASSWORD
-
-    @staticmethod
-    def get(user_id):
-        if user_id == 'admin':
-            return User('admin')
-        return None
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.get(user_id)
 
 
 configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
@@ -235,9 +205,31 @@ def _build_summary_response(summary):
     }
 
 
+_UI_BASELINE_DATE_CACHE: tuple[str | None, float] = (None, 0.0)
+_UI_BASELINE_DATE_CACHE_SOURCE = get_actual_latest_date
+_UI_BASELINE_DATE_CACHE_TTL_SECONDS = 60.0
+_UI_BASELINE_DATE_LOCK = threading.Lock()
+
+
 def _resolve_ui_baseline_date() -> str | None:
-    """取得 UI 與 LINE 共用的資料基準日。"""
-    return normalize_date_str(get_actual_latest_date() or get_latest_trade_date())
+    """取得 UI 與 LINE 共用的資料基準日，短暫共用避免並發重複掃描日期表。"""
+    global _UI_BASELINE_DATE_CACHE, _UI_BASELINE_DATE_CACHE_SOURCE
+    source = get_actual_latest_date
+    now = time.monotonic()
+    cached_date, cached_at = _UI_BASELINE_DATE_CACHE
+    if source is _UI_BASELINE_DATE_CACHE_SOURCE and now - cached_at < _UI_BASELINE_DATE_CACHE_TTL_SECONDS:
+        return cached_date
+
+    with _UI_BASELINE_DATE_LOCK:
+        now = time.monotonic()
+        cached_date, cached_at = _UI_BASELINE_DATE_CACHE
+        source = get_actual_latest_date
+        if source is _UI_BASELINE_DATE_CACHE_SOURCE and now - cached_at < _UI_BASELINE_DATE_CACHE_TTL_SECONDS:
+            return cached_date
+        resolved_date = normalize_date_str(source() or get_latest_trade_date())
+        _UI_BASELINE_DATE_CACHE_SOURCE = source
+        _UI_BASELINE_DATE_CACHE = (resolved_date, now)
+        return resolved_date
 
 
 def _current_line_date() -> str:
@@ -689,15 +681,12 @@ __all__ = [
     'app',
     'callback',
     'configuration',
-    'current_user',
     'handle_message',
     'handler',
-    'login_manager',
     'main',
     'postback_handler',
     'reply_message',
     'strategy_manager',
-    'User',
     '_PostbackCache',
     '_apply_news_sentiment_overlay',
     '_build_chip_trend_messages',

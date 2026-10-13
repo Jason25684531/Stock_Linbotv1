@@ -32,11 +32,10 @@ def test_shared_shell_contains_primary_navigation_and_truthful_status(monkeypatc
     assert "LIVE TRADING" not in html
 
 
-def test_primary_pages_keep_authentication_guard():
+def test_primary_pages_open_without_authentication():
     from app import app as flask_app
 
     client = flask_app.test_client()
     for path in ("/dashboard", "/stock-analysis", "/strategies", "/backtest", "/system"):
         response = client.get(path)
-        assert response.status_code == 302
-        assert "/login" in response.headers["Location"]
+        assert response.status_code == 200

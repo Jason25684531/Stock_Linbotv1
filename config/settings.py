@@ -269,7 +269,6 @@ class Config:
         os.getenv("DASHBOARD_NEWS_BREAKER_COOLDOWN_SECONDS", "60")
     )
 
-    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
     FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-in-production")
     PUBLIC_DASHBOARD_URL = os.getenv(
         "PUBLIC_DASHBOARD_URL",

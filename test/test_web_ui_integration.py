@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import json
 import subprocess
+from html.parser import HTMLParser
 
 from flask import render_template
 
@@ -108,6 +109,32 @@ def test_strategy_center_allows_mixed_transient_selection_but_gates_actions():
     assert 'encodeURIComponent(this.selected.join' in html
 
 
+def test_json_alpine_attributes_survive_html_parsing():
+    from app import app as flask_app
+
+    class DataAttributes(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.values = []
+
+        def handle_starttag(self, tag, attrs):
+            self.values.extend(value for key, value in attrs if key == 'x-data')
+
+    with flask_app.test_request_context('/strategies'):
+        strategy_html = render_template('strategy_center.html', strategy_catalog=_catalog())
+    with flask_app.test_request_context('/stock-analysis?id=2330'):
+        stock_html = render_template('stock_analysis.html', stock_id='2330')
+
+    parser = DataAttributes()
+    parser.feed(strategy_html)
+    strategy_data = next(value for value in parser.values if value.startswith('strategyCenter('))
+    assert len(json.loads(strategy_data[len('strategyCenter('):-1])) == 2
+
+    parser = DataAttributes()
+    parser.feed(stock_html)
+    assert 'stockAnalysisPage({ initialStockId: "2330" })' in parser.values
+
+
 def test_strategy_center_javascript_gates_mixed_selection_before_actions():
     from app import app as flask_app
 
@@ -131,3 +158,65 @@ console.log('strategy-gates-ok');
     result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr or result.stdout
     assert 'strategy-gates-ok' in result.stdout
+
+
+def test_strategy_center_preview_keeps_strategy_results_independent():
+    from app import app as flask_app
+
+    catalog = _catalog()
+    catalog.append({**catalog[0], 'strategy_id': 'defensive_low_volatility', 'name': 'defensive_low_volatility', 'active': False})
+    catalog.append({**catalog[0], 'strategy_id': 'heartbeat_strategy', 'name': 'heartbeat_strategy', 'active': False})
+    catalog.append({**catalog[0], 'strategy_id': 'failed_strategy', 'name': 'failed_strategy', 'active': False})
+    with flask_app.test_request_context('/strategies'):
+        html = render_template('strategy_center.html', strategy_catalog=catalog)
+    match = re.search(r'<script>\s*(function strategyCenter\(catalog\) \{.*?</script>)', html, re.S)
+    assert match is not None
+    script = match.group(1).replace('</script>', '')
+    ids = [item['strategy_id'] for item in catalog]
+    harness = f"""
+const assert = require('node:assert/strict');
+{script}
+const ids = {json.dumps(ids)};
+const page = strategyCenter({json.dumps(catalog)});
+const originalFetch = global.fetch;
+const responses = {{
+  [ids[0]]: {{ freshness_status: 'stale', data: {{ recommendations: [{{stock_id: '2330'}}] }} }},
+  [ids[1]]: {{ freshness_status: 'blocked', reason: 'official runtime unavailable', data: {{ recommendations: [] }} }},
+  [ids[2]]: {{ freshness_status: 'current', data: {{ recommendations: [{{stock_id: '2330'}}] }} }},
+  [ids[3]]: {{ freshness_status: 'heartbeat', resolution_source: 'heartbeat', recommendation_date: '2026-10-08', data: {{ recommendations: [] }} }}
+}};
+global.fetch = async url => {{
+  const id = new URL(url, 'http://localhost').searchParams.get('strategy');
+  if (id === 'failed_strategy') throw new Error('temporary failure');
+  const data = responses[id];
+  if (!data) throw new Error('unexpected strategy ' + id);
+  return {{ok: true, json: async () => data}};
+}};
+(async () => {{
+  page.selected = ids;
+  await Promise.all(ids.map(id => page.loadStrategy(id)));
+  assert.equal(page.results[ids[0]].data.freshness_status, 'stale');
+  assert.match(page.resultText(ids[1]), /暫不可用/);
+  assert.match(page.resultText(ids[3]), /已完成篩選/);
+  assert.match(page.resultText(ids[4]), /temporary failure/);
+  const sameStockStrategies = ids.filter(id => page.results[id]?.data?.data?.recommendations?.some(row => row.stock_id === '2330'));
+  assert.deepEqual(sameStockStrategies, [ids[0], ids[2]]);
+
+  let finishRace;
+  global.fetch = url => new Promise(resolve => {{ finishRace = resolve; }});
+  const raceId = 'removed_while_loading';
+  page.selected.push(raceId);
+  const pending = page.loadStrategy(raceId);
+  await Promise.resolve();
+  page.selected = page.selected.filter(id => id !== raceId);
+  page.loadSelections(page.selected);
+  finishRace({{ok: true, json: async () => ({{freshness_status: 'current', data: {{recommendations: [{{stock_id: '9999'}}]}}}})}});
+  await pending;
+  assert.equal(page.results[raceId], undefined);
+  global.fetch = originalFetch;
+  console.log('strategy-previews-isolated-ok');
+}})().catch(error => {{ console.error(error); process.exitCode = 1; }});
+"""
+    result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert 'strategy-previews-isolated-ok' in result.stdout

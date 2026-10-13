@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from config import Config
 from core.db_helper import (
     MIN_VALID_MARKET_ROWS,
+    _is_business_weekday,
     get_db_engine,
     get_latest_trade_date,
     normalize_date_str,
@@ -506,11 +507,11 @@ def merge_market_data(
         merged_snapshot['stock_id'].astype(str).str.strip()
     )
     if 'trade_date' not in merged_snapshot.columns:
-        merged_snapshot['trade_date'] = date_str
-    else:
-        merged_snapshot['trade_date'] = (
-            merged_snapshot['trade_date'].fillna(date_str).astype(str)
-        )
+        return pd.DataFrame()
+    source_dates = merged_snapshot['trade_date'].map(normalize_date_str)
+    if source_dates.isna().any() or source_dates.ne(normalize_date_str(date_str)).any():
+        raise ValueError(f'Market snapshot source date does not match requested date {date_str}')
+    merged_snapshot['trade_date'] = source_dates
     merged_snapshot = merged_snapshot.drop_duplicates(
         subset=['stock_id', 'trade_date']
     )
@@ -521,11 +522,11 @@ def merge_market_data(
             merged_flow['stock_id'].astype(str).str.strip()
         )
         if 'trade_date' not in merged_flow.columns:
-            merged_flow['trade_date'] = date_str
-        else:
-            merged_flow['trade_date'] = (
-                merged_flow['trade_date'].fillna(date_str).astype(str)
-            )
+            return pd.DataFrame()
+        flow_dates = merged_flow['trade_date'].map(normalize_date_str)
+        if flow_dates.isna().any() or flow_dates.ne(normalize_date_str(date_str)).any():
+            raise ValueError(f'Market flow source date does not match requested date {date_str}')
+        merged_flow['trade_date'] = flow_dates
         for column in ['foreign_buy', 'trust_buy', 'dealer_buy']:
             if column not in merged_flow.columns:
                 merged_flow[column] = 0
@@ -602,6 +603,10 @@ def process_and_save(df, date_str, engine):
     if df is None or df.empty:
         return 0
 
+    requested_date = normalize_date_str(date_str)
+    if not requested_date or not _is_business_weekday(requested_date):
+        raise ValueError(f'Market snapshot date is not a valid business weekday: {date_str}')
+
     cols = ['open_price', 'high_price', 'low_price', 'close_price', 'volume',
             'pe_ratio', 'foreign_buy', 'trust_buy', 'dealer_buy',
             'margin_balance', 'short_balance']
@@ -611,14 +616,23 @@ def process_and_save(df, date_str, engine):
         else:
             df[col] = 0
 
-    df['trade_date'] = date_str
+    if 'trade_date' not in df.columns:
+        raise ValueError('Market data is missing its authoritative source trade_date')
+    source_dates = df['trade_date'].map(normalize_date_str)
+    if source_dates.isna().any() or source_dates.ne(requested_date).any():
+        raise ValueError(f'Market data source date does not match requested date {date_str}')
+    df['trade_date'] = source_dates
     df = df[df['close_price'] > 0].copy()
+    if df.empty:
+        raise ValueError('Market data contains no rows with a positive close price')
 
     # 過濾權證（保留個股 + ETF + 債券ETF，只排除權證等衍生品）
     # 個股: 4碼 1xxx-9xxx | ETF/債券: 00 開頭 (0050, 006208, 00679B, 00631L...)
     before_filter = len(df)
     df['stock_id'] = df['stock_id'].astype(str).str.strip()
-    df = df[df['stock_id'].str.match(r'^([1-9]\d{3}|00)')].copy()
+    df = df[df['stock_id'].str.fullmatch(r'(?:[1-9]\d{3}|00\d{2,4}[A-Z]?)')].copy()
+    if df.empty:
+        raise ValueError('Market data contains no supported stock identifiers')
     filtered_out = before_filter - len(df)
     if filtered_out > 0:
         print(
@@ -627,31 +641,8 @@ def process_and_save(df, date_str, engine):
             f'（排除 {filtered_out} 筆權證/衍生品）'
         )
 
-    try:
-        from core.db_helper import upsert_stock_data
-        count = upsert_stock_data(df, 'daily_market_data')
-        return count
-    except ImportError:
-        print("⚠️ 使用回退方案：REPLACE INTO")
-        try:
-            with engine.connect() as conn:
-                conn.execute(
-                    text(
-                        'DELETE FROM daily_market_data '
-                        f"WHERE trade_date='{date_str}'"
-                    )
-                )
-                conn.commit()
-            df.to_sql(
-                'daily_market_data',
-                engine,
-                if_exists='append',
-                index=False,
-                chunksize=2000)
-            return len(df)
-        except Exception as e:
-            print(f"❌ 寫入失敗: {e}")
-            return 0
+    from core.db_helper import upsert_stock_data
+    return upsert_stock_data(df, 'daily_market_data')
 
 # ============================================
 # 🚀 主程式 - V35 統一更新入口
@@ -695,6 +686,9 @@ def run_price_update(engine):
     current_dt = start_dt
     while current_dt <= end_dt:
         date_str = current_dt.strftime("%Y-%m-%d")
+        if not _is_business_weekday(date_str):
+            current_dt += timedelta(days=1)
+            continue
         count = update_market_date(engine, date_str, mcp_client=mcp_client)
         if count > 0:
             print(f"💾 成功寫入 {count} 筆資料！")
@@ -716,6 +710,9 @@ def update_market_date(
 ) -> int:
     """更新單一交易日市場資料，供每日更新與 backfill 共用。"""
     print(f"\n📅 正在處理: {date_str}")
+    requested_date = normalize_date_str(date_str)
+    if not requested_date or not _is_business_weekday(requested_date):
+        raise ValueError(f'Market snapshot date is not a valid business weekday: {date_str}')
     client = mcp_client or MCPClient()
 
     final_df, warnings = fetch_market_data_with_mcp(client, date_str)
@@ -723,6 +720,9 @@ def update_market_date(
         print(f"  ⚠️ MCP 部分成功: {'；'.join(warnings)}")
 
     if final_df.empty:
+        if warnings:
+            raise RuntimeError(f'Market data fetch failed for {requested_date}: {"; ".join(warnings)}')
+        # ponytail: an empty successful response is treated as a holiday; confirm with an authoritative Taiwan calendar when available.
         print("  ⚠️ 缺少市場快照，略過當日寫入")
         return 0
 
@@ -731,7 +731,10 @@ def update_market_date(
             f"  ⚠️ MCP 回傳筆數過少 ({len(final_df)} < {int(min_row_count)})，"
             "略過當日市場資料更新"
         )
-        return 0
+        raise RuntimeError(
+            f'Market snapshot is incomplete for {requested_date}: '
+            f'{len(final_df)} rows, expected at least {int(min_row_count)}'
+        )
 
     final_df, margin_warning = enrich_with_margin_balance(final_df, date_str)
     if margin_warning:
@@ -951,7 +954,7 @@ def print_summary_report(price_count, revenue_ok, financial_ok, elapsed):
     except Exception as e:
         print(f"  ⚠️ 統計查詢失敗: {e}")
 
-    price_status = '✅ 完成' if price_count > 0 else '💤 已是最新'
+    price_status = '✅ 完成' if price_count > 0 else '💤 本次無新增資料'
     revenue_status = '✅ 完成' if revenue_ok else '⚠️ 跳過/失敗'
     financial_status = '✅ 完成' if financial_ok else '⚠️ 跳過/失敗'
 

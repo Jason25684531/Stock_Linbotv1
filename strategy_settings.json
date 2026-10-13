@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-09-21T13:10:26.930441",
+  "last_updated": "2026-10-13T14:12:11.976281",
   "active_strategies": [
-    "quality_value_low_volatility"
+    "hybrid_trend_rank"
   ],
   "random_strategy_pool": [
     "v35_innovation",

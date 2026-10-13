@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from jobs import update_database
 from jobs import backfill_pipeline
@@ -8,7 +9,7 @@ def _fake_calendar_frame(dates: list[str]) -> pd.DataFrame:
     return pd.DataFrame({'Close': [1.0] * len(dates)}, index=pd.to_datetime(dates))
 
 
-def test_update_market_date_skips_when_rows_too_few(monkeypatch):
+def test_update_market_date_fails_when_rows_too_few(monkeypatch):
     sparse_df = pd.DataFrame([
         {'stock_id': f'{1000 + idx}', 'close_price': 10.0, 'volume': 1000}
         for idx in range(50)
@@ -19,10 +20,30 @@ def test_update_market_date_skips_when_rows_too_few(monkeypatch):
     monkeypatch.setattr(update_database, 'enrich_with_margin_balance', lambda df, date_str: (df, None))
     monkeypatch.setattr(update_database, 'process_and_save', lambda df, date_str, engine: process_calls.append(date_str) or len(df))
 
-    result = update_database.update_market_date(object(), '2026-04-15', mcp_client=object())
-
-    assert result == 0
+    with pytest.raises(RuntimeError, match='incomplete'):
+        update_database.update_market_date(object(), '2026-04-15', mcp_client=object())
     assert process_calls == []
+
+
+def test_update_market_date_fails_on_empty_snapshot_with_fetch_warnings(monkeypatch):
+    monkeypatch.setattr(
+        update_database,
+        'fetch_market_data_with_mcp',
+        lambda client, date_str: (pd.DataFrame(), ['snapshot request failed']),
+    )
+
+    with pytest.raises(RuntimeError, match='snapshot request failed'):
+        update_database.update_market_date(object(), '2026-04-15', mcp_client=object())
+
+
+def test_update_market_date_accepts_empty_success_as_non_trading_day(monkeypatch):
+    monkeypatch.setattr(
+        update_database,
+        'fetch_market_data_with_mcp',
+        lambda client, date_str: (pd.DataFrame(), []),
+    )
+
+    assert update_database.update_market_date(object(), '2026-04-15', mcp_client=object()) == 0
 
 
 def test_scan_pipeline_gaps_detects_market_and_recommendation_holes(monkeypatch):

@@ -4,16 +4,33 @@ from __future__ import annotations
 
 import os
 import json
+import time
 import traceback
 
 import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
-from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import text
 
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
 from . import app, services
+
+
+_MARKET_DATE_CACHE: tuple[str | None, float] = (None, 0.0)
+_MARKET_DATE_CACHE_SOURCE = None
+
+
+def _latest_ui_market_date() -> str | None:
+    global _MARKET_DATE_CACHE, _MARKET_DATE_CACHE_SOURCE
+    source = db_helper.get_latest_valid_market_date
+    now = time.monotonic()
+    cached_date, cached_at = _MARKET_DATE_CACHE
+    if source is _MARKET_DATE_CACHE_SOURCE and now - cached_at < 30:
+        return cached_date
+    market_date = source()
+    _MARKET_DATE_CACHE_SOURCE = source
+    _MARKET_DATE_CACHE = (market_date, now)
+    return market_date
 
 
 def _parse_csv_query_values(*keys: str) -> list[str] | None:
@@ -61,41 +78,23 @@ def health_check():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """登入頁面。"""
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-
-    if request.method == 'POST':
-        password = request.form.get('password', '')
-        if services.User.validate_password(password):
-            user = services.User('admin')
-            login_user(user)
-            flash('✅ 登入成功！', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
-        flash('❌ 密碼錯誤，請重試', 'error')
-
-    return render_template('login.html')
+    """Redirect existing login bookmarks to the public dashboard."""
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/logout')
-@login_required
 def logout():
-    """登出。"""
-    logout_user()
-    flash('👋 已登出', 'success')
-    return redirect(url_for('login'))
+    """Redirect existing logout bookmarks to the public dashboard."""
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/')
-@login_required
 def index():
     """首頁重定向到 Dashboard。"""
     return redirect(url_for('dashboard'))
 
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
     """Dashboard 主頁面。"""
     return render_template('dashboard.html')
@@ -197,14 +196,12 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
 
 
 @app.route('/stock-analysis')
-@login_required
 def stock_analysis():
     """Render the dedicated stock analysis workspace."""
     return render_template('stock_analysis.html', stock_id=str(request.args.get('id') or '').strip())
 
 
 @app.route('/strategies')
-@login_required
 def strategy_center():
     """Render the unified strategy catalog."""
     return render_template('strategy_center.html', strategy_catalog=_build_strategy_catalog())
@@ -214,7 +211,7 @@ def strategy_center():
 def inject_shell_status():
     """Expose one evidence-backed status badge to every rendered page."""
     try:
-        payload, _ = _build_system_status_payload()
+        payload, _ = _build_system_status_payload(include_freshness=False)
         state = payload.get('status')
         if state == 'ok':
             return {'shell_status': {'state': 'ok', 'label': 'SYSTEM ONLINE'}}
@@ -226,7 +223,6 @@ def inject_shell_status():
 
 
 @app.route('/update_strategy', methods=['POST'])
-@login_required
 def update_strategy():
     """切換策略 (V2: 支援多策略)。"""
     try:
@@ -253,7 +249,6 @@ def update_strategy():
 
 
 @app.route('/update_mode', methods=['POST'])
-@login_required
 def update_mode():
     """切換 V34/V35 共用模式：積極 / 平衡 / 寬鬆。"""
     try:
@@ -360,8 +355,8 @@ def api_backtest_result():
 def api_user_trade():
     """記錄使用者模擬交易。"""
     try:
-        data = request.get_json()
-        user_id = data.get('user_id')
+        data = request.get_json(silent=True) or {}
+        user_id = 'admin'
         stock_id = data.get('stock_id')
         buy_price = data.get('buy_price')
         buy_date = data.get('buy_date')
@@ -687,7 +682,6 @@ def api_daily_signals():
 
 
 @app.route('/api/news_sentiment')
-@login_required
 def api_news_sentiment():
     """回傳指定日期（或最新）消息面情緒摘要。"""
     date_str = request.args.get('date')
@@ -772,12 +766,13 @@ def api_stock_analysis():
         return jsonify({'status': 'error', 'error': 'missing required stock id query parameter: id'}), 400
 
     try:
-        health_payload = services._build_dashboard_health_check_payload(
+        health_payload = services._build_dashboard_health_check_payload_local(
             stock_id=stock_id,
             requested_date=request.args.get('date'),
             period=request.args.get('period'),
             overlays=_parse_csv_query_values('overlay', 'overlays'),
             panes=_parse_csv_query_values('pane', 'panes', 'panel', 'panels'),
+            basic_only=True,
         )
         status_code = 500 if health_payload.get('status') == 'error' else 200
         return _dashboard_json_response(_build_stock_analysis_payload(health_payload, stock_id), status_code)
@@ -810,7 +805,17 @@ def _market_envelope(status: str, as_of_date: str | None, source: list[str], dat
 
 def _load_market_frame() -> tuple[pd.DataFrame, str | None, list[str]]:
     warnings: list[str] = []
-    requested_date = services.normalize_date_str(request.args.get('date')) or services._resolve_ui_baseline_date() or services._current_line_date()
+    try:
+        market_date = _latest_ui_market_date()
+    except Exception as exc:
+        market_date = None
+        warnings.append(f'market date resolution failed: {exc}')
+    requested_date = (
+        services.normalize_date_str(request.args.get('date'))
+        or market_date
+        or services._resolve_ui_baseline_date()
+        or services._current_line_date()
+    )
     try:
         df, date_str = services.get_stock_data(date_str=requested_date)
     except Exception as exc:
@@ -957,30 +962,90 @@ def api_market_recommendations():
     except (TypeError, ValueError):
         top_n = 10
     strategy = (request.args.get('strategy') or '').strip() or None
-    as_of_date = services.normalize_date_str(request.args.get('date')) or services._resolve_ui_baseline_date() or services._current_line_date()
+    strategy_id = None
+    if strategy:
+        try:
+            db_helper._strategy_storage_keys(strategy)
+            strategy_id = (
+                strategy if strategy == services.StrategyManager.FUNDAMENTAL_RUNTIME_STRATEGY_ID
+                else services.StrategyManager().resolve(strategy, warn_legacy=False)
+            )
+        except KeyError:
+            return jsonify({'status': 'error', 'error': f'無效策略: {strategy}'}), 400
     warnings: list[str] = []
     try:
-        rows = services.get_daily_recommendations(date_str=as_of_date, strategy=strategy, limit=top_n)
+        market_date = _latest_ui_market_date()
+    except Exception as exc:
+        market_date = None
+        warnings.append(f'market date resolution failed: {exc}')
+    as_of_date = (
+        services.normalize_date_str(request.args.get('date'))
+        or market_date
+        or services._resolve_ui_baseline_date()
+        or services._current_line_date()
+    )
+    try:
+        rows, resolution = services.get_recommendations_with_market_fallback(
+            date_str=as_of_date,
+            strategy=strategy,
+            limit=top_n,
+            max_fallback_age_days=Config.RECOMMENDATION_FALLBACK_MAX_AGE_DAYS,
+        )
     except Exception as exc:
         warnings.append(f'recommendations load failed: {exc}')
         rows = pd.DataFrame()
+        resolution = {'resolution_source': 'error', 'recommendation_date': None}
     if not isinstance(rows, pd.DataFrame):
         rows = pd.DataFrame(rows or [])
     if rows.empty:
-        return _market_envelope('empty', as_of_date, ['daily_recommendations'], {'recommendations': []}, warnings)
-    fields = [
-        'stock_id', 'stock_name', 'close_price', 'ai_score', 'strategy', 'strategy_key',
-        'strategy_display', 'chip_score', 'rsi', 'volume', 'foreign_buy',
-    ]
-    ranked = rows.sort_values('ai_score', ascending=False).head(top_n) if 'ai_score' in rows.columns else rows.head(top_n)
-    recommendations = []
-    for _, row in ranked.iterrows():
-        record = _record_from_row(row, [field for field in fields if field in ranked.columns])
-        record.setdefault('recommendation_date', as_of_date)
-        record['factor_fields'] = _recommendation_factor_fields(row)
-        record['fallback_used'] = bool(row.get('fallback_used', False)) if 'fallback_used' in ranked.columns else False
-        recommendations.append(record)
-    return _market_envelope('ok', as_of_date, ['daily_recommendations'], {'recommendations': recommendations}, warnings)
+        recommendations = []
+        status = 'error' if resolution.get('resolution_source') == 'error' else 'degraded' if resolution.get('fallback_too_old') or warnings else 'empty'
+        freshness_status = 'stale' if resolution.get('fallback_too_old') else resolution.get('resolution_source', 'unavailable')
+        if strategy_id == services.StrategyManager.FUNDAMENTAL_RUNTIME_STRATEGY_ID and not resolution.get('has_persisted_snapshot') and freshness_status == 'missing':
+            freshness_status = 'blocked'
+        recommendation_date = resolution.get('last_available_recommendation_date') or (
+            resolution.get('recommendation_date')
+            if resolution.get('resolution_source') not in {'missing', 'error'}
+            else None
+        )
+    else:
+        fields = [
+            'stock_id', 'stock_name', 'close_price', 'ai_score', 'strategy', 'strategy_key',
+            'strategy_display', 'chip_score', 'rsi', 'volume', 'foreign_buy',
+        ]
+        ranked = rows.sort_values('ai_score', ascending=False).head(top_n) if 'ai_score' in rows.columns else rows.head(top_n)
+        recommendation_date = resolution.get('recommendation_date') or resolution.get('last_available_recommendation_date')
+        recommendations = []
+        for _, row in ranked.iterrows():
+            record = _record_from_row(row, [field for field in fields if field in ranked.columns])
+            record['recommendation_date'] = recommendation_date
+            record['factor_fields'] = _recommendation_factor_fields(row)
+            record['fallback_used'] = bool(resolution.get('fallback_used'))
+            record['strategy_id'] = strategy_id or record.get('strategy')
+            recommendations.append(record)
+        status = 'degraded' if resolution.get('fallback_used') or warnings else 'ok'
+        freshness_status = 'fallback' if resolution.get('fallback_used') else 'current'
+    payload = _market_envelope(
+        status,
+        as_of_date,
+        ['daily_recommendations'],
+        {'recommendations': recommendations},
+        warnings,
+    ).get_json()
+    payload.update({
+        'strategy_id': strategy_id,
+        'requested_date': resolution.get('requested_date') or as_of_date,
+        'market_anchor_date': resolution.get('market_anchor_date'),
+        'resolution_source': resolution.get('resolution_source', 'error'),
+        'has_persisted_snapshot': bool(resolution.get('has_persisted_snapshot')),
+        'reason': ('正式策略尚不可用' if freshness_status == 'blocked' else '推薦資料已過期' if freshness_status == 'stale' else '尚無策略快照' if freshness_status == 'missing' else None),
+        'recommendation_date': recommendation_date,
+        'freshness_status': freshness_status,
+        'fallback_used': bool(resolution.get('fallback_used')),
+        'fallback_age_days': resolution.get('fallback_age_days'),
+        'last_available_recommendation_date': resolution.get('last_available_recommendation_date'),
+    })
+    return _dashboard_json_response(payload)
 
 
 @app.route('/api/market/snapshot')
@@ -1103,13 +1168,14 @@ def _format_pipeline_status(status: str | None) -> str:
         'success': 'Success',
         'failed': 'Failed',
         'failure': 'Failed',
+        'blocked': 'Blocked',
         'running': 'Running',
         'not_run': 'Not Run',
         'not run': 'Not Run',
     }.get(normalized, 'Unknown')
 
 
-def _build_system_status_payload() -> tuple[dict[str, object], int]:
+def _build_system_status_payload(*, include_freshness: bool = True) -> tuple[dict[str, object], int]:
     step_map = [('1_update', 'update_database'), ('2_run', 'run_daily'), ('5_push', 'push_to_line')]
     warnings: list[str] = []
     rows_by_step: dict[str, dict[str, object]] = {}
@@ -1117,18 +1183,38 @@ def _build_system_status_payload() -> tuple[dict[str, object], int]:
         engine = db_helper.get_db_engine()
         db_helper.ensure_pipeline_run_state_schema(engine)
         with engine.connect() as conn:
+            run = conn.execute(
+                text(
+                    f"""
+                    SELECT pipeline_name, run_date
+                    FROM {db_helper.PIPELINE_RUNS_TABLE}
+                    WHERE step_name = 'update_database'
+                      AND pipeline_name IN ('daily', 'evening')
+                    ORDER BY run_date DESC, updated_at DESC, id DESC
+                    LIMIT 1
+                    """
+                )
+            ).mappings().fetchone()
             for _, step_name in step_map:
+                if not run:
+                    break
                 row = conn.execute(
                     text(
                         f"""
                         SELECT *
                         FROM {db_helper.PIPELINE_RUNS_TABLE}
-                        WHERE step_name = :step_name
-                        ORDER BY run_date DESC, updated_at DESC, id DESC
+                        WHERE pipeline_name = :pipeline_name
+                          AND run_date = :run_date
+                          AND step_name = :step_name
+                        ORDER BY updated_at DESC, id DESC
                         LIMIT 1
                         """
                     ),
-                    {'step_name': step_name},
+                    {
+                        'pipeline_name': run['pipeline_name'],
+                        'run_date': run['run_date'],
+                        'step_name': step_name,
+                    },
                 ).mappings().fetchone()
                 if row:
                     rows_by_step[step_name] = dict(row)
@@ -1151,9 +1237,22 @@ def _build_system_status_payload() -> tuple[dict[str, object], int]:
                 'error_summary': row.get('error_summary'),
             }
         )
-    has_failed = any(step['status'] == 'Failed' for step in steps)
+    has_failed = any(step['status'] in {'Failed', 'Blocked'} for step in steps)
     has_missing = any(step['status'] == 'Unknown' for step in steps)
-    status = 'degraded' if has_failed or has_missing or warnings else 'ok'
+    market_date = recommendation_date = None
+    recommendation_stale = False
+    if include_freshness:
+        try:
+            market_date = _latest_ui_market_date()
+            recommendation_date = services._resolve_ui_baseline_date()
+        except Exception as exc:
+            warnings.append(f'recommendation freshness unavailable: {exc}')
+        recommendation_stale = bool(market_date and recommendation_date != market_date)
+        if recommendation_stale:
+            warnings.append(
+                f'recommendations stale: market={market_date}, recommendations={recommendation_date or "unavailable"}'
+            )
+    status = 'degraded' if has_failed or has_missing or warnings or recommendation_stale else 'ok'
     latest_run_date = next((step['run_date'] for step in steps if step.get('run_date')), None)
     heartbeat_state = 'failed' if has_failed else ('not_run' if has_missing else 'success')
     payload = {
@@ -1164,6 +1263,11 @@ def _build_system_status_payload() -> tuple[dict[str, object], int]:
         'data': {
             'heartbeat': {'state': heartbeat_state, 'latest_run_date': latest_run_date},
             'steps': steps,
+            **({'recommendation_freshness': {
+                'status': 'stale' if recommendation_stale else 'current' if recommendation_date else 'unavailable',
+                'market_date': market_date,
+                'recommendation_date': recommendation_date,
+            }} if include_freshness else {}),
         },
     }
     return payload, 200
@@ -1176,7 +1280,6 @@ def api_market_system_status():
 
 
 @app.route('/system')
-@login_required
 def system_status_page():
     payload, _ = _build_system_status_payload()
     steps = payload.get('data', {}).get('steps', []) if isinstance(payload.get('data'), dict) else []
@@ -1192,7 +1295,6 @@ def system_status_page():
 
 
 @app.route('/backtest', methods=['GET', 'POST'])
-@login_required
 def backtest():
     """回測頁面。"""
     if request.method == 'GET':
@@ -1269,7 +1371,6 @@ def backtest():
 
 
 @app.route('/api/backtest/run', methods=['POST'])
-@login_required
 def api_run_backtest():
     """執行回測 API。"""
     try:

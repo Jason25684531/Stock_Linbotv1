@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import re
 import time
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Connection
 from config import Config
 
@@ -883,9 +883,7 @@ def get_latest_trade_date():
         datetime.date or None
     """
     try:
-        valid_dates = get_valid_market_dates()
-        if valid_dates:
-            return valid_dates[-1]
+        return get_latest_valid_market_date()
     except Exception as e:
         print(f"⚠️ 獲取最新日期失敗: {e}")
     return None
@@ -896,11 +894,18 @@ def normalize_date_str(date_value) -> str | None:
     if date_value is None:
         return None
     if hasattr(date_value, 'strftime'):
-        return date_value.strftime('%Y-%m-%d')
-    text_value = str(date_value).strip()
+        try:
+            text_value = date_value.strftime('%Y-%m-%d')
+        except (TypeError, ValueError):
+            return None
+    else:
+        text_value = str(date_value).strip()
     if not text_value:
         return None
-    return text_value[:10]
+    try:
+        return datetime.fromisoformat(text_value.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+    except ValueError:
+        return None
 
 
 def _is_business_weekday(date_value) -> bool:
@@ -967,6 +972,35 @@ def get_valid_market_dates(
         valid_dates.append(normalized)
 
     return valid_dates
+
+
+def get_latest_valid_market_date(end_date: str | None = None, min_row_count: int = MIN_VALID_MARKET_ROWS) -> str | None:
+    """Resolve one valid date without grouping the full market history."""
+    engine = get_db_engine()
+    cutoff = normalize_date_str(end_date)
+    where_clause = 'WHERE trade_date <= :end_date' if cutoff else ''
+    offset = 0
+    while True:
+        dates = pd.read_sql(text(f"""
+            SELECT DISTINCT trade_date FROM daily_market_data
+            {where_clause}
+            ORDER BY trade_date DESC LIMIT 16 OFFSET :offset
+        """), engine, params={'end_date': cutoff, 'offset': offset})
+        if dates.empty:
+            return None
+        for value in dates['trade_date']:
+            day = normalize_date_str(value)
+            if not day or not _is_business_weekday(day):
+                continue
+            evidence = pd.read_sql(text("""
+                SELECT COUNT(*) AS row_count,
+                       SUM(CASE WHEN stock_id = :market_symbol THEN 1 ELSE 0 END) AS market_symbol_rows
+                FROM daily_market_data WHERE trade_date = :date
+            """), engine, params={'date': day, 'market_symbol': Config.MARKET_SYMBOL})
+            row = evidence.iloc[0]
+            if int(row['row_count']) > min_row_count and int(row['market_symbol_rows'] or 0) > 0:
+                return day
+        offset += len(dates)
 
 
 def get_recommendation_dates(
@@ -1057,14 +1091,15 @@ def get_completed_recommendation_strategy_days(
 def get_actual_latest_date(min_row_count: int = MIN_VALID_MARKET_ROWS):
     """取得市場資料與推薦資料交集中的最新有效日期。"""
     try:
-        market_dates = set(get_valid_market_dates(min_row_count=min_row_count))
-        if not market_dates:
-            return None
-
-        recommendation_dates = set(get_recommendation_dates(include_heartbeats=True))
-        shared_dates = sorted(market_dates & recommendation_dates)
-        if shared_dates:
-            return shared_dates[-1]
+        recommendation_dates = get_recommendation_dates(include_heartbeats=True)
+        for candidate_date in sorted(recommendation_dates, reverse=True):
+            valid_market_dates = get_valid_market_dates(
+                start_date=candidate_date,
+                end_date=candidate_date,
+                min_row_count=min_row_count,
+            )
+            if candidate_date in valid_market_dates:
+                return candidate_date
     except Exception as e:
         print(f"⚠️ 獲取實際最新日期失敗: {e}")
     return None
@@ -1244,35 +1279,32 @@ def upsert_stock_data(df, table_name='daily_market_data'):
     if table_name not in _ALLOWED_TABLES:
         raise ValueError(f"❌ 不允許的資料表名稱: {table_name}（允許: {_ALLOWED_TABLES}）")
 
-    try:
-        engine = get_db_engine()
-        with engine.connect() as conn:
-            # 查詢 DB 實際欄位，過濾 DataFrame 中不存在於表的欄位
-            result = conn.execute(text(f"SHOW COLUMNS FROM {table_name}"))
-            db_columns = {row[0] for row in result}
-            valid_cols = [col for col in df.columns if col in db_columns]
-            df = df[valid_cols]
+    engine = get_db_engine()
+    with engine.begin() as conn:
+        # Read actual table columns while keeping the write path dialect-neutral.
+        db_columns = {column['name'] for column in inspect(conn).get_columns(table_name)}
+        valid_cols = [col for col in df.columns if col in db_columns]
+        df = df[valid_cols]
 
-            # 方案：使用 REPLACE INTO（MySQL 特有）
-            # REPLACE = DELETE + INSERT，但是原子性操作
-            for _, row in df.iterrows():
-                columns = ', '.join(row.index)
-                placeholders = ', '.join([f':{col}' for col in row.index])
+        if not {'stock_id', 'trade_date'}.issubset(valid_cols):
+            raise ValueError(f'{table_name} requires stock_id and trade_date for retry-safe writes')
+        df = df.drop_duplicates(subset=['stock_id', 'trade_date'], keep='last')
+        for _, row in df.iterrows():
+            columns = ', '.join(row.index)
+            placeholders = ', '.join([f':{col}' for col in row.index])
 
-                sql = text(f"""
-                    REPLACE INTO {table_name} ({columns})
-                    VALUES ({placeholders})
-                """)
+            sql = text(f"""
+                INSERT INTO {table_name} ({columns})
+                VALUES ({placeholders})
+            """)
 
-                conn.execute(sql, row.to_dict())
+            conn.execute(text(
+                f'DELETE FROM {table_name} '
+                'WHERE stock_id = :stock_id AND trade_date = :trade_date'
+            ), {'stock_id': row['stock_id'], 'trade_date': row['trade_date']})
+            conn.execute(sql, row.to_dict())
 
-            conn.commit()
-
-        return len(df)
-
-    except Exception as e:
-        print(f"❌ upsert_stock_data 失敗: {e}")
-        return 0
+    return len(df)
 
 
 def get_market_trend(date_str):
@@ -2345,8 +2377,11 @@ def _get_prior_recommendation_dates(date_str: str, strategy: str = None) -> list
     params = {'date': date_str}
 
     if strategy:
-        sql += " AND strategy = :strategy"
+        keys = _strategy_storage_keys(strategy)
         params['strategy'] = strategy
+        for index, key in enumerate((key for key in keys if key != strategy), 1):
+            params[f'alias_{index}'] = key
+        sql += " AND strategy IN (" + ', '.join(f':{key}' for key in params if key != 'date') + ")"
 
     sql += " ORDER BY trade_date DESC"
 
@@ -2355,6 +2390,27 @@ def _get_prior_recommendation_dates(date_str: str, strategy: str = None) -> list
         return []
 
     return [normalize_date_str(value) for value in dates_df['trade_date'].tolist() if normalize_date_str(value)]
+
+
+def _strategy_storage_keys(strategy: str) -> tuple[str, ...]:
+    """Resolve the public strategy identity while retaining historical DB keys."""
+    from core.strategy_manager import StrategyManager
+
+    if strategy == StrategyManager.FUNDAMENTAL_RUNTIME_STRATEGY_ID:
+        return (strategy,)
+    canonical = StrategyManager().resolve(strategy, warn_legacy=False)
+    metadata = StrategyManager.STRATEGY_METADATA[canonical]
+    return (canonical, *metadata.legacy_ids)
+
+
+def _read_strategy_snapshot(date_str: str, strategy: str | None, limit: int | None) -> pd.DataFrame:
+    if not strategy:
+        return get_daily_recommendations(date_str=date_str, limit=limit, include_heartbeats=True)
+    for key in _strategy_storage_keys(strategy):
+        rows = get_daily_recommendations(date_str=date_str, strategy=key, include_heartbeats=True)
+        if not rows.empty:
+            return rows
+    return pd.DataFrame()
 
 
 def _calc_date_diff_days(older_date: str, newer_date: str) -> int | None:
@@ -2381,15 +2437,7 @@ def _resolve_market_anchor_date(requested_date: str | None) -> str | None:
     if not normalized_requested:
         return None
 
-    valid_dates = get_valid_market_dates(end_date=normalized_requested)
-    if valid_dates:
-        return normalize_date_str(valid_dates[-1])
-
-    latest = get_latest_trade_date()
-    latest_str = normalize_date_str(latest)
-    if latest_str and latest_str <= normalized_requested:
-        return latest_str
-    return None
+    return get_latest_valid_market_date(end_date=normalized_requested)
 
 
 def _build_recommendation_resolution_meta(
@@ -2442,6 +2490,8 @@ def get_recommendations_with_market_fallback(
     max_fallback_age_days: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """取得指定策略的持久化推薦快照，必要時回推同策略最後一筆資料。"""
+    if strategy:
+        _strategy_storage_keys(strategy)
     requested_date = _resolve_requested_date(date_str)
     market_anchor_date = _resolve_market_anchor_date(requested_date)
     if not requested_date or not market_anchor_date:
@@ -2463,12 +2513,7 @@ def get_recommendations_with_market_fallback(
         max_fallback_age_days = Config.RECOMMENDATION_FALLBACK_MAX_AGE_DAYS
 
     circuit_breaker_active = get_market_trend(market_anchor_date) != 'BULL'
-    current_rows = get_daily_recommendations(
-        date_str=market_anchor_date,
-        strategy=strategy,
-        limit=limit,
-        include_heartbeats=True,
-    )
+    current_rows = _read_strategy_snapshot(market_anchor_date, strategy, limit)
     current_candidates, current_has_heartbeat, current_has_candidates = _classify_recommendation_snapshot(current_rows)
 
     if current_has_heartbeat:
@@ -2487,7 +2532,7 @@ def get_recommendations_with_market_fallback(
         )
 
     if current_has_candidates:
-        return current_candidates, _build_recommendation_resolution_meta(
+        return current_candidates.head(limit) if limit is not None else current_candidates, _build_recommendation_resolution_meta(
             requested_date=requested_date,
             market_anchor_date=market_anchor_date,
             recommendation_date=market_anchor_date,
@@ -2524,12 +2569,7 @@ def get_recommendations_with_market_fallback(
                 last_available_recommendation_date=last_available_recommendation_date,
             )
 
-        fallback_rows = get_daily_recommendations(
-            date_str=candidate_date,
-            strategy=strategy,
-            limit=limit,
-            include_heartbeats=True,
-        )
+        fallback_rows = _read_strategy_snapshot(candidate_date, strategy, limit)
         fallback_candidates, fallback_has_heartbeat, fallback_has_candidates = _classify_recommendation_snapshot(fallback_rows)
         if not fallback_has_heartbeat and not fallback_has_candidates:
             continue
@@ -2549,7 +2589,7 @@ def get_recommendations_with_market_fallback(
                 last_available_recommendation_date=last_available_recommendation_date,
             )
 
-        return fallback_candidates, _build_recommendation_resolution_meta(
+        return fallback_candidates.head(limit) if limit is not None else fallback_candidates, _build_recommendation_resolution_meta(
             requested_date=requested_date,
             market_anchor_date=market_anchor_date,
             recommendation_date=candidate_date,

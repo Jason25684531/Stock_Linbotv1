@@ -1289,9 +1289,13 @@ def _build_dashboard_health_check_payload_local(
     period: str | None = None,
     overlays=None,
     panes=None,
+    basic_only: bool = False,
 ) -> dict[str, object]:
     normalized_stock_id = str(stock_id or '').strip()
-    normalized_requested_date = normalize_date_str(requested_date) or services._current_line_date()
+    normalized_requested_date = normalize_date_str(requested_date) or (
+        datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d')
+        if basic_only else services._current_line_date()
+    )
     normalized_period = _normalize_war_room_period(period)
     selected_overlays = _normalize_war_room_selection(
         overlays,
@@ -1334,38 +1338,34 @@ def _build_dashboard_health_check_payload_local(
     aggregated_history = _aggregate_dashboard_history(prepared_history, normalized_period)
     if aggregated_history.empty:
         payload['message'] = f'查無 {normalized_stock_id} 的可用行情資料。'
-        payload['llm_report'] = services._build_dashboard_llm_report(normalized_stock_id, {}, {}, {}, {})
+        if not basic_only:
+            payload['llm_report'] = services._build_dashboard_llm_report(normalized_stock_id, {}, {}, {}, {})
         return payload
 
     latest_row = aggregated_history.iloc[-1]
     as_of_date = normalize_date_str(latest_row.get('trade_date'))
     fallback_used = as_of_date != normalized_requested_date
-    report = services.get_stock_report(normalized_stock_id, as_of_date=as_of_date) or {'stock_id': normalized_stock_id, 'trade_date': as_of_date}
-
-    sector = services.get_stock_sector(normalized_stock_id)
-    market_snapshot = services._build_market_snapshot()
-    chip_snapshot = services._build_chip_snapshot()
-    with services._live_signal_news_timeout_scope():
-        stock_mentions_map = services._get_stock_mentions_map([normalized_stock_id])
-    news_info = services._get_stock_specific_news_summary(normalized_stock_id, stock_mentions_map)
-    if not news_info.get('items'):
-        news_info = services._get_sector_news_summary(sector, as_of_date)
-
-    rule_report = services._build_dashboard_rule_report(
-        normalized_stock_id,
-        report,
-        latest_row,
-        news_info,
-        market_snapshot,
-        chip_snapshot,
-    )
-    llm_report = services._build_dashboard_llm_report(
-        normalized_stock_id,
-        report,
-        rule_report,
-        market_snapshot,
-        chip_snapshot,
-    )
+    report = {}
+    sector = None
+    news_info = {}
+    rule_report = {}
+    llm_report = {}
+    if not basic_only:
+        report = services.get_stock_report(normalized_stock_id, as_of_date=as_of_date) or {'stock_id': normalized_stock_id, 'trade_date': as_of_date}
+        sector = services.get_stock_sector(normalized_stock_id)
+        market_snapshot = services._build_market_snapshot()
+        chip_snapshot = services._build_chip_snapshot()
+        with services._live_signal_news_timeout_scope():
+            stock_mentions_map = services._get_stock_mentions_map([normalized_stock_id])
+        news_info = services._get_stock_specific_news_summary(normalized_stock_id, stock_mentions_map)
+        if not news_info.get('items'):
+            news_info = services._get_sector_news_summary(sector, as_of_date)
+        rule_report = services._build_dashboard_rule_report(
+            normalized_stock_id, report, latest_row, news_info, market_snapshot, chip_snapshot,
+        )
+        llm_report = services._build_dashboard_llm_report(
+            normalized_stock_id, report, rule_report, market_snapshot, chip_snapshot,
+        )
 
     candles = []
     volume_series = []
@@ -1423,6 +1423,20 @@ def _build_dashboard_health_check_payload_local(
         'trust_buy': safe_int(latest_row.get('trust_buy')),
         'dealer_buy': safe_int(latest_row.get('dealer_buy')),
     }
+    if basic_only:
+        payload.update({
+            'status': 'degraded' if fallback_used else 'ok',
+            'symbol': normalized_stock_id,
+            'as_of_date': as_of_date,
+            'fallback_used': fallback_used,
+            'message': '已取得本地行情；進階分析未載入。',
+            'warnings': ['進階分析未載入；K 線使用本地行情。'],
+            'quote': quote,
+            'indicators': indicators,
+            'institutional': institutional,
+            'series': {'candles': candles, 'volume': volume_series, 'ma5': ma5_series, 'ma20': ma20_series, 'ma60': ma60_series},
+        })
+        return payload
     structure_payload = _build_war_room_structure(aggregated_history, normalized_period)
     flow_pane = _build_war_room_flow_pane(aggregated_history)
     fundamentals_payload = _build_war_room_fundamentals(report)

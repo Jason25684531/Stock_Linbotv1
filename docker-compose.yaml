@@ -31,6 +31,7 @@ services:
     volumes:
       - ./:/app
     environment:
+      DB_URL: mysql+pymysql://trader:${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}@db:3306/${MYSQL_DATABASE:-stock_ai_db}
       MCP_PORT: "8080"
       PYTHONUNBUFFERED: "1"
     ports:
@@ -70,7 +71,6 @@ services:
       LINE_SECRET: ${LINE_SECRET:-}
       GEMINI_KEY: ${GEMINI_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set}
     command:
       - /bin/sh

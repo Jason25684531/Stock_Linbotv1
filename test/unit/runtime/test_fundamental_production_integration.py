@@ -5,14 +5,14 @@ import pandas as pd
 from jobs import scheduler
 
 
-def test_fundamental_operation_is_once_before_run_daily():
+def test_explicit_fundamental_operation_is_not_a_daily_pipeline_dependency():
     for name in ("daily", "evening"):
         steps = [step.target for step in scheduler.PIPELINES[name]]
-        assert steps.count("fundamental_shadow_operation") == 1
-        assert steps.index("fundamental_shadow_operation") < steps.index("run_daily")
+        assert "fundamental_shadow_operation" not in steps
+        assert steps.index("run_daily") < steps.index("push_to_line")
 
 
-def test_blocked_operation_does_not_duplicate_or_stop_default_pipeline(monkeypatch):
+def test_blocked_explicit_operation_cannot_stop_default_pipeline(monkeypatch):
     calls: list[str] = []
 
     def fake_run_job(target, *args, **kwargs):
@@ -20,21 +20,21 @@ def test_blocked_operation_does_not_duplicate_or_stop_default_pipeline(monkeypat
         return 2 if target == "fundamental_shadow_operation" else 0
 
     monkeypatch.setattr(scheduler, "run_job", fake_run_job)
-    assert scheduler.run_pipeline("daily", stop_on_error=False) == 2
-    assert calls.count("fundamental_shadow_operation") == 1
-    assert calls.index("fundamental_shadow_operation") < calls.index("run_daily")
+    assert scheduler.run_pipeline("daily", stop_on_error=False) == 0
+    assert "fundamental_shadow_operation" not in calls
+    assert "run_daily" in calls
 
 
-def test_stop_on_error_keeps_legacy_steps_after_operation_blocked(monkeypatch):
+def test_stop_on_error_keeps_legacy_steps_independent_of_shadow_operation(monkeypatch):
     calls: list[str] = []
 
     def fake_run_job(target, *args, **kwargs):
         calls.append(target)
-        return 2 if target == "fundamental_shadow_operation" else 0
+        return 2 if target == "run_daily" else 0
 
     monkeypatch.setattr(scheduler, "run_job", fake_run_job)
     assert scheduler.run_pipeline("daily", stop_on_error=True) == 2
-    assert calls == ["update_database", "fundamental_shadow_operation"]
+    assert calls == ["update_database", "run_daily"]
 
 
 def test_run_daily_fundamental_block_is_status_only(monkeypatch):
