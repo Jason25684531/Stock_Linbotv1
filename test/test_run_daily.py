@@ -85,3 +85,22 @@ def test_compute_indicators_from_history_supports_current_pandas_groupby_apply(m
 
     assert not result.empty
     assert {'kd_k', 'atr', 'natr'}.issubset(result.columns)
+
+
+def test_daily_recovery_ignores_anomalies_without_changing_clean_indicators(monkeypatch):
+    dates = pd.bdate_range(end='2026-10-13', periods=61).difference(pd.DatetimeIndex(['2026-10-09']))
+    rows = [{'stock_id': sid, 'trade_date': day, 'open_price': 100 + i,
+             'high_price': 102 + i, 'low_price': 98 + i, 'close_price': 101 + i,
+             'volume': 1000 + i, 'foreign_buy': 1, 'trust_buy': 0, 'dealer_buy': 0}
+            for sid in ('2330', '2317') for i, day in enumerate(dates)]
+    clean = pd.DataFrame(rows)
+    monkeypatch.setattr(run_daily.pd, 'read_sql', lambda *a, **kw: clean.copy())
+    expected = run_daily.compute_indicators_from_history('2026-10-13', object(), dry_run=True)
+    extra = [dict(rows[0], trade_date=pd.Timestamp('2026-10-11'), close_price=99999),
+             dict(rows[-1], trade_date=pd.Timestamp('2026-10-09'), close_price=99999),
+             dict(rows[-1], stock_id='123456'), rows[0]]
+    dirty = pd.concat([clean, pd.DataFrame(extra)], ignore_index=True)
+    monkeypatch.setattr(run_daily.pd, 'read_sql', lambda *a, **kw: dirty.copy())
+    actual = run_daily.compute_indicators_from_history('2026-10-13', object(), dry_run=True)
+    pd.testing.assert_frame_equal(actual.reset_index(drop=True), expected.reset_index(drop=True),
+                                  check_exact=False, rtol=1e-9, atol=1e-12)

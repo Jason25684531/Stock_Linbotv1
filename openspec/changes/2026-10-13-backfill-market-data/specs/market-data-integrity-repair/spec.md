@@ -17,3 +17,10 @@ An ALL-market response MUST reject a result with only one exchange populated. Th
 #### Scenario: Individual symbol has no institutional row
 - **WHEN** both exchange feeds are available but a symbol has no institutional record
 - **THEN** its missing institutional values remain NULL through persistence
+
+### Requirement: Use valid daily history for recovery
+The daily recovery MUST exclude weekends, dates without the market anchor, unsupported identifiers and duplicate stock-date rows before rolling calculations. Results on clean supported history MUST remain identical within rtol=1e-9 and atol=1e-12.
+
+#### Scenario: Preserved historical anomalies exist
+- **WHEN** duplicate rows, weekend rows or dates without the market symbol remain in the database
+- **THEN** they do not influence the recovered daily indicators or recommendations

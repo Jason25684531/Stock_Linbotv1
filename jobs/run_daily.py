@@ -101,7 +101,17 @@ def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False
 
     df = df.dropna(subset=['close_price'])
     df['trade_date'] = pd.to_datetime(df['trade_date'])
-    df = df.sort_values(['stock_id', 'trade_date'])
+    df['stock_id'] = df['stock_id'].astype(str).str.strip()
+    anchor_dates = df.loc[
+        df['stock_id'].eq(Config.MARKET_SYMBOL) & df['trade_date'].dt.weekday.lt(5), 'trade_date'
+    ]
+    df = df[
+        df['trade_date'].isin(anchor_dates)
+        & df['stock_id'].str.fullmatch(r'(?:[1-9]\d{3}|00\d{2,4}[A-Z]?)')
+    ].drop_duplicates(['stock_id', 'trade_date'], keep='last')
+    df = df.sort_values(['stock_id', 'trade_date']).reset_index(drop=True)
+    if df.empty or df['trade_date'].max().strftime('%Y-%m-%d') != date_str:
+        raise RuntimeError(f'No valid market history for requested date {date_str}')
 
     # ---- 計算滾動指標（groupby stock_id）----
     print("  ✓ 計算 MA5 / MA20 / MA60...")
@@ -181,10 +191,6 @@ def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False
     # ---- 取最新交易日橫截面 ----
     latest_date = df['trade_date'].max()
     latest_df = df[df['trade_date'] == latest_date].copy()
-    if latest_df['stock_id'].duplicated().any():
-        duplicate_count = int(latest_df['stock_id'].duplicated().sum())
-        latest_df = latest_df.sort_values(['stock_id']).drop_duplicates(subset=['stock_id'], keep='last')
-        print(f"  ⚠️ 最新日存在重複 stock_id，已去重 {duplicate_count} 筆")
 
     has_ma60 = (latest_df['ma60'] > 0).sum()
     has_rsi = (latest_df['rsi'] > 0).sum()
