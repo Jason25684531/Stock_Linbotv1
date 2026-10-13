@@ -13,7 +13,8 @@
         <div>
             <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
             <h1 class="mt-1 text-2xl font-semibold text-white">Strategy Center</h1>
-            <p class="mt-1 text-sm text-gray-400">Canonical identities stay separate from their runtime adapters.</p>
+            <p class="mt-1 text-sm text-gray-400">點選策略名稱或勾選框，查看已完成的選股快照；套用到 Daily 可更新每日篩選設定，組合回測可帶入所選策略。</p>
+            <p class="mt-1 text-xs text-gray-500">Daily／回測可用表示系統支援執行，並非績效驗收通過。</p>
         </div>
         <span class="status-badge status-unknown"><span x-text="catalog.length"></span> Strategies</span>
     </div>
@@ -31,6 +32,21 @@
             ></button>
         </template>
     </div>
+
+    <section class="quant-card p-5" aria-live="polite" data-testid="strategy-results">
+        <h2 class="text-lg font-semibold text-white">所選策略股票</h2>
+        <p class="mt-1 text-xs text-gray-400">依資料庫已完成的策略快照顯示；勾選不會變更 Daily 設定。資料過期或缺少快照時會顯示原因。</p>
+        <p x-show="!selectedItems.length" class="mt-4 text-sm text-gray-400">請先選擇策略</p>
+        <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <template x-for="item in selectedItems" :key="item.strategy_id">
+                <article class="rounded border border-gray-700 p-4">
+                    <div class="flex items-center justify-between gap-3"><strong x-text="item.display_name_en"></strong><button type="button" class="text-xs text-blue-300" @click="loadStrategy(item.strategy_id)">重試</button></div>
+                    <p class="mt-1 text-xs text-gray-400" x-text="resultText(item.strategy_id)"></p>
+                    <ul class="mt-3 space-y-2"><template x-for="row in (results[item.strategy_id]?.data?.data?.recommendations || [])" :key="row.stock_id"><li><a class="text-blue-300 hover:text-blue-200" :href="'/stock-analysis?id=' + encodeURIComponent(row.stock_id)" x-text="row.stock_id + (row.stock_name ? ' ' + row.stock_name : '')"></a></li></template></ul>
+                </article>
+            </template>
+        </div>
+    </section>
 
     <div class="hidden overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/40 md:block">
         <table class="min-w-[900px] w-full text-left text-sm" data-testid="strategy-catalog-table">
@@ -51,13 +67,14 @@
                             <input
                                 type="checkbox"
                                 class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                                :id="'strategy-desktop-' + item.strategy_id"
                                 :value="item.strategy_id"
                                 x-model="selected"
                                 :aria-label="`Select ${item.display_name_en}`"
                             >
                         </td>
                         <td class="px-4 py-4 align-top">
-                            <div class="font-medium text-white" x-text="item.display_name_en"></div>
+                            <label :for="'strategy-desktop-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_en"></label>
                             <div class="mt-1 font-mono text-xs text-blue-300" x-text="item.strategy_id"></div>
                             <div class="mt-1 text-xs text-gray-500" x-show="item.aliases.length">
                                 Alias: <span x-text="item.aliases.join(', ')"></span>
@@ -92,12 +109,13 @@
                     <input
                         type="checkbox"
                         class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                        :id="'strategy-mobile-' + item.strategy_id"
                         :value="item.strategy_id"
                         x-model="selected"
                         :aria-label="`Select ${item.display_name_en}`"
                     >
                     <div class="min-w-0 flex-1">
-                        <div class="font-medium text-white" x-text="item.display_name_en"></div>
+                        <label :for="'strategy-mobile-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_en"></label>
                         <div class="mt-1 break-all font-mono text-xs text-blue-300" x-text="item.strategy_id"></div>
                     </div>
                     <span class="status-badge status-unknown" x-text="item.category"></span>
@@ -112,21 +130,6 @@
             </article>
         </template>
     </div>
-
-    <section class="quant-card p-5" aria-live="polite">
-        <h2 class="text-lg font-semibold text-white">所選策略股票</h2>
-        <p class="mt-1 text-xs text-gray-400">依資料庫已完成的策略快照顯示；勾選不會變更 Daily 設定。</p>
-        <p x-show="!selectedItems.length" class="mt-4 text-sm text-gray-400">請先選擇策略</p>
-        <div class="mt-4 grid gap-4 lg:grid-cols-2">
-            <template x-for="item in selectedItems" :key="item.strategy_id">
-                <article class="rounded border border-gray-700 p-4">
-                    <div class="flex items-center justify-between gap-3"><strong x-text="item.display_name_en"></strong><button type="button" class="text-xs text-blue-300" @click="loadStrategy(item.strategy_id)">重試</button></div>
-                    <p class="mt-1 text-xs text-gray-400" x-text="resultText(item.strategy_id)"></p>
-                    <ul class="mt-3 space-y-2"><template x-for="row in (results[item.strategy_id]?.data?.recommendations || [])" :key="row.stock_id"><li><a class="text-blue-300 hover:text-blue-200" :href="'/stock-analysis?id=' + encodeURIComponent(row.stock_id)" x-text="row.stock_id + (row.stock_name ? ' ' + row.stock_name : '')"></a></li></template></ul>
-                </article>
-            </template>
-        </div>
-    </section>
 
     <div class="sticky bottom-4 z-20 rounded-lg border border-blue-500/30 bg-gray-950/95 p-4 shadow-xl backdrop-blur" data-testid="strategy-actions">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -194,7 +197,7 @@ function strategyCenter(catalog) {
             try {
                 const response = await fetch('/api/market/recommendations?strategy=' + encodeURIComponent(id) + '&top_n=5', { signal: controller.signal });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || response.statusText);
+                if (!response.ok || data.status === 'error') throw new Error(data.error || data.reason || data.warnings?.join('; ') || '推薦資料查詢失敗');
                 if (controllers.get(id) === controller && this.selected.includes(id)) this.results[id] = { data };
             } catch (error) {
                 if (controllers.get(id) === controller && this.selected.includes(id)) this.results[id] = { error: controller.signal.aborted ? '查詢逾時，請重試' : (error.message || '資料無法載入') };

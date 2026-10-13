@@ -220,3 +220,47 @@ global.fetch = async url => {{
     result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr or result.stdout
     assert 'strategy-previews-isolated-ok' in result.stdout
+
+
+def test_strategy_center_renders_api_stock_rows_and_surfaces_application_errors():
+    from app import app as flask_app
+
+    with flask_app.test_request_context('/strategies'):
+        html = render_template('strategy_center.html', strategy_catalog=_catalog())
+    script = re.search(r'<script>\s*(function strategyCenter\(catalog\) \{.*?)</script>', html, re.S).group(1)
+    rows_expression = re.search(r'<template x-for="row in \((.*?)\)" :key="row.stock_id">', html).group(1)
+    harness = f"""
+const assert = require('node:assert/strict');
+{script}
+const page = strategyCenter({json.dumps(_catalog())});
+const item = {{strategy_id: 'hybrid_trend_rank'}};
+page.selected = [item.strategy_id, 'fundamental_g2g3_top5_reb60_score_weighted_v1'];
+global.fetch = async () => ({{ok: true, json: async () => ({{
+  status: 'ok', freshness_status: 'current', recommendation_date: '2026-10-08',
+  data: {{recommendations: [{{stock_id: '2330', stock_name: '台積電'}}]}}
+}})}});
+(async () => {{
+  await page.loadStrategy(item.strategy_id);
+  const results = page.results;
+  const rows = {rows_expression};
+  assert.deepEqual(rows.map(row => row.stock_id), ['2330']);
+  assert.match(page.resultText(item.strategy_id), /1 檔/);
+  global.fetch = async () => ({{ok: true, json: async () => ({{
+    status: 'error', warnings: ['database temporarily unavailable'], data: {{recommendations: []}}
+  }})}});
+  await page.loadStrategy('fundamental_g2g3_top5_reb60_score_weighted_v1');
+  assert.match(page.resultText('fundamental_g2g3_top5_reb60_score_weighted_v1'), /database temporarily unavailable/);
+  assert.deepEqual(page.results[item.strategy_id].data.data.recommendations.map(row => row.stock_id), ['2330']);
+  global.fetch = async () => ({{ok: true, statusText: 'OK', json: async () => ({{status: 'error'}})}});
+  await page.loadStrategy('fundamental_g2g3_top5_reb60_score_weighted_v1');
+  assert.match(page.resultText('fundamental_g2g3_top5_reb60_score_weighted_v1'), /推薦資料查詢失敗/);
+  console.log('strategy-render-and-errors-ok');
+}})().catch(error => {{ console.error(error); process.exitCode = 1; }});
+"""
+    result = subprocess.run(['node', '-e', harness], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert 'strategy-render-and-errors-ok' in result.stdout
+    for layout in ('desktop', 'mobile'):
+        assert f':id="\'strategy-{layout}-\' + item.strategy_id"' in html
+        assert f':for="\'strategy-{layout}-\' + item.strategy_id"' in html
+    assert html.index('data-testid="strategy-results"') < html.index('data-testid="strategy-catalog-table"')
