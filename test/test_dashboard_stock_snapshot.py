@@ -567,3 +567,30 @@ def test_market_system_status_maps_pipeline_runs(monkeypatch):
     assert payload['data']['steps'][1]['error_summary'] == 'boom'
     assert payload['data']['steps'][2]['alias'] == '5_push'
     assert payload['data']['steps'][2]['status'] == 'Success'
+
+
+def test_manual_recovery_does_not_hide_official_pipeline_failure(monkeypatch):
+    from app import app as flask_app, web_server
+
+    engine = create_engine('sqlite:///:memory:')
+    db_helper.record_pipeline_step_finish(
+        pipeline_name='daily', step_name='update_database', run_date='2026-10-13',
+        status='failed', error_summary='official fetch failed', engine=engine,
+    )
+    for step_name in ('update_database', 'run_daily'):
+        db_helper.record_pipeline_step_finish(
+            pipeline_name='manual', step_name=step_name, run_date='2026-10-14',
+            status='success', trade_date='2026-10-13', engine=engine,
+        )
+    monkeypatch.setattr(db_helper, 'get_db_engine', lambda: engine)
+    monkeypatch.setattr(web_server, '_latest_ui_market_date', lambda: '2026-10-13')
+    monkeypatch.setattr(web_server.services, '_resolve_ui_baseline_date', lambda: '2026-10-13')
+
+    payload = flask_app.test_client().get('/api/market/system-status').get_json()
+    assert payload['status'] == 'degraded'
+    assert payload['data']['heartbeat'] == {'state': 'failed', 'latest_run_date': '2026-10-13'}
+    assert [step['status'] for step in payload['data']['steps']] == ['Failed', 'Unknown', 'Unknown']
+    assert payload['data']['steps'][0]['error_summary'] == 'official fetch failed'
+    assert payload['data']['recommendation_freshness'] == {
+        'status': 'current', 'market_date': '2026-10-13', 'recommendation_date': '2026-10-13',
+    }

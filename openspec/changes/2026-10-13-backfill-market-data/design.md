@@ -16,6 +16,7 @@
 4. 用 run_daily --date 2026-10-13 刷新七策略；驗證候選或 heartbeat。維持基本面 production gate。
    Daily 的歷史讀取原本含 10/09 無市場錨點及週末污染列；計算前以既有市場代表股日期和工作日規則篩選，排除權證及重複鍵。修改前 daily characterization／CLI／persistence 基線 14 passed；乾淨輸入須維持浮點 rtol=1e-9、atol=1e-12。
 5. 在實際 127.0.0.1:1688 Web 操作名稱／checkbox 並比對 API 與顯示。用既有測試檢查錯誤與空結果。
+   全站 heartbeat 依最近一次 daily／evening 的同一跑次顯示；手動資料復原不能當作正式排程或 LINE 推播成功。本次推薦 freshness 應為 current，但保留 10/13 正式排程的 Failed／Unknown 及 DEGRADED；不混合不同跑次，不覆寫歷史失敗。
 6. Audit 以引用證據判斷；相容代理不視為可直接刪除。簡化不觸及策略或回測規則。
 
 ## Verification
