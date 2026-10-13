@@ -139,6 +139,9 @@ def fetch_margin_balance_twse(
                     continue
                 return pd.DataFrame()
 
+            if datetime.strptime(str(data.get('date')), '%Y%m%d').strftime('%Y-%m-%d') != date_str:
+                raise ValueError('TWSE margin source date does not match requested date')
+
             # 找到包含融資融券資料的表格
             tables = data.get('tables', [])
             target_table = None
@@ -259,21 +262,21 @@ def fetch_margin_balance_tpex(
 
             rows = data.get('aaData', [])
             if not rows:
+                rows = next((table['data'] for table in data.get('tables', []) if table.get('data')), [])
+            if not rows:
                 return pd.DataFrame()
+
+            if datetime.strptime(str(data.get('date')), '%Y%m%d').strftime('%Y-%m-%d') != date_str:
+                raise ValueError('TPEx margin source date does not match requested date')
 
             df = pd.DataFrame(rows)
 
-            # TPEx 融資融券欄位（位置固定，基於官方 API 規格）
-            # 欄位順序：代號(0), 名稱(1), 融資買進(2), 融資賣出(3),
-            #           融資現金償還(4), 融資前日餘額(5), 融資今日餘額(6),
-            #           融資限額(7), 融資使用率(8),
-            #           融券買進(9), 融券賣出(10), 融券現金償還(11),
-            #           融券前日餘額(12), 融券今日餘額(13), ...
-            if df.shape[1] < 14:
+            # Official 20-column table: 6=margin balance, 13=short repayment, 14=short balance.
+            if df.shape[1] != 20:
                 print(f"  ⚠️ TPEx 融資融券欄位不足: {df.shape[1]} 欄")
                 return pd.DataFrame()
 
-            result = df.iloc[:, [0, 6, 13]].copy()
+            result = df.iloc[:, [0, 6, 14]].copy()
             result.columns = ['stock_id', 'margin_balance', 'short_balance']
             result['stock_id'] = result['stock_id'].astype(str).str.strip()
             result['margin_balance'] = result['margin_balance'].apply(

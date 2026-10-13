@@ -24,3 +24,10 @@ The daily recovery MUST exclude weekends, dates without the market anchor, unsup
 #### Scenario: Preserved historical anomalies exist
 - **WHEN** duplicate rows, weekend rows or dates without the market symbol remain in the database
 - **THEN** they do not influence the recovered daily indicators or recommendations
+
+### Requirement: Validate margin balance enrichment
+Margin enrichment MUST check the official source date, support the current TPEx tables response, and use short balance rather than short repayment.
+
+#### Scenario: TPEx returns its current 20-column table
+- **WHEN** margin enrichment reads a dated TPEx tables payload
+- **THEN** it reads margin balance at index 6 and short balance at index 14, and rejects a stale date

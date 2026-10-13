@@ -105,3 +105,24 @@ def test_tpex_dealer_uses_total_instead_of_proprietary_only(monkeypatch):
     monkeypatch.setattr(server.requests, 'get', lambda *a, **kw: Response())
     frame = server._fetch_tpex_flow('2026-10-13')
     assert frame.iloc[0][['foreign_buy', 'trust_buy', 'dealer_buy']].tolist() == [4, 5, 3]
+
+
+def test_tpex_margin_tables_use_balance_and_reject_stale_date(monkeypatch):
+    from core.crawlers import chip_data_scraper as chip
+
+    class Response:
+        status_code = 200
+        date = '20261012'
+
+        def json(self):
+            row = ['5483', 'stock'] + [0] * 18
+            row[6], row[13], row[14] = '1,000', 777, 50
+            return {'date': self.date, 'tables': [{'data': [row]}]}
+
+    response = Response()
+    monkeypatch.setattr(chip.requests, 'get', lambda *a, **kw: response)
+    monkeypatch.setattr(chip.time, 'sleep', lambda *a: None)
+    frame = chip.fetch_margin_balance_tpex('2026-10-12', max_retries=1)
+    assert frame.iloc[0][['margin_balance', 'short_balance']].tolist() == [1000, 50]
+    response.date = '20261013'
+    assert chip.fetch_margin_balance_tpex('2026-10-12', max_retries=1).empty

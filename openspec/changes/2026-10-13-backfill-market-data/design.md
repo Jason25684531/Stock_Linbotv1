@@ -12,6 +12,7 @@
 1. 在 canonical MCP 官方解析處驗證 payload 日期，ALL 任一市場缺資料時拒絕部分結果。兩市均空仍可表示無資料日。
 2. 更新器遇到非空行情及失敗／空法人資料時拒絕寫入。缺少個別代碼的法人欄位保留 NULL，不推定零。
 3. 使用現有 update_market_date 補 10/12、10/13；只新增所需 nullable 欄位。既有 10/09–10/11 異常紀錄保留。
+   延伸官方核對發現 TPEx 融資融券已採 tables／20 欄，原 aaData 解析漏掉 919 筆；資餘額為 6、券餘額為 14，原 13 為券償。修正解析並驗證來源日期，只更新兩日餘額欄後重新執行 Daily。
 4. 用 run_daily --date 2026-10-13 刷新七策略；驗證候選或 heartbeat。維持基本面 production gate。
    Daily 的歷史讀取原本含 10/09 無市場錨點及週末污染列；計算前以既有市場代表股日期和工作日規則篩選，排除權證及重複鍵。修改前 daily characterization／CLI／persistence 基線 14 passed；乾淨輸入須維持浮點 rtol=1e-9、atol=1e-12。
 5. 在實際 127.0.0.1:1688 Web 操作名稱／checkbox 並比對 API 與顯示。用既有測試檢查錯誤與空結果。
