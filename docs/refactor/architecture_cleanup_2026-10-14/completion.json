@@ -1,0 +1,21 @@
+{
+  "change": "2026-10-14-simplify-runtime-architecture-safely",
+  "schema": "spec-driven",
+  "apply_state": "all_done",
+  "tasks_complete": 18,
+  "tasks_total": 18,
+  "requirements_mapped": 7,
+  "scenarios_covered": 9,
+  "strict_validation": "PASS",
+  "diff_check": "PASS",
+  "unrelated_user_changes_preserved": true,
+  "runtime_regression": "365 passed",
+  "isolated_mysql_flask": "5 passed",
+  "repository_policy": "PRE_EXISTING_FAILURE: 11 old pending deletion paths",
+  "commits": [
+    "a4b8bcb",
+    "fcdf545",
+    "a314cba",
+    "e4a5494"
+  ]
+}

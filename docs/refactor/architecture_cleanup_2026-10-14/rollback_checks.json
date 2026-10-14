@@ -1,20 +1,25 @@
 {
   "fcdf545": {
+    "tested_head": "e4a5494d8aa7a37b0d471b0f828b89fa78e0fa63",
     "source_revert": "PASS",
     "documentation_reconciliation": [
       "openspec/changes/2026-10-14-simplify-runtime-architecture-safely/tasks.md"
     ],
-    "unrelated_phase_source_changes": "NONE",
+    "active_artifacts_remain_untracked": true,
+    "changed_source_paths_match_only_reverted_phase": true,
     "contract_tests": "PASS",
-    "test_summary": "19 passed in 1.46s"
+    "test_summary": "19 passed in 1.49s"
   },
   "a314cba": {
+    "tested_head": "e4a5494d8aa7a37b0d471b0f828b89fa78e0fa63",
     "source_revert": "PASS",
     "documentation_reconciliation": [
+      "openspec/changes/2026-10-14-simplify-runtime-architecture-safely/phase1.md",
       "openspec/changes/2026-10-14-simplify-runtime-architecture-safely/tasks.md"
     ],
-    "unrelated_phase_source_changes": "NONE",
+    "active_artifacts_remain_untracked": true,
+    "changed_source_paths_match_only_reverted_phase": true,
     "contract_tests": "PASS",
-    "test_summary": "19 passed in 1.40s"
+    "test_summary": "19 passed in 1.36s"
   }
 }

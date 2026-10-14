@@ -26,5 +26,5 @@ Change: `2026-10-14-simplify-runtime-architecture-safely` (local OpenSpec artifa
 - DEFER: canonical PIT hash helper records self code_sha256; retain that source and existing evidence identity. Large DB/Daily/Dashboard splits and the duplicate F2/V3 record serializer remain deferred.
 - KEEP: StrategyManager/Registry/Runner/adapter, public wrappers, v3x aliases, research import shims, lazy V30 proxy, immutable contracts, the sole scheduler and existing production/broker gates.
 - UNKNOWN: heavyweight dependency removal; no package is removed or upgraded. No source/data/model/non-cache file is deleted.
-- Current evidence: production source diff is 27 inserted/57 deleted lines, net -30. This is the actual diff against f2babcb, excluding tests/docs and unrelated user changes; not a benchmark-derived savings estimate.
+- Current evidence: production source diff is 28 inserted/58 deleted lines, net -30. This is the actual diff against f2babcb, excluding tests/docs and unrelated user changes; not a benchmark-derived savings estimate.
 - Repository governance: only this change's Git tracking is removed (files retained locally). The 11 previously tracked/deleted 2026-10-13 OpenSpec files belong to the initial user worktree and are neither staged nor committed here. The old global tracking test therefore remains a documented pre-existing failure.
