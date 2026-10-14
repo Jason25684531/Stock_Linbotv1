@@ -7,13 +7,13 @@
 - [x] 1.3 建立並通過完整受影響 characterization：Daily selection／persistence／heartbeat／dry-run，Backtest seed／trade sequence，Web／LINE／CLI／scheduler／runtime isolation；補足 records 數值、訊息與 cache fixtures。
 - [x] 1.4 盤點六個 hash helper 原始碼檔是否被凍結證據消費；分類可改／DEFER，保存 parity baseline，不更改既有 fingerprints 或 manifests。
 - [x] 1.5 補齊 `_freeze_mapping` 無引用證據到 docs/refactor/deletion_candidates.md，包括 static／importlib／getattr、test／script／docs／deploy 消費者、替代、驗證與 rollback；不完整即保留。
-- [ ] 1.6 以僅包含本 Phase 的提交保存基準與證據，記錄 commit ID／可獨立 revert 範圍。
+- [x] 1.6 以僅包含本 Phase 的提交保存基準與證據，記錄 commit ID／可獨立 revert 範圍。
 
 ## 2. Phase 1：標準庫替換與私有死碼清理
 
-- [ ] 2.1 對 Phase 0 允許的四個 `_sha256`、兩個 `_file_sha256` 改用 hashlib.file_digest，保留 signatures、OSError／None，不建共用 framework。
-- [ ] 2.2 驗證 empty／binary／超過兩個 chunk／missing／OSError 的 digest、例外與 handle closure 相同；執行受影響 factor validation／PIT／universe recovery／runtime tests，確認 frozen evidence 不漂移。
-- [ ] 2.3 證據完整時才刪 `_freeze_mapping` 區塊，保留其他 freeze／validation；執行 strategy contract／dependency boundary／registry parity tests。
+- [x] 2.1 對 Phase 0 允許的四個 `_sha256`、兩個 `_file_sha256` 改用 hashlib.file_digest，保留 signatures、OSError／None，不建共用 framework。
+- [x] 2.2 驗證 empty／binary／超過兩個 chunk／missing／OSError 的 digest、例外與 handle closure 相同；執行受影響 factor validation／PIT／universe recovery／runtime tests，確認 frozen evidence 不漂移。
+- [x] 2.3 證據完整時才刪 `_freeze_mapping` 區塊，保留其他 freeze／validation；執行 strategy contract／dependency boundary／registry parity tests。
 - [ ] 2.4 完成相關測試、diff check、actual diff 和驗證紀錄；僅提交本 Phase hunks，保存 commit ID／revert 證據後才進下一 Phase。
 
 ## 3. Phase 2：Dashboard／LINE 相同 records 算術

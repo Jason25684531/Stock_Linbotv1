@@ -40,11 +40,8 @@ OUTPUT_ROOT = REPO_ROOT / "outputs" / "fundamental_runtime_shadow" / CHANGE_ID
 
 
 def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
     with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def _write_json(path: Path, value: Mapping[str, object]) -> None:

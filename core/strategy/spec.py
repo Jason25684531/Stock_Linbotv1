@@ -32,15 +32,6 @@ def _freeze(value: Any) -> Any:
     return value
 
 
-def _freeze_mapping(value: Mapping[str, Any] | None) -> Mapping[str, Any]:
-    if value is None:
-        value = {}
-    frozen = _freeze(value)
-    if not isinstance(frozen, Mapping):
-        raise StrategySpecValidationError("mapping fields must receive a mapping")
-    return frozen
-
-
 def _normalize_aliases(value: Any) -> tuple[str, ...]:
     if value is None:
         return ()
