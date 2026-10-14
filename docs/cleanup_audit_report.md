@@ -17,3 +17,14 @@
 ## Recovery
 
 All retained material remains at its original location.  Documentation and governance commits are independently revertible.  Cache cleanup can be retried only through an approved environment that permits the already-recorded exact target list and repeats the active-process/tracked-file safeguards.
+
+## 2026-10-14 Runtime architecture simplification
+
+Change: `2026-10-14-simplify-runtime-architecture-safely` (local OpenSpec artifacts). Full original audit remains in that change's audit.md; reproducible source/fixture/settings checksums and the current decisions are versioned under [architecture_cleanup_2026-10-14](refactor/architecture_cleanup_2026-10-14/).
+
+- Completed: fix the existing shared LINE reply composition contract; replace five duplicated hash loops with hashlib.file_digest; remove the evidence-proven private _freeze_mapping section; share two existing Dashboard/LINE records computations without moving I/O, dates, caching, formatting or errors.
+- DEFER: canonical PIT hash helper records self code_sha256; retain that source and existing evidence identity. Large DB/Daily/Dashboard splits and the duplicate F2/V3 record serializer remain deferred.
+- KEEP: StrategyManager/Registry/Runner/adapter, public wrappers, v3x aliases, research import shims, lazy V30 proxy, immutable contracts, the sole scheduler and existing production/broker gates.
+- UNKNOWN: heavyweight dependency removal; no package is removed or upgraded. No source/data/model/non-cache file is deleted.
+- Current evidence: production source diff is 27 inserted/57 deleted lines, net -30. This is the actual diff against f2babcb, excluding tests/docs and unrelated user changes; not a benchmark-derived savings estimate.
+- Repository governance: only this change's Git tracking is removed (files retained locally). The 11 previously tracked/deleted 2026-10-13 OpenSpec files belong to the initial user worktree and are neither staged nor committed here. The old global tracking test therefore remains a documented pre-existing failure.

@@ -8,9 +8,7 @@ import traceback
 
 from flask import abort, request
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import (
-    TextMessage as V3TextMessage,
-)
+from linebot.v3.messaging import TextMessage as V3TextMessage
 from linebot.v3.webhooks import MessageEvent, PostbackEvent, TextMessageContent
 
 from . import app, handler, services

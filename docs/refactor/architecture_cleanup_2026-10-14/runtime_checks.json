@@ -1,0 +1,32 @@
+{
+  "unrelated_tracked_files_preserved": true,
+  "settings_frozen_artifacts_and_gate_preserved": true,
+  "broker_order_submission": "DISABLED",
+  "containers": {
+    "stock_ai_stock_bot": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-14T07:27:13.599861489Z"
+    },
+    "twse_mcp_server": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-14T07:26:37.32068236Z"
+    },
+    "stock_ai_mysql": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-14T07:26:37.318485542Z"
+    }
+  },
+  "read_only_health_checks": {
+    "http://127.0.0.1:1688/health": {
+      "http_status": 200,
+      "status": "ok"
+    },
+    "http://127.0.0.1:8080/health": {
+      "http_status": 200,
+      "status": "ok"
+    }
+  }
+}

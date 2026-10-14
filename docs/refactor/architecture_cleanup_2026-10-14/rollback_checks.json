@@ -1,0 +1,20 @@
+{
+  "fcdf545": {
+    "source_revert": "PASS",
+    "documentation_reconciliation": [
+      "openspec/changes/2026-10-14-simplify-runtime-architecture-safely/tasks.md"
+    ],
+    "unrelated_phase_source_changes": "NONE",
+    "contract_tests": "PASS",
+    "test_summary": "19 passed in 1.46s"
+  },
+  "a314cba": {
+    "source_revert": "PASS",
+    "documentation_reconciliation": [
+      "openspec/changes/2026-10-14-simplify-runtime-architecture-safely/tasks.md"
+    ],
+    "unrelated_phase_source_changes": "NONE",
+    "contract_tests": "PASS",
+    "test_summary": "19 passed in 1.40s"
+  }
+}

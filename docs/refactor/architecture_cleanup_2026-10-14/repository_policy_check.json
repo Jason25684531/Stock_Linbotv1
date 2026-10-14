@@ -1,0 +1,20 @@
+{
+  "test": "test/test_stabilize_daily_recommendation_pipeline_contract.py::test_openspec_change_artifacts_are_not_git_tracked",
+  "status": "PRE_EXISTING_FAILURE",
+  "remaining_tracked_paths": [
+    "openspec/changes/2026-10-13-backfill-market-data/design.md",
+    "openspec/changes/2026-10-13-backfill-market-data/proposal.md",
+    "openspec/changes/2026-10-13-backfill-market-data/specs/market-data-integrity-repair/spec.md",
+    "openspec/changes/2026-10-13-backfill-market-data/specs/strategy-stock-results/spec.md",
+    "openspec/changes/2026-10-13-backfill-market-data/tasks.md",
+    "openspec/changes/2026-10-13-backfill-market-data/verification.md",
+    "openspec/changes/2026-10-13-fix-strategy-center-preview/design.md",
+    "openspec/changes/2026-10-13-fix-strategy-center-preview/proposal.md",
+    "openspec/changes/2026-10-13-fix-strategy-center-preview/specs/strategy-stock-results/spec.md",
+    "openspec/changes/2026-10-13-fix-strategy-center-preview/tasks.md",
+    "openspec/changes/2026-10-13-fix-strategy-center-preview/verification.md"
+  ],
+  "present_in_initial_index": true,
+  "this_change_files_now_untracked_and_preserved": true,
+  "unrelated_user_deletions_not_staged": true
+}
