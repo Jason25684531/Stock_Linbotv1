@@ -9,9 +9,6 @@ import traceback
 from flask import abort, request
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
-    ApiClient,
-    MessagingApi,
-    ReplyMessageRequest,
     TextMessage as V3TextMessage,
 )
 from linebot.v3.webhooks import MessageEvent, PostbackEvent, TextMessageContent
@@ -23,10 +20,10 @@ from . import line_commands
 def reply_message(reply_token: str, messages) -> None:
     """統一 LINE reply path，供 callback / postback / message handler 共用。"""
     normalized = messages if isinstance(messages, list) else [messages]
-    with ApiClient(services.configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
+    with services.ApiClient(services.configuration) as api_client:
+        line_bot_api = services.MessagingApi(api_client)
         line_bot_api.reply_message(
-            ReplyMessageRequest(
+            services.ReplyMessageRequest(
                 reply_token=reply_token,
                 messages=normalized,
             )

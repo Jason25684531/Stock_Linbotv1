@@ -1,0 +1,186 @@
+{
+  "market/records": {
+    "snapshot": {
+      "status": "ok",
+      "date_str": "2026-10-13",
+      "rising": 1,
+      "falling": 1,
+      "flat": 3,
+      "total_volume_b": 2e-09,
+      "summary": "盤勢中性，建議搭配題材與法人方向交叉確認。"
+    },
+    "message": "📊 台股大盤快照 2026-10-13\n──────────────────────────\n▲ 上漲     1 檔\n▼ 下跌     1 檔\n─ 平盤     3 檔\n──────────────────────────\n💹 總成交量 0.0 億股\n\n💡 資料來源：TWSE MCP Server",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": [
+      "market_summary:2026-10-14",
+      "market_summary_snapshot:2026-10-14"
+    ]
+  },
+  "market/empty": {
+    "snapshot": {
+      "status": "empty",
+      "date_str": "2026-10-13",
+      "message": "目前尚無今日盤勢資料，請於盤後再試。"
+    },
+    "message": "📊 大盤快照\n\n目前尚無今日交易資料，請於盤後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "market/none": {
+    "snapshot": {
+      "status": "error",
+      "date_str": "2026-10-14",
+      "message": "目前暫時無法連線至 TWSE MCP Server，盤勢快照暫不可用。"
+    },
+    "message": "📊 大盤快照\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "market/mcp_error": {
+    "snapshot": {
+      "status": "error",
+      "date_str": "2026-10-14",
+      "message": "盤勢快照暫時無法取得，請稍後再試。"
+    },
+    "message": "📊 大盤快照\n\n目前暫時無法連線至 TWSE 資料源，請稍後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "market/exception": {
+    "snapshot": {
+      "status": "error",
+      "date_str": "2026-10-14",
+      "message": "盤勢快照資料處理異常，請稍後再試。"
+    },
+    "message": "📊 大盤快照\n\n資料處理異常，請稍後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "market/cache": {
+    "snapshot": {
+      "status": "ok",
+      "date_str": "2026-10-13",
+      "rising": 1,
+      "falling": 1,
+      "flat": 3,
+      "total_volume_b": 2e-09,
+      "summary": "盤勢中性，建議搭配題材與法人方向交叉確認。"
+    },
+    "message": "📊 台股大盤快照 2026-10-13\n──────────────────────────\n▲ 上漲     1 檔\n▼ 下跌     1 檔\n─ 平盤     3 檔\n──────────────────────────\n💹 總成交量 0.0 億股\n\n💡 資料來源：TWSE MCP Server",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": [
+      "market_summary:2026-10-14",
+      "market_summary_snapshot:2026-10-14"
+    ]
+  },
+  "chip/records": {
+    "snapshot": {
+      "status": "ok",
+      "date_str": "2026-10-13",
+      "foreign_net": 2,
+      "trust_net": 0,
+      "dealer_net": 0,
+      "total_net": 2,
+      "summary": "三大法人偏多，且外資站在買方，籌碼面偏正向。"
+    },
+    "message": "🏦 三大法人買賣超 2026-10-13\n──────────────────────────────\n外資   ▲          2 張\n投信   ─          0 張\n自營商 ─          0 張\n──────────────────────────────\n合計   ▲          2 張\n\n💡 資料來源：TWSE MCP Server",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": [
+      "chip_trend:2026-10-14",
+      "chip_trend_snapshot:2026-10-14"
+    ]
+  },
+  "chip/empty": {
+    "snapshot": {
+      "status": "empty",
+      "date_str": "2026-10-13",
+      "message": "目前尚無今日法人資料，請於盤後再試。"
+    },
+    "message": "🏦 籌碼動向\n\n目前尚無今日法人資料，請於盤後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "chip/none": {
+    "snapshot": {
+      "status": "error",
+      "date_str": "2026-10-14",
+      "message": "目前暫時無法連線至 TWSE MCP Server，籌碼資料暫不可用。"
+    },
+    "message": "🏦 籌碼動向\n\n目前暫時無法連線至 TWSE MCP Server，請稍後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "chip/mcp_error": {
+    "snapshot": {
+      "status": "error",
+      "date_str": "2026-10-14",
+      "message": "籌碼資料暫時無法取得，請稍後再試。"
+    },
+    "message": "🏦 籌碼動向\n\n目前暫時無法連線至 TWSE 資料源，請稍後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "chip/exception": {
+    "snapshot": {
+      "status": "error",
+      "date_str": "2026-10-14",
+      "message": "籌碼資料處理異常，請稍後再試。"
+    },
+    "message": "🏦 籌碼動向\n\n資料處理異常，請稍後再試。",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": []
+  },
+  "chip/cache": {
+    "snapshot": {
+      "status": "ok",
+      "date_str": "2026-10-13",
+      "foreign_net": 2,
+      "trust_net": 0,
+      "dealer_net": 0,
+      "total_net": 2,
+      "summary": "三大法人偏多，且外資站在買方，籌碼面偏正向。"
+    },
+    "message": "🏦 三大法人買賣超 2026-10-13\n──────────────────────────────\n外資   ▲          2 張\n投信   ─          0 張\n自營商 ─          0 張\n──────────────────────────────\n合計   ▲          2 張\n\n💡 資料來源：TWSE MCP Server",
+    "calls": [
+      "2026-10-14",
+      "2026-10-14"
+    ],
+    "cache_keys": [
+      "chip_trend:2026-10-14",
+      "chip_trend_snapshot:2026-10-14"
+    ]
+  }
+}

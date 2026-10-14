@@ -1,0 +1,21 @@
+{
+  "scanned_metadata_json_files": 153,
+  "scope": "canonical fundamental runtime/strategy/factor/PIT manifests and baseline fixtures; raw/cache/publication/response directories and JSON >=2MB excluded",
+  "exact_prechange_source_hash_hits": {
+    "jobs/run_factor_validation.py": [],
+    "core/research/fundamental_factor_validation.py": [],
+    "core/runtime/fresh_oos_promotion.py": [],
+    "core/runtime/fundamental_advancement.py": [],
+    "core/research/universe_recovery.py": [],
+    "core/research/fundamentals/pit.py": [],
+    "core/strategy/spec.py": [],
+    "app/dashboard_payloads.py": [],
+    "app/line_flows.py": [],
+    "app/line_bot.py": [],
+    "docs/refactor/deletion_candidates.md": []
+  },
+  "decisions": {
+    "core/research/fundamentals/pit.py": "DEFER: self code_sha256 provenance in canonical manifest",
+    "other_five_hash_helpers": "ALLOW: data/artifact hashing; no self-hash write or current-source gate consumer found in source and checked manifests"
+  }
+}

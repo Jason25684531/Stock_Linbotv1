@@ -1,5 +1,29 @@
 # Deletion Candidates
 
+## 2026-10-14 private helper removal evidence
+
+`core/strategy/spec.py::_freeze_mapping` is SAFE_TO_REMOVE as a private code
+section (9 lines), not a file. Hidden repository searches across source,
+tests, scripts, deployment/batch files and documents found only its definition
+before this evidence/proposal was written. No import, string/getattr/importlib
+lookup, registration or export references it. `spec.__all__` exports only
+StrategySpec and StrategySpecValidationError. The core.strategy dynamic bridge
+loads core/strategy.py for historical public V30/V31 symbols, never this helper.
+The adapter's dynamic imports load registered strategy classes; they do not
+resolve spec helper names. The function is not a supported external interface.
+Replacement: nothing; StrategySpec continues calling `_freeze` directly and
+retains mapping/type validation. No non-cache file is removed. Validation:
+strategy contracts, immutable runtime contracts, dependency boundary, registry
+parity and the green Phase 0 suite. Rollback: independently revert Phase 1.
+
+The three direct SDK imports in app/line_bot.py are unused after the baseline
+correctness fix. app owns the SDK imports and services delegates to those same
+objects. Repository callers of callback/postback/diagnosis/command replies use
+reply_message; the facade patch contract continues to resolve the app objects.
+Replacement: existing services composition seam; SDK validation stays enabled.
+No dependency or exported app compatibility symbol is deleted.
+
+
 ## 2026-10-13 market-ingestion simplification
 
 `jobs/update_database.py::fetch_twse_data`, `fetch_tpex_data`, their private
