@@ -81,6 +81,20 @@ def _summarize_chip_snapshot(foreign_net: int, trust_net: int, dealer_net: int) 
     return '法人分歧，籌碼面缺乏一致性，宜搭配價格結構判讀。'
 
 
+def _market_record_totals(records: list[dict]) -> tuple[int, int, int, int]:
+    rising = sum(1 for record in records if (safe_float(record.get('close_price')) or 0) > (safe_float(record.get('open_price')) or 0))
+    falling = sum(1 for record in records if (safe_float(record.get('close_price')) or 0) < (safe_float(record.get('open_price')) or 0))
+    volume = sum(int(safe_float(record.get('volume')) or 0) for record in records)
+    return rising, falling, len(records) - rising - falling, volume
+
+
+def _chip_record_totals(records: list[dict]) -> tuple[int, int, int]:
+    return tuple(
+        sum(int(safe_float(record.get(key)) or 0) for record in records)
+        for key in ('foreign_buy', 'trust_buy', 'dealer_buy')
+    )
+
+
 def _build_market_snapshot() -> dict[str, object]:
     cached = _postback_cache.get('market_summary_snapshot')
     if isinstance(cached, dict) and cached:
@@ -104,10 +118,7 @@ def _build_market_snapshot() -> dict[str, object]:
                 'message': '目前尚無今日盤勢資料，請於盤後再試。',
             }
 
-        rising = sum(1 for record in records if (safe_float(record.get('close_price')) or 0) > (safe_float(record.get('open_price')) or 0))
-        falling = sum(1 for record in records if (safe_float(record.get('close_price')) or 0) < (safe_float(record.get('open_price')) or 0))
-        flat = len(records) - rising - falling
-        total_volume = sum(int(safe_float(record.get('volume')) or 0) for record in records)
+        rising, falling, flat, total_volume = _market_record_totals(records)
         snapshot = {
             'status': 'ok',
             'date_str': result.get('as_of_date') or trade_date,
@@ -158,12 +169,7 @@ def _build_chip_snapshot() -> dict[str, object]:
                 'message': '目前尚無今日法人資料，請於盤後再試。',
             }
 
-        def _sum_net(key: str) -> int:
-            return sum(int(safe_float(record.get(key)) or 0) for record in records)
-
-        foreign_net = _sum_net('foreign_buy')
-        trust_net = _sum_net('trust_buy')
-        dealer_net = _sum_net('dealer_buy')
+        foreign_net, trust_net, dealer_net = _chip_record_totals(records)
         total_net = foreign_net + trust_net + dealer_net
         snapshot = {
             'status': 'ok',

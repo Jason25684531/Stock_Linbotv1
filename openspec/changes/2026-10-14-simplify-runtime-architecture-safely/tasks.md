@@ -14,13 +14,13 @@
 - [x] 2.1 對 Phase 0 允許的四個 `_sha256`、兩個 `_file_sha256` 改用 hashlib.file_digest，保留 signatures、OSError／None，不建共用 framework。
 - [x] 2.2 驗證 empty／binary／超過兩個 chunk／missing／OSError 的 digest、例外與 handle closure 相同；執行受影響 factor validation／PIT／universe recovery／runtime tests，確認 frozen evidence 不漂移。
 - [x] 2.3 證據完整時才刪 `_freeze_mapping` 區塊，保留其他 freeze／validation；執行 strategy contract／dependency boundary／registry parity tests。
-- [ ] 2.4 完成相關測試、diff check、actual diff 和驗證紀錄；僅提交本 Phase hunks，保存 commit ID／revert 證據後才進下一 Phase。
+- [x] 2.4 完成相關測試、diff check、actual diff 和驗證紀錄；僅提交本 Phase hunks，保存 commit ID／revert 證據後才進下一 Phase。
 
 ## 3. Phase 2：Dashboard／LINE 相同 records 算術
 
-- [ ] 3.1 在既有 dashboard_payloads.py 增加最多兩個 private pure functions，集中 breadth／volume 和 chip totals；line_flows.py 共用，不改 MCP／日期／cache／錯誤分支。
-- [ ] 3.2 驗證 missing／NaN／zero／negative／fractional records，保留逐筆 int 後加總與單位；Web 不同 DataFrame 算術保持原樣。
-- [ ] 3.3 驗證兩 caller 的 cache key／hit／miss／TTL／Taipei 跨日／None／empty／MCPClientError／一般錯誤、API payload 與 LINE 字面訊息和 baseline 相同；不發送實際訊息。
+- [x] 3.1 在既有 dashboard_payloads.py 增加最多兩個 private pure functions，集中 breadth／volume 和 chip totals；line_flows.py 共用，不改 MCP／日期／cache／錯誤分支。
+- [x] 3.2 驗證 missing／NaN／zero／negative／fractional records，保留逐筆 int 後加總與單位；Web 不同 DataFrame 算術保持原樣。
+- [x] 3.3 驗證兩 caller 的 cache key／hit／miss／TTL／Taipei 跨日／None／empty／MCPClientError／一般錯誤、API payload 與 LINE 字面訊息和 baseline 相同；不發送實際訊息。
 - [ ] 3.4 通過相關 Dashboard／Rich Menu／Web／LINE parity 與 characterization，保存獨立 Phase commit、rollback 與驗證證據。
 
 ## 4. Phase 3：完整相容性驗收

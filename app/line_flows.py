@@ -31,6 +31,7 @@ from core.mcp_client import MCPClientError
 from core.strategy import StrategyContext, format_v31_recommendation
 from linebot.v3.messaging import TextMessage as V3TextMessage
 from . import services
+from .dashboard_payloads import _chip_record_totals, _market_record_totals
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -617,10 +618,7 @@ def _build_market_summary_messages() -> list:
         if not records:
             return [V3TextMessage(text='📊 大盤快照\n\n目前尚無今日交易資料，請於盤後再試。')]
 
-        rising = sum(1 for r in records if (safe_float(r.get('close_price')) or 0) > (safe_float(r.get('open_price')) or 0))
-        falling = sum(1 for r in records if (safe_float(r.get('close_price')) or 0) < (safe_float(r.get('open_price')) or 0))
-        flat = len(records) - rising - falling
-        total_vol = sum(int(safe_float(r.get('volume')) or 0) for r in records)
+        rising, falling, flat, total_vol = _market_record_totals(records)
         total_vol_b = total_vol / 1_000_000_000
         result_date = result.get('as_of_date') or trade_date
 
@@ -658,12 +656,7 @@ def _build_chip_trend_messages() -> list:
         if not records:
             return [V3TextMessage(text='🏦 籌碼動向\n\n目前尚無今日法人資料，請於盤後再試。')]
 
-        def _sum_net(key: str) -> int:
-            return sum(int(safe_float(r.get(key)) or 0) for r in records)
-
-        foreign_net = _sum_net('foreign_buy')
-        trust_net = _sum_net('trust_buy')
-        dealer_net = _sum_net('dealer_buy')
+        foreign_net, trust_net, dealer_net = _chip_record_totals(records)
         total_net = foreign_net + trust_net + dealer_net
         result_date = result.get('as_of_date') or trade_date
 
