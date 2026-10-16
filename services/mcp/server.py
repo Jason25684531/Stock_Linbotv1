@@ -986,7 +986,7 @@ def _fetch_twse_flow(trade_date: str) -> pd.DataFrame:
         (
             column
             for column in frame.columns
-            if '自營商' in column
+            if column.startswith('自營商')
             and '買賣超' in column
             and '自行' not in column
             and '避險' not in column

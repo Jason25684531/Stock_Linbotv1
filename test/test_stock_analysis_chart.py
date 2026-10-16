@@ -21,11 +21,12 @@ def test_stock_analysis_chart_constructs_all_required_series_for_normal_and_fall
     harness = r"""
 const assert = require('node:assert/strict');
 const factories = {};
-const calls = {create: 0, series: [], setData: []};
+const calls = {create: 0, series: [], setData: [], margins: []};
+const priceScale = () => ({applyOptions(value) { calls.margins.push(value.scaleMargins); }});
 const chart = {
-  addCandlestickSeries() { calls.series.push('Candlestick'); return {setData(value) { calls.setData.push(['Candlestick', value]); }}; },
+  addCandlestickSeries() { calls.series.push('Candlestick'); return {priceScale, setData(value) { calls.setData.push(['Candlestick', value]); }}; },
   addLineSeries() { const name = ['MA5', 'MA20', 'MA60'][calls.series.filter(item => String(item).startsWith('MA')).length % 3]; calls.series.push(name); return {setData(value) { calls.setData.push([name, value]); }}; },
-  addHistogramSeries() { calls.series.push('Volume'); return {setData(value) { calls.setData.push(['Volume', value]); }}; },
+  addHistogramSeries() { calls.series.push('Volume'); return {priceScale, setData(value) { calls.setData.push(['Volume', value]); }}; },
   timeScale() { return {fitContent() {}}; },
   applyOptions() {},
   remove() {}
@@ -47,6 +48,11 @@ for (const status of ['ok', 'degraded']) { page.payload = {status, kline_ma: ser
 assert.equal(calls.create, 2);
 assert.deepEqual(calls.series, ['Candlestick', 'MA5', 'MA20', 'MA60', 'Volume', 'Candlestick', 'MA5', 'MA20', 'MA60', 'Volume']);
 assert.equal(calls.setData.length, 10);
+assert.deepEqual(calls.margins, [{top: .05, bottom: .25}, {top: .8, bottom: 0}, {top: .05, bottom: .25}, {top: .8, bottom: 0}]);
+page.payload = {chip: {institutional: {foreign_buy: -5, trust_buy: 3, dealer_buy: 4}}};
+assert.equal(page.institutionItems()[3].value, '2');
+page.payload = {chip: {institutional: {foreign_buy: -5, trust_buy: null, dealer_buy: 4}}};
+assert.equal(page.institutionItems()[3].value, 'Unavailable');
 assert.deepEqual(calls.setData.map(item => item[0]), calls.series);
 console.log('chart-ok');
 """.replace('__SCRIPT__', script)

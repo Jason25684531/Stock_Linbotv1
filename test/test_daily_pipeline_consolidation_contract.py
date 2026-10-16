@@ -26,6 +26,13 @@ def test_scheduler_daily_pipeline_preserves_official_step_order():
     assert scheduler.JOBS['push_to_line'].script_path == 'jobs/push_to_line.py'
 
 
+def test_backfill_is_explicit_only_job():
+    assert scheduler.JOBS['backfill'].script_path == 'jobs/backfill_pipeline.py'
+    assert 'backfill' in scheduler.DRY_RUN_SUPPORTED_JOBS
+    for steps in scheduler.PIPELINES.values():
+        assert 'backfill' not in [step.target for step in steps]
+
+
 def test_cleanup_inventory_exists_with_classification_and_evidence_fields():
     inventory_path = REPO_ROOT / 'docs' / 'cleanup_inventory.md'
     inventory_text = inventory_path.read_text(encoding='utf-8')

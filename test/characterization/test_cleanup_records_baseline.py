@@ -23,6 +23,7 @@ def capture(monkeypatch, family, case):
     from app import dashboard_payloads as dashboard
 
     cache = dashboard._PostbackCache()
+    monkeypatch.setattr(cache, "_today_taipei", lambda: "2026-10-14")
     monkeypatch.setattr(dashboard, "_postback_cache", cache)
     monkeypatch.setattr(app, "_postback_cache", cache)
     monkeypatch.setattr(app, "_current_line_date", lambda: "2026-10-14")

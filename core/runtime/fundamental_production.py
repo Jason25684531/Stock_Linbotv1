@@ -96,7 +96,12 @@ def _evidence(root: Path) -> tuple[dict[str, Any], str | None]:
         return {}, "PROMOTION_EVIDENCE_INVALID"
     if validation.get("BROKER_ORDER_SUBMISSION") != BROKER_ORDER_SUBMISSION:
         return {}, "PROMOTION_EVIDENCE_INVALID"
-    if validation.get("HISTORICAL_SELECTION_DRIFT") not in (0, "0"):
+    if validation.get("status") == "BLOCKED":
+        return {}, str(validation.get("reason") or "PROMOTION_EVIDENCE_INVALID")
+    drift = validation.get("HISTORICAL_SELECTION_DRIFT")
+    if drift is None:
+        return {}, "PROMOTION_EVIDENCE_INVALID"
+    if drift not in (0, "0"):
         return {}, "HISTORICAL_DRIFT"
     failed = [name for name in REQUIRED_RUNTIME_GATES if validation.get(name) != "PASS"]
     if failed:
@@ -184,6 +189,35 @@ def check_production_eligibility(
     if not _flag(enable_production):
         return GateResult(False, "PRODUCTION_DISABLED", evidence)
     return GateResult(True, None, evidence)
+
+
+def shadow_preview(*, evidence_root: Path = OPERATION_ROOT, limit: int = 5) -> dict[str, Any] | None:
+    """Latest healthy SHADOW selection for observation; never a production recommendation."""
+
+    runs = sorted((Path(evidence_root) / "shadow_runs").glob(f"*_{STRATEGY_FINGERPRINT[:12]}"))
+    if not runs:
+        return None
+    health = _read_json(runs[-1] / "shadow_health.json") or {}
+    if health.get("status") != "SUCCESS":
+        return None
+    try:
+        rows = pd.read_csv(runs[-1] / "shadow_selection.csv", dtype={"stock_id": str})
+    except (OSError, ValueError):
+        return None
+    picked = rows[rows["selected"].eq(True)].sort_values("rank").head(limit)
+    fresh = _read_json(Path(evidence_root) / "FreshOOSAvailabilityReport.json") or {}
+    return {
+        "mode": "SHADOW",
+        "production_recommendation": False,
+        "asof_date": health.get("asof_date"),
+        "stocks": [{"stock_id": row.stock_id, "rank": int(row.rank), "score": float(row.score)} for row in picked.itertuples()],
+        "fresh_oos": {
+            "trading_days": int(fresh.get("trading_days") or 0),
+            "minimum_trading_days": FRESH_OOS_MINIMUMS["trading_days"],
+            "rebalances": int(fresh.get("rebalance_count") or 0),
+            "minimum_rebalances": FRESH_OOS_MINIMUMS["rebalances"],
+        },
+    }
 
 
 def _status_payload(

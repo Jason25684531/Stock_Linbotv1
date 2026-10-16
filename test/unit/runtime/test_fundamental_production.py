@@ -101,6 +101,33 @@ def test_identity_mismatch_blocks(tmp_path):
     assert result.reason == "FINGERPRINT_MISMATCH"
 
 
+def test_blocked_or_driftless_manifest_reports_truthful_reason(tmp_path):
+    root = _copy_evidence(tmp_path)
+    path = root / "runtime_validation_manifest.json"
+    validation = _read(path)
+    validation.pop("HISTORICAL_SELECTION_DRIFT")
+    path.write_text(json.dumps(validation), encoding="utf-8")
+    assert production.check_production_eligibility(evidence_root=root, enable_production=True).reason == "PROMOTION_EVIDENCE_INVALID"
+    path.write_text(json.dumps({**validation, "status": "BLOCKED", "reason": "STALE_DATA"}), encoding="utf-8")
+    assert production.check_production_eligibility(evidence_root=root, enable_production=True).reason == "STALE_DATA"
+    path.write_text(json.dumps({**validation, "HISTORICAL_SELECTION_DRIFT": 2}), encoding="utf-8")
+    assert production.check_production_eligibility(evidence_root=root, enable_production=True).reason == "HISTORICAL_DRIFT"
+
+
+def test_shadow_preview_is_observation_only_and_requires_healthy_run(tmp_path):
+    run = tmp_path / "shadow_runs" / f"2026-10-14_{production.STRATEGY_FINGERPRINT[:12]}"
+    run.mkdir(parents=True)
+    pd.DataFrame({"stock_id": ["2442", "6994", "9999"], "rank": [1, 2, 3], "score": [0.9, 0.8, 0.7], "selected": [True, True, False]}).to_csv(run / "shadow_selection.csv", index=False)
+    (tmp_path / "FreshOOSAvailabilityReport.json").write_text(json.dumps({"trading_days": 53, "rebalance_count": 1}), encoding="utf-8")
+    (run / "shadow_health.json").write_text(json.dumps({"status": "BLOCKED"}), encoding="utf-8")
+    assert production.shadow_preview(evidence_root=tmp_path) is None
+    (run / "shadow_health.json").write_text(json.dumps({"status": "SUCCESS", "asof_date": "2026-10-14"}), encoding="utf-8")
+    preview = production.shadow_preview(evidence_root=tmp_path)
+    assert preview["production_recommendation"] is False
+    assert [item["stock_id"] for item in preview["stocks"]] == ["2442", "6994"]
+    assert preview["fresh_oos"]["trading_days"] == 53 and preview["fresh_oos"]["minimum_trading_days"] == 180
+
+
 def test_missing_promotion_evidence_blocks(tmp_path):
     root = _copy_evidence(tmp_path)
     (root / "promotion_review.json").unlink()

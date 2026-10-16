@@ -92,6 +92,27 @@ def test_tpex_quotes_use_requested_date_and_include_etfs_in_one_request(monkeypa
     assert frame.iloc[0][['stock_id', 'close_price', 'volume']].tolist() == ['00679B', 24, 100]
 
 
+def test_twse_dealer_is_total_not_foreign_column(monkeypatch):
+    fields = ['證券代號', '證券名稱', '外陸資買進股數(不含外資自營商)', '外陸資賣出股數(不含外資自營商)',
+              '外陸資買賣超股數(不含外資自營商)', '外資自營商買進股數', '外資自營商賣出股數',
+              '外資自營商買賣超股數', '投信買進股數', '投信賣出股數', '投信買賣超股數', '自營商買賣超股數',
+              '自營商買進股數(自行買賣)', '自營商賣出股數(自行買賣)', '自營商買賣超股數(自行買賣)',
+              '自營商買進股數(避險)', '自營商賣出股數(避險)', '自營商買賣超股數(避險)', '三大法人買賣超股數']
+    row = ['2330', 'x'] + [0] * 17
+    row[4], row[10], row[11] = 4, 5, 3
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {'stat': 'OK', 'date': '20261013', 'fields': fields, 'data': [row]}
+
+    monkeypatch.setattr(server.requests, 'get', lambda *a, **kw: Response())
+    frame = server._fetch_twse_flow('2026-10-13')
+    assert frame.iloc[0][['foreign_buy', 'trust_buy', 'dealer_buy']].tolist() == [4, 5, 3]
+
+
 def test_tpex_dealer_uses_total_instead_of_proprietary_only(monkeypatch):
     class Response:
         def raise_for_status(self):

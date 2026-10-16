@@ -62,10 +62,8 @@ Thumbs.db
 .claude/*
 # Keep generated OpenSpec material local, expose all active changes for review,
 # and keep completed archives local.
-openspec/*
-!openspec/changes/
-!openspec/changes/*/
-!openspec/changes/*/**
+
 openspec/changes/archive/
-openspec/changes/archive/**
 outputs/*
+openspec/*
+docs/*

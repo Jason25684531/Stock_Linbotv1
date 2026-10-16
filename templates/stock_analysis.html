@@ -51,7 +51,7 @@ document.addEventListener('alpine:init', () => {
         changeValue() { return this.formatSigned(this.payload.quote?.price_change); },
         changePercentValue() { const value = this.formatSigned(this.payload.quote?.change_percent); return value === 'Unavailable' ? value : value + '%'; },
         quoteItems() { const quote = this.payload.quote || {}; return [{ label: 'Open', value: this.formatNumber(quote.open_price) }, { label: 'High', value: this.formatNumber(quote.high_price) }, { label: 'Low', value: this.formatNumber(quote.low_price) }, { label: 'Volume', value: this.formatNumber(quote.volume) }, { label: 'Turnover', value: 'Unavailable' }]; },
-        institutionItems() { const item = this.payload.chip?.institutional || {}; return [{ label: '外資', value: this.formatNumber(item.foreign_buy) }, { label: '投信', value: this.formatNumber(item.trust_buy) }, { label: '自營商', value: this.formatNumber(item.dealer_buy) }, { label: '三大法人', value: 'Unavailable' }]; },
+        institutionItems() { const item = this.payload.chip?.institutional || {}; return [{ label: '外資', value: this.formatNumber(item.foreign_buy) }, { label: '投信', value: this.formatNumber(item.trust_buy) }, { label: '自營商', value: this.formatNumber(item.dealer_buy) }, { label: '三大法人', value: [item.foreign_buy, item.trust_buy, item.dealer_buy].every(v => v !== null && v !== undefined && Number.isFinite(Number(v))) ? this.formatNumber(Number(item.foreign_buy) + Number(item.trust_buy) + Number(item.dealer_buy)) : 'Unavailable' }]; },
         maTrend() { const close = Number(this.payload.quote?.close_price); const ma20 = Number(this.payload.technical?.ma20); const ma60 = Number(this.payload.technical?.ma60); if (![close, ma20, ma60].every(Number.isFinite)) return 'Unavailable'; return close >= ma20 && ma20 >= ma60 ? 'Bullish' : close <= ma20 && ma20 <= ma60 ? 'Bearish' : 'Mixed'; },
         display(value) { return value === null || value === undefined || value === '' || Number.isNaN(Number(value)) ? 'Unavailable' : String(value); },
         formatNumber(value) { return value === null || value === undefined || value === '' || Number.isNaN(Number(value)) ? 'Unavailable' : Number(value).toLocaleString('zh-TW'); },
@@ -82,9 +82,12 @@ document.addEventListener('alpine:init', () => {
                 const chart = window.LightweightCharts.createChart(container, { width: container.clientWidth || 800, height: 500, layout: { background: { color: '#07131f' }, textColor: '#91a7ba' }, grid: { vertLines: { color: '#173246' }, horzLines: { color: '#173246' } }, rightPriceScale: { borderColor: '#28516d' }, timeScale: { borderColor: '#28516d' } });
                 this.chart = chart;
                 const candle = chart.addCandlestickSeries({ upColor: '#35e58a', downColor: '#ff5263', borderUpColor: '#35e58a', borderDownColor: '#ff5263', wickUpColor: '#35e58a', wickDownColor: '#ff5263' });
+                candle.priceScale().applyOptions({ scaleMargins: { top: .05, bottom: .25 } });
                 candle.setData(series.candles);
                 for (const [key, color] of [['ma5', '#f4b740'], ['ma20', '#38bdf8'], ['ma60', '#b088ff']]) chart.addLineSeries({ color, lineWidth: 1 }).setData(series[key]);
-                chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '', scaleMargins: { top: .8, bottom: 0 } }).setData(series.volume);
+                const volume = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '' });
+                volume.priceScale().applyOptions({ scaleMargins: { top: .8, bottom: 0 } });
+                volume.setData(series.volume);
                 chart.timeScale().fitContent();
                 const observer = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth || 800 }));
                 this.resizeObserver = observer;

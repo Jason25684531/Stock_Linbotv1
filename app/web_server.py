@@ -9,10 +9,11 @@ import traceback
 
 import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
+from core.runtime import fundamental_production
 from . import app, services
 
 
@@ -749,6 +750,14 @@ def _build_stock_analysis_payload(health_payload: dict[str, object], stock_id: s
             'price_map': war_room.get('price_map') or {},
         },
     }
+    candles = payload['kline_ma']['candles']
+    quote = payload['quote']
+    if quote and len(candles) >= 2 and quote.get('price_change') is None:
+        previous_close = candles[-2].get('close')
+        close = quote.get('close_price')
+        if previous_close and close is not None:
+            quote['price_change'] = round(close - previous_close, 4)
+            quote['change_percent'] = round((close - previous_close) / previous_close * 100, 2)
     if payload['status'] == 'ok' and (not payload['quote'] or not payload['kline_ma']['candles']):
         payload['status'] = 'degraded'
         payload['warnings'] = [
@@ -1045,6 +1054,19 @@ def api_market_recommendations():
         'fallback_age_days': resolution.get('fallback_age_days'),
         'last_available_recommendation_date': resolution.get('last_available_recommendation_date'),
     })
+    if freshness_status == 'blocked' and strategy_id == services.StrategyManager.FUNDAMENTAL_RUNTIME_STRATEGY_ID:
+        shadow = fundamental_production.shadow_preview(limit=top_n)
+        if shadow:
+            try:
+                names = pd.read_sql(
+                    text('select stock_id, stock_name from daily_market_data where trade_date = :d and stock_id in :ids').bindparams(bindparam('ids', expanding=True)),
+                    db_helper.get_db_engine(), params={'d': market_date, 'ids': [item['stock_id'] for item in shadow['stocks']]},
+                ).set_index('stock_id')['stock_name'].to_dict()
+            except Exception:
+                names = {}
+            for item in shadow['stocks']:
+                item['stock_name'] = names.get(item['stock_id'])
+            payload['shadow'] = shadow
     return _dashboard_json_response(payload)
 
 

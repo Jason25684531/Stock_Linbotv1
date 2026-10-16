@@ -20,9 +20,10 @@ echo   [3] Evening Push   - Push Only (skip DB update)
 echo   [4] Update DB      - Fetch latest stock data
 echo   [5] Run Strategy   - Select stocks (no push)
 echo   [6] Start Web      - Launch Flask + Line Bot
+echo   [7] Backfill Gaps  - Repair missing market/recommendation dates
 echo   [0] Exit
 echo.
-set /p CHOICE=  Choose (0-6):
+set /p CHOICE=  Choose (0-7):
 
 if "%CHOICE%"=="1" goto MORNING
 if "%CHOICE%"=="2" goto EVENING_FULL
@@ -30,6 +31,7 @@ if "%CHOICE%"=="3" goto EVENING_PUSH_ONLY
 if "%CHOICE%"=="4" goto UPDATE_DB
 if "%CHOICE%"=="5" goto RUN_DAILY
 if "%CHOICE%"=="6" goto START_WEB
+if "%CHOICE%"=="7" goto BACKFILL
 if "%CHOICE%"=="0" goto END
 echo Invalid choice, try again.
 pause
@@ -83,6 +85,17 @@ goto DONE
 echo.
 echo [%time%] === Run Strategy ===
 %PYTHON% -X utf8 %SCHEDULER% run_daily
+if %errorlevel% neq 0 (
+    echo [%time%] FAILED, errorlevel: %errorlevel%
+) else (
+    echo [%time%] DONE
+)
+goto DONE
+
+:BACKFILL
+echo.
+echo [%time%] === Backfill Gaps ===
+%PYTHON% -X utf8 %SCHEDULER% backfill
 if %errorlevel% neq 0 (
     echo [%time%] FAILED, errorlevel: %errorlevel%
 ) else (

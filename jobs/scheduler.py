@@ -53,12 +53,15 @@ JOBS: dict[str, JobSpec] = {
     'fundamental_oos_promotion': JobSpec('jobs/accumulate_fresh_oos_and_promotion.py', 'Accumulate Fundamental Fresh OOS'),
     # Explicit-only operation cycle; never part of legacy live pipelines.
     'fundamental_shadow_operation': JobSpec('jobs/operate_fundamental_shadow.py', 'Operate Fundamental shadow/OOS'),
+    # Explicit-only gap repair; never part of named pipelines.
+    'backfill': JobSpec('jobs/backfill_pipeline.py', 'Backfill market/recommendation gaps'),
 }
 
 DRY_RUN_SUPPORTED_JOBS = {
     'run_daily',
     'run_backtest',
     'push_to_line',
+    'backfill',
 }
 
 PIPELINES: dict[str, tuple[ScheduledStep, ...]] = {
