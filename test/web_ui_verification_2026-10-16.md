@@ -38,3 +38,5 @@ Phase 1：79 passed、4 個既有失敗、3 xfailed。Playwright 確認套用對
 Phase 2：80 passed、4 個既有失敗、3 xfailed；21 個瀏覽器案例無溢位、console 錯誤與過小互動目標。主按鈕白字／#0b6fd6 對比 4.93:1。中文徽章由 Jinja 對照輸出到 JS，無重複維護來源。
 
 Phase 3：85 passed、1 個既有失敗、3 xfailed；補股名、當日查詢與排名保留測試通過。截圖發現 Tailwind flex 覆蓋手機隱藏規則，已提高選擇器優先序；手機狀態列改兩欄。最終驗收會重測側欄隱藏。
+
+Phase 4：90 passed、1 個既有失敗、3 xfailed；名稱完全／包含／歧義／零筆解析與代號相容通過。Playwright 確認台積電查詢更新 ?id=2330、空白無圖表與缺值清單、五個區間正常。

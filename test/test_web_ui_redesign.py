@@ -115,3 +115,22 @@ def test_recommendation_fills_only_missing_names(client, monkeypatch):
     assert [r['stock_id'] for r in result] == ['2330', '2317', '2454']
     assert [r['ai_score'] for r in result] == [90, 88, 85]
     assert all(r['recommendation_date'] == '2026-10-15' for r in result)
+
+
+@pytest.mark.parametrize('query,expected', [('台積電', '2330'), ('台積', '2330'), ('2330', '2330'), ('台', None), ('不存在', None)])
+def test_stock_name_resolution_preserves_id_path(client, monkeypatch, query, expected):
+    import app.web_server as web
+    names = {'2330': '台積電', '1101': '台泥'}
+    monkeypatch.setattr(web.db_helper, 'get_stock_names', lambda date, ids=None: names)
+    adapter = Mock(return_value={'status': 'ok', 'stock_id': '2330', 'quote': {'close_price': 1050}, 'series': {'candles': [{'time': '2026-10-16'}]}})
+    monkeypatch.setattr(web.services, '_build_dashboard_health_check_payload_local', adapter)
+    response = client.get('/api/stock-analysis', query_string={'id': query})
+    if expected:
+        assert response.status_code == 200
+        assert response.get_json()['stock_id'] == expected
+        assert response.get_json()['stock_name'] == '台積電'
+        assert adapter.call_args.kwargs['stock_id'] == expected
+    else:
+        assert response.status_code == 400
+        assert len(response.get_json()['candidates']) == (2 if query == '台' else 0)
+        adapter.assert_not_called()

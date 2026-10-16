@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import json
 import math
+import re
 import time
 import traceback
 from datetime import date, timedelta
@@ -778,6 +779,19 @@ def api_stock_analysis():
         return jsonify({'status': 'error', 'error': 'missing required stock id query parameter: id'}), 400
 
     try:
+        stock_name = None
+        if not re.fullmatch(r'\d{4,6}[A-Z]?', stock_id):
+            names = db_helper.get_stock_names(_latest_ui_market_date())
+            matches = [(key, name) for key, name in names.items() if name == stock_id]
+            if not matches:
+                matches = [(key, name) for key, name in names.items() if stock_id in name]
+            if len(matches) != 1:
+                candidates = [{'stock_id': key, 'stock_name': name} for key, name in sorted(matches)[:5]]
+                message = '查無符合的股票名稱，請確認名稱或使用股票代號'
+                if candidates:
+                    message = '名稱符合多檔股票，請使用代號：' + '、'.join(f"{item['stock_id']} {item['stock_name']}" for item in candidates)
+                return jsonify({'status': 'error', 'error': message, 'candidates': candidates}), 400
+            stock_id, stock_name = matches[0]
         health_payload = services._build_dashboard_health_check_payload_local(
             stock_id=stock_id,
             requested_date=request.args.get('date'),
@@ -787,7 +801,9 @@ def api_stock_analysis():
             basic_only=True,
         )
         status_code = 500 if health_payload.get('status') == 'error' else 200
-        return _dashboard_json_response(_build_stock_analysis_payload(health_payload, stock_id), status_code)
+        payload = _build_stock_analysis_payload(health_payload, stock_id)
+        payload['stock_name'] = stock_name or health_payload.get('stock_name') or db_helper.get_stock_names(payload.get('as_of_date'), [stock_id]).get(stock_id)
+        return _dashboard_json_response(payload, status_code)
     except Exception as exc:
         traceback.print_exc()
         return jsonify({'status': 'error', 'error': str(exc)}), 500
