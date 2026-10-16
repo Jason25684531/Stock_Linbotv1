@@ -5,28 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Stock Linbot{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+            primary: 'var(--bg-primary)', secondary: 'var(--bg-secondary)', card: 'var(--bg-card)',
+            line: 'var(--border-color)', strong: 'var(--border-strong)', muted: 'var(--text-secondary)',
+            ink: 'var(--text-primary)', up: 'var(--color-up)', down: 'var(--color-down)'
+        } } } };
+    </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-primary:#07131f; --bg-secondary:#0b1d2c; --bg-card:#0d2233; --border-color:#1c3a50; --text-primary:#e5eef7; --text-secondary:#91a7ba; --accent-blue:#198cff; --accent-green:#35e58a; --accent-red:#ff5263; --accent-amber:#f4b740; --accent-purple:#b088ff; --color-up:#ff5263; --color-down:#35e58a; }
+        :root { --bg-primary:#07131f; --bg-secondary:#0b1d2c; --bg-card:#0d2233; --border-color:#1c3a50; --border-strong:#28516d; --chart-grid:#173246; --chart-ma20:#38bdf8; --text-primary:#e5eef7; --text-secondary:#91a7ba; --accent-blue:#198cff; --accent-green:#35e58a; --accent-red:#ff5263; --accent-amber:#f4b740; --accent-purple:#b088ff; --color-up:#ff5263; --color-down:#35e58a; }
         * { box-sizing:border-box; }
         html, body { min-height:100%; }
-        body { margin:0; background:var(--bg-primary); color:var(--text-primary); font-family:'JetBrains Mono',monospace; }
+        body { margin:0; background:var(--bg-primary); color:var(--text-primary); font-family:'Noto Sans TC',sans-serif; }
         a { color:inherit; }
+        .num { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
         .text-up { color:var(--color-up); }
         .text-down { color:var(--color-down); }
         .text-muted { color:var(--text-secondary); }
         .quant-card { background:rgba(13,34,51,.78); border:1px solid var(--border-color); border-radius:.55rem; }
         .metric-card { background:rgba(8,25,39,.78); border:1px solid var(--border-color); border-radius:.55rem; padding:1rem; }
-        .metric-label { color:var(--text-secondary); font-size:.72rem; letter-spacing:.04em; text-transform:uppercase; }
+        .metric-label { color:var(--text-secondary); font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; }
         .table-row { border-bottom:1px solid rgba(28,58,80,.8); }
         .table-row:hover { background:rgba(25,140,255,.07); }
-        .status-badge { display:inline-flex; align-items:center; gap:.35rem; border-radius:999px; padding:.18rem .55rem; font-size:.7rem; font-weight:600; }
+        .status-badge { display:inline-flex; align-items:center; gap:.35rem; border-radius:999px; padding:.18rem .55rem; font-size:.75rem; font-weight:600; }
         .status-ok { color:var(--accent-green); background:rgba(53,229,138,.1); }
         .status-degraded { color:var(--accent-amber); background:rgba(244,183,64,.1); }
         .status-error { color:var(--accent-red); background:rgba(255,82,99,.1); }
@@ -46,8 +53,8 @@
 <body x-data="{ sidebarOpen:false }">
     <div class="min-h-screen">
         <div x-cloak x-show="sidebarOpen" @click="sidebarOpen=false" class="fixed inset-0 z-40 bg-black/60 md:hidden" aria-hidden="true"></div>
-        <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-[#1c3a50] bg-[#081a29] transition-transform md:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" aria-label="主要導覽">
-            <div class="flex h-20 items-center gap-3 border-b border-[#1c3a50] px-4"><a href="{{ url_for('dashboard') }}" class="flex items-center gap-3" @click="sidebarOpen=false"><span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy"><span class="block text-sm font-bold tracking-wide text-white">STOCK LINBOT</span><span class="block text-[10px] text-slate-400">Quant Strategy Platform</span></span></a></div>
+        <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-secondary transition-transform md:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" aria-label="主要導覽">
+            <div class="flex h-20 items-center gap-3 border-b border-line px-4"><a href="{{ url_for('dashboard') }}" class="flex items-center gap-3" @click="sidebarOpen=false"><span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy"><span class="block text-sm font-bold tracking-wide text-white">STOCK LINBOT</span><span class="block text-xs text-slate-400">Quant Strategy Platform</span></span></a></div>
             <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
                 {% set active = request.endpoint or '' %}
                 <a title="Dashboard" href="{{ url_for('dashboard') }}" class="nav-item {% if active == 'dashboard' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span class="nav-label">Dashboard</span></a>
@@ -56,10 +63,10 @@
                 <a title="回測分析" href="{{ url_for('backtest') }}" class="nav-item {% if active == 'backtest' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 12a9 9 0 1 0 3-7M3 3v6h6m3-2v5l3 2"/></svg><span class="nav-label">回測分析</span></a>
                 <a title="System" href="{{ url_for('system_status_page') }}" class="nav-item {% if active == 'system_status_page' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 5h18v14H3zM3 10h18m-12 0v9"/></svg><span class="nav-label">System</span></a>
             </nav>
-            <div class="border-t border-[#1c3a50] p-3"><div class="mb-3 flex items-center gap-2 text-xs {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span><span class="nav-label">{{ shell_status.label }}</span></div><div class="flex items-center justify-between text-[10px] text-slate-500"><span class="nav-label">BROKER</span><span class="text-amber-300">DISABLED</span></div></div>
+            <div class="border-t border-line p-3"><div class="mb-3 flex items-center gap-2 text-xs {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span><span class="nav-label">{{ shell_status.label }}</span></div><div class="flex items-center justify-between text-xs text-slate-400"><span class="nav-label">BROKER</span><span class="text-amber-300">DISABLED</span></div></div>
         </aside>
         <div class="shell-main min-h-screen transition-[margin] md:ml-56">
-            <header class="sticky top-0 z-30 border-b border-[#1c3a50] bg-[#07131f]/95 backdrop-blur"><div class="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8"><div class="flex items-center gap-3"><button type="button" class="rounded-md border border-[#1c3a50] px-3 py-2 text-slate-300 md:hidden" @click="sidebarOpen=!sidebarOpen" :aria-expanded="sidebarOpen" aria-controls="main-sidebar" aria-label="開啟導覽">☰</button><div><p class="text-xs uppercase tracking-[.18em] text-slate-500">{% block page_kicker %}Stock Linbot{% endblock %}</p><h1 class="text-lg font-semibold text-white">{% block page_heading %}{% endblock %}</h1></div></div><div class="flex items-center gap-4 text-xs"><span class="hidden items-center gap-2 sm:flex {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span>{{ shell_status.label }}</span></div></div></header>
+            <header class="sticky top-0 z-30 border-b border-line bg-primary backdrop-blur"><div class="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8"><div class="flex items-center gap-3"><button type="button" class="rounded-md border border-line px-3 py-2 text-slate-300 md:hidden" @click="sidebarOpen=!sidebarOpen" :aria-expanded="sidebarOpen" aria-controls="main-sidebar" aria-label="開啟導覽">☰</button><div><p class="text-xs uppercase tracking-[.18em] text-slate-400">{% block page_kicker %}Stock Linbot{% endblock %}</p><h1 class="text-lg font-semibold text-white">{% block page_heading %}{% endblock %}</h1></div></div><div class="flex items-center gap-4 text-xs"><span class="hidden items-center gap-2 sm:flex {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span>{{ shell_status.label }}</span></div></div></header>
             <main class="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">{% block content %}{% endblock %}</main>
         </div>
     </div>

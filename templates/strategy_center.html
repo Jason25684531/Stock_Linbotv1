@@ -14,8 +14,8 @@
         <div>
             <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
             <h2 class="mt-1 text-2xl font-semibold text-white">Strategy Center</h2>
-            <p class="mt-1 text-sm text-gray-400">點選策略名稱或勾選框，查看已完成的選股快照；套用到 Daily 可更新每日篩選設定，組合回測可帶入所選策略。</p>
-            <p class="mt-1 text-xs text-gray-500">Daily／回測可用表示系統支援執行，並非績效驗收通過。</p>
+            <p class="mt-1 text-sm text-muted">點選策略名稱或勾選框，查看已完成的選股快照；套用到 Daily 可更新每日篩選設定，組合回測可帶入所選策略。</p>
+            <p class="mt-1 text-xs text-muted">Daily／回測可用表示系統支援執行，並非績效驗收通過。</p>
         </div>
         <span class="status-badge status-unknown"><span x-text="catalog.length"></span> Strategies</span>
     </div>
@@ -26,7 +26,7 @@
                 type="button"
                 role="tab"
                 class="rounded-md border px-3 py-2 text-xs transition-colors"
-                :class="filter === tab.key ? 'border-blue-500 bg-blue-500/15 text-blue-300' : 'border-gray-700 text-gray-400 hover:border-gray-500'"
+                :class="filter === tab.key ? 'border-blue-500 bg-blue-500/15 text-blue-300' : 'border-strong text-muted hover:border-strong'"
                 :aria-selected="filter === tab.key"
                 @click="filter = tab.key"
                 x-text="tab.label"
@@ -36,13 +36,13 @@
 
     <section class="quant-card p-5" aria-live="polite" data-testid="strategy-results">
         <h2 class="text-lg font-semibold text-white">所選策略股票</h2>
-        <p class="mt-1 text-xs text-gray-400">依資料庫已完成的策略快照顯示；勾選不會變更 Daily 設定。資料過期或缺少快照時會顯示原因。</p>
-        <p x-show="!selectedItems.length" class="mt-4 text-sm text-gray-400">請先選擇策略</p>
+        <p class="mt-1 text-xs text-muted">依資料庫已完成的策略快照顯示；勾選不會變更 Daily 設定。資料過期或缺少快照時會顯示原因。</p>
+        <p x-show="!selectedItems.length" class="mt-4 text-sm text-muted">請先選擇策略</p>
         <div class="mt-4 grid gap-4 lg:grid-cols-2">
             <template x-for="item in selectedItems" :key="item.strategy_id">
-                <article class="rounded border border-gray-700 p-4">
+                <article class="rounded border border-strong p-4">
                     <div class="flex items-center justify-between gap-3"><strong x-text="item.display_name_en"></strong><button type="button" class="text-xs text-blue-300" @click="loadStrategy(item.strategy_id)">重試</button></div>
-                    <p class="mt-1 text-xs text-gray-400" x-text="resultText(item.strategy_id)"></p>
+                    <p class="mt-1 text-xs text-muted" x-text="resultText(item.strategy_id)"></p>
                     <ul class="mt-3 space-y-2"><template x-for="row in (results[item.strategy_id]?.data?.data?.recommendations || [])" :key="row.stock_id"><li><a class="text-blue-300 hover:text-blue-200" :href="'/stock-analysis?id=' + encodeURIComponent(row.stock_id)" x-text="row.stock_id + (row.stock_name ? ' ' + row.stock_name : '')"></a></li></template></ul>
                     <div class="mt-3 rounded border border-amber-500/30 p-3 text-xs text-amber-200" data-testid="strategy-shadow" x-show="results[item.strategy_id]?.data?.shadow">
                         <p>SHADOW 觀察 · 非正式推薦 · <span x-text="results[item.strategy_id]?.data?.shadow?.asof_date"></span> · Fresh OOS <span x-text="results[item.strategy_id]?.data?.shadow?.fresh_oos?.trading_days"></span>/<span x-text="results[item.strategy_id]?.data?.shadow?.fresh_oos?.minimum_trading_days"></span> 交易日</p>
@@ -53,9 +53,9 @@
         </div>
     </section>
 
-    <div class="hidden overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/40 md:block">
+    <div class="hidden overflow-x-auto rounded-lg border border-line bg-primary md:block">
         <table class="min-w-[900px] w-full text-left text-sm" data-testid="strategy-catalog-table">
-            <thead class="border-b border-gray-800 bg-gray-900/80 text-xs uppercase tracking-wider text-gray-500">
+            <thead class="border-b border-line bg-primary text-xs uppercase tracking-wider text-muted">
                 <tr>
                     <th class="px-4 py-3">Select</th>
                     <th class="px-4 py-3">Strategy</th>
@@ -65,13 +65,13 @@
                     <th class="px-4 py-3">Backtest</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-800">
+            <tbody class="divide-y divide-line">
                 <template x-for="item in filteredItems" :key="item.strategy_id">
-                    <tr class="text-gray-300 hover:bg-gray-800/40">
+                    <tr class="text-ink hover:bg-secondary">
                         <td class="px-4 py-4 align-top">
                             <input
                                 type="checkbox"
-                                class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                                class="mt-1 h-4 w-4 rounded border-strong bg-secondary text-blue-500 focus:ring-blue-500"
                                 :id="'strategy-desktop-' + item.strategy_id"
                                 :value="item.strategy_id"
                                 x-model="selected"
@@ -80,8 +80,8 @@
                         </td>
                         <td class="px-4 py-4 align-top">
                             <label :for="'strategy-desktop-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_en"></label>
-                            <div class="mt-1 font-mono text-xs text-blue-300" x-text="item.strategy_id"></div>
-                            <div class="mt-1 text-xs text-gray-500" x-show="item.aliases.length">
+                            <div class="mt-1 num text-xs text-blue-300" x-text="item.strategy_id"></div>
+                            <div class="mt-1 text-xs text-muted" x-show="item.aliases.length">
                                 Alias: <span x-text="item.aliases.join(', ')"></span>
                             </div>
                         </td>
@@ -90,16 +90,16 @@
                         </td>
                         <td class="px-4 py-4 align-top text-xs">
                             <div x-text="item.lifecycle"></div>
-                            <div class="mt-1 text-gray-500" x-text="item.eligibility"></div>
+                            <div class="mt-1 text-muted" x-text="item.eligibility"></div>
                             <div class="mt-1 max-w-xs text-amber-300" x-show="item.eligibility_reason" x-text="item.eligibility_reason"></div>
                         </td>
                         <td class="px-4 py-4 align-top">
                             <span class="status-badge" :class="item.available_for_daily ? 'status-ok' : 'status-degraded'" x-text="item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE'"></span>
-                            <div class="mt-1 max-w-xs text-xs text-gray-500" x-show="!item.available_for_daily" x-text="item.daily_reason"></div>
+                            <div class="mt-1 max-w-xs text-xs text-muted" x-show="!item.available_for_daily" x-text="item.daily_reason"></div>
                         </td>
                         <td class="px-4 py-4 align-top">
                             <span class="status-badge" :class="item.available_for_backtest ? 'status-ok' : 'status-degraded'" x-text="item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE'"></span>
-                            <div class="mt-1 max-w-xs text-xs text-gray-500" x-show="!item.available_for_backtest" x-text="item.backtest_reason"></div>
+                            <div class="mt-1 max-w-xs text-xs text-muted" x-show="!item.available_for_backtest" x-text="item.backtest_reason"></div>
                         </td>
                     </tr>
                 </template>
@@ -109,11 +109,11 @@
 
     <div class="grid gap-3 md:hidden" data-testid="strategy-catalog-cards">
         <template x-for="item in filteredItems" :key="item.strategy_id">
-            <article class="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+            <article class="rounded-lg border border-line bg-primary p-4">
                 <div class="flex items-start gap-3">
                     <input
                         type="checkbox"
-                        class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                        class="mt-1 h-4 w-4 rounded border-strong bg-secondary text-blue-500 focus:ring-blue-500"
                         :id="'strategy-mobile-' + item.strategy_id"
                         :value="item.strategy_id"
                         x-model="selected"
@@ -121,13 +121,13 @@
                     >
                     <div class="min-w-0 flex-1">
                         <label :for="'strategy-mobile-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_en"></label>
-                        <div class="mt-1 break-all font-mono text-xs text-blue-300" x-text="item.strategy_id"></div>
+                        <div class="mt-1 break-all num text-xs text-blue-300" x-text="item.strategy_id"></div>
                     </div>
                     <span class="status-badge status-unknown" x-text="item.category"></span>
                 </div>
-                <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-400">
-                    <div>Lifecycle <span class="block text-gray-200" x-text="item.lifecycle"></span></div>
-                    <div>Eligibility <span class="block text-gray-200" x-text="item.eligibility"></span></div>
+                <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
+                    <div>Lifecycle <span class="block text-ink" x-text="item.lifecycle"></span></div>
+                    <div>Eligibility <span class="block text-ink" x-text="item.eligibility"></span></div>
                     <div>Daily <span class="block" :class="item.available_for_daily ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
                     <div>Backtest <span class="block" :class="item.available_for_backtest ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
                 </div>
@@ -136,18 +136,18 @@
         </template>
     </div>
 
-    <div class="sticky bottom-4 z-20 rounded-lg border border-blue-500/30 bg-gray-950/95 p-4 shadow-xl backdrop-blur" data-testid="strategy-actions">
+    <div class="sticky bottom-4 z-20 rounded-lg border border-blue-500/30 bg-primary p-4 shadow-xl backdrop-blur" data-testid="strategy-actions">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <div class="text-sm font-medium text-white">已選擇 <span x-text="selectedItems.length"></span> 個策略</div>
                 <div class="mt-1 flex flex-wrap gap-2" aria-live="polite">
                     <template x-for="item in selectedItems" :key="item.strategy_id">
-                        <span class="rounded bg-gray-800 px-2 py-1 font-mono text-xs text-gray-300">
+                        <span class="rounded bg-secondary px-2 py-1 num text-xs text-ink">
                             <span x-text="item.aliases.length ? item.aliases[0] : 'Fundamental'"></span>
-                            <span class="text-gray-500" x-text="` · ${item.strategy_id}`"></span>
+                            <span class="text-muted" x-text="` · ${item.strategy_id}`"></span>
                         </span>
                     </template>
-                    <span x-show="!selectedItems.length" class="text-xs text-gray-500">請選擇策略</span>
+                    <span x-show="!selectedItems.length" class="text-xs text-muted">請選擇策略</span>
                 </div>
                 <p x-show="selectedItems.length && !dailyAllowed" class="mt-2 text-xs text-amber-300">Daily unavailable: <span x-text="dailyBlockReason"></span></p>
                 <p x-show="selectedItems.length && !backtestAllowed" class="mt-1 text-xs text-amber-300">Backtest unavailable: <span x-text="backtestBlockReason"></span></p>
@@ -160,7 +160,7 @@
                 </form>
                 <button
                     type="button"
-                    class="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    class="rounded-md border border-strong px-4 py-2 text-sm text-ink transition-colors hover:border-strong disabled:cursor-not-allowed disabled:opacity-40"
                     :disabled="!dailyAllowed"
                     @click="$refs.dailyForm.submit()"
                 >套用到 Daily</button>

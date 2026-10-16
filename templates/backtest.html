@@ -9,21 +9,21 @@
     <div>
         <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
         <h2 class="mt-1 text-2xl font-semibold text-white">回測分析</h2>
-        <p class="mt-1 text-sm text-gray-400">使用已由 Backtest Engine 證明可用的 canonical strategy identity。</p>
+        <p class="mt-1 text-sm text-muted">使用已由 Backtest Engine 證明可用的 canonical strategy identity。</p>
     </div>
     <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6">
         <section class="quant-card p-5">
             <div class="mb-4 flex items-center justify-between">
-                <div><h2 class="text-base font-semibold text-white">選擇策略</h2><p class="mt-1 text-xs text-gray-500">Fundamental 保留在 catalog，但未有既有 Backtest capability 時不可執行。</p></div>
+                <div><h2 class="text-base font-semibold text-white">選擇策略</h2><p class="mt-1 text-xs text-muted">Fundamental 保留在 catalog，但未有既有 Backtest capability 時不可執行。</p></div>
                 <span class="status-badge status-ok">{{ strategies|length }} available</span>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {% for item in strategy_catalog %}
-                <label class="rounded-lg border p-3 {% if item.available_for_backtest %}cursor-pointer border-gray-700 bg-gray-900/50 hover:border-blue-500{% else %}border-amber-500/30 bg-amber-500/5{% endif %}">
+                <label class="rounded-lg border p-3 {% if item.available_for_backtest %}cursor-pointer border-strong bg-primary hover:border-blue-500{% else %}border-amber-500/30 bg-amber-500/5{% endif %}">
                     <div class="flex items-start gap-3">
-                        <input type="checkbox" name="strategies" value="{{ item.strategy_id }}" class="mt-1 h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500" {% if not item.available_for_backtest %}disabled{% endif %} {% if item.strategy_id in selected_strategies %}checked{% endif %}>
-                        <span class="min-w-0"><span class="block text-sm font-medium text-white">{{ item.display_name_en }}</span><span class="mt-1 block break-all font-mono text-[11px] text-blue-300">{{ item.strategy_id }}</span>
-                            {% if item.aliases %}<span class="mt-1 block text-xs text-gray-500">{{ item.aliases|join(', ') }}</span>{% endif %}
+                        <input type="checkbox" name="strategies" value="{{ item.strategy_id }}" class="mt-1 h-4 w-4 rounded border-strong bg-secondary text-blue-500 focus:ring-blue-500" {% if not item.available_for_backtest %}disabled{% endif %} {% if item.strategy_id in selected_strategies %}checked{% endif %}>
+                        <span class="min-w-0"><span class="block text-sm font-medium text-white">{{ item.display_name_en }}</span><span class="mt-1 block break-all num text-xs text-blue-300">{{ item.strategy_id }}</span>
+                            {% if item.aliases %}<span class="mt-1 block text-xs text-muted">{{ item.aliases|join(', ') }}</span>{% endif %}
                             <span class="mt-2 inline-flex status-badge {% if item.available_for_backtest %}status-ok{% else %}status-degraded{% endif %}">{% if item.available_for_backtest %}AVAILABLE{% else %}UNAVAILABLE{% endif %}</span>
                             {% if not item.available_for_backtest %}<span class="mt-2 block text-xs text-amber-300">{{ item.backtest_reason }}</span>{% endif %}
                         </span>
@@ -35,13 +35,13 @@
         <section class="quant-card p-5">
             <h2 class="text-base font-semibold text-white">期間與執行設定</h2>
             <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <label class="text-sm text-gray-300">開始日期<input type="date" name="start_date" value="2025-06-01" class="mt-2 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-200"></label>
-                <label class="text-sm text-gray-300">結束日期<input type="date" name="end_date" value="2026-02-11" class="mt-2 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-200"></label>
-                <label class="text-sm text-gray-300">Weights（可選）<input type="text" name="weights" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-200"></label>
-                <label class="flex items-end gap-2 pb-2 text-sm text-gray-300"><input type="checkbox" name="persist" value="1" class="h-4 w-4 rounded border-gray-600 bg-gray-900 text-blue-500">Persist result</label>
+                <label class="text-sm text-ink">開始日期<input type="date" name="start_date" value="2025-06-01" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
+                <label class="text-sm text-ink">結束日期<input type="date" name="end_date" value="2026-02-11" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
+                <label class="text-sm text-ink">Weights（可選）<input type="text" name="weights" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
+                <label class="flex items-end gap-2 pb-2 text-sm text-ink"><input type="checkbox" name="persist" value="1" class="h-4 w-4 rounded border-strong bg-primary text-blue-500">Persist result</label>
             </div>
         </section>
-        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-gray-700 px-5 py-3 text-center text-sm text-gray-300 hover:border-gray-500">回到 Strategy Center</a></div>
+        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-strong px-5 py-3 text-center text-sm text-ink hover:border-strong">回到 Strategy Center</a></div>
     </form>
 </div>
 {% endblock %}

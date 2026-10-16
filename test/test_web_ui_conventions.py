@@ -46,3 +46,18 @@ def test_taiwan_candles_use_shared_tokens_and_direction_symbols():
     assert 'borderDownColor: down' in stock
     assert 'directionLabel(row.direction)' in dashboard
     assert "'▼ '" in dashboard and "'▲ '" in dashboard
+
+
+def test_primary_templates_use_tokens_readable_sizes_and_numeric_font():
+    for path in TEMPLATES.glob('*.html'):
+        if path.name == 'login.html':
+            continue
+        source = path.read_text(encoding='utf-8')
+        assert not re.search(r'-\[#|gray-|text-\[1[01]px\]|text-slate-[56]00', source), path.name
+        assert 'chart.js@' not in source
+    base = (TEMPLATES / 'base.html').read_text(encoding='utf-8')
+    assert base.index('tailwind.config') > base.index('cdn.tailwindcss.com')
+    assert "font-family:'Noto Sans TC'" in base
+    assert ".num { font-family:'JetBrains Mono'" in base
+    assert 'font-variant-numeric:tabular-nums' in base
+
