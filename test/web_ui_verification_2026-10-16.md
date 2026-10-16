@@ -75,3 +75,4 @@ Phase 6：WEBTEST 91 passed、3 xfailed；修正最後一個既有英文文字�
 - 真實唯讀 API：台積電名稱解析為 2330，stock_name=台積電；啟用的 institutional_flow_confirmation 返回 6 檔推薦，6 檔皆有股名、current。系統狀態 ok，三個 pipeline 步驟皆 Success。
 - 最後 Web 全集 78 passed；WEBTEST 93 passed、3 個既有預期失敗；strict validation 與 diff whitespace 檢查通過。未執行真實回測、未提交正式設定。
 - 實作留在 feature/2026-10-16-redesign-web-ui-trading-desk，Phase 0～7 已各自提交；未歸檔。
+- 真實資料截圖補正狀態徽章不可折行，避免排程時間較長時壓縮文字；WEBTEST 仍為 93 passed、3 xfailed，已重新啟動 Web 載入最終模板。
