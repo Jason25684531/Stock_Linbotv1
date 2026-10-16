@@ -43,7 +43,7 @@
         .status-degraded { color:var(--accent-amber); background:rgba(244,183,64,.1); }
         .status-error { color:var(--status-err); background:rgba(255,138,61,.1); }
         .status-unknown { color:var(--text-secondary); background:rgba(145,167,186,.1); }
-        .status-disabled { color:var(--accent-amber); background:rgba(244,183,64,.1); }
+        .status-disabled { color:var(--text-secondary); background:rgba(145,167,186,.1); }
         .nav-item { display:flex; align-items:center; gap:.7rem; border:1px solid transparent; border-radius:.45rem; color:var(--text-secondary); padding:.65rem .75rem; transition:background .15s,color .15s; }
         .nav-item:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--accent-blue); outline-offset:2px; }
         .nav-item:hover { background:rgba(25,140,255,.08); color:var(--text-primary); }
@@ -59,9 +59,10 @@
         .shell-main { margin-left:232px; min-width:0; }
         .mobile-tabs { display:none; }
         .header-search { max-width:400px; flex:1; }
+        #notifications { position:fixed;right:16px;bottom:20px;z-index:60;max-width:min(420px,calc(100vw - 32px));padding:0; }
         dialog::backdrop { background:rgba(0,0,0,.65); }
         @media (min-width:721px) and (max-width:1100px) { .desktop-sidebar{width:72px;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:none;} .desktop-sidebar .nav-item{justify-content:center;} .shell-main{margin-left:72px;} .header-search{max-width:300px;} }
-        @media (max-width:720px) { body .desktop-sidebar{display:none;} .shell-main{margin-left:0;} main{padding-bottom:96px !important;} .mobile-tabs{display:flex;position:fixed;inset:auto 0 0;z-index:40;height:calc(56px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg-secondary);border-top:1px solid var(--border-color);} .mobile-tabs a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;font-size:12px;color:var(--text-secondary);} .mobile-tabs a[aria-current=page]{color:var(--status-ok);background:rgba(25,140,255,.12);} .header-row{flex-wrap:wrap;padding:12px 16px;gap:10px;} .header-search{order:3;flex-basis:100%;max-width:none;} .header-date{font-size:12px;} .chart-shell{min-height:360px;} .mobile-brand{display:inline;} #notifications{position:relative;z-index:45;} }
+        @media (max-width:720px) { body .desktop-sidebar{display:none;} .shell-main{margin-left:0;} main{padding-bottom:96px !important;} .mobile-tabs{display:flex;position:fixed;inset:auto 0 0;z-index:40;height:calc(56px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg-secondary);border-top:1px solid var(--border-color);} .mobile-tabs a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;font-size:12px;color:var(--text-secondary);} .mobile-tabs a[aria-current=page]{color:var(--status-ok);background:rgba(25,140,255,.12);} .header-row{flex-wrap:wrap;padding:12px 16px;gap:10px;} .header-search{order:3;flex-basis:100%;max-width:none;} .header-date{font-size:12px;} .chart-shell{min-height:360px;} .mobile-brand{display:inline;} #notifications{bottom:calc(72px + env(safe-area-inset-bottom));} }
         @media (min-width:721px) { .mobile-brand{display:none;} }
     </style>
     {% block extra_head %}{% endblock %}
@@ -89,8 +90,8 @@
                     <div class="text-xs"><span class="sr-only">系統</span>{{ ui.status_badge(shell_status.state) }}</div>
                 </div>
             </header>
-            <div id="notifications" class="mx-auto w-full max-w-[1500px] px-4" @notify.window="$refs.clientNotice.textContent=$event.detail; $refs.clientNotice.hidden=false; setTimeout(() => $refs.clientNotice.hidden=true, 6000)">
-                <p x-ref="clientNotice" hidden role="status" class="quant-card mt-3 p-3"></p>
+            <div id="notifications" class="w-full" x-data="{ notice:'', noticeOpen:false, noticeTimer:null }" @notify.window="notice=$event.detail; noticeOpen=true; clearTimeout(noticeTimer); noticeTimer=setTimeout(() => noticeOpen=false, 6000)">
+                <div x-show="noticeOpen" x-cloak x-transition.opacity role="status" class="quant-card mt-3 flex items-center justify-between gap-3 p-3"><span x-text="notice"></span><button type="button" @click="noticeOpen=false" aria-label="關閉通知" class="px-3 py-2">✕</button></div>
                 {% for category, message in get_flashed_messages(with_categories=true) %}
                 <div x-data="{ visible:true }" {% if category != 'error' %}x-init="setTimeout(() => visible=false, 6000)"{% endif %} x-show="visible" x-transition.opacity role="{{ 'alert' if category == 'error' else 'status' }}" class="quant-card mt-3 flex items-center justify-between gap-3 p-3 {{ 'text-amber-300' if category == 'error' else 'text-blue-200' }}">
                     <span>{{ message }}</span><button type="button" @click="visible=false" aria-label="關閉通知" class="px-3 py-2">✕</button>

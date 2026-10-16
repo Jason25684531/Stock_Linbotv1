@@ -215,7 +215,7 @@ def strategy_center():
 def inject_shell_status():
     """Expose one evidence-backed status badge to every rendered page."""
     try:
-        payload, _ = _build_system_status_payload(include_freshness=False)
+        payload, _ = _build_system_status_payload()
         market_date = _latest_ui_market_date()
         state = payload.get('status')
         if state == 'ok':
@@ -1340,7 +1340,12 @@ def backtest():
     if request.method == 'GET':
         catalog = _build_strategy_catalog()
         available = [item for item in catalog if item.get('available_for_backtest')]
-        requested = _parse_csv_query_values('strategies') or []
+        requested = []
+        for key in _parse_csv_query_values('strategies') or []:
+            try:
+                requested.append(services.strategy_manager.resolve(key, warn_legacy=False))
+            except KeyError:
+                continue
         selected = [item['strategy_id'] for item in available if item['strategy_id'] in requested]
         if not selected and available and not request.args.get('preserved'):
             selected = [available[0]['strategy_id']]

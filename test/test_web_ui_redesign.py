@@ -134,3 +134,22 @@ def test_stock_name_resolution_preserves_id_path(client, monkeypatch, query, exp
         assert response.status_code == 400
         assert len(response.get_json()['candidates']) == (2 if query == '台' else 0)
         adapter.assert_not_called()
+
+
+def test_preserved_backtest_alias_and_empty_selection(client):
+    html = client.get('/backtest?preserved=1&strategies=v31&weights=1&persist=1').get_data(as_text=True)
+    import re
+    strategy = re.search(r'<input[^>]*value="hybrid_trend_rank"[^>]*>', html)[0]
+    assert 'checked' in strategy
+    persist = re.search(r'<input[^>]*name="persist"[^>]*>', html)[0]
+    assert 'checked' in persist
+    html = client.get('/backtest?preserved=1&strategies=').get_data(as_text=True)
+    assert 'checked' not in re.search(r'<input[^>]*value="hybrid_trend_rank"[^>]*>', html)[0]
+
+
+def test_shell_uses_freshness_evidence(client, monkeypatch):
+    import app.web_server as web
+    status = Mock(return_value=({'status': 'degraded'}, 200))
+    monkeypatch.setattr(web, '_build_system_status_payload', status)
+    assert '▲ 部分降級' in client.get('/dashboard').get_data(as_text=True)
+    status.assert_called_once_with()

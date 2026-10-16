@@ -22,7 +22,7 @@
                 <div><h2 class="text-base font-semibold text-white">選擇策略</h2><p class="mt-1 text-xs text-muted">基本面策略保留於清單中；尚未支援回測的策略無法勾選。</p></div>
                 <span class="status-badge status-ok">{{ strategies|length }} 項可用</span>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid gap-3 sm:grid-cols-2">
                 {% for item in strategy_catalog %}
                 <label class="rounded-lg border p-3 {% if item.available_for_backtest %}cursor-pointer border-strong bg-primary hover:border-blue-500{% else %}border-dashed border-amber-500/30 bg-amber-500/5{% endif %}">
                     <div class="flex items-start gap-3">
@@ -40,7 +40,7 @@
         </section>
         <section class="quant-card p-5">
             <h2 class="text-base font-semibold text-white">期間與執行設定</h2>
-            <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <label class="text-sm text-ink">開始日期<input type="date" name="start_date" value="{{ default_start_date }}" x-ref="start_date" :aria-invalid="Boolean(errors.start_date)" aria-describedby="start-error" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="start-error" role="alert" class="mt-2 block text-xs text-amber-300" x-show="errors.start_date" x-text="errors.start_date"></span></label>
                 <label class="text-sm text-ink">結束日期<input type="date" name="end_date" value="{{ default_end_date }}" x-ref="end_date" :aria-invalid="Boolean(errors.end_date)" aria-describedby="end-error" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="end-error" role="alert" class="mt-2 block text-xs text-amber-300" x-show="errors.end_date" x-text="errors.end_date"></span></label>
                 <label class="text-sm text-ink">策略權重（可選）<input type="text" name="weights" value="{{ default_weights|default('') }}" x-ref="weights" :aria-invalid="Boolean(errors.weights)" :aria-describedby="errors.weights ? 'weights-help weights-error' : 'weights-help'" aria-describedby="weights-help" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="weights-help" class="mt-2 block text-xs text-muted">依上方所選策略順序，以逗號分隔，例如 0.5,0.5；數量須與策略數相同。留空使用預設權重。</span><span id="weights-error" role="alert" class="mt-2 block text-xs text-amber-300" x-show="errors.weights" x-text="errors.weights"></span></label>

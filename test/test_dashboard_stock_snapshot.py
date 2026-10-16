@@ -204,7 +204,7 @@ def test_dashboard_inline_summary_script_contains_browser_search_and_no_chart():
 
     assert 'Alpine.data' in html
     assert 'localStorage' in html
-    assert 'window.location.href' in html
+    assert 'method="get" action="/stock-analysis"' in html
     assert '/api/market/recommendations' in html
     assert '/api/market/institutional' not in html
     assert '/api/market/margin' in html

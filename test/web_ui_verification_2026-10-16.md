@@ -44,3 +44,24 @@ Phase 4：90 passed、1 個既有失敗、3 xfailed；名稱完全／包含／�
 Phase 5：90 passed、1 個既有失敗、3 xfailed。Playwright 驗證品質／技術分類正確、390px 最後卡片可捲至面板上方；預覽請求統一 top_n=6。
 
 Phase 6：WEBTEST 91 passed、3 xfailed；修正最後一個既有英文文字斷言。回測摘要、結果指標列與單一 tab stop、系統中文徽章完成。
+
+## 2026-10-16 Phase 7 最終驗收
+
+- WEBTEST：93 passed、3 xfailed（原有舊版畫面 characterization），無失敗。
+- 全部 Web 相關測試：78 passed、959 deselected、6 warnings；警告為既有套件棄用提示。
+- `git diff --check` 與 `openspec validate 2026-10-16-redesign-web-ui-trading-desk --strict` 通過。
+- Chrome／Playwright：7 頁狀態 × 1440／900／390px = 21 案例，唯一非空 h1、無頁面溢位、console 無錯誤、互動目標尺寸通過。
+- 額外互動：套用確認取消無請求、分類與手機面板、名稱查詢及網址、五個 K 線區間、結果分頁左右鍵循環與 Plotly resize、錯誤通知保留、成功通知 6 秒關閉、手動關閉、兩策略配三權重阻擋、執行秒數、降級與查無資料狀態。
+- 手機推薦列已檢查連結寬度等於容器寬度（356px），整列可點。
+- 瀏覽器實測主要按鈕白字／#0b6fd6：4.93:1；次要文字 #91a7ba／#0d2233：6.52:1。
+- API 與 JS 狀態碼仍保留；LINE 配色、文案與排程器均未修改。
+- 本輪提交只涉及 `templates/`、`app/web_server.py`、`core/db_helper.py`、`test/`；工作區另有使用者既有 `strategy_settings.json` 修改，沒有加入提交。
+- `openspec/` 仍依原忽略規則保留本機，不強制加入 Git。
+
+程式碼證據促成的修正：手機側欄受 Tailwind flex 覆蓋、推薦連結誤用 Tailwind table-row、回測舊別名保留、健康徽章納入新鮮度。均已補驗證。
+規格對齊：D3 明訂個股頁隱藏重複頂部搜尋；delta spec 原寫「所有頁頂部搜尋」，已先修訂該句，並為個股頁自己的搜尋表單補上原生 GET fallback。
+
+截圖採固定模擬資料，不連資料庫、不執行回測。Prototype 的示意原因／方向與假步驟沒有帶入產品。真實服務只做唯讀頁面／API 冒煙驗證。
+
+
+完整證據、63 張比較截圖與可重跑腳本：本機 `openspec/changes/2026-10-16-redesign-web-ui-trading-desk/verification.md`。
