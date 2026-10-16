@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+import math
 import time
 import traceback
 from datetime import date, timedelta
@@ -231,7 +232,7 @@ def update_strategy():
         selected_strategies = request.form.getlist('strategies')
         if not selected_strategies:
             flash('請至少選擇一個策略', 'error')
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('strategy_center'))
 
         success = services.strategy_manager.set_active_strategies(selected_strategies)
         if success:
@@ -247,7 +248,7 @@ def update_strategy():
         flash(f'❌ 切換失敗: {str(exc)}', 'error')
         print(f'[ERROR] 策略切換失敗: {exc}')
 
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('strategy_center'))
 
 
 @app.route('/update_mode', methods=['POST'])
@@ -1325,7 +1326,7 @@ def backtest():
         available = [item for item in catalog if item.get('available_for_backtest')]
         requested = _parse_csv_query_values('strategies') or []
         selected = [item['strategy_id'] for item in available if item['strategy_id'] in requested]
-        if not selected and available:
+        if not selected and available and not request.args.get('preserved'):
             selected = [available[0]['strategy_id']]
         today = date.today()
         return render_template(
@@ -1333,10 +1334,17 @@ def backtest():
             strategies=[item['strategy_id'] for item in available],
             strategy_catalog=catalog,
             selected_strategies=selected,
-            default_start_date=(today - timedelta(days=365)).isoformat(),
-            default_end_date=today.isoformat(),
+            default_start_date=request.args.get('start_date', (today - timedelta(days=365)).isoformat()),
+            default_end_date=request.args.get('end_date', today.isoformat()),
+            default_weights=request.args.get('weights', ''),
+            default_persist=request.args.get('persist', '').lower() in ('1', 'true', 'on'),
         )
 
+    preserved = {
+        'strategies': ','.join(request.form.getlist('strategies')),
+        **{key: request.form.get(key, '') for key in ('start_date', 'end_date', 'weights', 'persist')},
+        'preserved': '1',
+    }
     try:
         from core.viz_helper import generate_report_from_csv
 
@@ -1359,16 +1367,31 @@ def backtest():
         start_date = request.form.get('start_date')
         end_date = request.form.get('end_date')
         weights_raw = (request.form.get('weights') or '').strip()
-        weights = [float(w.strip()) for w in weights_raw.split(',') if w.strip()] if weights_raw else None
         persist_to_db = (request.form.get('persist') or '').strip().lower() in ('1', 'true', 'on')
 
         if unsupported:
             reasons = '; '.join(f"{item['strategy_id']}: {item.get('backtest_reason', 'unavailable')}" for item in unsupported)
             flash(f'Backtest unavailable — {reasons}', 'error')
-            return redirect(url_for('backtest'))
+            return redirect(url_for('backtest', **preserved))
         if not selected_strategies:
             flash('請至少選擇一個策略', 'error')
-            return redirect(url_for('backtest'))
+            return redirect(url_for('backtest', **preserved))
+
+        try:
+            if not start_date or not end_date:
+                raise ValueError('請填寫開始與結束日期')
+            if date.fromisoformat(end_date) < date.fromisoformat(start_date):
+                raise ValueError('結束日期不得早於開始日期')
+        except ValueError as exc:
+            flash(f'日期錯誤：{exc}', 'error')
+            return redirect(url_for('backtest', **preserved))
+        try:
+            weights = [float(w.strip()) for w in weights_raw.split(',')] if weights_raw else None
+            if weights is not None and (len(weights) != len(selected_strategies) or any(not math.isfinite(w) or w < 0 for w in weights)):
+                raise ValueError
+        except ValueError:
+            flash('權重須為逗號分隔的非負有限數字，且數量須與策略數相同', 'error')
+            return redirect(url_for('backtest', **preserved))
 
         result, start_date, end_date = services._run_portfolio_backtest(
             selected_strategies,
@@ -1393,7 +1416,7 @@ def backtest():
     except Exception as exc:
         traceback.print_exc()
         flash(f'回測執行失敗: {str(exc)}', 'error')
-        return redirect(url_for('backtest'))
+        return redirect(url_for('backtest', **preserved))
 
 
 @app.route('/api/backtest/run', methods=['POST'])

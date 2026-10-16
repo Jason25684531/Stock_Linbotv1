@@ -162,7 +162,7 @@
                     type="button"
                     class="rounded-md border border-strong px-4 py-2 text-sm text-ink transition-colors hover:border-strong disabled:cursor-not-allowed disabled:opacity-40"
                     :disabled="!dailyAllowed"
-                    @click="$refs.dailyForm.submit()"
+                    @click="$refs.confirmDaily.showModal()"
                 >套用到每日篩選</button>
                 <button
                     type="button"
@@ -173,6 +173,14 @@
             </div>
         </div>
     </div>
+    <dialog x-ref="confirmDaily" class="quant-card w-full max-w-lg p-6 text-ink" @click="$event.target === $el && $el.close()">
+        <h2 class="text-lg font-semibold">確認每日篩選設定</h2>
+        <p class="mt-3 text-sm">目前 → 套用後</p>
+        <p class="mt-2 break-words text-sm text-muted">目前：<span x-text="catalog.filter(item => item.active).map(item => item.aliases[0] || item.strategy_id).join('、') || '無'"></span></p>
+        <p class="mt-2 break-words text-sm">套用後：<span x-text="selectedItems.map(item => item.aliases[0] || item.strategy_id).join('、')"></span></p>
+        <template x-for="item in catalog.filter(item => item.active !== selected.includes(item.strategy_id))" :key="item.strategy_id"><p class="mt-2 text-sm" x-text="(selected.includes(item.strategy_id) ? '＋ 新增：' : '－ 移除：') + (item.aliases[0] || item.strategy_id)"></p></template>
+        <div class="mt-5 flex gap-3"><button type="button" class="rounded border border-strong px-4 py-2" @click="$refs.confirmDaily.close()">取消</button><button type="button" class="rounded bg-blue-600 px-4 py-2 text-white" :disabled="!dailyAllowed" @click="if (dailyAllowed) $refs.dailyForm.submit()">確認套用</button></div>
+    </dialog>
 </div>
 
 <script>

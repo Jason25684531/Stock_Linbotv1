@@ -67,6 +67,14 @@
         </aside>
         <div class="shell-main min-h-screen transition-[margin] motion-reduce:transition-none md:ml-56">
             <header class="sticky top-0 z-30 border-b border-line bg-primary backdrop-blur"><div class="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8"><div class="flex items-center gap-3"><button type="button" class="rounded-md border border-line px-3 py-2 text-slate-300 md:hidden" @click="sidebarOpen=!sidebarOpen" :aria-expanded="sidebarOpen" aria-controls="main-sidebar" aria-label="開啟導覽">☰</button><div><p class="text-xs uppercase tracking-[.18em] text-slate-400">{% block page_kicker %}Stock Linbot{% endblock %}</p><h1 class="text-lg font-semibold text-white">{% block page_heading %}{% endblock %}</h1></div></div><div class="flex items-center gap-4 text-xs"><span class="hidden items-center gap-2 sm:flex {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span>{{ shell_status.label }}</span></div></div></header>
+            <div id="notifications" class="mx-auto w-full max-w-[1500px] px-4" @notify.window="$refs.clientNotice.textContent=$event.detail; $refs.clientNotice.hidden=false; setTimeout(() => $refs.clientNotice.hidden=true, 6000)">
+                <p x-ref="clientNotice" hidden role="status" class="quant-card mt-3 p-3"></p>
+                {% for category, message in get_flashed_messages(with_categories=true) %}
+                <div x-data="{ visible:true }" {% if category != 'error' %}x-init="setTimeout(() => visible=false, 6000)"{% endif %} x-show="visible" x-transition.opacity role="{{ 'alert' if category == 'error' else 'status' }}" class="quant-card mt-3 flex items-center justify-between gap-3 p-3 {{ 'text-amber-300' if category == 'error' else 'text-blue-200' }}">
+                    <span>{{ message }}</span><button type="button" @click="visible=false" aria-label="關閉通知" class="px-3 py-2">✕</button>
+                </div>
+                {% endfor %}
+            </div>
             <main class="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">{% block content %}{% endblock %}</main>
         </div>
     </div>

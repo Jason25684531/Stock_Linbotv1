@@ -30,3 +30,7 @@ Chrome headless／Playwright 驗證六頁 × 1440／900／390px 共 18 個案例
 完整前後截圖、原始瀏覽器 JSON 與重現腳本，依既有忽略規則留在本機 `openspec/changes/2026-10-16-improve-web-ui-consistency/verification.md` 及同目錄內。
 
 環境差異：使用專案 myenv（系統 Python 缺 pandas），RTK 未安裝。OpenSpec 1.3.0 的 status/apply 不接受日期開頭名稱；保留專案命名規則，以套件內建 `generateApplyInstructions` 讀取相同 context，strict validation 正常通過。
+
+Phase 0：21 張改前截圖與 console JSON 完成，無 console 錯誤。
+
+Phase 1：79 passed、4 個既有失敗、3 xfailed。Playwright 確認套用對話框取消無請求、權重錯誤聚焦、不定進度與停用回饋。
