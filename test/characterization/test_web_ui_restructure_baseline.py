@@ -47,7 +47,7 @@ def test_phase1_stock_analysis_adapter_preserves_series_schema(monkeypatch):
             "war_room": {},
         }
 
-    monkeypatch.setattr(app_module, "_build_dashboard_health_check_payload", fake_builder)
+    monkeypatch.setattr(app_module, "_build_dashboard_health_check_payload_local", fake_builder)
 
     response = flask_app.test_client().get("/api/stock-analysis?id=2330&period=weekly")
     payload = response.get_json()
