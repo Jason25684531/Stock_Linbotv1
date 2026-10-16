@@ -40,3 +40,5 @@ Phase 2：80 passed、4 個既有失敗、3 xfailed；21 個瀏覽器案例無�
 Phase 3：85 passed、1 個既有失敗、3 xfailed；補股名、當日查詢與排名保留測試通過。截圖發現 Tailwind flex 覆蓋手機隱藏規則，已提高選擇器優先序；手機狀態列改兩欄。最終驗收會重測側欄隱藏。
 
 Phase 4：90 passed、1 個既有失敗、3 xfailed；名稱完全／包含／歧義／零筆解析與代號相容通過。Playwright 確認台積電查詢更新 ?id=2330、空白無圖表與缺值清單、五個區間正常。
+
+Phase 5：90 passed、1 個既有失敗、3 xfailed。Playwright 驗證品質／技術分類正確、390px 最後卡片可捲至面板上方；預覽請求統一 top_n=6。

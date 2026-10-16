@@ -263,4 +263,5 @@ global.fetch = async () => ({{ok: true, json: async () => ({{
     for layout in ('desktop', 'mobile'):
         assert f':id="\'strategy-{layout}-\' + item.strategy_id"' in html
         assert f':for="\'strategy-{layout}-\' + item.strategy_id"' in html
-    assert html.index('data-testid="strategy-results"') < html.index('data-testid="strategy-catalog-table"')
+    assert 'class="selection-panel space-y-5"' in html
+    assert 'aria-live="polite" x-text="resultText' in html
