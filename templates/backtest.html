@@ -1,17 +1,22 @@
 {% extends "base.html" %}
+{% import '_ui.html' as ui %}
 
 {% block title %}回測分析 - Stock Linbot{% endblock %}
 {% block page_kicker %}Stock Linbot{% endblock %}
 {% block page_heading %}回測分析{% endblock %}
 
+{% block extra_head %}<style>
+    .backtest-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start;}
+    .backtest-summary{position:sticky;top:100px;}
+    @media(max-width:1100px){.backtest-layout{grid-template-columns:1fr;}.backtest-summary{position:static;}}
+</style>{% endblock %}
 {% block content %}
 <div class="space-y-6" data-testid="backtest-config">
     <div>
-        <p class="text-xs uppercase tracking-[0.2em] text-blue-400">量化策略平台</p>
-        <h2 class="mt-1 text-2xl font-semibold text-white">回測分析</h2>
         <p class="mt-1 text-sm text-muted">使用回測引擎支援的正式策略代號。</p>
     </div>
-    <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6" x-data="backtestForm()" @submit="validate($event)" :aria-busy="submitting" novalidate>
+    <form method="POST" action="{{ url_for('backtest') }}" class="backtest-layout" x-data="backtestForm()" @input="updateSummary()" @submit="validate($event)" :aria-busy="submitting" novalidate>
+<div class="min-w-0 space-y-6">
         <section class="quant-card p-5" x-ref="strategies" tabindex="-1" :aria-invalid="Boolean(errors.strategies)" aria-describedby="strategies-error">
             <div class="mb-4 flex items-center justify-between">
                 <div><h2 class="text-base font-semibold text-white">選擇策略</h2><p class="mt-1 text-xs text-muted">基本面策略保留於清單中；尚未支援回測的策略無法勾選。</p></div>
@@ -19,12 +24,12 @@
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {% for item in strategy_catalog %}
-                <label class="rounded-lg border p-3 {% if item.available_for_backtest %}cursor-pointer border-strong bg-primary hover:border-blue-500{% else %}border-amber-500/30 bg-amber-500/5{% endif %}">
+                <label class="rounded-lg border p-3 {% if item.available_for_backtest %}cursor-pointer border-strong bg-primary hover:border-blue-500{% else %}border-dashed border-amber-500/30 bg-amber-500/5{% endif %}">
                     <div class="flex items-start gap-3">
                         <input type="checkbox" name="strategies" value="{{ item.strategy_id }}" class="mt-1 h-4 w-4 rounded border-strong bg-secondary text-blue-500 focus:ring-blue-500" {% if not item.available_for_backtest %}disabled{% endif %} {% if item.strategy_id in selected_strategies %}checked{% endif %}>
                         <span class="min-w-0"><span class="block text-sm font-medium text-white">{{ item.display_name_zh or item.display_name_en }}</span><span class="mt-1 block break-all num text-xs text-blue-300">{{ item.strategy_id }}</span>
                             {% if item.aliases %}<span class="mt-1 block text-xs text-muted">{{ item.aliases|join(', ') }}</span>{% endif %}
-                            <span class="mt-2 inline-flex status-badge {% if item.available_for_backtest %}status-ok{% else %}status-degraded{% endif %}">{% if item.available_for_backtest %}AVAILABLE{% else %}UNAVAILABLE{% endif %}</span>
+                            {{ ui.status_badge('available' if item.available_for_backtest else 'unavailable') }}
                             {% if not item.available_for_backtest %}<span class="mt-2 block text-xs text-amber-300">{{ item.backtest_reason }}</span>{% endif %}
                         </span>
                     </div>
@@ -44,12 +49,15 @@
         </section>
         <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" :disabled="submitting" x-text="submitting ? '回測中…' : '執行回測'" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-strong px-5 py-3 text-center text-sm text-ink hover:border-strong">回到策略中心</a></div>
         <div x-show="submitting" x-cloak role="status"><progress class="w-full" aria-label="回測執行中"></progress><p class="mt-2 text-sm text-muted">執行中，已經過 <span class="num" x-text="elapsed"></span> 秒</p></div>
+</div><aside class="backtest-summary quant-card space-y-4 p-5"><h2 class="font-semibold">執行摘要</h2><dl class="space-y-4 text-sm"><div><dt class="text-muted">策略</dt><dd class="mt-1 break-all num" x-text="summary.strategies || '尚未選擇'"></dd></div><div><dt class="text-muted">期間</dt><dd class="mt-1 num" x-text="summary.start + ' → ' + summary.end"></dd></div><div><dt class="text-muted">權重</dt><dd class="mt-1 break-all num" x-text="summary.weights || '使用預設權重'"></dd></div><div><dt class="text-muted">結果儲存</dt><dd class="mt-1" x-text="summary.persist ? '寫入資料庫' : '不寫入資料庫'"></dd></div></dl></aside>
     </form>
 </div>
 <script>
 function backtestForm() {
     return {
-        submitting:false, elapsed:0, timer:null, errors:{},
+        submitting:false, elapsed:0, timer:null, errors:{}, summary:{},
+        init() { this.$nextTick(() => this.updateSummary()); },
+        updateSummary() { const data = new FormData(this.$el); this.summary = {strategies:data.getAll('strategies').join('、'), start:data.get('start_date'), end:data.get('end_date'), weights:data.get('weights'), persist:data.has('persist')}; },
         validate(event) {
             if (this.submitting) { event.preventDefault(); return; }
             const data = new FormData(event.target);

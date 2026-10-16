@@ -92,7 +92,7 @@ def test_backtest_result_keeps_sections_and_omits_global_trades_without_run_evid
     assert 'data-testid="drawdown-section"' in html
     assert 'data-testid="monthly-section"' in html
     assert 'data-testid="trades-section"' not in html
-    assert 'Unavailable' in html
+    assert '資料不可用' in html
     assert 'equity history is unavailable' in html
     assert 'return variance is zero' in html
     assert 'Infinity' not in html

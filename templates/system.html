@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_ui.html' as ui %}
 {% block title %}系統狀態 - Stock Linbot{% endblock %}
 {% block page_kicker %}運作紀錄{% endblock %}
 {% block page_heading %}系統狀態{% endblock %}
@@ -6,15 +7,15 @@
 <div class="space-y-5">
     <section class="quant-card p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <div><p class="text-xs uppercase tracking-wider text-slate-400">排程執行狀態</p><h2 class="mt-1 text-xl font-semibold text-white">系統狀態</h2></div>
-            <span class="status-badge {% if system_payload.status == 'ok' %}status-ok{% else %}status-degraded{% endif %}"><span class="h-2 w-2 rounded-full bg-current"></span>{{ system_payload.status|upper }}</span>
+            <p class="text-sm text-muted">查看排程執行紀錄與元件檢查狀態。</p>
+            {{ ui.status_badge(system_payload.status) }}
         </div>
-        <p class="mt-3 text-xs text-slate-400">資料日期：{{ system_payload.as_of_date or 'UNKNOWN' }}。未具備獨立健康檢查的元件維持 UNKNOWN。</p>
+        <p class="mt-3 text-xs text-muted">紀錄日期：{{ system_payload.as_of_date or '未檢查' }}。未具備獨立健康檢查的元件維持未檢查。</p>
     </section>
     <section class="quant-card overflow-hidden">
         <div class="border-b border-line px-5 py-4"><h2 class="font-semibold text-white">排程流程</h2></div>
-        <div class="overflow-x-auto"><table class="w-full min-w-[680px] text-sm"><thead class="bg-secondary text-left text-xs text-slate-400"><tr><th class="px-5 py-3">步驟</th><th class="px-5 py-3">狀態</th><th class="px-5 py-3">執行日期</th><th class="px-5 py-3">錯誤</th></tr></thead><tbody>{% for step in pipeline_steps %}<tr class="table-row"><td class="px-5 py-3 text-slate-200">{{ step.alias }}</td><td class="px-5 py-3">{{ step.status }}</td><td class="px-5 py-3 text-slate-400">{{ step.run_date or 'UNKNOWN' }}</td><td class="px-5 py-3 text-xs text-slate-400">{{ step.error_summary or '—' }}</td></tr>{% endfor %}</tbody></table></div>
+        <div class="overflow-x-auto"><table class="w-full min-w-[680px] text-sm"><thead class="bg-secondary text-left text-xs text-muted"><tr><th class="px-5 py-3">步驟</th><th class="px-5 py-3">狀態</th><th class="px-5 py-3">執行日期／時間</th><th class="px-5 py-3">錯誤</th></tr></thead><tbody>{% for step in pipeline_steps %}<tr class="table-row"><td class="px-5 py-3">{{ {'1_update':'更新資料','2_run':'策略選股','5_push':'推播通知'}.get(step.alias, step.alias) }}<span class="num block text-xs text-muted">{{ step.alias }}</span></td><td class="px-5 py-3">{{ ui.status_badge(step.status) }}</td><td class="px-5 py-3 text-muted">{{ step.run_date or '未執行' }}<span class="num block text-xs">{{ step.started_at or '—' }} → {{ step.finished_at or '—' }}</span></td><td class="px-5 py-3 text-xs text-muted">{{ step.error_summary or '—' }}</td></tr>{% endfor %}</tbody></table></div>
     </section>
-    <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{% for component in system_components %}<article class="metric-card"><div class="flex items-center justify-between gap-2"><h3 class="text-sm text-slate-200">{{ {'Market Data':'市場資料','Strategy Engine':'策略引擎','Backtest Engine':'回測引擎','Database':'資料庫','Scheduler':'排程器'}.get(component.name, component.name) }}</h3><span class="status-badge {% if component.status == 'DISABLED' %}status-disabled{% elif component.status == 'NORMAL' %}status-ok{% else %}status-unknown{% endif %}">{{ component.status }}</span></div><p class="mt-3 text-xs text-slate-400">{{ {'No independent health contract':'尚無獨立健康檢查','Only pipeline query evidence is available':'目前僅有排程查詢紀錄','No live scheduler heartbeat endpoint':'尚無即時排程狀態資料','Expected safety configuration':'預期的安全設定'}.get(component.reason, component.reason) }}</p></article>{% endfor %}</section>
+    <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{% for component in system_components %}<article class="metric-card"><div class="flex items-center justify-between gap-2"><h3 class="text-sm">{{ {'Market Data':'市場資料','Strategy Engine':'策略引擎','Backtest Engine':'回測引擎','Database':'資料庫','Scheduler':'排程器','Broker Order Submission':'券商下單'}.get(component.name, component.name) }}</h3>{{ ui.status_badge(component.status) }}</div><p class="mt-3 text-xs text-muted">{{ {'No independent health contract':'尚無獨立健康檢查','Only pipeline query evidence is available':'目前僅有排程查詢紀錄','No live scheduler heartbeat endpoint':'尚無即時排程狀態資料','Expected safety configuration':'預期的安全設定'}.get(component.reason, component.reason) }}</p></article>{% endfor %}</section>
 </div>
 {% endblock %}
