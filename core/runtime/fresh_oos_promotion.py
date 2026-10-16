@@ -268,11 +268,6 @@ def _target_hash(rows: pd.DataFrame) -> str:
     return _selection_hash(rows[fields] if not rows.empty else pd.DataFrame(columns=fields))
 
 
-def _selected_assets_hash(rows: pd.DataFrame) -> str:
-    assets = sorted(str(value) for value in rows.get("stock_id", pd.Series(dtype=str)).dropna())
-    return hashlib.sha256("\n".join(assets).encode("utf-8")).hexdigest()
-
-
 def _availability_from_ledger(ledger: pd.DataFrame, minimum: Mapping[str, int]) -> dict[str, object]:
     eligible = ledger.loc[ledger["oos_eligibility"].astype(str).eq("VALID")].copy()
     dates = pd.to_datetime(eligible["date"], errors="coerce").dropna().dt.normalize()

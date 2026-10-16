@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from io import StringIO
 from pathlib import Path
+from typing import Iterable, Mapping
 
 import pandas as pd
 
@@ -36,13 +37,12 @@ from core.research.fundamental_pit import (
     PublicationRequest,
     PublicationParseError,
     REQUEST_STATUSES,
-    _atomic_json,
-    _atomic_link_or_copy,
     fetch_mops_publication_records,
     build_target_universe,
     make_request_key,
     publication_request_key,
 )
+from core.research.fundamentals.pit import _atomic_json, _atomic_link_or_copy
 from core.research.fundamental_pit_v3 import (
     RAW_METRICS,
     UNSUPPORTED_METRICS,
@@ -184,13 +184,6 @@ def acquire_financial_rows(
         result = result.drop_duplicates(["ticker", "fiscal_year", "quarter"], keep="last").sort_values(["ticker", "fiscal_year", "quarter"], kind="stable")
     result.to_csv(root / "financial_source_records.csv", index=False)
     return result
-
-
-def _publication_cache_exists(root: Path, request: PublicationRequest) -> bool:
-    key = publication_request_key(request.ticker, request.roc_year, request.season, statement_type=request.statement_type)
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    cache = root / MOPS_PUBLICATION_CACHE_DIR
-    return (cache / f"{digest}.html").exists() and (cache / f"{digest}.json").exists()
 
 
 def _publication_cache_is_valid(root: Path, request: PublicationRequest) -> bool:

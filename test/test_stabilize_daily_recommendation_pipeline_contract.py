@@ -12,14 +12,6 @@ def _read_text(relative_path: str) -> str:
     return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def _check_ignore(relative_path: str) -> bool:
-    return subprocess.run(
-        ["git", "check-ignore", relative_path],
-        cwd=REPO_ROOT,
-        check=False,
-    ).returncode == 0
-
-
 def _resolve_openspec_change_root(change_name: str = OPENSPEC_CHANGE_NAME) -> Path:
     changes_root = REPO_ROOT / "openspec" / "changes"
     active_root = changes_root / change_name

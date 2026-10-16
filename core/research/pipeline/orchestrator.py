@@ -182,10 +182,6 @@ def _load_actions(config: RunConfig) -> pd.DataFrame | None:
         return None
 
 
-def _required_frame_columns() -> tuple[str, ...]:
-    return tuple(sorted({column for spec in factors.FACTOR_REGISTRY.values() for column in spec.required_columns} | {"raw_open", "raw_high", "raw_low", "raw_close", "volume", "amount"}))
-
-
 def _raw_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     return {
         (f"adjusted_{name[4:]}" if name.startswith("raw_") else name): value

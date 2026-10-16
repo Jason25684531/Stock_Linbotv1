@@ -33,11 +33,6 @@ def _artifact_hashes(output: Path) -> dict[str, str]:
     return {file.relative_to(output).as_posix(): sha256_of(file) for file in sorted(output.rglob("*")) if file.is_file() and file.name != "run_manifest.json"}
 
 
-def _custom_metrics(path: Path) -> dict[str, float]:
-    frame = pd.read_csv(path)
-    return dict(zip(frame["metric"], frame["value"]))
-
-
 def run(*, output_dir: Path, day2_dir: Path = DEFAULT_DAY2, day3_dir: Path = DEFAULT_DAY3, dataset_path: Path = DEFAULT_DATASET) -> Path:
     """Write a DIAGNOSTIC_SHADOW run.  Frozen source hashes are checked twice."""
     manifest = verify_day2_run(day2_dir)

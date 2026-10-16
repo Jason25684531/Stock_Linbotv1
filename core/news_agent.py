@@ -269,10 +269,6 @@ def _build_stock_news_client(timeout_seconds: float | None = None):
     return genai.Client(api_key=Config.GEMINI_API_KEY, http_options=http_options)
 
 
-def _records_to_json(records: list[dict]) -> str:
-    return json.dumps(records, ensure_ascii=False)
-
-
 def _tool_unavailable_response(
     tool_name: str,
     **extra: object,

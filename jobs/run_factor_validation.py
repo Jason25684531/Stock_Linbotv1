@@ -38,7 +38,7 @@ from core.research.day2_candidates import (
     implementation_confidence,
     panel_to_long,
 )
-from core.research.factor_evaluation import load_d3_dataset
+from core.research.factor_evaluation import EvaluationPolicy, load_d3_dataset
 from core.research.sources import twse
 
 

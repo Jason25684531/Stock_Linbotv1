@@ -1,5 +1,36 @@
 # Deletion Candidates
 
+## 2026-10-16 runtime audit private helper evidence
+
+The following private code sections are **SAFE_TO_REMOVE**, with replacement
+**nothing**. This classification does not authorize deleting their source files.
+Before the new proposal/audit documents were written, a hidden/no-ignore search
+over source, tests, scripts, batch/deployment files, active/archived OpenSpec and
+documents returned only the six definitions. Search excluded `.git`, `myenv`,
+datasets, generated outputs/artifacts and `.env*`; none of those paths defines
+an executable caller or registration for these helpers. New audit documents
+mention the symbols as evidence, not runtime references.
+
+| Private section | Original lines | References / export and dynamic checks | Decision |
+|---|---|---|---|
+| core/news_agent.py::_records_to_json | 272-273 | Only definition; no import, tool schema registration, string/getattr lookup or public facade export. Other JSON serialization is in active callers. | SAFE_TO_REMOVE |
+| core/research/pipeline/orchestrator.py::_required_frame_columns | 185-186 | Only definition; pipeline package star re-export excludes private names; run() derives required columns directly from each factor spec. | SAFE_TO_REMOVE |
+| core/runtime/fresh_oos_promotion.py::_selected_assets_hash | 271-273 | Only definition; explicit __all__ excludes it. Active target identity uses _selection_hash/_target_hash; do not modify those functions. | SAFE_TO_REMOVE |
+| jobs/run_engine_diagnostics.py::_custom_metrics | 36-38 | Only definition; run() reads performance/return evidence directly. CLI dispatch calls main/run, never private helper lookup. | SAFE_TO_REMOVE |
+| jobs/run_fundamental_pit_v3.py::_publication_cache_exists | 189-193 | Only definition; active _load_cached_publication and batch cache paths validate their own files. Publication keys/cache constants have other callers and remain. | SAFE_TO_REMOVE |
+| test/test_stabilize_daily_recommendation_pipeline_contract.py::_check_ignore | 15-20 | Only definition, not a pytest test/fixture/hook; no collection plugin refers to it. subprocess remains needed by the actual git-contract test. | SAFE_TO_REMOVE |
+
+No dependency, non-cache file, compatibility launcher, strategy alias, protocol
+hook or research source is removed. In particular core/strategy/__init__.py's
+__dir__ and test/utils Alpha sources are KEEP. Existing module-level facade
+imports are not classified by pyflakes alone. Retain `publication_request_key`,
+MOPS cache constants, json/hashlib, and subprocess because active code uses them.
+
+Verification: research pipeline/publication/Fresh OOS/diagnostic/news tests,
+compatibility/dynamic-export checks, deterministic selection and full offline
+suite. Rollback: revert only the independently committed 2026-10-16 Phase 2;
+never restore or overwrite operator settings/research evidence.
+
 ## 2026-10-14 private helper removal evidence
 
 `core/strategy/spec.py::_freeze_mapping` is SAFE_TO_REMOVE as a private code
