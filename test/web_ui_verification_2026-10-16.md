@@ -65,3 +65,13 @@ Phase 6：WEBTEST 91 passed、3 xfailed；修正最後一個既有英文文字�
 
 
 完整證據、63 張比較截圖與可重跑腳本：本機 `openspec/changes/2026-10-16-redesign-web-ui-trading-desk/verification.md`。
+
+## 2026-10-16 審查與服務重啟證據
+
+- OpenSpec apply：32／32、all_done。verify-change：19 requirements、44 scenarios，0 CRITICAL、0 WARNING。詳細對照在本機 `verify-change.md`。
+- Ponytail review：沒有額外框架或抽象；5 個未被 base 引用的 page_kicker 區塊共 5 行可選擇移除，屬精簡建議，不影響功能；依 review 技能只記錄、不套用。完整位置在本機 `ponytail-review.md`。
+- 以 `docker compose restart twse_mcp_server stock_bot` 重啟，兩容器均 healthy。Web `http://127.0.0.1:1688/health` 與 MCP `http://127.0.0.1:8080/health` 均 200／ok。
+- 重啟後 Chrome／Playwright 對真實服務跑 6 個頁面狀態 × 3 種寬度 = 18 案例，均 HTTP 200、單一標題、無水平溢位、無 JavaScript 例外、無 API 5xx。此輪沒有攔截 API；截圖在本機 screenshots/live/，原始結果為 live-smoke.json。
+- 真實唯讀 API：台積電名稱解析為 2330，stock_name=台積電；啟用的 institutional_flow_confirmation 返回 6 檔推薦，6 檔皆有股名、current。系統狀態 ok，三個 pipeline 步驟皆 Success。
+- 最後 Web 全集 78 passed；WEBTEST 93 passed、3 個既有預期失敗；strict validation 與 diff whitespace 檢查通過。未執行真實回測、未提交正式設定。
+- 實作留在 feature/2026-10-16-redesign-web-ui-trading-desk，Phase 0～7 已各自提交；未歸檔。
