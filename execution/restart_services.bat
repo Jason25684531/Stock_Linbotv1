@@ -60,7 +60,7 @@ if "%DRY_RUN%"=="1" (
     ) else (
         echo [2/3] DRY-RUN would call execution\start_web.bat
     )
-    echo [3/3] DRY-RUN would check http://127.0.0.1:1688/health
+    echo [3/3] DRY-RUN would check http://127.0.0.1:8080/health and http://127.0.0.1:1688/health
     echo.
     echo Dry run complete.
     popd >nul
@@ -88,24 +88,25 @@ if "%DOCKER%"=="1" (
 )
 
 echo.
-echo [3/3] Waiting for web health endpoint...
+echo [3/3] Waiting for MCP and web health endpoints...
 for /L %%I in (1,1,%HEALTH_RETRIES%) do (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:1688/health' -TimeoutSec 3; if ($r.StatusCode -eq 200) { exit 0 } } catch { }; exit 1"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "foreach ($port in @(8080, 1688)) { try { $r = Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:' + $port + '/health') -TimeoutSec 3; if ($r.StatusCode -ne 200) { exit 1 } } catch { exit 1 } }; exit 0"
     if not errorlevel 1 (
-        echo Health check passed: http://127.0.0.1:1688/health
+        echo Health checks passed: http://127.0.0.1:8080/health and http://127.0.0.1:1688/health
         echo.
         echo Restart complete.
         popd >nul
         exit /b 0
     )
     echo Health check not ready yet, retry %%I/%HEALTH_RETRIES%...
-    timeout /t %HEALTH_WAIT% /nobreak >nul
+    powershell -NoProfile -Command "Start-Sleep -Seconds %HEALTH_WAIT%"
 )
 
-echo [ERROR] Health check did not pass after retries.
+echo [ERROR] MCP and web health checks did not both pass after retries.
 if "%DOCKER%"=="1" echo Check container logs: docker logs stock_ai_stock_bot --tail 30
 echo Check service windows and run:
 echo   powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:1688/health"
+echo   powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/health"
 popd >nul
 exit /b 1
 

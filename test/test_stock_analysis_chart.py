@@ -33,16 +33,17 @@ const chart = {
 };
 global.window = {LightweightCharts: {createChart() { calls.create += 1; return chart; }}};
 global.document = {getElementById() { return {clientWidth: 900}; }, addEventListener(name, callback) { if (name === 'alpine:init') callback(); }};
+global.getComputedStyle = () => ({getPropertyValue() { return '#888888'; }});
 global.ResizeObserver = class { observe() {} disconnect() {} };
 global.Alpine = {data(name, factory) { factories[name] = factory; }};
 __SCRIPT__
 const page = factories.stockAnalysisPage({initialStockId: '2330'});
 page.payload = {quote: {price_change: 15, change_percent: 1.46}};
-assert.equal(page.changeValue(), '+15');
-assert.equal(page.changePercentValue(), '+1.46%');
+assert.equal(page.changeValue(), '▲ +15');
+assert.equal(page.changePercentValue(), '▲ +1.46%');
 page.payload = {quote: {}};
-assert.equal(page.changeValue(), 'Unavailable');
-assert.equal(page.changePercentValue(), 'Unavailable');
+assert.equal(page.changeValue(), '資料不可用');
+assert.equal(page.changePercentValue(), '資料不可用');
 const series = {candles: [{time: '2026-10-05', open: 100, high: 105, low: 99, close: 104}, {time: '2026-10-06', open: 104, high: 108, low: 103, close: 107}], volume: [{time: '2026-10-05', value: 1000}, {time: '2026-10-06', value: 1200}], ma5: [{time: '2026-10-05', value: 101}, {time: '2026-10-06', value: 103}], ma20: [{time: '2026-10-05', value: 98}, {time: '2026-10-06', value: 100}], ma60: [{time: '2026-10-05', value: 95}, {time: '2026-10-06', value: 97}]};
 for (const status of ['ok', 'degraded']) { page.payload = {status, kline_ma: series, metadata: {fallback_used: status === 'degraded'}}; page.renderChart(); }
 assert.equal(calls.create, 2);
@@ -52,7 +53,7 @@ assert.deepEqual(calls.margins, [{top: .05, bottom: .25}, {top: .8, bottom: 0}, 
 page.payload = {chip: {institutional: {foreign_buy: -5, trust_buy: 3, dealer_buy: 4}}};
 assert.equal(page.institutionItems()[3].value, '2');
 page.payload = {chip: {institutional: {foreign_buy: -5, trust_buy: null, dealer_buy: 4}}};
-assert.equal(page.institutionItems()[3].value, 'Unavailable');
+assert.equal(page.institutionItems()[3].value, '資料不可用');
 assert.deepEqual(calls.setData.map(item => item[0]), calls.series);
 console.log('chart-ok');
 """.replace('__SCRIPT__', script)
