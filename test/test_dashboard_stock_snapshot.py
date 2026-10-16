@@ -181,9 +181,9 @@ def test_dashboard_template_is_summary_only_after_restructure():
         )
 
     assert 'dashboardSummary()' in html
-    assert '快速個股搜尋' in html
+    assert 'global-stock-search' in html
     assert '今日推薦' in html
-    assert 'Active Strategies' in html
+    assert '啟用策略' in html
     assert '/stock-analysis?id=' in html
     assert 'LightweightCharts.createChart' not in html
     assert '<pre' not in html
@@ -208,8 +208,8 @@ def test_dashboard_inline_summary_script_contains_browser_search_and_no_chart():
     assert '/api/market/recommendations' in html
     assert '/api/market/institutional' not in html
     assert '/api/market/margin' in html
-    assert '>Technical<' in html
-    assert '>Margin<' in html
+    assert '>技術面<' in html
+    assert '>融資融券<' in html
     match = re.search(r'<script>\s*(document\.addEventListener\(\'alpine:init\', .*?)</script>', html, re.S)
     assert match is not None
     result = subprocess.run(
@@ -242,7 +242,7 @@ assert.equal(page.recommendationDate(), '2026-10-08');
 page.recommendationMeta = {status: 'degraded', source: ['local_cache'], as_of_date: '2026-10-07'};
 page.recommendations = [{stock_id: '2330', fallback_used: true}];
 assert.equal(page.recommendationStatus(), 'DEGRADED');
-assert.equal(page.recommendationSource(), 'Local fallback');
+assert.equal(page.recommendationSource(), '本機備援');
 page.recommendationMeta = {status: 'degraded', freshness_status: 'stale', last_available_recommendation_date: '2026-06-26'};
 page.recommendations = [];
 assert.equal(page.recommendationStatus(), 'STALE');

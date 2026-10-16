@@ -1158,6 +1158,24 @@ def get_stock_data(stock_id=None, date_str=None):
         return pd.DataFrame(), None
 
 
+def get_stock_names(trade_date: str | None, stock_ids: list[str] | None = None) -> dict[str, str]:
+    """Read names on one market date; never substitute another date's names."""
+    if not trade_date or stock_ids == []:
+        return {}
+    query = text('SELECT stock_id, stock_name FROM daily_market_data WHERE trade_date = :date')
+    params = {'date': trade_date}
+    if stock_ids is not None:
+        from sqlalchemy import bindparam
+        query = text(str(query) + ' AND stock_id IN :ids').bindparams(bindparam('ids', expanding=True))
+        params['ids'] = stock_ids
+    try:
+        rows = pd.read_sql(query, get_db_engine(), params=params)
+        return {normalize_stock_id_value(row.stock_id): str(row.stock_name).strip()
+                for row in rows.itertuples() if pd.notna(row.stock_name) and str(row.stock_name).strip()}
+    except Exception:
+        return {}
+
+
 def get_stock_history(stock_id, limit: int = 120, end_date: str | None = None):
     """讀取單一股票歷史行情與指標序列。"""
     normalized_stock_id = normalize_stock_id_value(stock_id)

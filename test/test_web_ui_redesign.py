@@ -80,3 +80,38 @@ def test_shared_status_mapping_and_page_dependencies(client):
     assert 'plotly-' not in html and 'lightweight-charts@' not in html
     assert 'alpinejs@3.14.9' in html
     assert 'lightweight-charts@' in client.get('/stock-analysis').get_data(as_text=True)
+
+
+def test_stock_names_are_read_only_and_date_scoped(monkeypatch):
+    import pandas as pd
+    from sqlalchemy import create_engine
+    from core import db_helper
+    engine = create_engine('sqlite://')
+    pd.DataFrame([
+        {'trade_date': '2026-10-16', 'stock_id': '2330', 'stock_name': '台積電'},
+        {'trade_date': '2026-10-15', 'stock_id': '2317', 'stock_name': '鴻海'},
+    ]).to_sql('daily_market_data', engine, index=False)
+    monkeypatch.setattr(db_helper, 'get_db_engine', lambda: engine)
+    assert db_helper.get_stock_names('2026-10-16', ['2330', '2317']) == {'2330': '台積電'}
+    assert db_helper.get_stock_names('2026-10-16', []) == {}
+    assert db_helper.get_stock_names(None) == {}
+
+
+def test_recommendation_fills_only_missing_names(client, monkeypatch):
+    import pandas as pd
+    import app.web_server as web
+    rows = pd.DataFrame([
+        {'stock_id': '2330', 'stock_name': '', 'ai_score': 90, 'close_price': 1050},
+        {'stock_id': '2317', 'stock_name': None, 'ai_score': 88, 'close_price': 210},
+        {'stock_id': '2454', 'stock_name': '既有名稱', 'ai_score': 85, 'close_price': 1000},
+    ])
+    monkeypatch.setattr(web.services, 'get_recommendations_with_market_fallback', lambda **kw: (rows, {'recommendation_date': '2026-10-15', 'resolution_source': 'persisted'}))
+    names = Mock(return_value={'2330': '台積電', '2454': '不應覆寫'})
+    monkeypatch.setattr(web.db_helper, 'get_stock_names', names)
+    payload = client.get('/api/market/recommendations').get_json()
+    names.assert_called_once_with('2026-10-16', ['2330', '2317'])
+    result = payload['data']['recommendations']
+    assert [r['stock_name'] for r in result] == ['台積電', None, '既有名稱']
+    assert [r['stock_id'] for r in result] == ['2330', '2317', '2454']
+    assert [r['ai_score'] for r in result] == [90, 88, 85]
+    assert all(r['recommendation_date'] == '2026-10-15' for r in result)

@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
@@ -1037,6 +1037,11 @@ def api_market_recommendations():
             recommendations.append(record)
         status = 'degraded' if resolution.get('fallback_used') or warnings else 'ok'
         freshness_status = 'fallback' if resolution.get('fallback_used') else 'current'
+    missing_names = [row['stock_id'] for row in recommendations if not str(row.get('stock_name') or '').strip()]
+    names = db_helper.get_stock_names(market_date, missing_names) if missing_names else {}
+    for row in recommendations:
+        if not str(row.get('stock_name') or '').strip():
+            row['stock_name'] = names.get(row['stock_id'])
     payload = _market_envelope(
         status,
         as_of_date,
@@ -1060,13 +1065,7 @@ def api_market_recommendations():
     if freshness_status == 'blocked' and strategy_id == services.StrategyManager.FUNDAMENTAL_RUNTIME_STRATEGY_ID:
         shadow = fundamental_production.shadow_preview(limit=top_n)
         if shadow:
-            try:
-                names = pd.read_sql(
-                    text('select stock_id, stock_name from daily_market_data where trade_date = :d and stock_id in :ids').bindparams(bindparam('ids', expanding=True)),
-                    db_helper.get_db_engine(), params={'d': market_date, 'ids': [item['stock_id'] for item in shadow['stocks']]},
-                ).set_index('stock_id')['stock_name'].to_dict()
-            except Exception:
-                names = {}
+            names = db_helper.get_stock_names(market_date, [item['stock_id'] for item in shadow['stocks']])
             for item in shadow['stocks']:
                 item['stock_name'] = names.get(item['stock_id'])
             payload['shadow'] = shadow
