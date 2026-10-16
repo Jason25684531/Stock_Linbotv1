@@ -246,19 +246,15 @@ def empyrical_crosscheck(config_id: str, custom_returns: pd.Series, custom_metri
     for metric in _CROSSCHECK_METRICS:
         custom_metric = custom_metrics.get(_CUSTOM_METRIC_NAME[metric])
         empyrical_value = _finite_or_none(_empyrical_value(metric, custom_returns))
-        if custom_metric.value is None:
+        if custom_metric.value is None or empyrical_value is None:
+            custom_unavailable = custom_metric.value is None
+            reason = custom_metric.reason if custom_unavailable else "non_finite_value"
             rows.append({
-                "config_id": config_id, "metric": metric, "custom_engine_value": None, "empyrical_value": empyrical_value,
-                "absolute_difference": None, "relative_difference": None, "status": "CUSTOM_METRIC_UNAVAILABLE", "notes": custom_metric.reason,
+                "config_id": config_id, "metric": metric, "custom_engine_value": custom_metric.value, "empyrical_value": empyrical_value,
+                "absolute_difference": None, "relative_difference": None,
+                "status": "CUSTOM_METRIC_UNAVAILABLE" if custom_unavailable else "EMPYRICAL_METRIC_UNAVAILABLE", "notes": reason,
                 "empyrical_value_reason": "non_finite_value" if empyrical_value is None else None,
-                "relative_difference_reason": custom_metric.reason,
-            })
-            continue
-        if empyrical_value is None:
-            rows.append({
-                "config_id": config_id, "metric": metric, "custom_engine_value": custom_metric.value, "empyrical_value": None,
-                "absolute_difference": None, "relative_difference": None, "status": "EMPYRICAL_METRIC_UNAVAILABLE", "notes": "non_finite_value",
-                "empyrical_value_reason": "non_finite_value", "relative_difference_reason": "non_finite_value",
+                "relative_difference_reason": reason,
             })
             continue
         custom_value = custom_metric.value
