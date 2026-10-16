@@ -1,5 +1,7 @@
 # 2026-10-16 Web UI 一致性驗證
 
+交易台改版 Phase 0：WEBTEST 為 67 passed、4 failed、3 xfailed。既有失敗為前次中文化後殘留的 Unavailable、Active Strategies、Technical／Margin、Local fallback 文字斷言。基線與三種寬度共 21 張截圖保存在本機 `openspec/changes/2026-10-16-redesign-web-ui-trading-desk/`。
+
 變更：`2026-10-16-improve-web-ui-consistency`，Phase 0～5。
 
 | 階段 | 測試結果 |
