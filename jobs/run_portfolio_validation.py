@@ -273,6 +273,9 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             cost_stress_total_returns=cost_sensitivity["total_return"].tolist(),
             hac_alpha=hac_alpha, hac_p_value=hac_p_value,
         )
+        empyrical_failed = crosscheck["status"].isin(["FAIL", "EMPYRICAL_METRIC_UNAVAILABLE"]).any()
+        if empyrical_failed:
+            status = "INVALID"
         scoreboard_rows.append({
             "config_id": config_id,
             "vectorbt_sharpe": vbt_row["sharpe"], "custom_sharpe": custom_row["sharpe"],
@@ -282,7 +285,7 @@ def run(*, day2_dir: Path, dataset_path: Path, raw_cache_dir: Path, output_dir: 
             "orders_on_non_rebalance_dates": execution_gate["orders_on_non_rebalance_dates"],
             "unfilled_count": int(replay.execution_log["status"].eq("UNFILLED").sum()) if not replay.execution_log.empty else 0,
             "daily_return_correlation": comparison.loc[comparison["metric"].eq("daily_return_correlation"), "custom_value"].iloc[0],
-            "empyrical_status": "PASS" if not crosscheck["status"].eq("FAIL").any() else "FAIL",
+            "empyrical_status": "FAIL" if empyrical_failed else "PASS",
             "pyfolio_numeric_diagnostics_status": "PASS" if not any(not item.endswith(".png") for item in pyfolio_skipped) else "TOOLING_BLOCKED",
             "statsmodels_attribution_status": "PASS",
             "cost_scenarios_status": "PASS" if len(cost_sensitivity) == len(COST_SCENARIOS) else "FAIL",

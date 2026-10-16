@@ -1158,6 +1158,25 @@ def get_stock_data(stock_id=None, date_str=None):
         return pd.DataFrame(), None
 
 
+def get_previous_stock_data(stock_ids: list[str], date_str: str) -> pd.DataFrame:
+    """Read each stock's latest distinct observation strictly before date_str."""
+    from sqlalchemy import bindparam
+
+    if not stock_ids:
+        return pd.DataFrame()
+    query = text("""
+        SELECT market.* FROM daily_market_data AS market
+        JOIN (
+            SELECT stock_id, MAX(trade_date) AS trade_date
+            FROM daily_market_data
+            WHERE trade_date < :date AND stock_id IN :ids
+            GROUP BY stock_id
+        ) AS previous
+        ON market.stock_id = previous.stock_id AND market.trade_date = previous.trade_date
+    """).bindparams(bindparam('ids', expanding=True))
+    return pd.read_sql(query, get_db_engine(), params={'date': date_str, 'ids': stock_ids})
+
+
 def get_stock_names(trade_date: str | None, stock_ids: list[str] | None = None) -> dict[str, str]:
     """Read names on one market date; never substitute another date's names."""
     if not trade_date or stock_ids == []:

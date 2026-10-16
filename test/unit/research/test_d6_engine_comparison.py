@@ -81,3 +81,27 @@ def test_identical_metrics_still_flag_expected_cost_model_difference():
     identical_returns = _returns([0.01, 0.02, -0.01, 0.005, 0.0, 0.03])
     comparison = compare_engines("cfg", metrics, dict(metrics), identical_returns, identical_returns)
     assert overall_engine_status(comparison) == "PASS_WITH_EXPLAINED_DIFFERENCES"
+
+
+@pytest.mark.parametrize('value', [None, float('nan'), float('inf'), -float('inf')])
+def test_unavailable_metrics_are_reported_without_infinity(value):
+    from core.research.portfolio_validation import RETURN_METRICS, COST_METRICS
+
+    metrics = dict.fromkeys((*RETURN_METRICS, *COST_METRICS), 1.0)
+    result = compare_engines('cfg', {**metrics, 'sharpe': value}, metrics, _returns([0.1, -0.1]), _returns([0.1, -0.1]))
+    row = result.set_index('metric').loc['sharpe']
+    assert pd.isna(row['vectorbt_value']) and pd.isna(row['absolute_difference'])
+    assert row['difference_reason'] == 'non_finite_value'
+    assert overall_engine_status(result) == 'FAIL'
+    assert 'Infinity' not in result.to_json()
+
+
+def test_zero_baseline_uses_absolute_tolerance_and_explains_relative_gap():
+    from core.research.portfolio_validation import RETURN_METRICS, COST_METRICS
+
+    metrics = dict.fromkeys((*RETURN_METRICS, *COST_METRICS), 0.0)
+    result = compare_engines('cfg', metrics, metrics, _returns([0.1, -0.1]), _returns([0.1, -0.1]))
+    row = result.set_index('metric').loc['total_return']
+    assert row['absolute_difference'] == 0 and pd.isna(row['relative_difference'])
+    assert row['relative_difference_reason'] == 'zero_denominator'
+    assert row['comparison_status'] == 'MATCH_WITHIN_TOLERANCE'

@@ -22,17 +22,20 @@ def _returns(equity: list[float]) -> list[float]:
 
 
 def max_drawdown(equity: list[float]) -> tuple[MetricValue, int, int | None]:
+    """Return MDD, peak-to-trough sessions and trough-to-recovery sessions."""
     if not equity:
         return _na("equity curve is empty"), 0, None
-    peak, peak_index, worst, trough = equity[0], 0, 0.0, 0
+    peak, peak_index, worst, trough, worst_peak_index = equity[0], 0, 0.0, 0, 0
     for index, value in enumerate(equity):
-        if value > peak:
+        if value >= peak:
             peak, peak_index = value, index
         drawdown = (value / peak) - 1 if peak else 0.0
         if drawdown < worst:
-            worst, trough = drawdown, index
-    recovery = next((index for index in range(trough + 1, len(equity)) if equity[index] >= peak), None)
-    return _value(worst), trough - peak_index, recovery
+            worst, trough, worst_peak_index = drawdown, index, peak_index
+    if worst == 0:
+        return _value(0), 0, 0
+    recovery = next((index for index in range(trough + 1, len(equity)) if equity[index] >= equity[worst_peak_index]), None)
+    return _value(worst), trough - worst_peak_index, recovery - trough if recovery is not None else None
 
 
 def calculate_metrics(equity: list[float], trades: list[dict] | None = None,
@@ -60,7 +63,7 @@ def calculate_metrics(equity: list[float], trades: list[dict] | None = None,
     mdd, dd_duration, recovery = max_drawdown(equity)
     result["max_drawdown"] = mdd
     result["drawdown_duration"] = _value(dd_duration)
-    result["recovery_duration"] = _value((recovery - dd_duration) if recovery is not None else 0) if recovery is not None else _na("drawdown has not recovered")
+    result["recovery_duration"] = _value(recovery) if recovery is not None else _na("drawdown has not recovered")
     result["calmar"] = _value(result["cagr"].value / abs(mdd.value)) if mdd.value and result["cagr"].value is not None else _na("maximum drawdown is zero")
     profits = [float(item.get("profit_pct", item.get("profit", 0))) for item in trades]
     wins, losses = [x for x in profits if x > 0], [-x for x in profits if x < 0]

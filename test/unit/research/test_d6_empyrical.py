@@ -44,3 +44,21 @@ def test_deterministic_output():
     first = empyrical_crosscheck("cfg", daily_returns, metrics)
     second = empyrical_crosscheck("cfg", daily_returns, metrics)
     pd.testing.assert_frame_equal(first, second)
+
+
+def test_empyrical_unavailable_and_zero_denominator_have_reasons(monkeypatch):
+    import core.research.portfolio_validation as validation
+
+    returns = pd.Series([0.0] * 10)
+    metrics = calculate_metrics([100.0] * 11)
+    result = empyrical_crosscheck('cfg', returns, metrics)
+    mdd = result.set_index('metric').loc['max_drawdown']
+    assert mdd['absolute_difference'] == 0 and pd.isna(mdd['relative_difference'])
+    assert mdd['relative_difference_reason'] == 'zero_denominator'
+    assert 'Infinity' not in result.to_json()
+
+    monkeypatch.setattr(validation, '_empyrical_value', lambda *args: float('inf'))
+    result = empyrical_crosscheck('cfg', returns, metrics)
+    assert result['empyrical_value'].isna().all()
+    assert result['empyrical_value_reason'].eq('non_finite_value').all()
+    assert result.set_index('metric').loc['max_drawdown', 'status'] == 'EMPYRICAL_METRIC_UNAVAILABLE'

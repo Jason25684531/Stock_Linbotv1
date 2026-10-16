@@ -1181,17 +1181,27 @@ def api_market_margin():
     if latest.empty or not {'margin_balance', 'short_balance'}.intersection(latest.columns):
         return _market_envelope('empty', as_of_date, ['daily_market_data'], {}, warnings)
     margin = latest.copy()
-    if 'stock_id' in df.columns and 'trade_date' in df.columns:
-        history = df.sort_values(['stock_id', 'trade_date']).copy()
-        prev = history.groupby('stock_id', as_index=False).first()[['stock_id'] + [c for c in ['margin_balance', 'short_balance'] if c in history.columns]]
-        prev = prev.rename(columns={'margin_balance': 'previous_margin_balance', 'short_balance': 'previous_short_balance'})
+    if 'stock_id' in df.columns and 'trade_date' in df.columns and as_of_date:
+        history = df.loc[df['trade_date'].astype(str).str[:10] < as_of_date].copy()
+        history = history.sort_values(['stock_id', 'trade_date']).drop_duplicates('stock_id', keep='last')
+        missing_ids = margin.loc[~margin['stock_id'].isin(history['stock_id']), 'stock_id'].tolist()
+        if missing_ids:
+            try:
+                history = pd.concat([history, db_helper.get_previous_stock_data(missing_ids, as_of_date)], ignore_index=True)
+            except Exception:
+                warnings.append('previous margin observation unavailable')
+        prev = history.reindex(columns=['stock_id', 'margin_balance', 'short_balance']).rename(
+            columns={'margin_balance': 'previous_margin_balance', 'short_balance': 'previous_short_balance'})
         margin = margin.merge(prev, on='stock_id', how='left')
     for column in ('margin_balance', 'short_balance', 'previous_margin_balance', 'previous_short_balance'):
-        if column in margin.columns:
-            margin[column] = pd.to_numeric(margin[column], errors='coerce')
-    margin['margin_change'] = margin.get('margin_balance', 0) - margin.get('previous_margin_balance', 0)
-    margin['short_change'] = margin.get('short_balance', 0) - margin.get('previous_short_balance', 0)
-    margin['short_margin_ratio'] = (margin.get('short_balance', 0) / margin.get('margin_balance', 1)).replace([float('inf'), -float('inf')], pd.NA)
+        margin[column] = pd.to_numeric(margin.get(column, float('nan')), errors='coerce')
+    margin['margin_change'] = margin['margin_balance'] - margin['previous_margin_balance']
+    margin['short_change'] = margin['short_balance'] - margin['previous_short_balance']
+    margin['short_margin_ratio'] = margin['short_balance'].div(margin['margin_balance'].where(margin['margin_balance'].ne(0)))
+    for column in ('margin_change', 'short_change', 'short_margin_ratio'):
+        margin[column] = margin[column].replace([float('inf'), -float('inf')], float('nan'))
+        if margin[column].isna().any():
+            warnings.append(f'{column} unavailable: missing balance/previous observation or zero denominator')
     data = {
         'margin_increase': _top_records(margin, 'margin_change', fields=['stock_id', 'margin_balance', 'margin_change']),
         'margin_decrease': _top_records(margin, 'margin_change', ascending=True, fields=['stock_id', 'margin_balance', 'margin_change']),
@@ -1199,7 +1209,7 @@ def api_market_margin():
         'short_decrease': _top_records(margin, 'short_change', ascending=True, fields=['stock_id', 'short_balance', 'short_change']),
         'high_short_margin_risk': _top_records(margin, 'short_margin_ratio', fields=['stock_id', 'short_balance', 'margin_balance', 'short_margin_ratio']),
     }
-    return _market_envelope('ok', as_of_date, ['daily_market_data'], data, warnings)
+    return _market_envelope('degraded' if warnings else 'ok', as_of_date, ['daily_market_data'], data, warnings)
 
 
 def _format_pipeline_status(status: str | None) -> str:

@@ -156,13 +156,16 @@ _COST_METRIC_REASON = {
 }
 
 
-def _classify_metric(metric: str, vbt_value: float, custom_value: float) -> tuple[str, str | None]:
+def _finite_or_none(value: float | None) -> float | None:
+    return float(value) if value is not None and np.isfinite(float(value)) else None
+
+
+def _classify_metric(metric: str, vbt_value: float | None, custom_value: float | None) -> tuple[str, str | None]:
     if any(v is None for v in (vbt_value, custom_value)) or pd.isna(vbt_value) or pd.isna(custom_value) or not np.isfinite(vbt_value) or not np.isfinite(custom_value):
         return "UNEXPLAINED_DIFFERENCE", "non_finite_value"
     absolute_difference = abs(custom_value - vbt_value)
-    relative_difference = absolute_difference / abs(vbt_value) if vbt_value else float("inf")
     if metric in RETURN_METRICS:
-        if relative_difference <= 0.10 or absolute_difference <= 0.05:
+        if absolute_difference <= 0.05 or (vbt_value and absolute_difference / abs(vbt_value) <= 0.10):
             return "MATCH_WITHIN_TOLERANCE", None
         return "UNEXPLAINED_DIFFERENCE", "exceeds_declared_tolerance"
     if metric in COST_METRICS:
@@ -174,14 +177,15 @@ def compare_engines(config_id: str, vbt_row: dict, custom_row: dict, vbt_returns
     """Level B: classify VectorBT-vs-Custom differences under the frozen tolerance policy."""
     rows = []
     for metric in (*RETURN_METRICS, *COST_METRICS):
-        vbt_value, custom_value = float(vbt_row[metric]), float(custom_row[metric])
+        vbt_value, custom_value = _finite_or_none(vbt_row[metric]), _finite_or_none(custom_row[metric])
         status, reason = _classify_metric(metric, vbt_value, custom_value)
-        absolute_difference = abs(custom_value - vbt_value)
-        relative_difference = absolute_difference / abs(vbt_value) if vbt_value else float("inf")
+        absolute_difference = abs(custom_value - vbt_value) if vbt_value is not None and custom_value is not None else None
+        relative_difference = absolute_difference / abs(vbt_value) if vbt_value and absolute_difference is not None else None
         rows.append({
             "config_id": config_id, "metric": metric, "vectorbt_value": vbt_value, "custom_value": custom_value,
             "absolute_difference": absolute_difference, "relative_difference": relative_difference,
             "comparison_status": status, "difference_reason": reason,
+            "relative_difference_reason": "non_finite_value" if absolute_difference is None else "zero_denominator" if not vbt_value else None,
         })
     aligned = pd.concat([vbt_returns.rename("vbt"), custom_returns.rename("custom")], axis=1).dropna()
     correlation = aligned["vbt"].corr(aligned["custom"]) if len(aligned) > 1 else float("nan")
@@ -194,8 +198,9 @@ def compare_engines(config_id: str, vbt_row: dict, custom_row: dict, vbt_returns
     else:
         corr_status, corr_reason = "UNEXPLAINED_DIFFERENCE", "daily_return_correlation_below_declared_floor"
     rows.append({
-        "config_id": config_id, "metric": "daily_return_correlation", "vectorbt_value": float("nan"), "custom_value": correlation,
-        "absolute_difference": float("nan"), "relative_difference": float("nan"),
+        "config_id": config_id, "metric": "daily_return_correlation", "vectorbt_value": None, "custom_value": _finite_or_none(correlation),
+        "absolute_difference": None, "relative_difference": None,
+        "relative_difference_reason": "not_applicable",
         "comparison_status": corr_status, "difference_reason": corr_reason,
     })
     return pd.DataFrame(rows)
@@ -240,25 +245,35 @@ def empyrical_crosscheck(config_id: str, custom_returns: pd.Series, custom_metri
     rows = []
     for metric in _CROSSCHECK_METRICS:
         custom_metric = custom_metrics.get(_CUSTOM_METRIC_NAME[metric])
-        empyrical_value = _empyrical_value(metric, custom_returns)
+        empyrical_value = _finite_or_none(_empyrical_value(metric, custom_returns))
         if custom_metric.value is None:
             rows.append({
                 "config_id": config_id, "metric": metric, "custom_engine_value": None, "empyrical_value": empyrical_value,
                 "absolute_difference": None, "relative_difference": None, "status": "CUSTOM_METRIC_UNAVAILABLE", "notes": custom_metric.reason,
+                "empyrical_value_reason": "non_finite_value" if empyrical_value is None else None,
+                "relative_difference_reason": custom_metric.reason,
+            })
+            continue
+        if empyrical_value is None:
+            rows.append({
+                "config_id": config_id, "metric": metric, "custom_engine_value": custom_metric.value, "empyrical_value": None,
+                "absolute_difference": None, "relative_difference": None, "status": "EMPYRICAL_METRIC_UNAVAILABLE", "notes": "non_finite_value",
+                "empyrical_value_reason": "non_finite_value", "relative_difference_reason": "non_finite_value",
             })
             continue
         custom_value = custom_metric.value
         absolute_difference = abs(empyrical_value - custom_value)
-        relative_difference = absolute_difference / abs(custom_value) if custom_value else float("inf")
-        if absolute_difference <= 1e-6 or relative_difference <= 1e-4:
+        relative_difference = absolute_difference / abs(custom_value) if custom_value else None
+        if absolute_difference <= 1e-6 or (relative_difference is not None and relative_difference <= 1e-4):
             status, notes = "MATCH", ""
-        elif metric in _CONVENTION_DIFFERENCE_METRICS and relative_difference <= 0.01:
+        elif metric in _CONVENTION_DIFFERENCE_METRICS and relative_difference is not None and relative_difference <= 0.01:
             status, notes = "CONVENTION_DIFFERENCE", "annualization/formula convention differs (see design.md decision C)"
         else:
-            raise ValueError(f"metric_crosscheck STOP: {metric} disagrees beyond declared tolerance for {config_id} (rel_diff={relative_difference:.6f})")
+            raise ValueError(f"metric_crosscheck STOP: {metric} disagrees beyond declared tolerance for {config_id} (rel_diff={relative_difference})")
         rows.append({
             "config_id": config_id, "metric": metric, "custom_engine_value": custom_value, "empyrical_value": empyrical_value,
             "absolute_difference": absolute_difference, "relative_difference": relative_difference, "status": status, "notes": notes,
+            "empyrical_value_reason": None, "relative_difference_reason": "zero_denominator" if not custom_value else None,
         })
     return pd.DataFrame(rows)
 
