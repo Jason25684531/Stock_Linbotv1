@@ -67,13 +67,13 @@ def test_responsive_and_accessible_shell_structure_is_present(monkeypatch):
         )
 
     assert 'class="desktop-sidebar' in html
-    assert 'md:translate-x-0' in html
-    assert 'md:hidden' in html
-    assert 'x-data="{ sidebarOpen:false }"' in html
-    assert 'aria-controls="main-sidebar"' in html
+    assert 'class="mobile-tabs"' in html
+    assert 'safe-area-inset-bottom' in html
+    assert 'sidebarOpen' not in html
+    assert 'aria-label="手機主要導覽"' in html
     assert '<main ' in html
     assert 'focus-visible' in html
-    assert 'BROKER' in html and 'DISABLED' in html
+    assert '券商下單' in html and '已停用' in html
 
 
 def test_dashboard_search_and_recommendation_flow_targets_stock_analysis():

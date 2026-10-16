@@ -1,3 +1,4 @@
+{% import '_ui.html' as ui %}
 <!DOCTYPE html>
 <html lang="zh-TW" class="dark">
 <head>
@@ -12,14 +13,18 @@
             ink: 'var(--text-primary)', up: 'var(--color-up)', down: 'var(--color-down)'
         } } } };
     </script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        window.statusMap = {{ ui.status_map|tojson }};
+        window.statusEntry = code => window.statusMap[String(code || 'unknown').trim().toLowerCase()] || window.statusMap.unknown;
+        window.statusLabel = code => window.statusEntry(code).slice(0, 2).join(' ');
+        window.statusTone = code => 'status-' + window.statusEntry(code)[2];
+    </script>
     <style>
-        :root { --bg-primary:#07131f; --bg-secondary:#0b1d2c; --bg-card:#0d2233; --border-color:#1c3a50; --border-strong:#28516d; --chart-grid:#173246; --chart-ma20:#38bdf8; --text-primary:#e5eef7; --text-secondary:#91a7ba; --accent-blue:#198cff; --accent-green:#35e58a; --accent-red:#ff5263; --accent-amber:#f4b740; --accent-purple:#b088ff; --color-up:#ff5263; --color-down:#35e58a; }
+        :root { --bg-primary:#07131f; --bg-secondary:#0b1d2c; --bg-card:#0d2233; --border-color:#1c3a50; --border-strong:#28516d; --chart-grid:#173246; --chart-ma20:#38bdf8; --text-primary:#e5eef7; --text-secondary:#91a7ba; --accent-blue:#198cff; --accent-green:#35e58a; --accent-red:#ff5263; --accent-amber:#f4b740; --accent-purple:#b088ff; --status-ok:#4cc3ff; --status-err:#ff8a3d; --btn-primary:#0b6fd6; --color-up:#ff5263; --color-down:#35e58a; }
         * { box-sizing:border-box; }
         html, body { min-height:100%; }
         body { margin:0; background:var(--bg-primary); color:var(--text-primary); font-family:'Noto Sans TC',sans-serif; }
@@ -34,39 +39,56 @@
         .table-row { border-bottom:1px solid rgba(28,58,80,.8); }
         .table-row:hover { background:rgba(25,140,255,.07); }
         .status-badge { display:inline-flex; align-items:center; gap:.35rem; border-radius:999px; padding:.18rem .55rem; font-size:.75rem; font-weight:600; }
-        .status-ok { color:var(--accent-green); background:rgba(53,229,138,.1); }
+        .status-ok { color:var(--status-ok); background:rgba(76,195,255,.1); }
         .status-degraded { color:var(--accent-amber); background:rgba(244,183,64,.1); }
-        .status-error { color:var(--accent-red); background:rgba(255,82,99,.1); }
+        .status-error { color:var(--status-err); background:rgba(255,138,61,.1); }
         .status-unknown { color:var(--text-secondary); background:rgba(145,167,186,.1); }
         .status-disabled { color:var(--accent-amber); background:rgba(244,183,64,.1); }
         .nav-item { display:flex; align-items:center; gap:.7rem; border:1px solid transparent; border-radius:.45rem; color:var(--text-secondary); padding:.65rem .75rem; transition:background .15s,color .15s; }
-        .nav-item:focus-visible, button:focus-visible, a:focus-visible { outline:2px solid var(--accent-blue); outline-offset:2px; }
+        .nav-item:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--accent-blue); outline-offset:2px; }
         .nav-item:hover { background:rgba(25,140,255,.08); color:var(--text-primary); }
         .nav-item.active { background:rgba(25,140,255,.2); border-color:rgba(25,140,255,.32); color:#8ec8ff; }
         .chart-shell { min-height:430px; }
         [x-cloak] { display:none !important; }
-        @media (max-width:1023px) { .desktop-sidebar{width:4.5rem;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:none;} .desktop-sidebar .nav-item{justify-content:center;} .shell-main{margin-left:4.5rem;} }
-        @media (max-width:767px) { .desktop-sidebar{display:flex;width:14rem;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:block;} .shell-main{margin-left:0;} .chart-shell{min-height:360px;} }
+        button, a, input:not([type=hidden]), select, textarea { min-height:44px; }
+        a { display:inline-flex; align-items:center; }
+        td a { min-height:32px; }
+        input[type=checkbox] { min-width:24px; width:24px; height:44px; }
+        .bg-blue-600, button.bg-blue-600:hover { background:var(--btn-primary); }
+        .desktop-sidebar { width:232px; }
+        .shell-main { margin-left:232px; min-width:0; }
+        .mobile-tabs { display:none; }
+        .header-search { max-width:400px; flex:1; }
+        dialog::backdrop { background:rgba(0,0,0,.65); }
+        @media (min-width:721px) and (max-width:1100px) { .desktop-sidebar{width:72px;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:none;} .desktop-sidebar .nav-item{justify-content:center;} .shell-main{margin-left:72px;} .header-search{max-width:300px;} }
+        @media (max-width:720px) { .desktop-sidebar{display:none;} .shell-main{margin-left:0;} main{padding-bottom:96px !important;} .mobile-tabs{display:flex;position:fixed;inset:auto 0 0;z-index:40;height:calc(56px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg-secondary);border-top:1px solid var(--border-color);} .mobile-tabs a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;font-size:12px;color:var(--text-secondary);} .mobile-tabs a[aria-current=page]{color:var(--status-ok);background:rgba(25,140,255,.12);} .header-row{flex-wrap:wrap;padding:12px 16px;gap:10px;} .header-search{order:3;flex-basis:100%;max-width:none;} .header-date{font-size:12px;} .chart-shell{min-height:360px;} .mobile-brand{display:inline;} #notifications{position:relative;z-index:45;} }
+        @media (min-width:721px) { .mobile-brand{display:none;} }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body x-data="{ sidebarOpen:false }">
+<body x-data="{}">
+    {% set active = request.endpoint or '' %}
     <div class="min-h-screen">
-        <div x-cloak x-show="sidebarOpen" @click="sidebarOpen=false" class="fixed inset-0 z-40 bg-black/60 md:hidden" aria-hidden="true"></div>
-        <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-secondary transition-transform motion-reduce:transition-none md:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" aria-label="主要導覽">
-            <div class="flex h-20 items-center gap-3 border-b border-line px-4"><a href="{{ url_for('dashboard') }}" class="flex items-center gap-3" @click="sidebarOpen=false"><span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy"><span class="block text-sm font-bold tracking-wide text-white">STOCK LINBOT</span><span class="block text-xs text-slate-400">量化策略平台</span></span></a></div>
+        <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex flex-col border-r border-line bg-secondary" aria-label="主要導覽">
+            <a href="{{ url_for('dashboard') }}" class="flex h-20 items-center gap-3 border-b border-line px-4"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy text-sm font-bold">STOCK LINBOT<span class="block text-xs text-muted">量化策略平台</span></span></a>
             <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
-                {% set active = request.endpoint or '' %}
-                <a title="總覽" href="{{ url_for('dashboard') }}" class="nav-item {% if active == 'dashboard' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span class="nav-label">總覽</span></a>
-                <a title="個股分析" href="{{ url_for('stock_analysis') }}" class="nav-item {% if active == 'stock_analysis' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 3v18h18M7 14v-4m5 7V6m5 7V8"/></svg><span class="nav-label">個股分析</span></a>
-                <a title="策略中心" href="{{ url_for('strategy_center') }}" class="nav-item {% if active == 'strategy_center' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="nav-label">策略中心</span></a>
-                <a title="回測分析" href="{{ url_for('backtest') }}" class="nav-item {% if active == 'backtest' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 12a9 9 0 1 0 3-7M3 3v6h6m3-2v5l3 2"/></svg><span class="nav-label">回測分析</span></a>
-                <a title="系統狀態" href="{{ url_for('system_status_page') }}" class="nav-item {% if active == 'system_status_page' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 5h18v14H3zM3 10h18m-12 0v9"/></svg><span class="nav-label">系統狀態</span></a>
+<a title="總覽" href="{{ url_for('dashboard') }}" class="nav-item {% if active == 'dashboard' %}active{% endif %}" {% if active == 'dashboard' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span class="nav-label">總覽</span></a>
+<a title="個股分析" href="{{ url_for('stock_analysis') }}" class="nav-item {% if active == 'stock_analysis' %}active{% endif %}" {% if active == 'stock_analysis' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 3v18h18M7 14v-4m5 7V6m5 7V8"/></svg><span class="nav-label">個股分析</span></a>
+<a title="策略中心" href="{{ url_for('strategy_center') }}" class="nav-item {% if active == 'strategy_center' %}active{% endif %}" {% if active == 'strategy_center' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="nav-label">策略中心</span></a>
+<a title="回測分析" href="{{ url_for('backtest') }}" class="nav-item {% if active == 'backtest' %}active{% endif %}" {% if active == 'backtest' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 12a9 9 0 1 0 3-7M3 3v6h6m3-2v5l3 2"/></svg><span class="nav-label">回測分析</span></a>
+<a title="系統狀態" href="{{ url_for('system_status_page') }}" class="nav-item {% if active == 'system_status_page' %}active{% endif %}" {% if active == 'system_status_page' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 5h18v14H3zM3 10h18m-12 0v9"/></svg><span class="nav-label">系統狀態</span></a>
             </nav>
-            <div class="border-t border-line p-3"><div class="mb-3 flex items-center gap-2 text-xs {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span><span class="nav-label">{{ shell_status.label }}</span></div><div class="flex items-center justify-between text-xs text-slate-400"><span class="nav-label">BROKER</span><span class="text-amber-300">DISABLED</span></div></div>
+            <div class="brand-copy border-t border-line p-3 text-xs"><p class="mb-3">系統 {{ ui.status_badge(shell_status.state) }}</p><p>券商下單 {{ ui.status_badge('disabled') }}</p></div>
         </aside>
-        <div class="shell-main min-h-screen transition-[margin] motion-reduce:transition-none md:ml-56">
-            <header class="sticky top-0 z-30 border-b border-line bg-primary backdrop-blur"><div class="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8"><div class="flex items-center gap-3"><button type="button" class="rounded-md border border-line px-3 py-2 text-slate-300 md:hidden" @click="sidebarOpen=!sidebarOpen" :aria-expanded="sidebarOpen" aria-controls="main-sidebar" aria-label="開啟導覽">☰</button><div><p class="text-xs uppercase tracking-[.18em] text-slate-400">{% block page_kicker %}Stock Linbot{% endblock %}</p><h1 class="text-lg font-semibold text-white">{% block page_heading %}{% endblock %}</h1></div></div><div class="flex items-center gap-4 text-xs"><span class="hidden items-center gap-2 sm:flex {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span>{{ shell_status.label }}</span></div></div></header>
+        <div class="shell-main min-h-screen">
+            <header class="sticky top-0 z-30 border-b border-line bg-primary backdrop-blur">
+                <div class="header-row flex min-h-20 items-center justify-between gap-5 px-6">
+                    <div><span class="mobile-brand text-xs text-blue-300">STOCK LINBOT</span><h1 class="text-lg font-semibold text-white">{% block page_heading %}{% endblock %}</h1></div>
+                    {% if request.endpoint != 'stock_analysis' %}<form method="get" action="{{ url_for('stock_analysis') }}" class="header-search flex gap-2"><label for="global-stock-search" class="sr-only">股票代號或名稱</label><input id="global-stock-search" name="id" type="search" required placeholder="股票代號或名稱" class="min-w-0 flex-1 rounded border border-strong bg-secondary px-3 text-sm"><button class="rounded bg-blue-600 px-3 text-sm text-white" type="submit">搜尋</button></form>{% endif %}
+                    <div class="header-date text-xs text-muted">資料日期 <span class="num">{{ shell_status.market_date or '未檢查' }}</span></div>
+                    <div class="text-xs"><span class="sr-only">系統</span>{{ ui.status_badge(shell_status.state) }}</div>
+                </div>
+            </header>
             <div id="notifications" class="mx-auto w-full max-w-[1500px] px-4" @notify.window="$refs.clientNotice.textContent=$event.detail; $refs.clientNotice.hidden=false; setTimeout(() => $refs.clientNotice.hidden=true, 6000)">
                 <p x-ref="clientNotice" hidden role="status" class="quant-card mt-3 p-3"></p>
                 {% for category, message in get_flashed_messages(with_categories=true) %}
@@ -78,5 +100,12 @@
             <main class="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">{% block content %}{% endblock %}</main>
         </div>
     </div>
+    <nav class="mobile-tabs" aria-label="手機主要導覽">
+<a title="總覽" href="{{ url_for('dashboard') }}" {% if active == 'dashboard' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>總覽</span></a>
+<a title="個股分析" href="{{ url_for('stock_analysis') }}" {% if active == 'stock_analysis' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 3v18h18M7 14v-4m5 7V6m5 7V8"/></svg><span>個股分析</span></a>
+<a title="策略中心" href="{{ url_for('strategy_center') }}" {% if active == 'strategy_center' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span>策略中心</span></a>
+<a title="回測分析" href="{{ url_for('backtest') }}" {% if active == 'backtest' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 12a9 9 0 1 0 3-7M3 3v6h6m3-2v5l3 2"/></svg><span>回測分析</span></a>
+<a title="系統狀態" href="{{ url_for('system_status_page') }}" {% if active == 'system_status_page' %}aria-current="page"{% endif %}><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 5h18v14H3zM3 10h18m-12 0v9"/></svg><span>系統狀態</span></a>
+    </nav>
 </body>
 </html>

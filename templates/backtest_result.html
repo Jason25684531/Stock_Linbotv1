@@ -10,6 +10,7 @@
     {%- if metric_value is undefined or metric_value is none -%}<span class="text-muted">資料不可用</span>{% if reason %}<span class="mt-1 block text-xs text-muted">{{ reason }}</span>{% endif %}{%- else -%}{{ metric_value }}{{ suffix }}{%- endif -%}
 {%- endmacro %}
 
+{% block extra_head %}<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>{% endblock %}
 {% block content %}
 <div x-data="{ tab: 'overview', init() { this.$watch('tab', () => this.$nextTick(() => { if (window.Plotly) document.querySelectorAll('.js-plotly-plot').forEach(plot => { if (plot.clientWidth &amp;&amp; plot.clientHeight) Plotly.Plots.resize(plot); }); })); } }" class="space-y-6" data-testid="backtest-result">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

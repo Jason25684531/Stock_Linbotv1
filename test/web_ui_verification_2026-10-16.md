@@ -34,3 +34,5 @@ Chrome headless／Playwright 驗證六頁 × 1440／900／390px 共 18 個案例
 Phase 0：21 張改前截圖與 console JSON 完成，無 console 錯誤。
 
 Phase 1：79 passed、4 個既有失敗、3 xfailed。Playwright 確認套用對話框取消無請求、權重錯誤聚焦、不定進度與停用回饋。
+
+Phase 2：80 passed、4 個既有失敗、3 xfailed；21 個瀏覽器案例無溢位、console 錯誤與過小互動目標。主按鈕白字／#0b6fd6 對比 4.93:1。中文徽章由 Jinja 對照輸出到 JS，無重複維護來源。

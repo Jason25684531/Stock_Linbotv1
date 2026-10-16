@@ -10,7 +10,7 @@ def test_shared_shell_contains_primary_navigation_and_truthful_status(monkeypatc
     monkeypatch.setattr(
         web_server,
         "_build_system_status_payload",
-        lambda: ({"status": "degraded", "data": {"heartbeat": {}}}, 200),
+        lambda **kw: ({"status": "degraded", "data": {"heartbeat": {}}}, 200),
     )
     with flask_app.test_request_context("/dashboard"):
         html = render_template(
@@ -27,8 +27,9 @@ def test_shared_shell_contains_primary_navigation_and_truthful_status(monkeypatc
     assert 'href="/strategies"' in html
     assert 'href="/backtest"' in html
     assert 'href="/system"' in html
-    assert "DEGRADED" in html
-    assert "BROKER" in html and "DISABLED" in html
+    assert "部分降級" in html
+    assert "券商下單" in html and "已停用" in html
+    assert 'status-disabled' in html
     assert "LIVE TRADING" not in html
 
 

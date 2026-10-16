@@ -215,11 +215,12 @@ def inject_shell_status():
     """Expose one evidence-backed status badge to every rendered page."""
     try:
         payload, _ = _build_system_status_payload(include_freshness=False)
+        market_date = _latest_ui_market_date()
         state = payload.get('status')
         if state == 'ok':
-            return {'shell_status': {'state': 'ok', 'label': 'SYSTEM ONLINE'}}
+            return {'shell_status': {'state': 'ok', 'label': 'SYSTEM ONLINE', 'market_date': market_date}}
         if state == 'degraded':
-            return {'shell_status': {'state': 'degraded', 'label': 'DEGRADED'}}
+            return {'shell_status': {'state': 'degraded', 'label': 'DEGRADED', 'market_date': market_date}}
     except Exception:
         pass
     return {'shell_status': {'state': 'unknown', 'label': 'UNKNOWN'}}

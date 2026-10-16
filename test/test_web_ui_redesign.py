@@ -13,6 +13,7 @@ def client(monkeypatch):
     from test_web_ui_integration import _catalog
     monkeypatch.setattr(web, '_build_system_status_payload', lambda **kw: ({'status': 'unknown'}, 200))
     monkeypatch.setattr(web, '_build_strategy_catalog', _catalog)
+    monkeypatch.setattr(web, '_latest_ui_market_date', lambda: '2026-10-16')
     return app.test_client()
 
 
@@ -62,3 +63,20 @@ def test_engine_failure_preserves_input(client, monkeypatch):
     assert response.status_code == 302
     engine.assert_called_once_with(['hybrid_trend_rank'], start_date='2026-01-01', end_date='2026-10-16', weights=[1.0], persist_to_db=False)
     assert '測試引擎失敗' in client.get(response.location).get_data(as_text=True)
+
+
+def test_shared_status_mapping_and_page_dependencies(client):
+    import json
+    import re
+    from app import app
+    html = client.get('/dashboard').get_data(as_text=True)
+    mapping = json.loads(re.search(r'window.statusMap = (.*);', html)[1])
+    macro = app.jinja_env.get_template('_ui.html').module.status_badge
+    for code, (symbol, label, tone) in mapping.items():
+        for variant in (code, code.upper()):
+            badge = macro(variant)
+            assert f'{symbol} {label}' in badge and f'status-{tone}' in badge
+    assert mapping['ok'][2] == 'ok' and mapping['disabled'][2] != 'error'
+    assert 'plotly-' not in html and 'lightweight-charts@' not in html
+    assert 'alpinejs@3.14.9' in html
+    assert 'lightweight-charts@' in client.get('/stock-analysis').get_data(as_text=True)

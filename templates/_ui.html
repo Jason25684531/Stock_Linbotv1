@@ -1,0 +1,15 @@
+{% set status_map = {
+    'ok':['●','正常','ok'], 'success':['●','正常','ok'], 'normal':['●','正常','ok'], 'system online':['●','正常','ok'],
+    'degraded':['▲','部分降級','degraded'], 'running':['▲','執行中','degraded'],
+    'error':['✕','失敗','error'], 'failed':['✕','失敗','error'],
+    'unknown':['○','未檢查','unknown'], 'not run':['○','未執行','unknown'], 'not_run':['○','未執行','unknown'],
+    'disabled':['⊘','已停用','disabled'], 'stale':['▲','已過期','degraded'],
+    'available':['✓','可用','ok'], 'unavailable':['–','不可用','degraded'],
+    'production':['●','正式','ok'], 'shadow':['◐','觀察中','degraded'], 'blocked':['⊘','已封鎖','disabled'],
+    'eligible':['✓','符合資格','ok'], 'current':['●','最新快照','ok'], 'fallback':['▲','歷史快照','degraded'],
+    'empty':['○','無資料','unknown'], 'missing':['○','尚無快照','unknown'], 'heartbeat':['✓','已完成，無入選股票','ok']
+} %}
+{% macro status_badge(code) -%}
+    {%- set entry = status_map.get(code|string|trim|lower, status_map['unknown']) -%}
+    <span class="status-badge status-{{ entry[2] }}">{{ entry[0] }} {{ entry[1] }}</span>
+{%- endmacro %}

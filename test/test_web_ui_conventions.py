@@ -67,13 +67,13 @@ def test_navigation_copy_is_chinese_and_status_tokens_are_preserved(monkeypatch)
     html = render('dashboard')
     nav = re.search(r'<nav\b.*?</nav>', html, re.S)[0]
     assert re.findall(r'<span class="nav-label">(.*?)</span>', nav) == ['總覽', '個股分析', '策略中心', '回測分析', '系統狀態']
-    assert 'BROKER' in html and 'DISABLED' in html
+    assert '券商下單' in html and '已停用' in html
     assert 'LIVE TRADING' not in html
     import app.web_server as web
     from app import app
     monkeypatch.setattr(web, '_build_system_status_payload', lambda **kw: ({'status': 'ok'}, 200))
     with app.test_request_context('/dashboard'):
-        assert 'SYSTEM ONLINE' in render_template('dashboard.html')
+        assert '● 正常' in render_template('dashboard.html')
 
 
 @pytest.mark.parametrize('today,start', [('2026-10-16', '2025-10-16'), ('2024-03-01', '2023-03-02')])
