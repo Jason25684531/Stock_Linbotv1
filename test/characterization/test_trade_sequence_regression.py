@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import re
 
+import pytest
+
 from jobs.run_backtest import BacktestEngine, _seed_backtest_rng
 
 
@@ -18,6 +20,7 @@ def _metric(output: str, pattern: str) -> float:
     return float(match.group(1).replace(',', ''))
 
 
+@pytest.mark.integration
 def test_seeded_v31_trade_sequence_matches_the_characterization_baseline(monkeypatch, capsys):
     baseline = json.loads(FIXTURE.read_text(encoding='utf-8'))
     monkeypatch.setenv('BACKTEST_RANDOM_SEED', baseline['environment']['BACKTEST_RANDOM_SEED'])

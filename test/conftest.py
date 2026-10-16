@@ -5,9 +5,27 @@
 避免各測試檔重複定義相同的 setup 邏輯。
 """
 
+import sys
+
 import pytest
 import pandas as pd
 from core.strategy_manager import StrategyManager
+
+
+@pytest.fixture(autouse=True)
+def _isolate_strategy_settings(monkeypatch, tmp_path):
+    """Keep default and collection-time managers away from operator settings."""
+    source = StrategyManager.SETTINGS_FILE
+    isolated = tmp_path / 'strategy_settings.json'
+    isolated.write_bytes(source.read_bytes())
+    monkeypatch.setattr(StrategyManager, 'SETTINGS_FILE', isolated)
+    app_manager = getattr(sys.modules.get('app'), 'strategy_manager', None)
+    for instance in (StrategyManager._instance, app_manager):
+        if instance is not None and instance.settings_file == source:
+            monkeypatch.setattr(instance, 'settings_file', isolated)
+            monkeypatch.setattr(instance, '_settings', None)
+            monkeypatch.setattr(instance, '_strategy_cache', {})
+    monkeypatch.setattr(StrategyManager, '_instance', None)
 
 
 @pytest.fixture
