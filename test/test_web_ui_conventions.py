@@ -1,5 +1,7 @@
 """Presentation contracts; no changes to strategy or backtest execution."""
 import re
+import subprocess
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -72,3 +74,59 @@ def test_navigation_copy_is_chinese_and_status_tokens_are_preserved(monkeypatch)
     monkeypatch.setattr(web, '_build_system_status_payload', lambda **kw: ({'status': 'ok'}, 200))
     with app.test_request_context('/dashboard'):
         assert 'SYSTEM ONLINE' in render_template('dashboard.html')
+
+
+@pytest.mark.parametrize('today,start', [('2026-10-16', '2025-10-16'), ('2024-03-01', '2023-03-02')])
+def test_backtest_get_defaults_to_365_days_and_preserves_opt_in(monkeypatch, today, start):
+    import app.web_server as web
+    from app import app
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return cls.fromisoformat(today)
+    monkeypatch.setattr(web, 'date', FixedDate)
+    monkeypatch.setattr(web, '_build_strategy_catalog', lambda: [])
+    monkeypatch.setattr(web, '_build_system_status_payload', lambda **kw: ({'status': 'unknown'}, 200))
+    html = app.test_client().get('/backtest').get_data(as_text=True)
+    assert f'name="start_date" value="{start}"' in html
+    assert f'name="end_date" value="{today}"' in html
+    assert ':disabled="submitting"' in html and '回測中…' in html
+    assert 'aria-describedby="weights-help"' in html
+    assert '儲存結果到資料庫' in html
+    persist = re.search(r'<input[^>]*name="persist"[^>]*>', html)[0]
+    assert 'checked' not in persist
+
+
+@pytest.mark.parametrize('value,color', [(4.5, 'text-up'), (-2.0, 'text-down'), (0, 'text-ink'), ({'value': None, 'reason': '樣本不足'}, 'text-ink')])
+def test_result_return_sign_and_undefined_reason(value, color):
+    html = render('backtest_result', metrics={'total_return': value, 'max_drawdown': None, 'sharpe_ratio': None, 'win_rate': None}, strategy_performance={}, trades=[], equity_chart='null', drawdown_chart='null', monthly_chart='null')
+    assert re.search(r'總報酬</div><div class="[^"]*' + color, html)
+    if isinstance(value, dict):
+        assert '樣本不足' in html and '資料不可用' in html
+    assert 'role="tablist"' in html and 'role="tab"' in html
+    assert ':aria-selected=' in html and 'Plotly.Plots.resize(plot)' in html
+    assert "token('--bg-primary')" in html
+
+
+def test_stock_direction_formats_positive_negative_zero_and_missing_values():
+    html = render('stock_analysis', stock_id='2330')
+    script = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S) if "Alpine.data('stockAnalysisPage'" in s)
+    harness = """
+const assert = require('node:assert/strict');
+let factory;
+global.document = {addEventListener: (_, fn) => fn()};
+global.Alpine = {data: (_, fn) => factory = fn};
+""" + script + """
+const page = factory();
+assert.equal(page.changeClass(3), 'text-up');
+assert.equal(page.changeClass(-3), 'text-down');
+for (const value of [0, null, undefined, '', NaN]) assert.equal(page.changeClass(value), 'text-muted');
+assert.match(page.formatSigned(3), /^▲/);
+assert.match(page.formatSigned(-3), /^▼/);
+assert.equal(page.formatSigned(0), '0');
+assert.equal(page.formatSigned(null), '資料不可用');
+assert.equal(page.quoteItems().length, 4);
+"""
+    result = subprocess.run(['node', '-e', harness], capture_output=True, text=True, encoding='utf-8')
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert not re.search(r'MACD|>KD<|Turnover|命中 Strategy', html)

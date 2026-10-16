@@ -6,6 +6,7 @@ import os
 import json
 import time
 import traceback
+from datetime import date, timedelta
 
 import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
@@ -1326,11 +1327,14 @@ def backtest():
         selected = [item['strategy_id'] for item in available if item['strategy_id'] in requested]
         if not selected and available:
             selected = [available[0]['strategy_id']]
+        today = date.today()
         return render_template(
             'backtest.html',
             strategies=[item['strategy_id'] for item in available],
             strategy_catalog=catalog,
             selected_strategies=selected,
+            default_start_date=(today - timedelta(days=365)).isoformat(),
+            default_end_date=today.isoformat(),
         )
 
     try:

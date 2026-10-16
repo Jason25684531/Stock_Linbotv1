@@ -11,7 +11,7 @@
         <h2 class="mt-1 text-2xl font-semibold text-white">回測分析</h2>
         <p class="mt-1 text-sm text-muted">使用回測引擎支援的正式策略代號。</p>
     </div>
-    <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6">
+    <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6" x-data="{ submitting:false }" @submit="submitting=true" :aria-busy="submitting">
         <section class="quant-card p-5">
             <div class="mb-4 flex items-center justify-between">
                 <div><h2 class="text-base font-semibold text-white">選擇策略</h2><p class="mt-1 text-xs text-muted">基本面策略保留於清單中；尚未支援回測的策略無法勾選。</p></div>
@@ -35,13 +35,13 @@
         <section class="quant-card p-5">
             <h2 class="text-base font-semibold text-white">期間與執行設定</h2>
             <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <label class="text-sm text-ink">開始日期<input type="date" name="start_date" value="2025-06-01" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
-                <label class="text-sm text-ink">結束日期<input type="date" name="end_date" value="2026-02-11" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
-                <label class="text-sm text-ink">策略權重（可選）<input type="text" name="weights" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
+                <label class="text-sm text-ink">開始日期<input type="date" name="start_date" value="{{ default_start_date }}" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
+                <label class="text-sm text-ink">結束日期<input type="date" name="end_date" value="{{ default_end_date }}" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"></label>
+                <label class="text-sm text-ink">策略權重（可選）<input type="text" name="weights" aria-describedby="weights-help" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="weights-help" class="mt-2 block text-xs text-muted">依上方所選策略順序，以逗號分隔，例如 0.5,0.5；數量須與策略數相同。留空使用預設權重。</span></label>
                 <label class="flex items-end gap-2 pb-2 text-sm text-ink"><input type="checkbox" name="persist" value="1" class="h-4 w-4 rounded border-strong bg-primary text-blue-500">儲存結果到資料庫</label>
             </div>
         </section>
-        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-strong px-5 py-3 text-center text-sm text-ink hover:border-strong">回到 策略中心</a></div>
+        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" :disabled="submitting" x-text="submitting ? '回測中…' : '執行回測'" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-strong px-5 py-3 text-center text-sm text-ink hover:border-strong">回到策略中心</a></div>
     </form>
 </div>
 {% endblock %}

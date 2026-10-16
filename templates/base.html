@@ -46,14 +46,14 @@
         .chart-shell { min-height:430px; }
         [x-cloak] { display:none !important; }
         @media (max-width:1023px) { .desktop-sidebar{width:4.5rem;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:none;} .desktop-sidebar .nav-item{justify-content:center;} .shell-main{margin-left:4.5rem;} }
-        @media (max-width:767px) { .desktop-sidebar{display:none;} .shell-main{margin-left:0;} .chart-shell{min-height:360px;} }
+        @media (max-width:767px) { .desktop-sidebar{display:flex;width:14rem;} .desktop-sidebar .nav-label,.desktop-sidebar .brand-copy{display:block;} .shell-main{margin-left:0;} .chart-shell{min-height:360px;} }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body x-data="{ sidebarOpen:false }">
     <div class="min-h-screen">
         <div x-cloak x-show="sidebarOpen" @click="sidebarOpen=false" class="fixed inset-0 z-40 bg-black/60 md:hidden" aria-hidden="true"></div>
-        <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-secondary transition-transform md:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" aria-label="主要導覽">
+        <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-secondary transition-transform motion-reduce:transition-none md:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" aria-label="主要導覽">
             <div class="flex h-20 items-center gap-3 border-b border-line px-4"><a href="{{ url_for('dashboard') }}" class="flex items-center gap-3" @click="sidebarOpen=false"><span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy"><span class="block text-sm font-bold tracking-wide text-white">STOCK LINBOT</span><span class="block text-xs text-slate-400">量化策略平台</span></span></a></div>
             <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
                 {% set active = request.endpoint or '' %}
@@ -65,7 +65,7 @@
             </nav>
             <div class="border-t border-line p-3"><div class="mb-3 flex items-center gap-2 text-xs {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span><span class="nav-label">{{ shell_status.label }}</span></div><div class="flex items-center justify-between text-xs text-slate-400"><span class="nav-label">BROKER</span><span class="text-amber-300">DISABLED</span></div></div>
         </aside>
-        <div class="shell-main min-h-screen transition-[margin] md:ml-56">
+        <div class="shell-main min-h-screen transition-[margin] motion-reduce:transition-none md:ml-56">
             <header class="sticky top-0 z-30 border-b border-line bg-primary backdrop-blur"><div class="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8"><div class="flex items-center gap-3"><button type="button" class="rounded-md border border-line px-3 py-2 text-slate-300 md:hidden" @click="sidebarOpen=!sidebarOpen" :aria-expanded="sidebarOpen" aria-controls="main-sidebar" aria-label="開啟導覽">☰</button><div><p class="text-xs uppercase tracking-[.18em] text-slate-400">{% block page_kicker %}Stock Linbot{% endblock %}</p><h1 class="text-lg font-semibold text-white">{% block page_heading %}{% endblock %}</h1></div></div><div class="flex items-center gap-4 text-xs"><span class="hidden items-center gap-2 sm:flex {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span>{{ shell_status.label }}</span></div></div></header>
             <main class="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">{% block content %}{% endblock %}</main>
         </div>
