@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 
 {% block title %}Backtest - Stock Linbot{% endblock %}
-{% block nav_backtest %}active{% endblock %}
+{% block page_kicker %}Stock Linbot{% endblock %}
+{% block page_heading %}回測分析{% endblock %}
 
 {% block content %}
 <div class="space-y-6" data-testid="backtest-config">
     <div>
         <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
-        <h1 class="mt-1 text-2xl font-semibold text-white">回測分析</h1>
+        <h2 class="mt-1 text-2xl font-semibold text-white">回測分析</h2>
         <p class="mt-1 text-sm text-gray-400">使用已由 Backtest Engine 證明可用的 canonical strategy identity。</p>
     </div>
     <form method="POST" action="{{ url_for('backtest') }}" class="space-y-6">

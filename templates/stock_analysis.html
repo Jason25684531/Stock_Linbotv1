@@ -81,7 +81,10 @@ document.addEventListener('alpine:init', () => {
                 if (!window.LightweightCharts?.createChart) { this.chartMessage = '圖表套件載入失敗，請重試'; return; }
                 const chart = window.LightweightCharts.createChart(container, { width: container.clientWidth || 800, height: 500, layout: { background: { color: '#07131f' }, textColor: '#91a7ba' }, grid: { vertLines: { color: '#173246' }, horzLines: { color: '#173246' } }, rightPriceScale: { borderColor: '#28516d' }, timeScale: { borderColor: '#28516d' } });
                 this.chart = chart;
-                const candle = chart.addCandlestickSeries({ upColor: '#35e58a', downColor: '#ff5263', borderUpColor: '#35e58a', borderDownColor: '#ff5263', wickUpColor: '#35e58a', wickDownColor: '#ff5263' });
+                const colors = getComputedStyle(document.documentElement);
+                const up = colors.getPropertyValue('--color-up').trim();
+                const down = colors.getPropertyValue('--color-down').trim();
+                const candle = chart.addCandlestickSeries({ upColor: up, downColor: 'transparent', borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
                 candle.priceScale().applyOptions({ scaleMargins: { top: .05, bottom: .25 } });
                 candle.setData(series.candles);
                 for (const [key, color] of [['ma5', '#f4b740'], ['ma20', '#38bdf8'], ['ma60', '#b088ff']]) chart.addLineSeries({ color, lineWidth: 1 }).setData(series[key]);

@@ -13,11 +13,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-primary:#07131f; --bg-secondary:#0b1d2c; --bg-card:#0d2233; --border-color:#1c3a50; --text-primary:#e5eef7; --text-secondary:#91a7ba; --accent-blue:#198cff; --accent-green:#35e58a; --accent-red:#ff5263; --accent-amber:#f4b740; --accent-purple:#b088ff; }
+        :root { --bg-primary:#07131f; --bg-secondary:#0b1d2c; --bg-card:#0d2233; --border-color:#1c3a50; --text-primary:#e5eef7; --text-secondary:#91a7ba; --accent-blue:#198cff; --accent-green:#35e58a; --accent-red:#ff5263; --accent-amber:#f4b740; --accent-purple:#b088ff; --color-up:#ff5263; --color-down:#35e58a; }
         * { box-sizing:border-box; }
         html, body { min-height:100%; }
         body { margin:0; background:var(--bg-primary); color:var(--text-primary); font-family:'JetBrains Mono',monospace; }
         a { color:inherit; }
+        .text-up { color:var(--color-up); }
+        .text-down { color:var(--color-down); }
+        .text-muted { color:var(--text-secondary); }
         .quant-card { background:rgba(13,34,51,.78); border:1px solid var(--border-color); border-radius:.55rem; }
         .metric-card { background:rgba(8,25,39,.78); border:1px solid var(--border-color); border-radius:.55rem; padding:1rem; }
         .metric-label { color:var(--text-secondary); font-size:.72rem; letter-spacing:.04em; text-transform:uppercase; }
@@ -47,11 +50,11 @@
             <div class="flex h-20 items-center gap-3 border-b border-[#1c3a50] px-4"><a href="{{ url_for('dashboard') }}" class="flex items-center gap-3" @click="sidebarOpen=false"><span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy"><span class="block text-sm font-bold tracking-wide text-white">STOCK LINBOT</span><span class="block text-[10px] text-slate-400">Quant Strategy Platform</span></span></a></div>
             <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
                 {% set active = request.endpoint or '' %}
-                <a href="{{ url_for('dashboard') }}" class="nav-item {% if active == 'dashboard' %}active{% endif %}" @click="sidebarOpen=false"><span aria-hidden="true">▦</span><span class="nav-label">Dashboard</span></a>
-                <a href="{{ url_for('stock_analysis') }}" class="nav-item {% if active == 'stock_analysis' %}active{% endif %}" @click="sidebarOpen=false"><span aria-hidden="true">⌁</span><span class="nav-label">個股分析</span></a>
-                <a href="{{ url_for('strategy_center') }}" class="nav-item {% if active == 'strategy_center' %}active{% endif %}" @click="sidebarOpen=false"><span aria-hidden="true">◎</span><span class="nav-label">Strategy Center</span></a>
-                <a href="{{ url_for('backtest') }}" class="nav-item {% if active == 'backtest' %}active{% endif %}" @click="sidebarOpen=false"><span aria-hidden="true">⌁</span><span class="nav-label">回測分析</span></a>
-                <a href="{{ url_for('system_status_page') }}" class="nav-item {% if active == 'system_status_page' %}active{% endif %}" @click="sidebarOpen=false"><span aria-hidden="true">⚙</span><span class="nav-label">System</span></a>
+                <a title="Dashboard" href="{{ url_for('dashboard') }}" class="nav-item {% if active == 'dashboard' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span class="nav-label">Dashboard</span></a>
+                <a title="個股分析" href="{{ url_for('stock_analysis') }}" class="nav-item {% if active == 'stock_analysis' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 3v18h18M7 14v-4m5 7V6m5 7V8"/></svg><span class="nav-label">個股分析</span></a>
+                <a title="Strategy Center" href="{{ url_for('strategy_center') }}" class="nav-item {% if active == 'strategy_center' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="nav-label">Strategy Center</span></a>
+                <a title="回測分析" href="{{ url_for('backtest') }}" class="nav-item {% if active == 'backtest' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 12a9 9 0 1 0 3-7M3 3v6h6m3-2v5l3 2"/></svg><span class="nav-label">回測分析</span></a>
+                <a title="System" href="{{ url_for('system_status_page') }}" class="nav-item {% if active == 'system_status_page' %}active{% endif %}" @click="sidebarOpen=false"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 5h18v14H3zM3 10h18m-12 0v9"/></svg><span class="nav-label">System</span></a>
             </nav>
             <div class="border-t border-[#1c3a50] p-3"><div class="mb-3 flex items-center gap-2 text-xs {% if shell_status.state == 'ok' %}text-emerald-300{% elif shell_status.state == 'degraded' %}text-amber-300{% else %}text-slate-400{% endif %}"><span class="h-2 w-2 rounded-full {% if shell_status.state == 'ok' %}bg-emerald-400{% elif shell_status.state == 'degraded' %}bg-amber-400{% else %}bg-slate-500{% endif %}"></span><span class="nav-label">{{ shell_status.label }}</span></div><div class="flex items-center justify-between text-[10px] text-slate-500"><span class="nav-label">BROKER</span><span class="text-amber-300">DISABLED</span></div></div>
         </aside>

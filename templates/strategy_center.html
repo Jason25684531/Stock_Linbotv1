@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}Strategy Center - Stock Linbot{% endblock %}
-{% block nav_strategies %}active{% endblock %}
+{% block page_kicker %}Stock Linbot{% endblock %}
+{% block page_heading %}Strategy Center{% endblock %}
 
 {% block content %}
 <div
@@ -12,7 +13,7 @@
     <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
-            <h1 class="mt-1 text-2xl font-semibold text-white">Strategy Center</h1>
+            <h2 class="mt-1 text-2xl font-semibold text-white">Strategy Center</h2>
             <p class="mt-1 text-sm text-gray-400">點選策略名稱或勾選框，查看已完成的選股快照；套用到 Daily 可更新每日篩選設定，組合回測可帶入所選策略。</p>
             <p class="mt-1 text-xs text-gray-500">Daily／回測可用表示系統支援執行，並非績效驗收通過。</p>
         </div>

@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}Backtest Result - Stock Linbot{% endblock %}
-{% block nav_backtest %}active{% endblock %}
+{% block page_kicker %}Stock Linbot{% endblock %}
+{% block page_heading %}回測結果{% endblock %}
 
 {% macro metric(value, suffix='') -%}
     {%- set metric_value = value.value if value.value is defined else value -%}
@@ -12,7 +13,7 @@
 {% block content %}
 <div x-data="{ tab: 'overview' }" class="space-y-6" data-testid="backtest-result">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div><p class="text-xs uppercase tracking-[0.2em] text-blue-400">Backtest Result</p><h1 class="mt-1 text-2xl font-semibold text-white">回測結果</h1><p class="mt-1 text-sm text-gray-400">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="font-mono text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
+        <div><p class="text-xs uppercase tracking-[0.2em] text-blue-400">Backtest Result</p><h2 class="mt-1 text-2xl font-semibold text-white">回測結果</h2><p class="mt-1 text-sm text-gray-400">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="font-mono text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
         <a href="{{ url_for('backtest') }}" class="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-gray-500">重新設定</a>
     </div>
     <nav class="flex flex-wrap gap-2 border-b border-gray-800 pb-3" aria-label="Backtest result sections">
