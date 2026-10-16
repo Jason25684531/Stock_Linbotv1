@@ -5,6 +5,8 @@
 
 ## TD-01 執行測試會覆寫正式的 `strategy_settings.json`
 
+> 狀態：**已於 2026-10-16 解決**（`05d8ed6`）。共用 autouse fixture 已將預設及 collection-time app manager 導向暫存設定，並保留顯式 settings_path；新增真實啟用切換隔離檢查。1053 項廣泛測試通過後，正式設定 SHA-256 仍與執行前一致。以下保留原始問題與修復建議作為歷史證據，不再列為未解決缺陷。
+
 > 發現日期：2026-07-30
 > 嚴重性：**高**——「跑一次測試」即改變正式啟用策略，且無任何提示
 
@@ -64,6 +66,7 @@ TD-02b 修改會影響 OpenSpec capability `common-stock-universe-filter` 與其
 
 ## Rollback
 
-This worktree intentionally has no per-phase commits. Before merging, commit each
-phase separately in task order. Roll back in reverse order with `git revert <phase
-commit>`. Never rewrite historical strategy keys or generated baseline fixtures during rollback.
+The 2026-10-16 audit retains independent phase commits: `05d8ed6`, `de59b22`,
+`e7f677c`, `1364795`, and `88b3af0`. Roll back the relevant phase in reverse
+dependency order with `git revert <phase commit>`. Never rewrite operator
+settings, historical strategy keys or generated baseline fixtures during rollback.
