@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}Strategy Center - Stock Linbot{% endblock %}
+{% block title %}策略中心 - Stock Linbot{% endblock %}
 {% block page_kicker %}Stock Linbot{% endblock %}
-{% block page_heading %}Strategy Center{% endblock %}
+{% block page_heading %}策略中心{% endblock %}
 
 {% block content %}
 <div
@@ -12,15 +12,15 @@
 >
     <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <p class="text-xs uppercase tracking-[0.2em] text-blue-400">Quant Strategy Platform</p>
-            <h2 class="mt-1 text-2xl font-semibold text-white">Strategy Center</h2>
-            <p class="mt-1 text-sm text-muted">點選策略名稱或勾選框，查看已完成的選股快照；套用到 Daily 可更新每日篩選設定，組合回測可帶入所選策略。</p>
-            <p class="mt-1 text-xs text-muted">Daily／回測可用表示系統支援執行，並非績效驗收通過。</p>
+            <p class="text-xs uppercase tracking-[0.2em] text-blue-400">量化策略平台</p>
+            <h2 class="mt-1 text-2xl font-semibold text-white">策略中心</h2>
+            <p class="mt-1 text-sm text-muted">點選策略名稱或勾選框，查看已完成的選股快照；套用到每日篩選 可更新每日篩選設定，組合回測可帶入所選策略。</p>
+            <p class="mt-1 text-xs text-muted">每日篩選／回測可用表示系統支援執行，並非績效驗收通過。</p>
         </div>
-        <span class="status-badge status-unknown"><span x-text="catalog.length"></span> Strategies</span>
+        <span class="status-badge status-unknown"><span x-text="catalog.length"></span> 個策略</span>
     </div>
 
-    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Strategy categories">
+    <div class="flex flex-wrap gap-2" role="tablist" aria-label="策略分類">
         <template x-for="tab in tabs" :key="tab.key">
             <button
                 type="button"
@@ -36,16 +36,16 @@
 
     <section class="quant-card p-5" aria-live="polite" data-testid="strategy-results">
         <h2 class="text-lg font-semibold text-white">所選策略股票</h2>
-        <p class="mt-1 text-xs text-muted">依資料庫已完成的策略快照顯示；勾選不會變更 Daily 設定。資料過期或缺少快照時會顯示原因。</p>
+        <p class="mt-1 text-xs text-muted">依資料庫已完成的策略快照顯示；勾選不會變更每日篩選設定。資料過期或缺少快照時會顯示原因。</p>
         <p x-show="!selectedItems.length" class="mt-4 text-sm text-muted">請先選擇策略</p>
         <div class="mt-4 grid gap-4 lg:grid-cols-2">
             <template x-for="item in selectedItems" :key="item.strategy_id">
                 <article class="rounded border border-strong p-4">
-                    <div class="flex items-center justify-between gap-3"><strong x-text="item.display_name_en"></strong><button type="button" class="text-xs text-blue-300" @click="loadStrategy(item.strategy_id)">重試</button></div>
+                    <div class="flex items-center justify-between gap-3"><strong x-text="item.display_name_zh || item.display_name_en"></strong><button type="button" class="text-xs text-blue-300" @click="loadStrategy(item.strategy_id)">重試</button></div>
                     <p class="mt-1 text-xs text-muted" x-text="resultText(item.strategy_id)"></p>
                     <ul class="mt-3 space-y-2"><template x-for="row in (results[item.strategy_id]?.data?.data?.recommendations || [])" :key="row.stock_id"><li><a class="text-blue-300 hover:text-blue-200" :href="'/stock-analysis?id=' + encodeURIComponent(row.stock_id)" x-text="row.stock_id + (row.stock_name ? ' ' + row.stock_name : '')"></a></li></template></ul>
                     <div class="mt-3 rounded border border-amber-500/30 p-3 text-xs text-amber-200" data-testid="strategy-shadow" x-show="results[item.strategy_id]?.data?.shadow">
-                        <p>SHADOW 觀察 · 非正式推薦 · <span x-text="results[item.strategy_id]?.data?.shadow?.asof_date"></span> · Fresh OOS <span x-text="results[item.strategy_id]?.data?.shadow?.fresh_oos?.trading_days"></span>/<span x-text="results[item.strategy_id]?.data?.shadow?.fresh_oos?.minimum_trading_days"></span> 交易日</p>
+                        <p>SHADOW 觀察 · 非正式推薦 · <span x-text="results[item.strategy_id]?.data?.shadow?.asof_date"></span> · 新增樣本外觀察 <span x-text="results[item.strategy_id]?.data?.shadow?.fresh_oos?.trading_days"></span>/<span x-text="results[item.strategy_id]?.data?.shadow?.fresh_oos?.minimum_trading_days"></span> 交易日</p>
                         <ul class="mt-2 space-y-1"><template x-for="row in (results[item.strategy_id]?.data?.shadow?.stocks || [])" :key="row.stock_id"><li><a class="text-amber-100 hover:text-white" :href="'/stock-analysis?id=' + encodeURIComponent(row.stock_id)" x-text="'#' + row.rank + ' ' + row.stock_id + (row.stock_name ? ' ' + row.stock_name : '')"></a></li></template></ul>
                     </div>
                 </article>
@@ -57,12 +57,12 @@
         <table class="min-w-[900px] w-full text-left text-sm" data-testid="strategy-catalog-table">
             <thead class="border-b border-line bg-primary text-xs uppercase tracking-wider text-muted">
                 <tr>
-                    <th class="px-4 py-3">Select</th>
-                    <th class="px-4 py-3">Strategy</th>
-                    <th class="px-4 py-3">Category</th>
-                    <th class="px-4 py-3">Lifecycle / Eligibility</th>
-                    <th class="px-4 py-3">Daily</th>
-                    <th class="px-4 py-3">Backtest</th>
+                    <th class="px-4 py-3">選擇</th>
+                    <th class="px-4 py-3">策略</th>
+                    <th class="px-4 py-3">分類</th>
+                    <th class="px-4 py-3">生命週期／執行資格</th>
+                    <th class="px-4 py-3">每日篩選</th>
+                    <th class="px-4 py-3">回測分析</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-line">
@@ -75,14 +75,14 @@
                                 :id="'strategy-desktop-' + item.strategy_id"
                                 :value="item.strategy_id"
                                 x-model="selected"
-                                :aria-label="`Select ${item.display_name_en}`"
+                                :aria-label="`選擇 ${item.display_name_zh || item.display_name_en}`"
                             >
                         </td>
                         <td class="px-4 py-4 align-top">
-                            <label :for="'strategy-desktop-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_en"></label>
+                            <label :for="'strategy-desktop-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_zh || item.display_name_en"></label>
                             <div class="mt-1 num text-xs text-blue-300" x-text="item.strategy_id"></div>
                             <div class="mt-1 text-xs text-muted" x-show="item.aliases.length">
-                                Alias: <span x-text="item.aliases.join(', ')"></span>
+                                別名： <span x-text="item.aliases.join(', ')"></span>
                             </div>
                         </td>
                         <td class="px-4 py-4 align-top">
@@ -117,19 +117,19 @@
                         :id="'strategy-mobile-' + item.strategy_id"
                         :value="item.strategy_id"
                         x-model="selected"
-                        :aria-label="`Select ${item.display_name_en}`"
+                        :aria-label="`選擇 ${item.display_name_zh || item.display_name_en}`"
                     >
                     <div class="min-w-0 flex-1">
-                        <label :for="'strategy-mobile-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_en"></label>
+                        <label :for="'strategy-mobile-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_zh || item.display_name_en"></label>
                         <div class="mt-1 break-all num text-xs text-blue-300" x-text="item.strategy_id"></div>
                     </div>
                     <span class="status-badge status-unknown" x-text="item.category"></span>
                 </div>
                 <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
-                    <div>Lifecycle <span class="block text-ink" x-text="item.lifecycle"></span></div>
-                    <div>Eligibility <span class="block text-ink" x-text="item.eligibility"></span></div>
-                    <div>Daily <span class="block" :class="item.available_for_daily ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
-                    <div>Backtest <span class="block" :class="item.available_for_backtest ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
+                    <div>生命週期 <span class="block text-ink" x-text="item.lifecycle"></span></div>
+                    <div>執行資格 <span class="block text-ink" x-text="item.eligibility"></span></div>
+                    <div>每日篩選 <span class="block" :class="item.available_for_daily ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
+                    <div>回測 <span class="block" :class="item.available_for_backtest ? 'text-green-300' : 'text-amber-300'" x-text="item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE'"></span></div>
                 </div>
                 <p class="mt-3 text-xs text-amber-300" x-show="!item.available_for_daily || !item.available_for_backtest" x-text="item.daily_reason || item.backtest_reason"></p>
             </article>
@@ -143,14 +143,14 @@
                 <div class="mt-1 flex flex-wrap gap-2" aria-live="polite">
                     <template x-for="item in selectedItems" :key="item.strategy_id">
                         <span class="rounded bg-secondary px-2 py-1 num text-xs text-ink">
-                            <span x-text="item.aliases.length ? item.aliases[0] : 'Fundamental'"></span>
+                            <span x-text="item.aliases.length ? item.aliases[0] : '基本面'"></span>
                             <span class="text-muted" x-text="` · ${item.strategy_id}`"></span>
                         </span>
                     </template>
                     <span x-show="!selectedItems.length" class="text-xs text-muted">請選擇策略</span>
                 </div>
-                <p x-show="selectedItems.length && !dailyAllowed" class="mt-2 text-xs text-amber-300">Daily unavailable: <span x-text="dailyBlockReason"></span></p>
-                <p x-show="selectedItems.length && !backtestAllowed" class="mt-1 text-xs text-amber-300">Backtest unavailable: <span x-text="backtestBlockReason"></span></p>
+                <p x-show="selectedItems.length && !dailyAllowed" class="mt-2 text-xs text-amber-300">每日篩選不可用： <span x-text="dailyBlockReason"></span></p>
+                <p x-show="selectedItems.length && !backtestAllowed" class="mt-1 text-xs text-amber-300">回測不可用： <span x-text="backtestBlockReason"></span></p>
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
                 <form method="post" action="{{ url_for('update_strategy') }}" x-ref="dailyForm" class="hidden">
@@ -163,7 +163,7 @@
                     class="rounded-md border border-strong px-4 py-2 text-sm text-ink transition-colors hover:border-strong disabled:cursor-not-allowed disabled:opacity-40"
                     :disabled="!dailyAllowed"
                     @click="$refs.dailyForm.submit()"
-                >套用到 Daily</button>
+                >套用到每日篩選</button>
                 <button
                     type="button"
                     class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"

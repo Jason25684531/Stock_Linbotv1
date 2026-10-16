@@ -1,42 +1,42 @@
 {% extends "base.html" %}
 
-{% block title %}Backtest Result - Stock Linbot{% endblock %}
+{% block title %}回測結果 - Stock Linbot{% endblock %}
 {% block page_kicker %}Stock Linbot{% endblock %}
 {% block page_heading %}回測結果{% endblock %}
 
 {% macro metric(value, suffix='') -%}
     {%- set metric_value = value.value if value.value is defined else value -%}
     {%- set reason = value.reason if value.reason is defined else none -%}
-    {%- if metric_value is undefined or metric_value is none -%}<span class="text-muted">Unavailable</span>{% if reason %}<span class="mt-1 block text-xs text-muted">{{ reason }}</span>{% endif %}{%- else -%}{{ metric_value }}{{ suffix }}{%- endif -%}
+    {%- if metric_value is undefined or metric_value is none -%}<span class="text-muted">資料不可用</span>{% if reason %}<span class="mt-1 block text-xs text-muted">{{ reason }}</span>{% endif %}{%- else -%}{{ metric_value }}{{ suffix }}{%- endif -%}
 {%- endmacro %}
 
 {% block content %}
 <div x-data="{ tab: 'overview' }" class="space-y-6" data-testid="backtest-result">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div><p class="text-xs uppercase tracking-[0.2em] text-blue-400">Backtest Result</p><h2 class="mt-1 text-2xl font-semibold text-white">回測結果</h2><p class="mt-1 text-sm text-muted">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="num text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
+        <div><p class="text-xs uppercase tracking-[0.2em] text-blue-400">回測結果</p><h2 class="mt-1 text-2xl font-semibold text-white">回測結果</h2><p class="mt-1 text-sm text-muted">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="num text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
         <a href="{{ url_for('backtest') }}" class="rounded-md border border-strong px-4 py-2 text-sm text-ink hover:border-strong">重新設定</a>
     </div>
-    <nav class="flex flex-wrap gap-2 border-b border-line pb-3" aria-label="Backtest result sections">
-        {% for key, label in [('overview', 'Overview'), ('equity', 'Equity'), ('drawdown', 'Drawdown'), ('monthly', 'Monthly') ] %}<button type="button" class="rounded-md px-3 py-2 text-xs" :class="tab === '{{ key }}' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='{{ key }}'">{{ label }}</button>{% endfor %}
-        {% if trades %}<button type="button" class="rounded-md px-3 py-2 text-xs" :class="tab === 'trades' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='trades'">Trades</button>{% endif %}
+    <nav class="flex flex-wrap gap-2 border-b border-line pb-3" aria-label="回測結果分頁">
+        {% for key, label in [('overview', '總覽'), ('equity', '資產曲線'), ('drawdown', '回撤'), ('monthly', '月報酬') ] %}<button type="button" class="rounded-md px-3 py-2 text-xs" :class="tab === '{{ key }}' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='{{ key }}'">{{ label }}</button>{% endfor %}
+        {% if trades %}<button type="button" class="rounded-md px-3 py-2 text-xs" :class="tab === 'trades' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='trades'">交易筆數</button>{% endif %}
     </nav>
     <section x-show="tab === 'overview'" x-cloak data-testid="backtest-overview">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="metric-card"><div class="metric-label">Total Return</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.total_return, '%') }}</div></div>
+            <div class="metric-card"><div class="metric-label">總報酬</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.total_return, '%') }}</div></div>
             <div class="metric-card"><div class="metric-label">MDD</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.max_drawdown, '%') }}</div></div>
             <div class="metric-card"><div class="metric-label">Sharpe</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.sharpe_ratio) }}</div></div>
-            <div class="metric-card"><div class="metric-label">Win Rate</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.win_rate, '%') }}</div></div>
+            <div class="metric-card"><div class="metric-label">勝率</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.win_rate, '%') }}</div></div>
         </div>
         <div class="mt-4 quant-card overflow-x-auto">
-            <table class="min-w-[640px] w-full text-sm"><thead class="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th class="px-4 py-3 text-left">Strategy</th><th class="px-4 py-3 text-right">ROI</th><th class="px-4 py-3 text-right">Win Rate</th><th class="px-4 py-3 text-right">Trades</th><th class="px-4 py-3 text-right">Wins</th></tr></thead><tbody class="divide-y divide-line">
-                {% for strategy_name, perf in strategy_performance.items() %}<tr><td class="px-4 py-3 num text-blue-300">{{ strategy_name }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.roi, '%') }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.win_rate, '%') }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.trade_count) }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.win_count) }}</td></tr>{% else %}<tr><td colspan="5" class="px-4 py-5 text-center text-muted">No strategy performance evidence.</td></tr>{% endfor %}
+            <table class="min-w-[640px] w-full text-sm"><thead class="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th class="px-4 py-3 text-left">策略</th><th class="px-4 py-3 text-right">ROI</th><th class="px-4 py-3 text-right">勝率</th><th class="px-4 py-3 text-right">交易筆數</th><th class="px-4 py-3 text-right">獲利筆數</th></tr></thead><tbody class="divide-y divide-line">
+                {% for strategy_name, perf in strategy_performance.items() %}<tr><td class="px-4 py-3 num text-blue-300">{{ strategy_name }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.roi, '%') }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.win_rate, '%') }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.trade_count) }}</td><td class="num px-4 py-3 text-right">{{ metric(perf.win_count) }}</td></tr>{% else %}<tr><td colspan="5" class="px-4 py-5 text-center text-muted">尚無策略績效資料。</td></tr>{% endfor %}
             </tbody></table>
         </div>
     </section>
     <section x-show="tab === 'equity'" x-cloak class="quant-card p-4" data-testid="equity-section"><div id="equity-chart" class="min-h-[360px]"></div></section>
     <section x-show="tab === 'drawdown'" x-cloak class="quant-card p-4" data-testid="drawdown-section"><div id="drawdown-chart" class="min-h-[360px]"></div></section>
     <section x-show="tab === 'monthly'" x-cloak class="quant-card p-4" data-testid="monthly-section"><div id="monthly-chart" class="min-h-[360px]"></div></section>
-    {% if trades %}<section x-show="tab === 'trades'" x-cloak class="quant-card overflow-x-auto p-4" data-testid="trades-section"><h2 class="mb-3 text-base font-semibold text-white">Run Trades</h2><table class="min-w-[760px] w-full text-sm"><thead class="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Stock</th><th class="px-3 py-2 text-left">Side</th><th class="px-3 py-2 text-right">Price</th><th class="px-3 py-2 text-right">Quantity</th></tr></thead><tbody class="divide-y divide-line">{% for trade in trades %}<tr><td class="px-3 py-2">{{ trade.get('date', trade.get('trade_date', 'Unavailable')) }}</td><td class="px-3 py-2">{{ trade.get('stock_id', 'Unavailable') }}</td><td class="px-3 py-2">{{ trade.get('action', trade.get('side', 'Unavailable')) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('price', trade.get('entry_price'))) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('shares', trade.get('quantity'))) }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+    {% if trades %}<section x-show="tab === 'trades'" x-cloak class="quant-card overflow-x-auto p-4" data-testid="trades-section"><h2 class="mb-3 text-base font-semibold text-white">本次交易紀錄</h2><table class="min-w-[760px] w-full text-sm"><thead class="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th class="px-3 py-2 text-left">日期</th><th class="px-3 py-2 text-left">股票</th><th class="px-3 py-2 text-left">方向</th><th class="px-3 py-2 text-right">價格</th><th class="px-3 py-2 text-right">數量</th></tr></thead><tbody class="divide-y divide-line">{% for trade in trades %}<tr><td class="px-3 py-2">{{ trade.get('date', trade.get('trade_date', '資料不可用')) }}</td><td class="px-3 py-2">{{ trade.get('stock_id', '資料不可用') }}</td><td class="px-3 py-2">{{ trade.get('action', trade.get('side', '資料不可用')) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('price', trade.get('entry_price'))) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('shares', trade.get('quantity'))) }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
 </div>
 
 <script>
