@@ -60,14 +60,39 @@ def test_missing_flow_stays_sql_null_and_real_zero_stays_zero(monkeypatch):
     assert rows == [('2317', None, None), ('2330', 0, -1)]
 
 
-def test_failed_flow_does_not_produce_market_batch():
+def test_failed_flow_writes_prices_with_null_flow_and_warning():
     class Client:
         def fetch_many_sync(self, *a, **kw):
             return {'snapshot': {'records': [{'stock_id': '2330', 'trade_date': '2026-10-13',
                                              'close_price': 100}]}, 'flow': RuntimeError('not published')}
 
-    with pytest.raises(RuntimeError, match='Institutional data is unavailable'):
-        fetch_market_data_with_mcp(Client(), '2026-10-13')
+    batch, warnings = fetch_market_data_with_mcp(Client(), '2026-10-13')
+    assert batch['stock_id'].tolist() == ['2330']
+    assert batch['foreign_buy'].isna().all()
+    assert any('法人資料尚未取得' in w for w in warnings)
+
+
+def test_incomplete_recent_dates_are_refetched(monkeypatch):
+    from datetime import date, datetime as real_datetime
+    from jobs import update_database
+
+    class FixedDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real_datetime(2026, 10, 19, 20, 0)
+
+    monkeypatch.setattr(update_database, 'datetime', FixedDatetime)
+    engine = create_engine('sqlite:///:memory:')
+    with engine.begin() as conn:
+        conn.execute(text('CREATE TABLE daily_market_data (stock_id TEXT, trade_date TEXT, '
+                          'foreign_buy REAL, margin_balance REAL)'))
+        conn.execute(text("INSERT INTO daily_market_data VALUES "
+                          "('A', '2026-10-09', NULL, NULL), "  # outside lookback
+                          "('A', '2026-10-14', 1, 1), ('B', '2026-10-14', 1, NULL), "
+                          "('A', '2026-10-15', 1, 1), ('B', '2026-10-15', 1, 1), "
+                          "('A', '2026-10-16', 1, NULL), ('B', '2026-10-16', 1, NULL), "
+                          "('A', '2026-10-19', NULL, 1)"))
+    assert update_database.get_earliest_incomplete_date(engine) == date(2026, 10, 16)
 
 
 def test_tpex_quotes_use_requested_date_and_include_etfs_in_one_request(monkeypatch):

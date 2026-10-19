@@ -75,6 +75,25 @@ def get_latest_date_from_db(engine):
         return None
 
 
+def get_earliest_incomplete_date(engine, lookback_days: int = 7):
+    """近期缺法人或融資融券（覆蓋不到一半）的最早交易日，供回補。"""
+    # ponytail: fixed lookback window; older gaps need jobs/backfill_pipeline.py.
+    since = datetime.now().date() - timedelta(days=lookback_days)
+    try:
+        with engine.connect() as conn:
+            earliest = conn.execute(text("""
+                SELECT MIN(trade_date) FROM (
+                    SELECT trade_date FROM daily_market_data
+                    WHERE trade_date >= :since
+                    GROUP BY trade_date
+                    HAVING COUNT(foreign_buy) = 0 OR COUNT(margin_balance) * 2 < COUNT(*)
+                ) gaps
+            """), {'since': since}).scalar()
+        return pd.Timestamp(earliest).date() if earliest else None
+    except Exception:
+        return None
+
+
 def clean_number(x):
     """清洗數字格式 (去除逗號, 處理 --)"""
     if pd.isna(x):
@@ -148,7 +167,8 @@ def fetch_market_data_with_mcp(
         warnings.append('外資買賣超未回傳有效資料')
 
     if not snapshot_df.empty and flow_df.empty:
-        raise RuntimeError(f'Institutional data is unavailable for {date_str}; market batch not written')
+        # 法人缺漏時仍寫入行情（欄位保留 NULL），run_price_update 會回頭補抓
+        warnings.append(f'法人資料尚未取得 ({date_str})，先寫入行情')
     final_df = merge_market_data(snapshot_df, flow_df, date_str)
     return final_df, warnings
 
@@ -343,6 +363,11 @@ def run_price_update(engine):
     else:
         start_dt = datetime.strptime("2024-01-01", "%Y-%m-%d").date()
         print(f"⚠️ 資料庫為空，將從 {start_dt} 開始更新...")
+
+    incomplete_dt = get_earliest_incomplete_date(engine)
+    if incomplete_dt and incomplete_dt < start_dt:
+        start_dt = incomplete_dt
+        print(f"🔁 {start_dt} 法人或融資融券不完整，從該日重新抓取...")
 
     end_dt = datetime.now().date()
 
