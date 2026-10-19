@@ -1,5 +1,31 @@
 # Deletion Candidates
 
+## 2026-10-19 unreachable login cleanup
+
+Baseline: e22d1a4, initially clean working tree. These entries authorize only
+the named template, manifest lines and obsolete test exclusion.
+
+| Candidate | Static, dynamic and compatibility evidence | Decision / replacement |
+|---|---|---|
+| `templates/login.html` (62 lines) | Hidden/no-ignore repository search for `login.html` finds historical audit hashes, archived migration prose/scripts and `test/test_web_ui_conventions.py`'s exemption only. No active renderer/include/extends/get_template/select_template references it. Every current `render_template` call was inspected; targets are literal supported dashboard/stock/strategy/system/backtest templates. `app/web_server.py:83-92` redirects GET/POST login and logout to dashboard. Existing `test_web_auth_safety.py` asserts these redirects. No dynamic template-name resolver or external public template API is present. Historical mentions remain evidence, not callers. | SAFE_TO_REMOVE; nothing replaces the unreachable form. Preserve login/logout routes. |
+| Flask-Login pins in `requirements.runtime.txt` and `requirements.txt` | Hidden/no-ignore search for flask_login/Flask-Login/login_required/LoginManager/UserMixin finds pins and historical documentation/spec/copilot instructions only. No source/test/tool import, importlib lookup, plugin registration or runtime authentication wiring. Installed distribution metadata lists zero reverse requirements for Flask-Login. `create_app()` returns the global app; login is already public redirect behavior. Delta spec corrects obsolete LoginManager expectation before cleanup. | SAFE_TO_REMOVE direct dependency lines; keep Flask and its dependencies. No environment-wide uninstall. |
+| `test/test_web_ui_conventions.py:55-56` login exemption | Sole active filename mention skips checking the unreachable template. After removal the exemption has no target. | SAFE_TO_REMOVE code section; all remaining templates follow the same test. |
+
+Search command pattern: `rg -n --hidden --no-ignore` excluding `.git`, `myenv`,
+`data`, `ML_Data`, `outputs`, `artifacts`, `__pycache__`, and `.env*`. Included
+source, tests, launchers, deployment, ignored docs/specs and active/archive
+OpenSpec. Excluded datasets and generated evidence cannot register a template
+renderer; installed package dependencies were checked separately. Reviewed
+`render_template`, `get_template`, `select_template`, Jinja include/extends,
+and current app composition. No supported external consumer is documented.
+
+Rollback: revert only the 2026-10-19 cleanup commit to restore template, pins
+and exemption. Validation: baseline/post-change offline suite, existing auth
+redirect/UI contracts, live browser navigation and actual Web/MCP restart.
+Research artifacts, source facades, legacy strategy aliases, root CLI scripts,
+operator settings and database history are KEEP. Linter-only unused imports
+are not deletion evidence, especially facade re-exports.
+
 ## 2026-10-16 runtime audit private helper evidence
 
 The following private code sections are **SAFE_TO_REMOVE**, with replacement
