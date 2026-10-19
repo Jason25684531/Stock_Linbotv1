@@ -63,6 +63,12 @@ def test_registry_aliases_line_and_cli_contracts(manager):
             assert _tquant.ENGINE_NOTICE in strategy.description
     native = [key for key, item in metadata.items() if item.source == 'native']
     assert len(native) == 7
+    assert {key for key, item in metadata.items() if item.source == 'tquant'} == {
+        'macd_cross', 'kd_oversold', 'mad_distance', 'bias_reversion',
+        'bollinger_reversion', 'regression_momentum', 'volume_surge', 'aroon_trend',
+        'trend_following', 'contrarian_pullback', 'long_term_trend',
+        'volatility_adjusted_momentum',
+    }
     assert [row['key'] for row in line_flows._list_strategy_picker_options()] == native
 
 
@@ -85,5 +91,3 @@ def test_catalog_source_capabilities_and_page():
     assert "{key: 'Technical', label: '技術'}" in html
     payload = client.get('/api/strategies').get_json()
     assert set(StrategyManager.CANONICAL_REGISTRY) <= {row['name'] for row in payload['strategies']}
-
-

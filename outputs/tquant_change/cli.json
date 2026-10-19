@@ -1,0 +1,14 @@
+{
+  "macd_cross": "passed",
+  "kd_oversold": "passed",
+  "mad_distance": "passed",
+  "bias_reversion": "passed",
+  "bollinger_reversion": "passed",
+  "regression_momentum": "passed",
+  "volume_surge": "passed",
+  "aroon_trend": "passed",
+  "trend_following": "passed",
+  "contrarian_pullback": "passed",
+  "long_term_trend": "passed",
+  "volatility_adjusted_momentum": "passed"
+}

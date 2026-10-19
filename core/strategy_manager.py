@@ -92,6 +92,17 @@ class StrategyManager:
         'mean_reversion': StrategyMetadata('mean_reversion', ('v37', 'v37_mean_reversion'), '均值回歸策略', 'Mean Reversion', 'reversion'),
         'quality_value_low_volatility': StrategyMetadata('quality_value_low_volatility', ('v38', 'v38_value_dividend'), '品質價值低波動策略', 'Quality Value Low Volatility', 'value'),
         'macd_cross': StrategyMetadata('macd_cross', (), 'MACD 黃金交叉', 'MACD Cross', 'trend', 'tquant', 'TQ_MACD交易策略.ipynb'),
+        'kd_oversold': StrategyMetadata('kd_oversold', (), 'KD 超賣', 'KD Oversold', 'reversion', 'tquant', 'TQ_KD指標回測實戰.ipynb'),
+        'mad_distance': StrategyMetadata('mad_distance', (), 'MAD 均線距離', 'Moving Average Distance', 'trend', 'tquant', 'TQ_MAD_移動均線距離策略.ipynb'),
+        'bias_reversion': StrategyMetadata('bias_reversion', (), '乖離率反轉', 'Bias Reversion', 'reversion', 'tquant', 'TQ_乖離率策略.ipynb'),
+        'bollinger_reversion': StrategyMetadata('bollinger_reversion', (), '布林下軌反轉', 'Bollinger Reversion', 'reversion', 'tquant', 'TQ_布林通道交易策略.ipynb'),
+        'regression_momentum': StrategyMetadata('regression_momentum', (), '迴歸動量', 'Regression Momentum', 'trend', 'tquant', 'TQ_動量策略.ipynb'),
+        'volume_surge': StrategyMetadata('volume_surge', (), '量能突破', 'Volume Surge', 'trend', 'tquant', 'TQ_量能回測實戰.ipynb'),
+        'aroon_trend': StrategyMetadata('aroon_trend', (), '阿隆趨勢', 'Aroon Trend', 'trend', 'tquant', 'TQ_阿隆指標交易策略.ipynb'),
+        'trend_following': StrategyMetadata('trend_following', (), '趨勢跟蹤', 'Trend Following', 'trend', 'tquant', 'TQ_趨勢跟蹤策略.ipynb'),
+        'contrarian_pullback': StrategyMetadata('contrarian_pullback', (), '逆勢回檔', 'Contrarian Pullback', 'reversion', 'tquant', 'TQ_逆勢交易策略.ipynb'),
+        'long_term_trend': StrategyMetadata('long_term_trend', (), '長期趨勢', 'Long Term Trend', 'trend', 'tquant', 'TQ_長期趨勢策略.ipynb'),
+        'volatility_adjusted_momentum': StrategyMetadata('volatility_adjusted_momentum', (), 'VAM 波動率調整動量', 'Volatility Adjusted Momentum', 'trend', 'tquant', 'TQ_VAM_波動率調整截面動能_TWN100 .ipynb'),
     }
     # Canonical registry for new callers; legacy keys remain public compatibility keys.
     CANONICAL_REGISTRY = {
@@ -103,6 +114,17 @@ class StrategyManager:
         'mean_reversion': 'core.strategies.mean_reversion.MeanReversionStrategy',
         'quality_value_low_volatility': 'core.strategies.quality_value_low_volatility.QualityValueLowVolatilityStrategy',
         'macd_cross': 'core.strategies.macd_cross.MacdCrossStrategy',
+        'kd_oversold': 'core.strategies.kd_oversold.KdOversoldStrategy',
+        'mad_distance': 'core.strategies.mad_distance.MadDistanceStrategy',
+        'bias_reversion': 'core.strategies.bias_reversion.BiasReversionStrategy',
+        'bollinger_reversion': 'core.strategies.bollinger_reversion.BollingerReversionStrategy',
+        'regression_momentum': 'core.strategies.regression_momentum.RegressionMomentumStrategy',
+        'volume_surge': 'core.strategies.volume_surge.VolumeSurgeStrategy',
+        'aroon_trend': 'core.strategies.aroon_trend.AroonTrendStrategy',
+        'trend_following': 'core.strategies.trend_following.TrendFollowingStrategy',
+        'contrarian_pullback': 'core.strategies.contrarian_pullback.ContrarianPullbackStrategy',
+        'long_term_trend': 'core.strategies.long_term_trend.LongTermTrendStrategy',
+        'volatility_adjusted_momentum': 'core.strategies.volatility_adjusted_momentum.VolatilityAdjustedMomentumStrategy',
     }
     STRATEGY_REGISTRY = {**CANONICAL_REGISTRY, **LEGACY_STRATEGY_REGISTRY}
 

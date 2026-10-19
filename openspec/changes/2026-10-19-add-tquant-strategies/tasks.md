@@ -16,13 +16,13 @@
 
 ## 2. 技術面批次（14 份，僅用 daily_market_data）
 
-- [ ] 2.1 依 `design.md` 對照表的 P2 列，逐一建立 `core/strategies/*.py` 並登錄（`category=trend` 或 `reversion`）。每支策略都補一個 fixture 測試。
-- [ ] 2.2 驗收：每支策略都能用 `python 4_run_backtest.py` 跑完；`design.md` 對照表的狀態更新為「已移植」或「不納入（原因）」。
+- [x] 2.1 依 `design.md` 對照表的 P2 列，逐一建立 `core/strategies/*.py` 並登錄（`category=trend` 或 `reversion`）。每支策略都補一個 fixture 測試。
+- [x] 2.2 驗收：每支策略都能用 `python 4_run_backtest.py` 跑完；`design.md` 對照表的狀態更新為「已移植」或「不納入（原因）」。
 
 ## 3. 籌碼與營收批次（4 份）
 
 - [x] 3.1 逐一列出 notebook 所需欄位，對照本地 table 的實際欄位（以 `PRAGMA table_info` 或 schema 為證）。缺少必要欄位就標為不納入，不得用代用欄位。
-- [ ] 3.2 移植通過稽核的策略（跟隨大戶、融資維持率歸 `flow`；月營收、尋找 Alpha 歸 `fundamental`），補上 fixture 測試，並以 `python 4_run_backtest.py` 驗收。
+- [x] 3.2 移植通過稽核的策略（跟隨大戶、融資維持率歸 `flow`；月營收、尋找 Alpha 歸 `fundamental`），補上 fixture 測試，並以 `python 4_run_backtest.py` 驗收。
 
 ## 4. 基本面批次（12 份，先稽核）
 
