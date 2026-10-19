@@ -1,0 +1,36 @@
+{
+  "change": "2026-10-19-add-tquant-strategies",
+  "status": "PASS",
+  "tasks_completed": 18,
+  "tasks_total": 18,
+  "requirements_verified": 4,
+  "scenarios_verified": 10,
+  "baseline_tests": {
+    "passed": 1057,
+    "skipped": 1,
+    "xfailed": 4
+  },
+  "final_tests": {
+    "passed": 1074,
+    "skipped": 1,
+    "xfailed": 4
+  },
+  "new_tests_passed": 17,
+  "original_trade_events": 70,
+  "trade_parity": "PASS",
+  "original_daily_counts_parity": "PASS",
+  "rtol": 1e-09,
+  "atol": 1e-12,
+  "daily_seconds_before": 31.54598579998128,
+  "daily_seconds_after": 65.68945730000269,
+  "new_strategy_count": 12,
+  "line_picker_count": 7,
+  "catalog_count": 20,
+  "daily_strategy_count": 19,
+  "ported_cli": "PASS",
+  "browser": "PASS",
+  "strict_validation": "PASS",
+  "diff_check": "PASS",
+  "ponytail_review": "Lean already. Ship.",
+  "settings_sha256_at_completion": "75a45f3242f0e3f07b688ac0d6d21c12f12ce33dc0ecd99c5a82be3ddeab4e7f"
+}

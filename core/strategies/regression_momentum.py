@@ -20,5 +20,5 @@ class RegressionMomentumStrategy(TQuantStrategy):
             scores[sid] = np.expm1(regression.slope * 252) * 100 * regression.rvalue ** 2
             liquidity[sid] = (group.close_price * group.volume).mean()
         top = pd.Series(scores, dtype=float).dropna().nlargest(20).index
-        liquid = pd.Series(liquidity, dtype=float).rank(ascending=False).le(150)
+        liquid = pd.Series(liquidity, dtype=float).rank(ascending=False, method='first').le(150)
         return [sid for sid in top if liquid[sid]]
