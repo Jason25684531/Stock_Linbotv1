@@ -29,6 +29,7 @@ def test_daily_dry_run_preserves_frozen_strategy_outputs(monkeypatch) -> None:
     monkeypatch.setattr(run_daily, "run_fundamental_production", lambda *args, **kwargs: {"status": {"production_eligibility": "BLOCKED", "block_reason": "FIXTURE"}})
     monkeypatch.setattr(run_daily.Config, "NEWS_BOOST_ENABLED", False)
     monkeypatch.setattr(StrategyManager, "get_strategy_overrides", lambda self, _name: RUNTIME_OVERRIDES)
+    monkeypatch.setattr(StrategyManager, "get_persistence_strategy_names", lambda self: list(EXPECTED_SELECTIONS))
 
     observed: dict[str, tuple[str, ...]] = {}
     original = run_daily.run_strategy

@@ -37,7 +37,8 @@ ALIASES = {
 
 def test_exact_canonical_and_alias_identity_contract() -> None:
     manager = StrategyManager()
-    assert tuple(manager.list_strategies()) == CANONICAL_IDS
+    assert tuple(key for key in manager.list_strategies()
+                 if manager.STRATEGY_METADATA[key].source == 'native') == CANONICAL_IDS
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
         resolved = {alias: manager.resolve(alias) for alias in ALIASES}

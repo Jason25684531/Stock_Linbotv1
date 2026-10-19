@@ -120,6 +120,7 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
         'flow': 'Institutional',
         'quality': 'Quality / Growth',
         'value': 'Quality / Value',
+        'fundamental': 'Fundamental',
     }
     catalog: list[dict[str, object]] = []
 
@@ -146,6 +147,8 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
                 'description': info.get('description', getattr(strategy, 'description', '')),
                 'aliases': aliases,
                 'category_key': metadata.category,
+                'source': metadata.source,
+                'source_notebook': metadata.source_notebook,
                 'category': category_labels.get(metadata.category, 'Technical'),
                 'lifecycle': spec.lifecycle.value,
                 'eligibility': spec.lifecycle.value,
@@ -184,6 +187,8 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
             'description': fundamental_reason,
             'aliases': [],
             'category_key': 'fundamental',
+            'source': 'native',
+            'source_notebook': '',
             'category': 'Fundamental',
             'lifecycle': 'SHADOW' if shadow_enabled else 'UNKNOWN',
             'eligibility': eligibility,
@@ -191,7 +196,7 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
             'available_for_daily': False,
             'daily_reason': 'Daily setter accepts legacy StrategyManager identities only',
             'available_for_backtest': False,
-            'backtest_reason': 'Backtest Engine supports the seven legacy identities only',
+            'backtest_reason': 'Backtest Engine does not support this shadow runtime',
             'reason': fundamental_reason,
             'active': False,
         }

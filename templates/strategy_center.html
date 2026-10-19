@@ -68,6 +68,8 @@
                         <td class="px-4 py-4 align-top">
                             <label :for="'strategy-desktop-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_zh || item.display_name_en"></label>
                             <div class="mt-1 break-all num text-xs text-blue-300" x-text="item.strategy_id"></div>
+                            <p class="mt-2 text-xs text-muted" x-show="item.source === 'tquant'" x-text="'來源：' + item.source_notebook"></p>
+                            <p class="mt-1 text-xs text-amber-200" x-show="item.source === 'tquant'">持股數、再平衡和出場規則依本專案引擎，績效和原 notebook 不同。</p>
                             <div class="mt-1 text-xs text-muted" x-show="item.aliases.length">
                                 別名： <span x-text="item.aliases.join(', ')"></span>
                             </div>
@@ -119,6 +121,8 @@
                     <div>回測 <span class="block" :class="item.available_for_backtest ? 'status-ok' : 'text-amber-300'" x-text="statusLabel(item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE')"></span></div>
                 </div>
                 <p class="mt-2 text-xs text-muted" x-text="'別名：' + (item.aliases.join('、') || '無')"></p>
+                <p class="mt-2 text-xs text-muted" x-show="item.source === 'tquant'" x-text="'來源：' + item.source_notebook"></p>
+                <p class="mt-1 text-xs text-amber-200" x-show="item.source === 'tquant'">持股數、再平衡和出場規則依本專案引擎，績效和原 notebook 不同。</p>
                 <p class="mt-3 text-xs text-amber-300" x-show="!item.available_for_daily" x-text="'每日篩選：' + item.daily_reason"></p>
                 <p class="mt-2 text-xs text-amber-300" x-show="!item.available_for_backtest" x-text="'回測：' + item.backtest_reason"></p>
             </article>
@@ -132,7 +136,7 @@
                 <div class="selection-tags mt-1 flex flex-wrap gap-2">
                     <template x-for="item in selectedItems" :key="item.strategy_id">
                         <span class="rounded bg-secondary px-2 py-1 num text-xs text-ink">
-                            <span x-text="item.aliases.length ? item.aliases[0] : '基本面'"></span>
+                            <span x-text="item.aliases[0] || item.display_name_zh || item.strategy_id"></span>
                             <span class="selection-identity text-muted" x-text="` · ${item.strategy_id}`"></span>
                         </span>
                     </template>

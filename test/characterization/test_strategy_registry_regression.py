@@ -13,7 +13,8 @@ def test_canonical_registry_resolves_existing_settings_keys(manager):
     settings['active_strategies'] = ['v38_value_dividend']
     manager.settings_file.write_text(json.dumps(settings), encoding='utf-8')
 
-    assert set(StrategyManager.CANONICAL_REGISTRY) == {
+    assert {key for key in StrategyManager.CANONICAL_REGISTRY
+            if StrategyManager.STRATEGY_METADATA[key].source == 'native'} == {
         'hybrid_trend_rank', 'defensive_low_volatility', 'growth_momentum_breakout',
         'quality_growth', 'institutional_flow_confirmation', 'mean_reversion',
         'quality_value_low_volatility',

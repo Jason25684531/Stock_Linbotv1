@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import text
 
 from core.db_helper import get_db_engine
+from core.strategy_manager import StrategyManager
 from jobs.run_daily import run_daily_for_date
 
 
@@ -23,7 +24,6 @@ def test_daily_selection_live_db_smoke(capsys):
     assert summary['skipped_persistence'] is True
     assert summary['strategy_errors'] == {}
     assert set(summary['strategy_counts']) == {
-        'v31_hybrid', 'v33_low_vol', 'v34_turbo', 'v35_innovation',
-        'v36_chip_momentum', 'v37_mean_reversion', 'v38_value_dividend',
+        strategy.name for strategy in StrategyManager().get_persistence_strategies()
     }
     assert '[DRY-RUN] run_daily preview mode enabled' in output

@@ -74,7 +74,8 @@ def test_phase1_strategy_identity_and_fundamental_isolation():
         "mean_reversion",
         "quality_value_low_volatility",
     }
-    assert set(manager.list_strategies()) == expected
+    assert {key for key in manager.list_strategies()
+            if manager.STRATEGY_METADATA[key].source == 'native'} == expected
     assert manager.resolve("v31") == "hybrid_trend_rank"
     assert manager.resolve("v38_value_dividend") == "quality_value_low_volatility"
     assert manager.FUNDAMENTAL_RUNTIME_STRATEGY_ID not in manager.list_strategies()

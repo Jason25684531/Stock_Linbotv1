@@ -34,6 +34,8 @@ class StrategyMetadata:
     display_name_zh: str
     display_name_en: str
     category: str
+    source: str = 'native'
+    source_notebook: str = ''
 
 
 class StrategyManager:
@@ -89,6 +91,7 @@ class StrategyManager:
         'institutional_flow_confirmation': StrategyMetadata('institutional_flow_confirmation', ('v36', 'v36_chip_momentum'), '法人資金流確認策略', 'Institutional Flow Confirmation', 'flow'),
         'mean_reversion': StrategyMetadata('mean_reversion', ('v37', 'v37_mean_reversion'), '均值回歸策略', 'Mean Reversion', 'reversion'),
         'quality_value_low_volatility': StrategyMetadata('quality_value_low_volatility', ('v38', 'v38_value_dividend'), '品質價值低波動策略', 'Quality Value Low Volatility', 'value'),
+        'macd_cross': StrategyMetadata('macd_cross', (), 'MACD 黃金交叉', 'MACD Cross', 'trend', 'tquant', 'TQ_MACD交易策略.ipynb'),
     }
     # Canonical registry for new callers; legacy keys remain public compatibility keys.
     CANONICAL_REGISTRY = {
@@ -99,6 +102,7 @@ class StrategyManager:
         'institutional_flow_confirmation': 'core.strategies.institutional_flow_confirmation.InstitutionalFlowConfirmationStrategy',
         'mean_reversion': 'core.strategies.mean_reversion.MeanReversionStrategy',
         'quality_value_low_volatility': 'core.strategies.quality_value_low_volatility.QualityValueLowVolatilityStrategy',
+        'macd_cross': 'core.strategies.macd_cross.MacdCrossStrategy',
     }
     STRATEGY_REGISTRY = {**CANONICAL_REGISTRY, **LEGACY_STRATEGY_REGISTRY}
 

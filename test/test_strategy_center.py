@@ -3,13 +3,14 @@ from __future__ import annotations
 from flask import render_template
 
 
-def test_strategy_catalog_contains_seven_legacy_and_one_fundamental():
+def test_strategy_catalog_contains_registered_strategies_and_one_fundamental():
     from app.web_server import FUNDAMENTAL_STRATEGY_ID, _build_strategy_catalog
     from core.strategy_manager import StrategyManager
 
     catalog = _build_strategy_catalog()
-    assert len(catalog) == 8
-    assert [item['strategy_id'] for item in catalog[:-1]] == [
+    assert len(catalog) == len(StrategyManager.CANONICAL_REGISTRY) + 1
+    assert [item['strategy_id'] for item in catalog[:-1]] == list(StrategyManager.CANONICAL_REGISTRY)
+    assert [item['strategy_id'] for item in catalog[:-1] if item['source'] == 'native'] == [
         'hybrid_trend_rank',
         'defensive_low_volatility',
         'growth_momentum_breakout',

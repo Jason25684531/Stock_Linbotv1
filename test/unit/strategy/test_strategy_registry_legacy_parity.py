@@ -37,7 +37,8 @@ ALIASES = {
 
 def test_registry_has_exactly_seven_canonical_ids_and_fourteen_aliases() -> None:
     registry = build_legacy_registry()
-    assert registry.canonical_ids() == CANONICAL_IDS
+    assert tuple(key for key in registry.canonical_ids()
+                 if StrategyManager.STRATEGY_METADATA[key].source == 'native') == CANONICAL_IDS
     assert tuple(registry.get(alias).canonical_id for alias in ALIASES) == tuple(
         ALIASES.values()
     )
@@ -71,6 +72,6 @@ def test_manager_platform_registry_is_opt_in_and_does_not_change_legacy_listing(
     manager = StrategyManager()
     before = tuple(manager.list_strategies())
     platform_registry = manager.get_platform_registry()
-    assert tuple(manager.list_strategies()) == before == CANONICAL_IDS
-    assert platform_registry.canonical_ids() == CANONICAL_IDS
+    assert tuple(manager.list_strategies()) == before == tuple(StrategyManager.CANONICAL_REGISTRY)
+    assert platform_registry.canonical_ids() == before
     assert manager.get_platform_registry() is platform_registry
