@@ -25,3 +25,12 @@ Subsequent phase results and final requirement mapping will be appended after ex
 - Strategy/LINE/UI test inputs now control their DB boundaries; expected strategy selection/order values were not altered.
 - Integration-marker coverage, 356-file AST parse, compatibility CLI help (backtest/LINE/scheduler), settings hash and diff checks passed.
 - OpenSpec proposal/evidence phase commit: d52a7f1. OpenSpec artifacts remain local per repository ignore policy.
+
+## Phase 2 cleanup (2026-10-20)
+
+- Reliability phase commit: 63f55f2.
+- Removed only `templates/login.html`, its UI-test exclusion and Flask-Login direct pins from the two manifests, following the precommitted deletion evidence.
+- `requirements.txt` is UTF-16LE with BOM. Verified byte-for-byte that only the encoded dependency line was removed, retaining the existing encoding and line endings.
+- Post-cleanup Web/auth/UI/LINE/CLI/strategy/restart/environment checks: **147 passed** in 5.04s (`post-cleanup.xml`/`post-cleanup.log`). Full offline suite had passed immediately before this bounded template/manifest cleanup; it was not unnecessarily repeated.
+- Fresh-process factory returns the compatibility app, `/callback` is registered and `flask_login` is not imported. Operator settings remain unchanged.
+- `git diff --check` and OpenSpec strict validation passed.

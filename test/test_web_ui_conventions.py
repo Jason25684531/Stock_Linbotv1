@@ -52,8 +52,6 @@ def test_taiwan_candles_use_shared_tokens_and_direction_symbols():
 
 def test_primary_templates_use_tokens_readable_sizes_and_numeric_font():
     for path in TEMPLATES.glob('*.html'):
-        if path.name == 'login.html':
-            continue
         source = path.read_text(encoding='utf-8')
         assert not re.search(r'-\[#|gray-|text-\[1[01]px\]|text-slate-[56]00', source), path.name
         assert 'chart.js@' not in source
