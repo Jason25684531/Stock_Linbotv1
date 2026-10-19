@@ -52,6 +52,7 @@ def main():
     daily = run_daily_for_date('2026-10-16', dry_run=True)
     elapsed = time.perf_counter() - start
     assert daily is not None
+    assert daily['strategy_errors'] == {}, daily['strategy_errors']
     assert StrategyManager.SETTINGS_FILE.read_bytes() == settings
     result = {'trades': records, 'daily_seconds': elapsed, 'daily_result': daily}
     (directory / f'{args.stage}.json').write_text(

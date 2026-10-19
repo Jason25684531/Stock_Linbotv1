@@ -175,7 +175,7 @@ def _list_strategy_picker_options() -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
     for strategy_key in services.strategy_manager.list_strategies():
         metadata = services.strategy_manager.STRATEGY_METADATA.get(strategy_key)
-        if metadata is not None and metadata.source != 'native':
+        if metadata is None or metadata.source != 'native':
             continue
         strategy = services.strategy_manager.get_strategy(strategy_key)
         if strategy is None:

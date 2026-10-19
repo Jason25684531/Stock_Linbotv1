@@ -12,16 +12,16 @@ for path in Path('Strategy_example').glob('*.ipynb'):
         if cell['cell_type'] != 'code':
             continue
         source = ''.join(cell['source'])
-        if '--all' in sys.argv:
-            print(source)
-            continue
         try:
             tree = ast.parse(source)
         except SyntaxError:
             continue
         for node in tree.body:
             if '--assignments' in sys.argv:
-                if isinstance(node, ast.Assign) and any(isinstance(t, ast.Subscript) for t in node.targets):
+                if isinstance(node, ast.Assign) and any(
+                    isinstance(t, ast.Subscript) and not ast.unparse(t).startswith('os.environ')
+                    for t in node.targets
+                ):
                     print(ast.get_source_segment(source, node))
                 continue
             if '--audit' in sys.argv:

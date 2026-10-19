@@ -66,7 +66,10 @@ def test_registration_is_exact_and_legacy_listing_is_unchanged():
     assert registration["ENABLED_FOR_LIVE"] == "NO"
     assert registration["BROKER_ORDER_SUBMISSION"] == "DISABLED"
     assert RUNTIME_STRATEGY_ID in StrategyManager.runtime_strategy_registrations()
-    assert len(StrategyManager().list_strategies()) == 7
+    manager = StrategyManager()
+    assert len([key for key in manager.list_strategies()
+                if manager.STRATEGY_METADATA[key].source == 'native']) == 7
+    assert RUNTIME_STRATEGY_ID not in manager.list_strategies()
 
 
 def test_frozen_evidence_blocks_on_insufficient_oos(tmp_path):

@@ -91,3 +91,14 @@ def test_catalog_source_capabilities_and_page():
     assert "{key: 'Technical', label: '技術'}" in html
     payload = client.get('/api/strategies').get_json()
     assert set(StrategyManager.CANONICAL_REGISTRY) <= {row['name'] for row in payload['strategies']}
+
+
+def test_daily_apply_ported_strategy_uses_isolated_settings(monkeypatch, manager):
+    from pathlib import Path
+    from app import app, services
+    settings = Path('strategy_settings.json').read_bytes()
+    monkeypatch.setattr(services, 'strategy_manager', manager)
+    response = app.test_client().post('/update_strategy', data={'strategies': 'macd_cross'})
+    assert response.status_code == 302
+    assert manager.get_active_strategy_names() == ['macd_cross']
+    assert Path('strategy_settings.json').read_bytes() == settings
