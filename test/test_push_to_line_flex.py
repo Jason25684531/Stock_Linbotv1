@@ -135,8 +135,11 @@ def test_run_morning_broadcasts_carousel_even_without_picks():
     assert MORNING_PICKS_EMPTY_STATE in _bubble_body_texts(flex_message.contents.contents[2])
 
 
-def test_run_evening_broadcasts_uniform_carousel():
+def test_run_evening_broadcasts_uniform_carousel(monkeypatch):
+    import pandas as pd
     from jobs.push_to_line import run_evening
+
+    monkeypatch.setattr('jobs.push_to_line._resolve_push_strategy_rows', lambda *_args: (pd.DataFrame(), {}))
 
     fake_news_module = SimpleNamespace(
         get_morning_news_summary=lambda: '📌 盤後重點\n→ 測試摘要'

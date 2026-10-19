@@ -21,6 +21,12 @@ def _context() -> StrategyContext:
     return StrategyContext(asof_date=ASOF_DATE, data=frozen_legacy_frame())
 
 
+@pytest.fixture(autouse=True)
+def frozen_market_inputs(monkeypatch):
+    monkeypatch.setattr('core.db_helper.get_market_trend', lambda *_args: 'BULL')
+    monkeypatch.setattr('core.db_helper.get_setting', lambda _key, default=None: default)
+
+
 def test_adapter_satisfies_executor_and_preserves_legacy_output() -> None:
     registry = build_legacy_registry()
     for strategy_id, expected in EXPECTED_SELECTIONS.items():

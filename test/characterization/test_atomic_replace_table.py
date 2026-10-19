@@ -2,17 +2,27 @@
 從不觸及真正的 backtest_trades/backtest_equity_curve。
 """
 
+import os
+
 import pytest
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
 import core.db_helper as db_helper
 
 _TEST_TABLE = 'test_atomic_replace_probe'
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
 def probe_table():
+    requested = os.environ.get('CLEANUP_TEST_DB_URL')
+    if not requested:
+        pytest.skip('requires an explicitly isolated cleanup database')
+    url = make_url(requested)
+    assert url.database == 'cleanup_probe' and url.host == '127.0.0.1'
     engine = db_helper.get_db_engine()
+    assert engine.url == url
     with engine.connect() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS `{_TEST_TABLE}`'))
         conn.execute(text(f'DROP TABLE IF EXISTS `{_TEST_TABLE}_staging`'))

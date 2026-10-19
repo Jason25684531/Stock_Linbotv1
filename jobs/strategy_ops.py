@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext, redirect_stdout
 import json
 import sys
 from pathlib import Path
@@ -31,9 +32,10 @@ def main(argv=None):
         command.add_argument("--id", required=True)
         command.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
-    service = DiagnosticsService()
-    method = {"data": "data_sources", "data-quality": "data_quality", "validate": "validation"}.get(args.command, args.command)
-    result = getattr(service, method)(getattr(args, "id")) if args.command in {"factor", "strategy"} else getattr(service, method)(verbose=args.verbose) if args.command == "all" else getattr(service, method)()
+    with redirect_stdout(sys.stderr) if args.json else nullcontext():
+        service = DiagnosticsService()
+        method = {"data": "data_sources", "data-quality": "data_quality", "validate": "validation"}.get(args.command, args.command)
+        result = getattr(service, method)(getattr(args, "id")) if args.command in {"factor", "strategy"} else getattr(service, method)(verbose=args.verbose) if args.command == "all" else getattr(service, method)()
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True, default=str))
     else:

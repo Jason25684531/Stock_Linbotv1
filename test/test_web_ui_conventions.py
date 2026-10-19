@@ -72,6 +72,7 @@ def test_navigation_copy_is_chinese_and_status_tokens_are_preserved(monkeypatch)
     import app.web_server as web
     from app import app
     monkeypatch.setattr(web, '_build_system_status_payload', lambda **kw: ({'status': 'ok'}, 200))
+    monkeypatch.setattr(web, '_latest_ui_market_date', lambda: '2026-10-19')
     with app.test_request_context('/dashboard'):
         assert '● 正常' in render_template('dashboard.html')
 

@@ -32,11 +32,11 @@ other migration aspirations remain follow-up, not falsely marked implemented.
 
 ## Ponytail audit (ranked, pre-cleanup)
 
-delete: unreachable 62-line login form and 2-line test exemption. Nothing; keep the existing redirect routes. [templates/login.html; test/test_web_ui_conventions.py]
+delete: unreachable 57-line login form and 2-line test exemption. Nothing; keep the existing redirect routes. [templates/login.html; test/test_web_ui_conventions.py]
 
 delete: unused Flask-Login direct dependency in two manifests. Existing Flask public-dashboard composition. [requirements.runtime.txt; requirements.txt]
 
-net: -66 lines, -1 deps possible.
+net: -61 lines, -1 deps possible.
 
 This is a concrete candidate-size estimate, not a ponytail-gain savings claim.
 No speculative abstraction removal is warranted: strategy factories have many

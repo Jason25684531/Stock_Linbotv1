@@ -7,6 +7,8 @@ def test_shared_shell_contains_primary_navigation_and_truthful_status(monkeypatc
     import app.web_server as web_server
     from app import app as flask_app
 
+    monkeypatch.setattr(web_server, '_latest_ui_market_date', lambda: '2026-10-19')
+
     monkeypatch.setattr(
         web_server,
         "_build_system_status_payload",

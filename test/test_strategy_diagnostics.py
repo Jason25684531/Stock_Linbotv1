@@ -75,3 +75,18 @@ def test_cli_json_contract_is_machine_readable():
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run([sys.executable, "jobs/strategy_ops.py", "status", "--json"], cwd=root, check=True, capture_output=True, text=True)
     assert json.loads(result.stdout)["fundamental_g2_g3"]["production"] == "BLOCKED"
+
+
+def test_cli_json_preserves_dependency_warnings_on_stderr(monkeypatch, capsys):
+    from jobs import strategy_ops
+
+    class NoisyDiagnostics:
+        def status(self):
+            print('dependency unavailable; using fallback')
+            return {'status': 'degraded'}
+
+    monkeypatch.setattr(strategy_ops, 'DiagnosticsService', NoisyDiagnostics)
+    assert strategy_ops.main(['status', '--json']) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {'status': 'degraded'}
+    assert 'dependency unavailable; using fallback' in captured.err

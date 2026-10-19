@@ -15,3 +15,13 @@ Change: `2026-10-19-audit-repository-maintainability`.
 
 Raw local evidence is retained in `outputs/repository_audit_2026-10-19/`.
 Subsequent phase results and final requirement mapping will be appended after execution.
+
+## Phase 1 reliability baseline (2026-10-20)
+
+- Focused reproduced failures: **57 passed, 3 skipped** in 17.53s. Skips are the explicitly opt-in MySQL atomic-table tests.
+- Full isolated offline suite after boundary fixes: **1069 passed, 8 deselected, 4 xfailed**, 425 existing warnings in 132.77s. No unexpected failures/errors. Same command/environment as above, report `reliability.xml`/`reliability.log`.
+- The 8 deselected tests are 3 MySQL atomic-table cases, 2 live strategy-factory cases, live daily selection, live seeded trades and the opt-in cleanup database integration test. They are not claimed as passed. Frozen strategy/trade characterization remains in the passing suite.
+- CLI `--json` now directs dependency warnings to stderr using stdlib context managers. A regression exercises warning preservation and JSON parsing. Human output remains unchanged.
+- Strategy/LINE/UI test inputs now control their DB boundaries; expected strategy selection/order values were not altered.
+- Integration-marker coverage, 356-file AST parse, compatibility CLI help (backtest/LINE/scheduler), settings hash and diff checks passed.
+- OpenSpec proposal/evidence phase commit: d52a7f1. OpenSpec artifacts remain local per repository ignore policy.
