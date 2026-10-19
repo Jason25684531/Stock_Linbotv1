@@ -67,3 +67,5 @@ openspec/changes/archive/
 outputs/*
 openspec/*
 docs/*
+
+Strategy_example/*

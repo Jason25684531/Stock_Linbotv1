@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "last_updated": "2026-10-15T15:59:52.474670",
+  "last_updated": "2026-10-19T20:36:40.565519",
   "active_strategies": [
-    "institutional_flow_confirmation"
+    "bollinger_reversion"
   ],
   "random_strategy_pool": [
     "v35_innovation",
