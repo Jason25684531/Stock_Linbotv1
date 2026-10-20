@@ -52,7 +52,7 @@ Reviewed proposal, design, both delta specs and tasks using the spec-driven sche
 
 | Dimension | Assessment |
 |---|---|
-| Completeness | All implementation/runtime tasks complete; administrative sync/archive is the remaining final step. Five requirements and nine scenarios have evidence below. |
+| Completeness | 8/8 tasks complete, including sync and archive. Five requirements and nine scenarios have evidence below. |
 | Correctness | 5/5 changed requirements covered; 9/9 scenarios covered by automated or recorded acceptance checks. |
 | Coherence | Bounded removals match deletion evidence; stdlib JSON redirection and existing fixtures preserve project patterns; factory specification matches observed compatibility behavior. |
 
@@ -68,10 +68,18 @@ Reviewed proposal, design, both delta specs and tasks using the spec-driven sche
 | Application factory: configured settings preserved | SHA-256 of strategy_settings.json captured before implementation and matched after suite/import/restart/browser checks; no settings changes in diff. |
 | Application factory: legacy login links | `test/test_web_auth_safety.py:4` and live GET/POST login/GET logout redirect checks. |
 
-CRITICAL: no missing implementation or scenario evidence. Administrative sync/archive remains to be completed before final task accounting.
+CRITICAL: none. All tasks, changed requirements and scenarios have implementation or acceptance evidence.
 
 WARNING: the live data-pipeline and margin degradation above remains an operational follow-up. Diagnose the named failed `update_database` run and its upstream institutional-data source before rerunning ingestion; use the existing backfill workflow for historical gaps. This does not block archiving the completed cleanup.
 
 SUGGESTION: future work on shared application state, concentrated modules and container image startup remains in the audit; it is not reported as implemented here.
 
 Ponytail-review of the code diff from e22d1a4 through d64f72a: **Lean already. Ship.** No additional complexity finding in this change. The stdlib context managers and one small JSON regression are sufficient; no new runtime abstraction or dependency was introduced.
+
+## Final sync and archive (2026-10-20)
+
+- Verification evidence commit: 98235b4. Re-read all change artifacts and checked task/scenario accounting after runtime acceptance.
+- Synchronized one modified `Application factory` requirement into `openspec/specs/application-structure/spec.md` and four new audit requirements into `openspec/specs/repository-maintainability-audit/spec.md`. Unrelated canonical requirements were preserved.
+- Change and both canonical specs passed OpenSpec strict validation before archival. OpenSpec workflow name restrictions remain a documented tool limitation, not a claimed passing status command.
+- Archived locally to `openspec/changes/archive/2026-10-20-2026-10-19-audit-repository-maintainability/`, preserving `.openspec.yaml`, proposal, design, both delta specs and tasks. All **8/8 checkboxes** are complete. The source and destination absolute paths were checked within the expected OpenSpec directories before moving.
+- Assessment: this change is complete and archived, with **0 critical implementation issues and 1 existing operational warning** (stored pipeline/data degradation). Architecture follow-ups and the user's unrelated `.gitignore` edit are retained.
