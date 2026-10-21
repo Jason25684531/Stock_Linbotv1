@@ -25,6 +25,7 @@ from sqlalchemy import text
 import joblib
 import os
 import random
+import math
 import sys
 from pathlib import Path
 
@@ -413,7 +414,7 @@ class BacktestEngine:
     
     def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
                  persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None,
-                 persist_to_db: bool | None = None):
+                 persist_to_db: bool | None = None, execution_contract='legacy_same_close', trading_sessions=None):
         """
         初始化回測引擎
 
@@ -429,6 +430,23 @@ class BacktestEngine:
             persist_to_db: 是否呼叫 save_backtest_results() 寫入 DB；None 時 fallback 為 persist_results
                 （CLI 既有行為不變）。與 persist_results 正交，讓呼叫端可以「輸出 CSV 但不寫 DB」。
         """
+        if execution_contract not in {'legacy_same_close', 'next_session_open_v2'}:
+            raise ValueError('Unknown execution contract')
+        self.execution_contract = execution_contract
+        self.trading_sessions = list(trading_sessions or [])
+        if execution_contract == 'next_session_open_v2':
+            if not math.isfinite(initial_capital) or initial_capital <= 0:
+                raise ValueError('Research execution requires positive finite initial capital')
+            normalized = [_parse_iso_date(day) for day in self.trading_sessions]
+            if not normalized or normalized != sorted(set(normalized)):
+                raise ValueError('next_session_open_v2 requires ordered unique externally validated trading sessions')
+            if any(_coerce_to_date(day).weekday() >= 5 for day in normalized):
+                raise ValueError('Weekend sessions are invalid for the TWSE stock execution contract')
+            if persist_results or persist_to_db:
+                raise ValueError('Research execution requires persist_results=False and persist_to_db=False')
+        self.pending_orders = []
+        self.execution_events = []
+        self._execution_asof = None
         self.mode = mode.lower()
         self.start_date = start_date or BACKTEST_START
         self.end_date = end_date
@@ -659,20 +677,69 @@ class BacktestEngine:
             )
             self.positions[sid]['stop_loss'] = new_stop
             if action == 'SELL':
-                self.sell(sid, curr_price, date_str, reason)
+                self._exit_at_signal(sid, curr_price, date_str, reason)
         else:
             # Fallback: 基本停損停利邏輯
             cost = self.positions[sid]['cost']
             change = (curr_price - cost) / cost
             
             if curr_price <= self.positions[sid]['stop_loss']:
-                self.sell(sid, curr_price, date_str, "停損")
+                self._exit_at_signal(sid, curr_price, date_str, "停損")
             elif self.take_profit_pct > 0 and change >= self.take_profit_pct:
-                self.sell(sid, curr_price, date_str, "停利")
+                self._exit_at_signal(sid, curr_price, date_str, "停利")
             elif self.positions[sid]['days'] >= self.max_hold_days:
-                self.sell(sid, curr_price, date_str, "時間到")
+                self._exit_at_signal(sid, curr_price, date_str, "時間到")
             elif trend == 'BEAR' and change < 0:
-                self.sell(sid, curr_price, date_str, "趨勢轉空")
+                self._exit_at_signal(sid, curr_price, date_str, "趨勢轉空")
+
+    def _exit_at_signal(self, sid, price, signal_date, reason):
+        if getattr(self, 'execution_contract', 'legacy_same_close') == 'legacy_same_close':
+            self.sell(sid, price, signal_date, reason)
+        else:
+            self.pending_orders.append({'side': 'SELL', 'stock_id': sid, 'signal_date': signal_date, 'reason': reason})
+
+    def execute_pending_open(self, session):
+        """Day orders expire when next-session open is missing; never substitute a close."""
+        if self.execution_contract != 'next_session_open_v2':
+            return
+        orders, self.pending_orders = self.pending_orders, []
+        for order in orders:
+            if session <= order['signal_date']:
+                raise ValueError('Execution must follow signal availability')
+            data = self.get_data(order['stock_id'], session)
+            price = data.get('open_price') if data is not None else None
+            valid = price is not None and math.isfinite(float(price)) and float(price) > 0
+            event = {**order, 'execution_date': session, 'price': float(price) if valid else None,
+                     'status': 'UNFILLED', 'reason': 'MISSING_OR_INVALID_NEXT_OPEN'}
+            if valid:
+                sid = order['stock_id']
+                before = sid in self.positions
+                self._execution_asof = order['signal_date']
+                try:
+                    if order['side'] == 'SELL' and before:
+                        self.sell(sid, float(price), session, order['reason'])
+                    elif order['side'] == 'BUY' and not before:
+                        self.buy(sid, float(price), session)
+                finally:
+                    self._execution_asof = None
+                event['status'] = 'FILLED' if before != (sid in self.positions) else 'UNFILLED'
+                event['reason'] = None if event['status'] == 'FILLED' else 'POSITION_CASH_OR_HOLDING_LIMIT'
+            self.execution_events.append(event)
+
+    def process_close_signals(self, session, trend):
+        """Shared single/portfolio signal scheduling; legacy replay retains its ordering."""
+        for sid in list(self.positions):
+            self.check_and_execute_exit(sid, session, trend)
+        if trend == 'BULL':
+            for sid in self.find_candidates(session):
+                if sid in self.positions:
+                    continue
+                if self.execution_contract == 'next_session_open_v2':
+                    self.pending_orders.append({'side': 'BUY', 'stock_id': sid, 'signal_date': session, 'reason': 'ENTRY_SIGNAL'})
+                else:
+                    data = self.get_data(sid, session)
+                    if data:
+                        self.buy(sid, data['close_price'], session)
     
     def get_market_trend(self, date_str):
         """判斷大盤趨勢（使用共用函數）
@@ -884,7 +951,7 @@ class BacktestEngine:
 
     def buy(self, stock_id, price, date_str):
         """買入"""
-        if len(self.positions) >= self._get_max_holdings(date_str):
+        if len(self.positions) >= self._get_max_holdings(getattr(self, '_execution_asof', None) or date_str):
             return
         if stock_id in self.positions:
             return
@@ -990,6 +1057,8 @@ class BacktestEngine:
             dates = conn.execute(text(query_str), params).fetchall()
         
         if not dates:
+            if self.execution_contract == 'next_session_open_v2':
+                raise ValueError('NO_MARKET_DATA: research performance is undefined')
             print("⚠️ 指定回測期間無可用交易資料")
             empty_metrics = {
                 'roi': 0.0,
@@ -1008,10 +1077,15 @@ class BacktestEngine:
             return empty_metrics if return_metrics else 0.0
 
         date_list = [d[0].strftime("%Y-%m-%d") for d in dates]
+        if self.execution_contract == 'next_session_open_v2':
+            date_list = [day for day in self.trading_sessions if day >= self.start_date and (not self.end_date or day <= self.end_date)]
+            if not date_list:
+                raise ValueError('No validated sessions in requested window')
         print(f"📅 回測期間: {date_list[0]} ~ {date_list[-1]} ({len(date_list)} 天)")
         print("-" * 60)
         
         for date_str in date_list:
+            self.execute_pending_open(date_str)
             trend = self.get_market_trend(date_str)
             
             # V32: 記錄每日資產（用於 MDD 和 Sharpe 計算）
@@ -1027,18 +1101,7 @@ class BacktestEngine:
             self.daily_assets.append(daily_asset)
             self.daily_dates.append(date_str)
             
-            # === 賣出邏輯（委派 check_and_execute_exit 統一處理）===
-            for sid in list(self.positions.keys()):
-                self.check_and_execute_exit(sid, date_str, trend)
-            
-            # === 買入邏輯 ===
-            if trend == 'BULL':
-                candidates = self.find_candidates(date_str)
-                for sid in candidates:
-                    if sid not in self.positions:
-                        data = self.get_data(sid, date_str)
-                        if data:
-                            self.buy(sid, data['close_price'], date_str)
+            self.process_close_signals(date_str, trend)
         
         # === 結算未平倉 ===
         final = self.capital
@@ -1051,7 +1114,10 @@ class BacktestEngine:
                       AND trade_date <= :end_date
                     ORDER BY trade_date DESC LIMIT 1
                 """)
-                price = conn.execute(query, {'sid': sid, 'end_date': final_trade_date}).scalar() or info['cost']
+                price = conn.execute(query, {'sid': sid, 'end_date': final_trade_date}).scalar()
+                if self.execution_contract == 'next_session_open_v2' and (price is None or not math.isfinite(float(price)) or price <= 0):
+                    raise ValueError('MISSING_END_MARK: cannot value an open position')
+                price = price or info['cost']
             final += info['shares'] * price
         
         # === 統計結果 ===
@@ -1181,6 +1247,12 @@ class BacktestEngine:
             'date_count': len(date_list),
         }
         metrics['risk_metrics'] = calculate_metrics(self.daily_assets, self.trades)
+        if self.execution_contract == 'next_session_open_v2':
+            if return_metrics:
+                return {'execution_contract': self.execution_contract,
+                        'risk_metrics': metrics['risk_metrics'],
+                        'execution_events': self.execution_events,
+                        'unexecuted_end_of_window_signals': self.pending_orders}
 
         return metrics if return_metrics else roi
 
@@ -1202,7 +1274,7 @@ class PortfolioBacktestEngine:
     
     def __init__(self, strategies: list, start_date: str, end_date: str = None, initial_capital: float = 1000000,
                  weights: list = None, strategy_filter_mode: str | None = None, persist_results: bool = True,
-                 persist_to_db: bool | None = None):
+                 persist_to_db: bool | None = None, execution_contract='legacy_same_close', trading_sessions=None):
         """初始化組合回測引擎
 
         Args:
@@ -1214,6 +1286,10 @@ class PortfolioBacktestEngine:
             persist_to_db: 是否呼叫 save_backtest_results() 寫入 DB；None 時 fallback 為 persist_results
         """
         self.strategy_names = strategies
+        self.execution_contract = execution_contract
+        self.trading_sessions = list(trading_sessions or [])
+        if execution_contract == 'next_session_open_v2' and (persist_results or persist_to_db):
+            raise ValueError('Research execution requires persist_results=False and persist_to_db=False')
         self.start_date = start_date
         self.end_date = end_date
         self.initial_capital = initial_capital
@@ -1238,6 +1314,8 @@ class PortfolioBacktestEngine:
                 initial_capital=self.allocated_capital[strategy_name],
                 persist_results=False,
                 strategy_filter_mode=self.strategy_filter_mode,
+                execution_contract=execution_contract,
+                trading_sessions=self.trading_sessions,
             )
             self.engines[strategy_name] = engine
         
@@ -1306,6 +1384,10 @@ class PortfolioBacktestEngine:
             dates = conn.execute(text(query_str), params).fetchall()
         
         date_list = [d[0].strftime("%Y-%m-%d") for d in dates]
+        if self.execution_contract == 'next_session_open_v2':
+            date_list = [day for day in self.trading_sessions if day >= self.start_date and (not self.end_date or day <= self.end_date)]
+            if not date_list:
+                raise ValueError('No validated sessions in requested window')
         print(f"📅 回測期間: {date_list[0]} ~ {date_list[-1]} ({len(date_list)} 天)")
         print("-" * 60)
         
@@ -1319,6 +1401,7 @@ class PortfolioBacktestEngine:
             daily_total = 0
             
             for strategy_name, strategy_engine in self.engines.items():
+                strategy_engine.execute_pending_open(date_str)
                 # 取得該策略當日資產
                 strategy_value = strategy_engine.capital
                 
@@ -1337,18 +1420,7 @@ class PortfolioBacktestEngine:
                 # 執行該策略的交易邏輯（簡化版，只執行一天）
                 trend = strategy_engine.get_market_trend(date_str)
                 
-                # 賣出邏輯 - 委派共用 check_and_execute_exit
-                for sid in list(strategy_engine.positions.keys()):
-                    strategy_engine.check_and_execute_exit(sid, date_str, trend)
-                
-                # 買入邏輯
-                if trend == 'BULL':
-                    candidates = strategy_engine.find_candidates(date_str)
-                    for sid in candidates:
-                        if sid not in strategy_engine.positions:
-                            data = strategy_engine.get_data(sid, date_str)
-                            if data:
-                                strategy_engine.buy(sid, data['close_price'], date_str)
+                strategy_engine.process_close_signals(date_str, trend)
             
             daily_portfolio_value.append(daily_total)
             daily_dates.append(date_str)
@@ -1372,7 +1444,17 @@ class PortfolioBacktestEngine:
                         WHERE stock_id = :sid 
                         ORDER BY trade_date DESC LIMIT 1
                     """)
-                    price = conn.execute(query, {'sid': sid}).scalar() or info['cost']
+                    if self.execution_contract == 'next_session_open_v2':
+                        query = text("""
+                            SELECT close_price FROM daily_market_data
+                            WHERE stock_id = :sid AND trade_date <= :end_date
+                            ORDER BY trade_date DESC LIMIT 1
+                        """)
+                        price = conn.execute(query, {'sid': sid, 'end_date': date_list[-1]}).scalar()
+                        if price is None:
+                            raise ValueError('MISSING_END_MARK: cannot value an open position')
+                    else:
+                        price = conn.execute(query, {'sid': sid}).scalar() or info['cost']
                 final_value += info['shares'] * price
             
             initial_alloc = self.allocated_capital[strategy_name]

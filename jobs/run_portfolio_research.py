@@ -20,6 +20,7 @@ from core.research.d5_handoff import load_frozen_handoff
 from core.research.portfolio_research import build_parameter_robustness, parameter_grid, select_shortlist, shortlist_eligibility, summarize_portfolio
 from core.research.target_weights import build_rebalance_calendar, build_target_weights
 from core.research.vectorbt_adapter import run_vectorbt
+from core.research.strategy_search import build_close_matrix
 
 
 def _dataset(path: Path, factor_ids: list[str]) -> pd.DataFrame:
@@ -100,7 +101,7 @@ def run(*, handoff_path: Path, dataset_path: Path, output_dir: Path, initial_cap
     data = _dataset(dataset_path, handoff.candidates["factor_id"].tolist())
     universe = data.groupby(["asof_date", "asset_id"], as_index=False).agg(member=("member", "all"), is_tradable_t1=("is_tradable_t1", "all"), execution_date=("execution_date", "first"), entry_price=("entry_price", "first"))
     universe["execution_date"] = pd.to_datetime(universe["execution_date"])
-    close = universe.pivot(index="execution_date", columns="asset_id", values="entry_price").sort_index().ffill()
+    close = build_close_matrix(universe)
     grid = parameter_grid()
     weights, scores = {}, {}
     for method in grid.combination_method.unique():
