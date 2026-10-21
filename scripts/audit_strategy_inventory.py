@@ -99,9 +99,13 @@ def notebook_inventory(path):
                 if isinstance(node, ast.Compare):
                     kind = "condition"
                 if isinstance(node, ast.Assign) and any(
-                    re.search(r"context\.|top|window|lookback|vol|weight|hold|fee|cost|stock|period|capital", ast.unparse(t), re.I)
+                    re.search(r"context\.|top|window|lookback|vol|weight|hold|fee|cost|stock|period|capital|fields|columns|assets|pool|universe|rebalance|signals|screen", ast.unparse(t), re.I)
                     for t in node.targets):
                     kind = "parameter_or_state"
+                if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                    kind = "field_access"
+                if isinstance(node, ast.Attribute) and node.attr == "latest":
+                    kind = "field_access"
                 if isinstance(node, ast.Call):
                     call = ast.unparse(node.func).split(".")[-1]
                     if call in {"set_commission", "set_slippage", "schedule_function"}:
@@ -132,6 +136,8 @@ def notebook_inventory(path):
                             benchmark = any(re.search(r"_(tse|otc|ir0001)$", value) for value in callbacks.values())
                             runs.append({"cell": cell_no, "line": node.lineno, "callbacks": callbacks,
                                 "call": ast.unparse(node.func), "fingerprint": fingerprint,
+                                "arguments": {kw.arg: safe_expression(bindings.get(kw.value.id, kw.value) if isinstance(kw.value, ast.Name) else kw.value)
+                                    for kw in node.keywords if kw.arg in {"start", "end", "start_session", "end_session", "capital_base", "bundle"}},
                                 "role": "BENCHMARK" if benchmark else "STRATEGY"})
                 if kind and (expression := safe_expression(node)):
                     owner = parents.get(node)
@@ -185,11 +191,22 @@ def inventory(output):
                         sid = row.get("strategy_id", row.get("config_id"))
                         if not sid:
                             continue
+                        # A replay in another output directory is the same research family.
+                        if "combination_method" in row and "config_id" in row:
+                            namespace = "portfolio_research"
+                        elif "factor_set_id" in row:
+                            namespace = "fundamental_strategy_validation"
+                        elif "composite_id" in row:
+                            namespace = "strategy_research"
                         key = namespace + ":" + sid
+                        parameters = {k: v for k, v in row.items() if k not in {"strategy_id", "config_id", "config_hash"}}
+                        signature = row.get("config_hash") or hashlib.sha256(json.dumps(parameters, sort_keys=True).encode()).hexdigest()
+                        if key in grid_records and signature != grid_records[key]["configuration_fingerprint"]:
+                            key += "@" + signature
                         record = grid_records.setdefault(key, {"id": key, "strategy_id": sid,
                             "display_name": sid, "kind": "RESEARCH_SETTING", "namespace": namespace,
                             "asset_class": "EQUITY_PORTFOLIO", "sources": [], "config_hashes": [],
-                            "parameters": {k: v for k, v in row.items() if k not in {"strategy_id", "config_id", "config_hash"}},
+                            "parameters": parameters, "configuration_fingerprint": signature,
                             "counts_as_strategy": True, "daily": "RESEARCH_ONLY", "production": "RESEARCH_ONLY"})
                         record["sources"].append({"path": rel, "line": line, "sha256": digest(path)})
                         if row.get("config_hash") and row["config_hash"] not in record["config_hashes"]:
@@ -260,6 +277,10 @@ def inventory(output):
         record["holding_count"] = record.get("parameters", {}).get("top_n", "NOT_SPECIFIED; source/engine policy required") if isinstance(record.get("parameters"), dict) else "See source_rules/runner MAX_HOLDINGS"
         record["rebalance_frequency"] = record.get("parameters", {}).get("rebalance_days", "See cost_or_schedule and callbacks") if isinstance(record.get("parameters"), dict) else "See cost_or_schedule and callbacks"
         record["required_data"] = "PIT OHLCV/universe; source-declared features and publication versions where used"
+        if record.get("source_rules") in {n["source"] for n in notebook_sources}:
+            original = next(n for n in notebook_sources if n["source"] == record["source_rules"])
+            record["required_data"] = {"field_accesses": sorted({r["expression"] for r in original["rules"] if r["kind"] == "field_access"}),
+                "availability": "original schema/publication versions required; dynamic dataframe fields may require original dependencies"}
         record["validation_status"] = "NOT_TESTED"
         record.setdefault("tests", ["test/test_strategy_inventory_audit.py"])
         record["blockers"] = ["VALIDATION_PENDING"]

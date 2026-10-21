@@ -1,6 +1,7 @@
 """Source discovery must preserve variants without executing Notebook code."""
 import ast
 import json
+from types import SimpleNamespace
 
 from scripts import audit_strategy_inventory as audit
 
@@ -60,3 +61,26 @@ def test_benchmark_and_invalid_cells_are_explicit(tmp_path, monkeypatch):
 def test_sensitive_assignments_are_never_exported():
     assert audit.safe_expression(ast.parse("context.api_key = credential").body[0]) is None
     assert audit.safe_expression(ast.parse("order_target_percent(stock, 0.5)").body[0]) is not None
+
+
+def test_replay_output_directory_does_not_create_new_strategy_ids(tmp_path, monkeypatch):
+    monkeypatch.setattr(audit, 'ROOT', tmp_path)
+    monkeypatch.setattr(audit, 'StrategyManager', SimpleNamespace(CANONICAL_REGISTRY={}, STRATEGY_METADATA={},
+        LEGACY_STRATEGY_REGISTRY={}, FUNDAMENTAL_RUNTIME_STRATEGY_ID='frozen'))
+    for name in ('core/strategy.py', 'core/runtime/fundamental_shadow.py'):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('pass\n')
+    for run in ('portfolio_research/original', 'strategy_validation/replay'):
+        path = tmp_path / 'outputs' / run / 'parameter_grid.csv'
+        path.parent.mkdir(parents=True)
+        path.write_text('config_id,combination_method,top_n,rebalance_days,stock_weighting\none,equal,20,20,equal\n')
+    result = audit.inventory(tmp_path / 'evidence')
+    research = [r for r in result['records'] if r['kind'] == 'RESEARCH_SETTING']
+    assert len(research) == 1
+    assert len(research[0]['sources']) == 2
+    path.write_text('config_id,combination_method,top_n,rebalance_days,stock_weighting\none,equal,30,20,equal\n')
+    changed = audit.inventory(tmp_path / 'changed')
+    variants = [r for r in changed['records'] if r['kind'] == 'RESEARCH_SETTING']
+    assert len(variants) == 2
+    assert {r['parameters']['top_n'] for r in variants} == {'20', '30'}
