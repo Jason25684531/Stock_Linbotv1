@@ -1,0 +1,71 @@
+{
+  "phase": "3",
+  "local_loaded_and_listed": [
+    "hybrid_trend_rank",
+    "defensive_low_volatility",
+    "growth_momentum_breakout",
+    "quality_growth",
+    "institutional_flow_confirmation",
+    "mean_reversion",
+    "quality_value_low_volatility",
+    "macd_cross",
+    "kd_oversold",
+    "mad_distance",
+    "bias_reversion",
+    "bollinger_reversion",
+    "regression_momentum",
+    "volume_surge",
+    "aroon_trend",
+    "trend_following",
+    "contrarian_pullback",
+    "long_term_trend",
+    "volatility_adjusted_momentum"
+  ],
+  "deployed_daily_available": [
+    "hybrid_trend_rank",
+    "defensive_low_volatility",
+    "growth_momentum_breakout",
+    "quality_growth",
+    "institutional_flow_confirmation",
+    "mean_reversion",
+    "quality_value_low_volatility",
+    "macd_cross",
+    "kd_oversold",
+    "mad_distance",
+    "bias_reversion",
+    "bollinger_reversion",
+    "volume_surge",
+    "aroon_trend",
+    "trend_following",
+    "contrarian_pullback",
+    "long_term_trend",
+    "volatility_adjusted_momentum"
+  ],
+  "deployed_blocked": [
+    "regression_momentum",
+    "fundamental_g2g3_top5_reb60_score_weighted_v1"
+  ],
+  "root_cause": "regression_momentum resolves canonical identity but container lacks scipy, required by module-level linregress import",
+  "root_cause_evidence": {
+    "source": "core/strategies/regression_momentum.py:4",
+    "probe": "deployed_scipy_probe.log",
+    "probe_sha256": "2a8d90a48bb25990722fa0196789cb0fa526387cd6f9b1c41c35145fbe761921"
+  },
+  "fix": "Declare direct scipy dependency in runtime manifest; keep formula, gates and existing IDs. Expose safe load/executor reason codes for both Daily and Backtest.",
+  "not_deployed": true,
+  "settings_unchanged": true,
+  "strategy_unchanged": true,
+  "tests": [
+    "test/test_strategy_capability_diagnostics.py",
+    "test/test_daily_platform_parity.py",
+    "test/test_web_platform_parity.py",
+    "test/test_tquant_technical.py",
+    "test/characterization/test_strategy_registry_regression.py"
+  ],
+  "results": {
+    "daily_diagnostic_tests.log": "79 passed",
+    "web_isolation_regression.log": "7 passed",
+    "final_offline_tests.log": "1072 passed, 8 deselected, 4 xfailed; external dashboard health module excluded after recorded timeout"
+  },
+  "deployment_repair": "In separately authorized deployment, rebuild runtime image from requirements.runtime.txt; verify import and read-only /api/strategies. Do not edit active/persistence settings."
+}

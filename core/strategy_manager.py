@@ -174,6 +174,7 @@ class StrategyManager:
         self._initialized = True
         self.settings_file = Path(settings_path) if settings_path else self.SETTINGS_FILE
         self._strategy_cache: Dict[str, Any] = {}  # 策略物件快取
+        self._strategy_load_errors: Dict[str, Dict[str, str]] = {}
         self._settings: Optional[Dict] = None
         
         # 確保設定檔存在
@@ -371,6 +372,14 @@ class StrategyManager:
             BaseStrategy 實例或 None
         """
         return self._get_or_load_strategy(strategy_name)
+
+    def get_strategy_load_error(self, strategy_name: str) -> Dict[str, str]:
+        """Return safe failure codes, never exception messages or credentials."""
+        try:
+            key = self._registry_key(strategy_name)
+        except KeyError:
+            return {'code': 'UNKNOWN_STRATEGY'}
+        return dict(self._strategy_load_errors.get(key, {}))
     
     def _load_strategy(self, strategy_name: str):
         """動態載入策略類別
@@ -382,6 +391,7 @@ class StrategyManager:
             BaseStrategy 實例或 None
         """
         if strategy_name not in self.STRATEGY_REGISTRY:
+            self._strategy_load_errors[strategy_name] = {'code': 'EXECUTOR_UNAVAILABLE'}
             print(f"❌ 未知的策略: {strategy_name}")
             return None
         
@@ -397,11 +407,17 @@ class StrategyManager:
             
             # 實例化策略
             strategy = strategy_class()
+
+            self._strategy_load_errors.pop(strategy_name, None)
             
             print(f"✅ 策略已載入: {strategy.display_name} ({strategy_name})")
             return strategy
             
         except Exception as e:
+            self._strategy_load_errors[strategy_name] = {
+                'code': 'DEPENDENCY_BLOCKED' if isinstance(e, (ImportError, ModuleNotFoundError)) else 'EXECUTOR_LOAD_FAILED',
+                'error_type': type(e).__name__,
+            }
             print(f"❌ 載入策略失敗 ({strategy_name}): {e}")
             import traceback
             traceback.print_exc()

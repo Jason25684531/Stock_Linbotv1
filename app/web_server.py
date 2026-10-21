@@ -128,8 +128,14 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
         strategy = manager.get_strategy(strategy_id)
         spec = registry.get_spec(strategy_id)
         info = strategy.get_strategy_info() if hasattr(strategy, 'get_strategy_info') else {}
-        daily_available = strategy is not None and strategy_id in manager.list_strategies()
-        backtest_available = strategy_id in backtest_ids
+        has_executor = strategy is not None and callable(getattr(strategy, 'filter_candidates', None))
+        listed_for_daily = strategy_id in manager.list_strategies()
+        load_error = manager.get_strategy_load_error(strategy_id)
+        executor_reason = ('Strategy dependency import failed; check runtime dependencies'
+                           if load_error.get('code') == 'DEPENDENCY_BLOCKED'
+                           else 'Strategy executor is unavailable or failed to load')
+        daily_available = has_executor and listed_for_daily
+        backtest_available = has_executor and strategy_id in backtest_ids
         aliases = [
             alias.upper()
             for alias in metadata.legacy_ids
@@ -153,9 +159,15 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
                 'lifecycle': spec.lifecycle.value,
                 'eligibility': spec.lifecycle.value,
                 'available_for_daily': daily_available,
-                'daily_reason': None if daily_available else 'Daily contract rejected this legacy identity',
+                'daily_reason': None if daily_available else (
+                    executor_reason if not has_executor else 'Canonical identity is not included in the Daily contract'),
+                'daily_reason_code': None if daily_available else (
+                    load_error.get('code', 'EXECUTOR_UNAVAILABLE') if not has_executor else 'DAILY_IDENTITY_UNSUPPORTED'),
                 'available_for_backtest': backtest_available,
-                'backtest_reason': None if backtest_available else 'Backtest registry does not expose this identity',
+                'backtest_reason': None if backtest_available else (
+                    executor_reason if not has_executor else 'Backtest registry does not expose this identity'),
+                'backtest_reason_code': None if backtest_available else (
+                    load_error.get('code', 'EXECUTOR_UNAVAILABLE') if not has_executor else 'BACKTEST_IDENTITY_UNSUPPORTED'),
                 'reason': None,
                 'active': strategy_id in active,
             }
