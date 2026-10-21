@@ -1,0 +1,28 @@
+{
+  "phase": "historical_audit",
+  "summary": {
+    "family_count": 64,
+    "source_records": 461,
+    "historical_validation_identities": 453,
+    "non_strategy_tools": 7,
+    "research_parameters": 384,
+    "historical_completed_identities": 397,
+    "historical_completed_families": 28,
+    "verified_historical_identities": 384,
+    "reused_reproducible_identities": 384,
+    "new_valid_investment_backtests": 0,
+    "new_reproductions": 0,
+    "fresh_oos_certified": 0,
+    "manifest_status_counts": {
+      "PASS": 34,
+      "NOT_VERIFIABLE": 77,
+      "FAIL": 8
+    }
+  },
+  "baseline": {
+    "command": "myenv/Scripts/python.exe -m pytest test/characterization -m not-integration -q",
+    "result": "========== 56 passed, 5 deselected, 1 xfailed, 3 warnings in 17.12s ==========="
+  },
+  "audit_tests": "2 passed",
+  "scope": "scoreboard hash checks and immutable owner observer replay; not full certification"
+}
