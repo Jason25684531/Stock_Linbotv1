@@ -1,0 +1,765 @@
+{
+  "method": "investment premise + primary information/factor set + decision mechanism; asset execution/normalization/weighting/TopN/rebalance are explicitly retained variants, never parity claims",
+  "reviewed_source_sha256": {
+    "Strategy_example/TQ-Future_Impluse_MACD_期貨交易策略.ipynb": "4e97c13b14bbe5006371097f64a7eb27228dff572f6441c5a5e8d2c53eec7c34",
+    "Strategy_example/TQ-Future_三大法人籌碼面台指期貨交易策略.ipynb": "7866821110802cf83a780b15059c70dfcdcd46433a452eeca650f66ab433a051",
+    "Strategy_example/TQ-Future_黃金交叉期貨交易策略.ipynb": "2fe40c966843ae67efa4e7308eeb15ffd1d788cecf69e8e1fcff3baaf463442c",
+    "Strategy_example/TQ_David_Dreman_逆向投資策略.ipynb": "88ed4b23aaf6a1f420500e0f5644f9d87a01b0a9ec606e9629f6f55633998bf8",
+    "Strategy_example/TQ_ETF資產配置模型.ipynb": "6ff377ead7e73d18e02fd5637831c0c7a14a22615809ad6c1813918228f23bf3",
+    "Strategy_example/TQ_Future_波動率調整持倉動能期貨策略.ipynb": "4fc6cc82dac839cd7ab8335f3c1a11a644651598dba3fd82b42143778923ae18",
+    "Strategy_example/TQ_IMQ_IndMom_Quality.ipynb": "3012724d29e7920dc3787923a4bca357f8fcc458e334fd6e807967426d8bef6b",
+    "Strategy_example/TQ_James_OShaughnessy_Value_v1.ipynb": "818956ce8e7c73ddc4feb1216c94275f0f9204a43663f7a028cb0e916be476d1",
+    "Strategy_example/TQ_KD指標回測實戰.ipynb": "7f505a6dc93e858ba9ced2dafb142b936977eaf7776cf0bf18ccb6c4e1a0c377",
+    "Strategy_example/TQ_LTR_LambdaMART截面排名.ipynb": "38c685c48764736e2eb83124e8cef7059fbe598b9e0719ca57bd399b46cbc9be",
+    "Strategy_example/TQ_MACD交易策略.ipynb": "ba1d429c7e30d8c32cd3345472f0fa636d5291e6a20aec51a9ed82d7294b1700",
+    "Strategy_example/TQ_MAD_移動均線距離策略.ipynb": "9c96f32fd31afff2191172b5eb431e696fc25b9714ef31c3e0c0aad23c41ad69",
+    "Strategy_example/TQ_VAM_波動率調整截面動能_TWN100 .ipynb": "ca9e403ae50d037804d6a7ede2dd01e5f80fa052ee664f67e10c2eee8d0a314a",
+    "Strategy_example/TQ_iValue.ipynb": "a0424f7f3a0b58d072e9ce245842d50045704fdf846785c8bd01c7798a60e2b0",
+    "Strategy_example/TQ_乖離率策略.ipynb": "f5023052ca57ead2fc89b702faef979b08e9eda40d241cb691004610594d3a80",
+    "Strategy_example/TQ_動量策略.ipynb": "69d2241d39403040c5f8848a485f5c6cd91a26be13ab5e0fd02c12934c090a7d",
+    "Strategy_example/TQ_大師策略＿麥克．喜偉收益型選股法.ipynb": "8734c8580d319c5c63ca4f35a6c7c0f6526e81e480e517fb1bfeff1e93aa3afd",
+    "Strategy_example/TQ_安東尼·賣利亞反向操作策略.ipynb": "c1a67cc4b9bcc11df5258d46efa90d42232a25f1a70fb14e2ff21ed8c5a938d7",
+    "Strategy_example/TQ_尋找Alpha.ipynb": "87d3e34cbf0df2e7de38694ba3e217b453b4910d4a47ada6334b5e27fc657928",
+    "Strategy_example/TQ_尤金·法瑪(Eugene_Fama)三因子模型策略.ipynb": "851b8b4bd221a58d4c885e034940e841526baeda1a1d57f8c63a145bd6ec3a23",
+    "Strategy_example/TQ_布林通道交易策略.ipynb": "c4b22cb8b7a89ecae4e5a096b9300c9d87c2cb5c994b7c9b1030dc2b4c4cd655",
+    "Strategy_example/TQ_延伸量能回測策略.ipynb": "1954e5a04139d6c5a6ea68a950444905cc8cbe5371d62fa8dacf6f84b7f43a02",
+    "Strategy_example/TQ_從羅伯．加迪納的選股法出發：在台股尋找小型成長黑馬.ipynb": "65b34ba4636dde18a1dddea7a438bf4cdd78eef6fafd6170d79293a009201ff6",
+    "Strategy_example/TQ_德伍．卻斯動能策略.ipynb": "d463965e59b3221cb15e67d1cd23bf39992b8a7904cfcb1cb488728e95441e6e",
+    "Strategy_example/TQ_月營收成長率策略.ipynb": "ce316aadc7c9de9905e67011d3bfedd5d08016039bdeb3d18cffe9953c2bc357",
+    "Strategy_example/TQ_月營收成長率策略_simple_algo.ipynb": "be1a6fae5715b21de44e993d96fe4b03a020312f0f87cf8b3533e7b1f3094413",
+    "Strategy_example/TQ_期貨策略範例.ipynb": "9ad33199c7a24f9eff93f5a39ceea271c4edd97007ff1351a5190fc569ceb01f",
+    "Strategy_example/TQ_柏頓．墨基爾成功選股法則.ipynb": "f0c1afe7791677dbe82daf2281720791a8abebe7d60dd06c15668cce77b0c1af",
+    "Strategy_example/TQ_查爾士．布蘭帝 價值型選股法則.ipynb": "61b7298bfc5eb3d4d40e62a3c2a040b51f6546eb312e0b7754fdf1cd84e69fd1",
+    "Strategy_example/TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效.ipynb": "4c55659a8e4fd1a1e096e9bc85ce7d966d1fc792838e595eee3de9a876ae21a1",
+    "Strategy_example/TQ_波動率調整持倉動能期貨策略.ipynb": "711accb92a5b052cc947d0518056d0ca0f90b85e90ded31411fa25a27c264151",
+    "Strategy_example/TQ_融資維持率.ipynb": "57b52a5bcd790aee85b52c2a8ed7af12abb2c2031697fd4d2a7d8f3e60a92e4b",
+    "Strategy_example/TQ_趨勢跟蹤策略.ipynb": "0ea8986bf44f1ad2bcd7bbcf46f40e3e9596425ee831a726313f73e2b92d1356",
+    "Strategy_example/TQ_跟隨大戶策略.ipynb": "ffec7181d1b858f9a34bab5a18c43177090fb8fcc0dea791a0ebc28f0b3dad0d",
+    "Strategy_example/TQ_逆勢交易策略.ipynb": "d9592eee26ba4078564955af25af4b1bd4b7043e8f5633e44b2f2bdf93ff6c85",
+    "Strategy_example/TQ_造市商與一般投資人在 ETF 折溢價套利中的實作績效探討.ipynb": "ef2b77934ee0e400a4bb4df7208ba101bd25ff6e143e693daa03d75ffc6d4235",
+    "Strategy_example/TQ_週期投資.ipynb": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+    "Strategy_example/TQ_量能回測實戰.ipynb": "d955d05d70c9476651cdf6bf5bb9e80ad7c6ec7f4e68d4f8fa160f576fb1e894",
+    "Strategy_example/TQ_長期趨勢策略.ipynb": "e2c146bdd0a456be5ffa92640af81b88cdff14ae267ddfa9e42e8ddf58dd27fa",
+    "Strategy_example/TQ_阿隆指標交易策略.ipynb": "95ae40aa776bf030eceb0b8b71683296f9c472ac350fc4b889c26afeba33c65d",
+    "Strategy_example/TQ_霍華羅斯曼_審慎致富投資法.ipynb": "64fb1a0183a138bc8fd5c77ea2a739c97ca5dd678216d16de02daef99a214cef",
+    "core/strategies/aroon_trend.py": "56a7b554b0157cbca3900a21928c7fd77bd20b91e5f8f75030124a7b75477cd5",
+    "core/strategies/base.py": "7256d1427a40d12e28b95177161c4ff5a2a6c3359b771bc36334e699487d39cf",
+    "core/strategies/bias_reversion.py": "3b8d69184ffa8ee9b81ff335c7bfb0844ab0e6b5878684b0650a41fe65a424ce",
+    "core/strategies/bollinger_reversion.py": "33b216f54bcd4c52592bfff465d34a384c325fac1d02041d107672c261e2c940",
+    "core/strategies/contrarian_pullback.py": "411fb9f93d4400bcabc437ab09137894ed7b69fbed5b20e8a701415393f5231d",
+    "core/strategies/defensive_low_volatility.py": "c817359d04867e586f57702306cb319ea97ac233f35d5701ef36fe3463d706c3",
+    "core/strategies/growth_momentum_breakout.py": "fa2f73b6f1ecedf9f7f2ca102f8179d286d42baad8cc059eec5a337acfff54cb",
+    "core/strategies/hybrid_trend_rank.py": "4072ac37d63ea7dfa82845858d385b753fb3730924f71df38a4af08e26789c24",
+    "core/strategies/institutional_flow_confirmation.py": "d0b480fe6b8c6203751d30cf0059f47a5f09a91f9364dabbf9f92f30cc7f5eac",
+    "core/strategies/kd_oversold.py": "26c943e590dd9a518a999cef708ea8dde5517106386ebe20188bc3edb1a26ea3",
+    "core/strategies/long_term_trend.py": "e629e56b1d77dcbba2e4f41851c94cff086555c54daa263e9a414fc0738fd465",
+    "core/strategies/macd_cross.py": "030efcf246a499e2896070a65bd5ef98d6b2fc9b0f3e37a9955a27643d4e5910",
+    "core/strategies/mad_distance.py": "60a9b15a7976da4d520c83558c38e2e3273c0f2e3276f529e75d8e942fceee68",
+    "core/strategies/mean_reversion.py": "e705d4badd7ad30e1405756cc7f41a1ea7dc78208245a5f8d4417826099c79d3",
+    "core/strategies/quality_growth.py": "8f5d90ad6cbbf6e0dbcf658209e74c375bd9ca8c777fd4c48c9d0067dc975cdb",
+    "core/strategies/quality_value_low_volatility.py": "b35aedc567366709494ff46d175f6075cd1a4b3b06db4857126ffae4fa49659e",
+    "core/strategies/regression_momentum.py": "986c42d28d7fd48364798c6c4e33195fefb0f88d9c62b4a08a493a68e228af00",
+    "core/strategies/trend_following.py": "c38135da01101b699f2640b04f1b480cb3cfe5f26c276bb61a1a490246fdd294",
+    "core/strategies/v31_hybrid.py": "d72e71d0de149251a9a67a0d245c48ead8b05a41afb656a093a2c7b7a35ea98f",
+    "core/strategies/v33_low_vol.py": "cf59d8cc1942c122ee8df36760294bbba751efe9f52c72fec8e73a3ad694470c",
+    "core/strategies/v34_turbo.py": "792eb1df4e0966131e5b831e540f34a507b42d41d551b64e5d5997a6010e2dcb",
+    "core/strategies/v35_innovation.py": "3a20c9dcda413afecaf076510a888eeb1d5128b8e54fa2c0c6c660c0bc74d2cb",
+    "core/strategies/v36_chip_momentum.py": "8ad401ed066e5626554cc15fbfab15eeedabbbbffa322a1cdc76e5da00abc092",
+    "core/strategies/v37_mean_reversion.py": "7112000f1e53c16f8bfce7cb2a13c443221aeb27961c5c8a7ec616151cdd114f",
+    "core/strategies/v38_value_dividend.py": "7c25140c18f862d0d5ddd0b91b4688a07661dcc65c7524f2386af1358a332ebf",
+    "core/strategies/volatility_adjusted_momentum.py": "4bd0b1df5608f1c2522efb380c695f86e722e2276715eb0d10ce5b2b9c76952f",
+    "core/strategies/volume_surge.py": "a66fce55268d2917928363575996ed6e53d258baaeee187cfc38c143614248cc",
+    "core/strategies/_tquant.py": "63e1be0e7237d4f00a3cb1ab795f372fd966a4d43adbd5f2573b2853638fd041",
+    "core/strategies/__init__.py": "aa52c01acf28ec7735f8353347197107411702b68a1b45b79a91a1c812391906",
+    "core/research/strategy_search.py": "284ea520a3af3bd1910556ad03b2839af3bd65386ea80c1ba5efb93c1bc44814",
+    "core/research/portfolio_research.py": "1b00f53a87f3a2489a9ad1b32b21a3a344af0b8b18266a811d528f3df2b5812d",
+    "core/research/fundamental_strategy_validation.py": "5ee47d5bb2185c3135e4b0da27841349b2ccacd63170697bebcc73d2fb8e4bef",
+    "core/runtime/fundamental_shadow.py": "e8ab55a1bff5731c6b94f4bb6a560996d99b4c3166bd38875cd399a62efa32d6",
+    "jobs/run_portfolio_research.py": "5b556c268f0e56ee281cd45351c51d52d23c11071780a8323cb5ac064e3ff0ec",
+    "core/research/day2_candidates.py": "ada16bcfcb51735121d355755996413eb8eac82a0316abb431b3909d5e62fefc",
+    "core/research/composite_factor.py": "06d18e2d966fa4e378f964fde9460933011e74eff8035561d2b8bec812792f55",
+    "core/research/target_weights.py": "8af47e873ad4fe8ea2181ffc1a70cd41330656c083ee0fc707b8e1a7b8ddf80d",
+    "core/research/vectorbt_adapter.py": "74ffe78911253bf403a79e4c2a9ddae467a241f676fc04fb81cfa28f2cf74d81"
+  },
+  "notebook_decisions": {
+    "notebook:TQ-Future_Impluse_MACD_期貨交易策略:cell14:initialize": {
+      "family_id": "family:futures_impulse_macd",
+      "name": "futures impulse macd",
+      "investment_logic": "Impulse MACD線交叉，ATR追蹤停損；不是一般MACD股票交叉",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ-Future_Impluse_MACD_期貨交易策略.ipynb",
+          "sha256": "4e97c13b14bbe5006371097f64a7eb27228dff572f6441c5a5e8d2c53eec7c34",
+          "cell": 14
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ-Future_三大法人籌碼面台指期貨交易策略:cell12:initialize": {
+      "family_id": "family:futures_institutional_oi",
+      "name": "futures institutional oi",
+      "investment_logic": "法人淨未平倉量及ATR分位風險濾網",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ-Future_三大法人籌碼面台指期貨交易策略.ipynb",
+          "sha256": "7866821110802cf83a780b15059c70dfcdcd46433a452eeca650f66ab433a051",
+          "cell": 12
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ-Future_黃金交叉期貨交易策略:cell2:initialize": {
+      "family_id": "family:futures_ma_cross",
+      "name": "futures ma cross",
+      "investment_logic": "期貨移動平均黃金交叉與對應持倉規則",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ-Future_黃金交叉期貨交易策略.ipynb",
+          "sha256": "2fe40c966843ae67efa4e7308eeb15ffd1d788cecf69e8e1fcff3baaf463442c",
+          "cell": 2
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_David_Dreman_逆向投資策略:cell18:handle_data": {
+      "family_id": "family:dreman_contrarian",
+      "name": "dreman contrarian",
+      "investment_logic": "Dreman低估值及品質額外條件計分",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_David_Dreman_逆向投資策略.ipynb",
+          "sha256": "88ed4b23aaf6a1f420500e0f5644f9d87a01b0a9ec606e9629f6f55633998bf8",
+          "cell": 18
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_ETF資產配置模型:cell15:initialize": {
+      "family_id": "family:etf_allocation",
+      "name": "etf allocation",
+      "investment_logic": "ETF資產配置權重模型；不同於單股篩選",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_ETF資產配置模型.ipynb",
+          "sha256": "6ff377ead7e73d18e02fd5637831c0c7a14a22615809ad6c1813918228f23bf3",
+          "cell": 15
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_Future_波動率調整持倉動能期貨策略:cell2:initialize": {
+      "family_id": "family:futures_vol_target_momentum",
+      "name": "futures vol target momentum",
+      "investment_logic": "多lookback報酬方向平均，Yang-Zhang波動率目標持倉；兩份來源同邏輯",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_Future_波動率調整持倉動能期貨策略.ipynb",
+          "sha256": "4fc6cc82dac839cd7ab8335f3c1a11a644651598dba3fd82b42143778923ae18",
+          "cell": 2
+        },
+        {
+          "path": "Strategy_example/TQ_波動率調整持倉動能期貨策略.ipynb",
+          "sha256": "711accb92a5b052cc947d0518056d0ca0f90b85e90ded31411fa25a27c264151",
+          "cell": 2
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_IMQ_IndMom_Quality:cell28:initialize_fn": {
+      "family_id": "family:industry_momentum_quality",
+      "name": "industry momentum quality",
+      "investment_logic": "產業動能與品質訊號組合；內部調參不是新family",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_IMQ_IndMom_Quality.ipynb",
+          "sha256": "3012724d29e7920dc3787923a4bca357f8fcc458e334fd6e807967426d8bef6b",
+          "cell": 28
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_James_OShaughnessy_Value_v1:cell16:initialize": {
+      "family_id": "family:oshaughnessy_value",
+      "name": "oshaughnessy value",
+      "investment_logic": "相對市場PSR、每股營收、現金流估值及市值篩選",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_James_OShaughnessy_Value_v1.ipynb",
+          "sha256": "818956ce8e7c73ddc4feb1216c94275f0f9204a43663f7a028cb0e916be476d1",
+          "cell": 16
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_KD指標回測實戰:cell18:handle_data": {
+      "family_id": "family:kd_oversold",
+      "name": "kd oversold",
+      "investment_logic": "KD超賣進場、超買出場",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_KD指標回測實戰.ipynb",
+          "sha256": "7f505a6dc93e858ba9ced2dafb142b936977eaf7776cf0bf18ccb6c4e1a0c377",
+          "cell": 18
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_LTR_LambdaMART截面排名:cell18:initialize": {
+      "family_id": "family:lambdamart_ranking",
+      "name": "lambdamart ranking",
+      "investment_logic": "LambdaMART學習截面排名；不同於手工動量分數",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_LTR_LambdaMART截面排名.ipynb",
+          "sha256": "38c685c48764736e2eb83124e8cef7059fbe598b9e0719ca57bd399b46cbc9be",
+          "cell": 18
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_MACD交易策略:cell13:handle_data": {
+      "family_id": "family:macd_cross",
+      "name": "macd cross",
+      "investment_logic": "DIF/MACD及柱狀體交叉訊號",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_MACD交易策略.ipynb",
+          "sha256": "ba1d429c7e30d8c32cd3345472f0fa636d5291e6a20aec51a9ed82d7294b1700",
+          "cell": 13
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_MAD_移動均線距離策略:cell20:handle_data": {
+      "family_id": "family:moving_average_distance",
+      "name": "moving average distance",
+      "investment_logic": "均線距離截面排名及價格整理／高低點條件",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_MAD_移動均線距離策略.ipynb",
+          "sha256": "9c96f32fd31afff2191172b5eb431e696fc25b9714ef31c3e0c0aad23c41ad69",
+          "cell": 20
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_VAM_波動率調整截面動能_TWN100:cell14:handle_data": {
+      "family_id": "family:vol_adjusted_equity_momentum",
+      "name": "vol adjusted equity momentum",
+      "investment_logic": "TWN100波動率調整截面動量；port改本地universe仍保留差異",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_VAM_波動率調整截面動能_TWN100 .ipynb",
+          "sha256": "ca9e403ae50d037804d6a7ede2dd01e5f80fa052ee664f67e10c2eee8d0a314a",
+          "cell": 14
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_iValue:cell29:initialize": {
+      "family_id": "family:ivalue",
+      "name": "ivalue",
+      "investment_logic": "帳面價值／估值的PIT分組選股與組合",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_iValue.ipynb",
+          "sha256": "a0424f7f3a0b58d072e9ce245842d50045704fdf846785c8bd01c7798a60e2b0",
+          "cell": 29
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_乖離率策略:cell14:handle_data": {
+      "family_id": "family:bias_breakout",
+      "name": "bias breakout",
+      "investment_logic": "價格突破高低點搭配bias正負；不能僅按顯示名推定均值回歸",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_乖離率策略.ipynb",
+          "sha256": "f5023052ca57ead2fc89b702faef979b08e9eda40d241cb691004610594d3a80",
+          "cell": 14
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_動量策略:cell28:initialize": {
+      "family_id": "family:regression_momentum",
+      "name": "regression momentum",
+      "investment_logic": "跨股票／期貨的對數價格年化迴歸斜率乘R平方動量；股票流動性前150及期貨截斷／持股制度分版本",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_動量策略.ipynb",
+          "sha256": "69d2241d39403040c5f8848a485f5c6cd91a26be13ab5e0fd02c12934c090a7d",
+          "cell": 28
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_大師策略＿麥克．喜偉收益型選股法:cell10:handle_data": {
+      "family_id": "family:michael_income",
+      "name": "michael income",
+      "investment_logic": "產業相對PE、流動比、股利及營收成長收益型篩選",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_大師策略＿麥克．喜偉收益型選股法.ipynb",
+          "sha256": "8734c8580d319c5c63ca4f35a6c7c0f6526e81e480e517fb1bfeff1e93aa3afd",
+          "cell": 10
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_安東尼·賣利亞反向操作策略:cell20:handle_data": {
+      "family_id": "family:anthony_contrarian",
+      "name": "anthony contrarian",
+      "investment_logic": "52週低價、董監／法人及多重低估值條件",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_安東尼·賣利亞反向操作策略.ipynb",
+          "sha256": "c1a67cc4b9bcc11df5258d46efa90d42232a25f1a70fb14e2ff21ed8c5a938d7",
+          "cell": 20
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_尋找Alpha:cell81:initialize": {
+      "family_id": "family:regression_alpha",
+      "name": "regression alpha",
+      "investment_logic": "相對市場迴歸alpha排名；非Fama基本面篩選或Alpha101因子拼接",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_尋找Alpha.ipynb",
+          "sha256": "87d3e34cbf0df2e7de38694ba3e217b453b4910d4a47ada6334b5e27fc657928",
+          "cell": 81
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_尤金·法瑪(Eugene_Fama)三因子模型策略:cell6:handle_data": {
+      "family_id": "family:fama_french",
+      "name": "fama french",
+      "investment_logic": "Fama-French三因子相關選股，前年度計算名單與年度再平衡",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_尤金·法瑪(Eugene_Fama)三因子模型策略.ipynb",
+          "sha256": "851b8b4bd221a58d4c885e034940e841526baeda1a1d57f8c63a145bd6ec3a23",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_布林通道交易策略:cell14:handle_data": {
+      "family_id": "family:bollinger_reversion",
+      "name": "bollinger reversion",
+      "investment_logic": "布林下緣買入、上緣賣出與來源加倉規則",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_布林通道交易策略.ipynb",
+          "sha256": "c4b22cb8b7a89ecae4e5a096b9300c9d87c2cb5c994b7c9b1030dc2b4c4cd655",
+          "cell": 14
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_延伸量能回測策略:cell27:initialize1": {
+      "family_id": "family:extended_volume_momentum",
+      "name": "extended volume momentum",
+      "investment_logic": "自訂factor_momentum_score正值／中位數篩選、反波動權重",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_延伸量能回測策略.ipynb",
+          "sha256": "1954e5a04139d6c5a6ea68a950444905cc8cbe5371d62fa8dacf6f84b7f43a02",
+          "cell": 27
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_從羅伯．加迪納的選股法出發：在台股尋找小型成長黑馬:cell8:handle_data_1": {
+      "family_id": "family:gardner_small_growth",
+      "name": "gardner small growth",
+      "investment_logic": "小市值、淨利成長、產業毛利及PEG條件",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_從羅伯．加迪納的選股法出發：在台股尋找小型成長黑馬.ipynb",
+          "sha256": "65b34ba4636dde18a1dddea7a438bf4cdd78eef6fafd6170d79293a009201ff6",
+          "cell": 8
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_德伍．卻斯動能策略:cell6:handle_data_1": {
+      "family_id": "family:dewood_growth_momentum",
+      "name": "dewood growth momentum",
+      "investment_logic": "市值、EPS長期成長、負債、相對強度及估值聯合篩選",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_德伍．卻斯動能策略.ipynb",
+          "sha256": "d463965e59b3221cb15e67d1cd23bf39992b8a7904cfcb1cb488728e95441e6e",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_月營收成長率策略:cell49:initialize": {
+      "family_id": "family:monthly_revenue_growth",
+      "name": "monthly revenue growth",
+      "investment_logic": "獲利成長三正值mask，月營收YoY zscore top30；兩Notebook／SimpleAlgo同訊號，成本排程保留版本",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_月營收成長率策略.ipynb",
+          "sha256": "ce316aadc7c9de9905e67011d3bfedd5d08016039bdeb3d18cffe9953c2bc357",
+          "cell": 49
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_月營收成長率策略_simple_algo:cell48:algo.run": {
+      "family_id": "family:monthly_revenue_growth",
+      "name": "monthly revenue growth",
+      "investment_logic": "獲利成長三正值mask，月營收YoY zscore top30；兩Notebook／SimpleAlgo同訊號，成本排程保留版本",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_月營收成長率策略_simple_algo.ipynb",
+          "sha256": "be1a6fae5715b21de44e993d96fe4b03a020312f0f87cf8b3533e7b1f3094413",
+          "cell": 48
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_月營收成長率策略_simple_algo:cell62:initialize": {
+      "family_id": "family:monthly_revenue_growth",
+      "name": "monthly revenue growth",
+      "investment_logic": "獲利成長三正值mask，月營收YoY zscore top30；兩Notebook／SimpleAlgo同訊號，成本排程保留版本",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_月營收成長率策略_simple_algo.ipynb",
+          "sha256": "be1a6fae5715b21de44e993d96fe4b03a020312f0f87cf8b3533e7b1f3094413",
+          "cell": 62
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_期貨策略範例:cell10:handle_data": {
+      "family_id": "family:futures_retail_sentiment",
+      "name": "futures retail sentiment",
+      "investment_logic": "散戶多空情緒零線進出單口TX",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_期貨策略範例.ipynb",
+          "sha256": "9ad33199c7a24f9eff93f5a39ceea271c4edd97007ff1351a5190fc569ceb01f",
+          "cell": 10
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_期貨策略範例:cell17:initialize": {
+      "family_id": "family:trend_pullback",
+      "name": "trend pullback",
+      "investment_logic": "股票／期貨均為EMA多頭內高點回撤、20日或趨勢轉弱出場；報酬波動vs價差波動正規化、乘數及下單方式差異留版本，不宣稱signal parity",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_期貨策略範例.ipynb",
+          "sha256": "9ad33199c7a24f9eff93f5a39ceea271c4edd97007ff1351a5190fc569ceb01f",
+          "cell": 17
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_期貨策略範例:cell25:initialize": {
+      "family_id": "family:regression_momentum",
+      "name": "regression momentum",
+      "investment_logic": "跨股票／期貨的對數價格年化迴歸斜率乘R平方動量；股票流動性前150及期貨截斷／持股制度分版本",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_期貨策略範例.ipynb",
+          "sha256": "9ad33199c7a24f9eff93f5a39ceea271c4edd97007ff1351a5190fc569ceb01f",
+          "cell": 25
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_柏頓．墨基爾成功選股法則:cell18:handle_data_1": {
+      "family_id": "family:malkiel_growth",
+      "name": "malkiel growth",
+      "investment_logic": "產業相對成長品質及跨年度goodtimes篩選",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_柏頓．墨基爾成功選股法則.ipynb",
+          "sha256": "f0c1afe7791677dbe82daf2281720791a8abebe7d60dd06c15668cce77b0c1af",
+          "cell": 18
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_查爾士．布蘭帝 價值型選股法則:cell7:handle_data_1": {
+      "family_id": "family:brandes_value",
+      "name": "brandes value",
+      "investment_logic": "低負債、相對市場PE／現金流估值與低PBR",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_查爾士．布蘭帝 價值型選股法則.ipynb",
+          "sha256": "61b7298bfc5eb3d4d40e62a3c2a040b51f6546eb312e0b7754fdf1cd84e69fd1",
+          "cell": 7
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix": {
+      "family_id": "family:ichimoku_technical_led_hybrid",
+      "name": "ichimoku technical led hybrid",
+      "investment_logic": "技術Signal決定方向，ML預測調整增減倉幅度",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效.ipynb",
+          "sha256": "4c55659a8e4fd1a1e096e9bc85ce7d966d1fc792838e595eee3de9a876ae21a1",
+          "cell": 15
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_ml": {
+      "family_id": "family:ichimoku_ml",
+      "name": "ichimoku ml",
+      "investment_logic": "主要Predicted_Signal決定Buy/Sell，XGBoost預測策略",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效.ipynb",
+          "sha256": "4c55659a8e4fd1a1e096e9bc85ce7d966d1fc792838e595eee3de9a876ae21a1",
+          "cell": 15
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix_2": {
+      "family_id": "family:ichimoku_ml_led_hybrid",
+      "name": "ichimoku ml led hybrid",
+      "investment_logic": "ML預測決定方向，技術Signal調整增減倉幅度",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效.ipynb",
+          "sha256": "4c55659a8e4fd1a1e096e9bc85ce7d966d1fc792838e595eee3de9a876ae21a1",
+          "cell": 15
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_raw": {
+      "family_id": "family:ichimoku_technical",
+      "name": "ichimoku technical",
+      "investment_logic": "主要Signal欄位決定Buy/Sell，純技術一目均衡表",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效.ipynb",
+          "sha256": "4c55659a8e4fd1a1e096e9bc85ce7d966d1fc792838e595eee3de9a876ae21a1",
+          "cell": 15
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_融資維持率:cell17:handle_data": {
+      "family_id": "family:margin_maintenance",
+      "name": "margin maintenance",
+      "investment_logic": "K線、成交額、融資餘額與維持率條件，另有停損停利",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_融資維持率.ipynb",
+          "sha256": "57b52a5bcd790aee85b52c2a8ed7af12abb2c2031697fd4d2a7d8f3e60a92e4b",
+          "cell": 17
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_趨勢跟蹤策略:cell23:initialize": {
+      "family_id": "family:trend_following",
+      "name": "trend following",
+      "investment_logic": "均線趨勢加突破進場及移動出場；原始long/short與port long-only留版本",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_趨勢跟蹤策略.ipynb",
+          "sha256": "0ea8986bf44f1ad2bcd7bbcf46f40e3e9596425ee831a726313f73e2b92d1356",
+          "cell": 23
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_跟隨大戶策略:cell22:initialize": {
+      "family_id": "family:large_holder_flow",
+      "name": "large holder flow",
+      "investment_logic": "大戶持股比對均線與買賣量方向訊號",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_跟隨大戶策略.ipynb",
+          "sha256": "ffec7181d1b858f9a34bab5a18c43177090fb8fcc0dea791a0ebc28f0b3dad0d",
+          "cell": 22
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_逆勢交易策略:cell23:initialize": {
+      "family_id": "family:trend_pullback",
+      "name": "trend pullback",
+      "investment_logic": "股票／期貨均為EMA多頭內高點回撤、20日或趨勢轉弱出場；報酬波動vs價差波動正規化、乘數及下單方式差異留版本，不宣稱signal parity",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_逆勢交易策略.ipynb",
+          "sha256": "d9592eee26ba4078564955af25af4b1bd4b7043e8f5633e44b2f2bdf93ff6c85",
+          "cell": 23
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_造市商與一般投資人在 ETF 折溢價套利中的實作績效探討": {
+      "family_id": "family:etf_premium_arbitrage",
+      "name": "etf premium arbitrage",
+      "investment_logic": "cell2：折溢價均值±標準差訊號shift(1)，NAV與市價反向雙腿、cost與net return；研究模型，NAV可交易性未證明",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_造市商與一般投資人在 ETF 折溢價套利中的實作績效探討.ipynb",
+          "sha256": "ef2b77934ee0e400a4bb4df7208ba101bd25ff6e143e693daa03d75ffc6d4235"
+        }
+      ],
+      "reviewed_role": "RESEARCH_MODEL"
+    },
+    "notebook:TQ_週期投資:cell3:handle_data": {
+      "family_id": "family:macro_cycle_allocation",
+      "name": "macro cycle allocation",
+      "investment_logic": "相同景氣分數16/38門檻；cash／債券／反向ETF及0/50/100%配置為政策參數變體",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_週期投資.ipynb",
+          "sha256": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+          "cell": 3
+        },
+        {
+          "path": "Strategy_example/TQ_週期投資.ipynb",
+          "sha256": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_週期投資:cell6:handle_data_2": {
+      "family_id": "family:macro_cycle_allocation",
+      "name": "macro cycle allocation",
+      "investment_logic": "相同景氣分數16/38門檻；cash／債券／反向ETF及0/50/100%配置為政策參數變體",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_週期投資.ipynb",
+          "sha256": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_週期投資:cell6:handle_data_3": {
+      "family_id": "family:macro_cycle_allocation",
+      "name": "macro cycle allocation",
+      "investment_logic": "相同景氣分數16/38門檻；cash／債券／反向ETF及0/50/100%配置為政策參數變體",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_週期投資.ipynb",
+          "sha256": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_週期投資:cell6:handle_data_4": {
+      "family_id": "family:macro_cycle_allocation",
+      "name": "macro cycle allocation",
+      "investment_logic": "相同景氣分數16/38門檻；cash／債券／反向ETF及0/50/100%配置為政策參數變體",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_週期投資.ipynb",
+          "sha256": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_週期投資:cell6:handle_data_5": {
+      "family_id": "family:macro_cycle_allocation",
+      "name": "macro cycle allocation",
+      "investment_logic": "相同景氣分數16/38門檻；cash／債券／反向ETF及0/50/100%配置為政策參數變體",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_週期投資.ipynb",
+          "sha256": "948287cc86ed617a46c230a726e6e237f193084e0009e5f48df99ada24b45861",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_量能回測實戰:cell14:handle_data": {
+      "family_id": "family:volume_surge",
+      "name": "volume surge",
+      "investment_logic": "短期量縮與2.5倍放量的量能訊號",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_量能回測實戰.ipynb",
+          "sha256": "d955d05d70c9476651cdf6bf5bb9e80ad7c6ec7f4e68d4f8fa160f576fb1e894",
+          "cell": 14
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_長期趨勢策略:cell23:initialize": {
+      "family_id": "family:long_term_trend",
+      "name": "long term trend",
+      "investment_logic": "長短期價格方向組合；原始short分支與port差異保留",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_長期趨勢策略.ipynb",
+          "sha256": "e2c146bdd0a456be5ffa92640af81b88cdff14ae267ddfa9e42e8ddf58dd27fa",
+          "cell": 23
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_阿隆指標交易策略:cell3:handle_data": {
+      "family_id": "family:aroon_trend",
+      "name": "aroon trend",
+      "investment_logic": "Aroon up/down及差值閾值進出場",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_阿隆指標交易策略.ipynb",
+          "sha256": "95ae40aa776bf030eceb0b8b71683296f9c472ac350fc4b889c26afeba33c65d",
+          "cell": 3
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    },
+    "notebook:TQ_霍華羅斯曼_審慎致富投資法:cell6:handle_data_1": {
+      "family_id": "family:rosman_quality_growth",
+      "name": "rosman quality growth",
+      "investment_logic": "市值、流動比率及持續營收／淨利成長條件",
+      "evidence": [
+        {
+          "path": "Strategy_example/TQ_霍華羅斯曼_審慎致富投資法.ipynb",
+          "sha256": "64fb1a0183a138bc8fd5c77ea2a739c97ca5dd678216d16de02daef99a214cef",
+          "cell": 6
+        }
+      ],
+      "reviewed_role": "ORIGINAL"
+    }
+  },
+  "native_decisions": {
+    "hybrid_trend_rank": "均線、RSI、量能硬篩選加ML排名",
+    "defensive_low_volatility": "NATR低波動加趨勢／量能條件",
+    "growth_momentum_breakout": "營收YoY、價格突破與量能條件",
+    "quality_growth": "營業利益率水準、營收與EPS加技術趨勢，非G2/G3成長率因子",
+    "institutional_flow_confirmation": "法人連續買超／籌碼確認加技術條件",
+    "mean_reversion": "KD、布林寬度、量縮與RSI聯合條件，不等於單一KD或布林家族",
+    "quality_value_low_volatility": "EPS、營業利益率及NATR／STD低波動品質價值"
+  },
+  "d5_factor_ids": [
+    "amihud_20d",
+    "momentum_12_1",
+    "momentum_20d",
+    "momentum_60d",
+    "near_high_252d"
+  ],
+  "d5_pool_evidence": {
+    "path": "outputs/strategy_validation/2026-10-21/d5_replay/run_manifest.json",
+    "sha256": "7c09b3b496dfdd6127652b5c1c756aa7cee29579e367f81854e81a0ce78b0c57"
+  }
+}

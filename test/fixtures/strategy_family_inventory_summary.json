@@ -1,0 +1,1142 @@
+{
+  "stats": {
+    "strategy_families": 64,
+    "ported_families": 12,
+    "native_python_families": 22,
+    "unported_families": 30,
+    "partially_ported_families": 2,
+    "unported_versions_within_ported_families": 2,
+    "research_parameter_combinations": 384,
+    "non_strategy_tools": 7,
+    "tool_categories": {
+      "BENCHMARK": 5,
+      "SIGNAL_ONLY": 2
+    },
+    "historical_validation_identities": 453,
+    "historical_source_records": 461,
+    "historical_non_strategy_records": 8,
+    "family_linked_source_records": 454,
+    "current_analysis_only_tools": 0,
+    "reclassified_analysis_research_models": 1
+  },
+  "all_historical_identities_preserved": true,
+  "legacy_protected_file_count": 76,
+  "historical_validation_files_unchanged": true,
+  "original_inventory_report_archived_with_matching_receipt_hash": true,
+  "new_backtests_executed": 0,
+  "tests": "18 passed; synthetic taxonomy and existing boundary checks, not financial validation",
+  "strict_validation": "PASS",
+  "diff_check": "PASS",
+  "family_membership": [
+    {
+      "family_id": "family:anthony_contrarian",
+      "members": [
+        "notebook:TQ_安東尼·賣利亞反向操作策略:cell20:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_安東尼·賣利亞反向操作策略:cell20:handle_data"
+      ]
+    },
+    {
+      "family_id": "family:aroon_trend",
+      "members": [
+        "aroon_trend",
+        "notebook:TQ_阿隆指標交易策略:cell3:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:bias_breakout",
+      "members": [
+        "bias_reversion",
+        "notebook:TQ_乖離率策略:cell14:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:bollinger_reversion",
+      "members": [
+        "bollinger_reversion",
+        "notebook:TQ_布林通道交易策略:cell14:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:brandes_value",
+      "members": [
+        "notebook:TQ_查爾士．布蘭帝 價值型選股法則:cell7:handle_data_1"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_查爾士．布蘭帝 價值型選股法則:cell7:handle_data_1"
+      ]
+    },
+    {
+      "family_id": "family:dewood_growth_momentum",
+      "members": [
+        "notebook:TQ_德伍．卻斯動能策略:cell6:handle_data_1"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_德伍．卻斯動能策略:cell6:handle_data_1"
+      ]
+    },
+    {
+      "family_id": "family:dreman_contrarian",
+      "members": [
+        "notebook:TQ_David_Dreman_逆向投資策略:cell18:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_David_Dreman_逆向投資策略:cell18:handle_data"
+      ]
+    },
+    {
+      "family_id": "family:etf_allocation",
+      "members": [
+        "notebook:TQ_ETF資產配置模型:cell15:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_ETF資產配置模型:cell15:initialize"
+      ]
+    },
+    {
+      "family_id": "family:etf_premium_arbitrage",
+      "members": [
+        "notebook:TQ_造市商與一般投資人在 ETF 折溢價套利中的實作績效探討"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_造市商與一般投資人在 ETF 折溢價套利中的實作績效探討"
+      ]
+    },
+    {
+      "family_id": "family:extended_volume_momentum",
+      "members": [
+        "notebook:TQ_延伸量能回測策略:cell27:initialize1"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_延伸量能回測策略:cell27:initialize1"
+      ]
+    },
+    {
+      "family_id": "family:fama_french",
+      "members": [
+        "notebook:TQ_尤金·法瑪(Eugene_Fama)三因子模型策略:cell6:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_尤金·法瑪(Eugene_Fama)三因子模型策略:cell6:handle_data"
+      ]
+    },
+    {
+      "family_id": "family:fundamental_strategy_validation:G2_OPERATING_INCOME_YOY",
+      "members": [
+        "fundamental_strategy_validation:G2__EQUAL__TOP10__REB20__EQUAL",
+        "fundamental_strategy_validation:G2__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2__EQUAL__TOP10__REB60__EQUAL",
+        "fundamental_strategy_validation:G2__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2__EQUAL__TOP20__REB20__EQUAL",
+        "fundamental_strategy_validation:G2__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2__EQUAL__TOP20__REB60__EQUAL",
+        "fundamental_strategy_validation:G2__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2__EQUAL__TOP5__REB20__EQUAL",
+        "fundamental_strategy_validation:G2__EQUAL__TOP5__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2__EQUAL__TOP5__REB60__EQUAL",
+        "fundamental_strategy_validation:G2__EQUAL__TOP5__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:fundamental_strategy_validation:G2_OPERATING_INCOME_YOY+G3_EPS_YOY",
+      "members": [
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB20__EQUAL",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB60__EQUAL",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB20__EQUAL",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB60__EQUAL",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB20__EQUAL",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB60__EQUAL",
+        "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB60__SCORE_WEIGHTED",
+        "fundamental_g2g3_top5_reb60_score_weighted_v1"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 2,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:fundamental_strategy_validation:G3_EPS_YOY",
+      "members": [
+        "fundamental_strategy_validation:G3__EQUAL__TOP10__REB20__EQUAL",
+        "fundamental_strategy_validation:G3__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G3__EQUAL__TOP10__REB60__EQUAL",
+        "fundamental_strategy_validation:G3__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G3__EQUAL__TOP20__REB20__EQUAL",
+        "fundamental_strategy_validation:G3__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G3__EQUAL__TOP20__REB60__EQUAL",
+        "fundamental_strategy_validation:G3__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G3__EQUAL__TOP5__REB20__EQUAL",
+        "fundamental_strategy_validation:G3__EQUAL__TOP5__REB20__SCORE_WEIGHTED",
+        "fundamental_strategy_validation:G3__EQUAL__TOP5__REB60__EQUAL",
+        "fundamental_strategy_validation:G3__EQUAL__TOP5__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:futures_impulse_macd",
+      "members": [
+        "notebook:TQ-Future_Impluse_MACD_期貨交易策略:cell14:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ-Future_Impluse_MACD_期貨交易策略:cell14:initialize"
+      ]
+    },
+    {
+      "family_id": "family:futures_institutional_oi",
+      "members": [
+        "notebook:TQ-Future_三大法人籌碼面台指期貨交易策略:cell12:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ-Future_三大法人籌碼面台指期貨交易策略:cell12:initialize"
+      ]
+    },
+    {
+      "family_id": "family:futures_ma_cross",
+      "members": [
+        "notebook:TQ-Future_黃金交叉期貨交易策略:cell2:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ-Future_黃金交叉期貨交易策略:cell2:initialize"
+      ]
+    },
+    {
+      "family_id": "family:futures_retail_sentiment",
+      "members": [
+        "notebook:TQ_期貨策略範例:cell10:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_期貨策略範例:cell10:handle_data"
+      ]
+    },
+    {
+      "family_id": "family:futures_vol_target_momentum",
+      "members": [
+        "notebook:TQ_Future_波動率調整持倉動能期貨策略:cell2:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_Future_波動率調整持倉動能期貨策略:cell2:initialize"
+      ]
+    },
+    {
+      "family_id": "family:gardner_small_growth",
+      "members": [
+        "notebook:TQ_從羅伯．加迪納的選股法出發：在台股尋找小型成長黑馬:cell8:handle_data_1"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_從羅伯．加迪納的選股法出發：在台股尋找小型成長黑馬:cell8:handle_data_1"
+      ]
+    },
+    {
+      "family_id": "family:ichimoku_ml",
+      "members": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_ml"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_ml"
+      ]
+    },
+    {
+      "family_id": "family:ichimoku_ml_led_hybrid",
+      "members": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix_2"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix_2"
+      ]
+    },
+    {
+      "family_id": "family:ichimoku_technical",
+      "members": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_raw"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_raw"
+      ]
+    },
+    {
+      "family_id": "family:ichimoku_technical_led_hybrid",
+      "members": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix"
+      ]
+    },
+    {
+      "family_id": "family:industry_momentum_quality",
+      "members": [
+        "notebook:TQ_IMQ_IndMom_Quality:cell28:initialize_fn"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_IMQ_IndMom_Quality:cell28:initialize_fn"
+      ]
+    },
+    {
+      "family_id": "family:ivalue",
+      "members": [
+        "notebook:TQ_iValue:cell29:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_iValue:cell29:initialize"
+      ]
+    },
+    {
+      "family_id": "family:kd_oversold",
+      "members": [
+        "kd_oversold",
+        "notebook:TQ_KD指標回測實戰:cell18:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:lambdamart_ranking",
+      "members": [
+        "notebook:TQ_LTR_LambdaMART截面排名:cell18:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_LTR_LambdaMART截面排名:cell18:initialize"
+      ]
+    },
+    {
+      "family_id": "family:large_holder_flow",
+      "members": [
+        "notebook:TQ_跟隨大戶策略:cell22:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_跟隨大戶策略:cell22:initialize"
+      ]
+    },
+    {
+      "family_id": "family:long_term_trend",
+      "members": [
+        "long_term_trend",
+        "notebook:TQ_長期趨勢策略:cell23:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:macd_cross",
+      "members": [
+        "macd_cross",
+        "notebook:TQ_MACD交易策略:cell13:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:macro_cycle_allocation",
+      "members": [
+        "notebook:TQ_週期投資:cell3:handle_data",
+        "notebook:TQ_週期投資:cell6:handle_data_2",
+        "notebook:TQ_週期投資:cell6:handle_data_3",
+        "notebook:TQ_週期投資:cell6:handle_data_4",
+        "notebook:TQ_週期投資:cell6:handle_data_5"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 5,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_週期投資:cell3:handle_data",
+        "notebook:TQ_週期投資:cell6:handle_data_2",
+        "notebook:TQ_週期投資:cell6:handle_data_3",
+        "notebook:TQ_週期投資:cell6:handle_data_4",
+        "notebook:TQ_週期投資:cell6:handle_data_5"
+      ]
+    },
+    {
+      "family_id": "family:malkiel_growth",
+      "members": [
+        "notebook:TQ_柏頓．墨基爾成功選股法則:cell18:handle_data_1"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_柏頓．墨基爾成功選股法則:cell18:handle_data_1"
+      ]
+    },
+    {
+      "family_id": "family:margin_maintenance",
+      "members": [
+        "notebook:TQ_融資維持率:cell17:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_融資維持率:cell17:handle_data"
+      ]
+    },
+    {
+      "family_id": "family:michael_income",
+      "members": [
+        "notebook:TQ_大師策略＿麥克．喜偉收益型選股法:cell10:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_大師策略＿麥克．喜偉收益型選股法:cell10:handle_data"
+      ]
+    },
+    {
+      "family_id": "family:monthly_revenue_growth",
+      "members": [
+        "notebook:TQ_月營收成長率策略:cell49:initialize",
+        "notebook:TQ_月營收成長率策略_simple_algo:cell48:algo.run",
+        "notebook:TQ_月營收成長率策略_simple_algo:cell62:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 3,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_月營收成長率策略:cell49:initialize",
+        "notebook:TQ_月營收成長率策略_simple_algo:cell48:algo.run",
+        "notebook:TQ_月營收成長率策略_simple_algo:cell62:initialize"
+      ]
+    },
+    {
+      "family_id": "family:moving_average_distance",
+      "members": [
+        "mad_distance",
+        "notebook:TQ_MAD_移動均線距離策略:cell20:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:defensive_low_volatility",
+      "members": [
+        "defensive_low_volatility"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:growth_momentum_breakout",
+      "members": [
+        "growth_momentum_breakout"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:hybrid_trend_rank",
+      "members": [
+        "hybrid_trend_rank"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:institutional_flow_confirmation",
+      "members": [
+        "institutional_flow_confirmation"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:mean_reversion",
+      "members": [
+        "mean_reversion"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:quality_growth",
+      "members": [
+        "quality_growth"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:native:quality_value_low_volatility",
+      "members": [
+        "quality_value_low_volatility"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:oshaughnessy_value",
+      "members": [
+        "notebook:TQ_James_OShaughnessy_Value_v1:cell16:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_James_OShaughnessy_Value_v1:cell16:initialize"
+      ]
+    },
+    {
+      "family_id": "family:portfolio_research:amihud_20d+momentum_12_1+momentum_20d+momentum_60d+near_high_252d",
+      "members": [
+        "portfolio_research:equal_top20_reb20_equal",
+        "portfolio_research:equal_top20_reb20_score_weighted",
+        "portfolio_research:equal_top20_reb60_equal",
+        "portfolio_research:equal_top20_reb60_score_weighted",
+        "portfolio_research:equal_top30_reb20_equal",
+        "portfolio_research:equal_top30_reb20_score_weighted",
+        "portfolio_research:equal_top30_reb60_equal",
+        "portfolio_research:equal_top30_reb60_score_weighted",
+        "portfolio_research:equal_top50_reb20_equal",
+        "portfolio_research:equal_top50_reb20_score_weighted",
+        "portfolio_research:equal_top50_reb60_equal",
+        "portfolio_research:equal_top50_reb60_score_weighted",
+        "portfolio_research:ic_top20_reb20_equal",
+        "portfolio_research:ic_top20_reb20_score_weighted",
+        "portfolio_research:ic_top20_reb60_equal",
+        "portfolio_research:ic_top20_reb60_score_weighted",
+        "portfolio_research:ic_top30_reb20_equal",
+        "portfolio_research:ic_top30_reb20_score_weighted",
+        "portfolio_research:ic_top30_reb60_equal",
+        "portfolio_research:ic_top30_reb60_score_weighted",
+        "portfolio_research:ic_top50_reb20_equal",
+        "portfolio_research:ic_top50_reb20_score_weighted",
+        "portfolio_research:ic_top50_reb60_equal",
+        "portfolio_research:ic_top50_reb60_score_weighted",
+        "portfolio_research:icir_top20_reb20_equal",
+        "portfolio_research:icir_top20_reb20_score_weighted",
+        "portfolio_research:icir_top20_reb60_equal",
+        "portfolio_research:icir_top20_reb60_score_weighted",
+        "portfolio_research:icir_top30_reb20_equal",
+        "portfolio_research:icir_top30_reb20_score_weighted",
+        "portfolio_research:icir_top30_reb60_equal",
+        "portfolio_research:icir_top30_reb60_score_weighted",
+        "portfolio_research:icir_top50_reb20_equal",
+        "portfolio_research:icir_top50_reb20_score_weighted",
+        "portfolio_research:icir_top50_reb60_equal",
+        "portfolio_research:icir_top50_reb60_score_weighted",
+        "portfolio_research:redundancy_adjusted_top20_reb20_equal",
+        "portfolio_research:redundancy_adjusted_top20_reb20_score_weighted",
+        "portfolio_research:redundancy_adjusted_top20_reb60_equal",
+        "portfolio_research:redundancy_adjusted_top20_reb60_score_weighted",
+        "portfolio_research:redundancy_adjusted_top30_reb20_equal",
+        "portfolio_research:redundancy_adjusted_top30_reb20_score_weighted",
+        "portfolio_research:redundancy_adjusted_top30_reb60_equal",
+        "portfolio_research:redundancy_adjusted_top30_reb60_score_weighted",
+        "portfolio_research:redundancy_adjusted_top50_reb20_equal",
+        "portfolio_research:redundancy_adjusted_top50_reb20_score_weighted",
+        "portfolio_research:redundancy_adjusted_top50_reb60_equal",
+        "portfolio_research:redundancy_adjusted_top50_reb60_score_weighted"
+      ],
+      "research_parameter_combinations": 48,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:regression_alpha",
+      "members": [
+        "notebook:TQ_尋找Alpha:cell81:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_尋找Alpha:cell81:initialize"
+      ]
+    },
+    {
+      "family_id": "family:regression_momentum",
+      "members": [
+        "regression_momentum",
+        "notebook:TQ_動量策略:cell28:initialize",
+        "notebook:TQ_期貨策略範例:cell25:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 3,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": [
+        "notebook:TQ_期貨策略範例:cell25:initialize"
+      ]
+    },
+    {
+      "family_id": "family:rosman_quality_growth",
+      "members": [
+        "notebook:TQ_霍華羅斯曼_審慎致富投資法:cell6:handle_data_1"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 1,
+      "migration": "NOT_PORTED",
+      "unported_original_versions": [
+        "notebook:TQ_霍華羅斯曼_審慎致富投資法:cell6:handle_data_1"
+      ]
+    },
+    {
+      "family_id": "family:strategy_research:A101_003",
+      "members": [
+        "strategy_research:A101_003__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A101_003+A191_088",
+      "members": [
+        "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003+A191_088__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_088__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003+A191_088__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A101_003+A191_088+A191_132+RS_004_NEAR_HIGH_120D",
+      "members": [
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A101_003+A191_132",
+      "members": [
+        "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:A101_003+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A101_003+A191_132__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:A101_003+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A101_003+RS_004_NEAR_HIGH_120D",
+      "members": [
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A191_088",
+      "members": [
+        "strategy_research:A191_088__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:A191_088__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:A191_088__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:A191_088__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:A191_088__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:A191_088__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A191_088+A191_132",
+      "members": [
+        "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:A191_088+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_088+A191_132__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:A191_088+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A191_088+RS_004_NEAR_HIGH_120D",
+      "members": [
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A191_132",
+      "members": [
+        "strategy_research:A191_132__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_132__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_132__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_132__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:A191_132__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:A191_132__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:A191_132+RS_004_NEAR_HIGH_120D",
+      "members": [
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 36,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:strategy_research:RS_004_NEAR_HIGH_120D",
+      "members": [
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB20__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB60__EQUAL",
+        "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+      ],
+      "research_parameter_combinations": 12,
+      "execution_contract_count": 1,
+      "migration": "NATIVE_PYTHON",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:trend_following",
+      "members": [
+        "trend_following",
+        "notebook:TQ_趨勢跟蹤策略:cell23:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:trend_pullback",
+      "members": [
+        "contrarian_pullback",
+        "notebook:TQ_期貨策略範例:cell17:initialize",
+        "notebook:TQ_逆勢交易策略:cell23:initialize"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 3,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": [
+        "notebook:TQ_期貨策略範例:cell17:initialize"
+      ]
+    },
+    {
+      "family_id": "family:vol_adjusted_equity_momentum",
+      "members": [
+        "volatility_adjusted_momentum",
+        "notebook:TQ_VAM_波動率調整截面動能_TWN100:cell14:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    },
+    {
+      "family_id": "family:volume_surge",
+      "members": [
+        "volume_surge",
+        "notebook:TQ_量能回測實戰:cell14:handle_data"
+      ],
+      "research_parameter_combinations": 0,
+      "execution_contract_count": 2,
+      "migration": "SELECTION_PORT_ONLY",
+      "unported_original_versions": []
+    }
+  ],
+  "evidence_sha256": {
+    "outputs\\strategy_family_inventory\\2026-10-21-final\\baseline.json": "f4f8383e9c822323a4aaf9c1978fe11c5207cd961e77217815a85ecb8385e0c2",
+    "outputs\\strategy_family_inventory\\2026-10-21-final\\strategy_families.json": "8727bdeee520a9dbb4d38d6525e9f2ee5364c189a371c3363adc6e6f3a15b91b",
+    "outputs\\strategy_family_inventory\\2026-10-21-final\\strategy_family_mapping.csv": "b253b208d226626b884ad0ecae215e28c4352fbf6b0112117f527fb2eddcb7e1",
+    "outputs\\strategy_family_inventory\\2026-10-21-final\\tests.log": "cc0f7230395666acf9bb1210cee8426bf67255390aae58014780181e40c6d13c",
+    "outputs\\strategy_family_inventory\\2026-10-21-final\\openspec_strict.json": "0ed64b63325f3cd984af86d8e7df69c113feff4daa8fc9d9432bd511a6b62d7f",
+    "scripts\\strategy_family_review.json": "2bac853c31b2a4886caf9c7b122d6c655831c51ca18b604e4d6adea4352478db",
+    "scripts\\reconcile_strategy_families.py": "ef6984a4b10e3cb036e855a11756dea234bd84d2a3c81f0099d4586476f597ab",
+    "docs\\strategy_family_inventory.md": "3b16569adb8121428c7b207646f1a74fda9c9bb6405bbdfe3329405bc0622e64"
+  }
+}
