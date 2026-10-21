@@ -55,3 +55,40 @@ def test_deployed_failure_is_not_hidden_by_local_capability(tmp_path, monkeypatc
     assert result['totals']['local_daily_capable'] == 1
     assert result['totals']['daily_capable'] == 0
     assert result['records'][0]['daily']['status'] == 'BLOCKED'
+
+
+def test_duplicate_daily_input_blocks_engine_before_execution(tmp_path, monkeypatch, manager):
+    """Synthetic database boundary, not real strategy validation evidence."""
+    import pandas as pd
+    import pytest
+    from core import db_helper
+    from core.backtest import runner
+    from core.strategy_manager import StrategyManager
+
+    class Connection:
+        closed = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            self.closed = True
+        def exec_driver_sql(self, query):
+            assert query == 'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY'
+
+    connection = Connection()
+    class Engine:
+        def connect(self):
+            return connection
+    class ForbiddenEngine:
+        def __init__(self, **kwargs):
+            pytest.fail('invalid input reached the trading engine')
+
+    duplicate = pd.DataFrame({'stock_id': ['2330', '2330'], 'trade_date': ['2026-10-01'] * 2})
+    monkeypatch.setattr(db_helper, 'get_db_engine', lambda: Engine())
+    monkeypatch.setattr(pd, 'read_sql', lambda *args, **kwargs: duplicate.copy())
+    monkeypatch.setattr(runner, 'BacktestEngine', ForbiddenEngine)
+    monkeypatch.setattr(StrategyManager, 'SETTINGS_FILE', manager.settings_file)
+    with pytest.raises(ValueError, match='DATA_QUALITY_GATE'):
+        validation.stocks(tmp_path, '2026-10-01', '2026-10-02')
+    records = json.loads((tmp_path / 'stocks.json').read_text(encoding='utf-8'))
+    assert records and all(r['validation'] == 'BLOCKED' for r in records.values())
+    assert connection.closed

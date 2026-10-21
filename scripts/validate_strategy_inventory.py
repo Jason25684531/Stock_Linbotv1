@@ -1,10 +1,10 @@
 """Run isolated diagnostics and retain every inventory verdict, including blockers."""
 import argparse
-from collections import Counter
 import contextlib
 from dataclasses import asdict
 import hashlib
 import importlib.util
+from importlib import metadata
 import json
 import math
 import os
@@ -150,10 +150,18 @@ def stocks(output, start, end):
                     path = output / f"snapshot_{table}.parquet"
                     frame.to_parquet(path, index=False)
                     snapshots[table] = {"path": path.name, "rows": len(frame), "sha256": digest(path), "columns": list(frame.columns)}
+                    if table == 'daily_market_data':
+                        snapshots[table]['duplicate_asset_dates'] = int(frame.duplicated(['stock_id', 'trade_date']).sum())
                     del frame
                 write_json(output / "snapshot_manifest.json", {"isolation": "consistent snapshot, READ ONLY",
                     "history_start": history_start, "end": end, "tables": snapshots,
                     "settings_sha256": hashlib.sha256(protected_settings).hexdigest(), "plan": plan})
+                if snapshots['daily_market_data']['duplicate_asset_dates']:
+                    blocked = {sid: {'execution_status': 'NOT_STARTED_DATA_GATE', 'exit_status': None,
+                        'validation': 'BLOCKED', 'reason': 'NOT_VERIFIABLE: duplicate asset/date observations; repair official calendar, provider lineage and unique daily history',
+                        'snapshot_manifest': 'snapshot_manifest.json'} for sid in StrategyManager.CANONICAL_REGISTRY}
+                    write_json(output / 'stocks.json', blocked)
+                    raise ValueError('DATA_QUALITY_GATE: refuse performance certification on duplicate daily observations')
                 # pandas and existing helpers may enter the same Connection repeatedly.
                 # Suppress inner close only; outer context rolls back/closes after patches exit.
                 with patch.object(engine, "connect", return_value=connection), patch.object(Connection, "__exit__", return_value=False), patch.object(runner, "get_db_engine", return_value=engine):
@@ -241,9 +249,11 @@ def report(output):
                         row["daily"] = axis("BLOCKED", "DEPLOYED_EXECUTOR_UNAVAILABLE: see container scipy import evidence; runtime manifest fix requires deployment",
                             evidence=deployed_file.name + "#" + sid)
         elif record["kind"] == "STRATEGY":
-            row["parity"] = axis("BLOCKED", "PORT_MISSING or reference runtime/bundle absent")
+            row['port_ids'] = record.get('port_ids', [])
+            row["parity"] = axis("BLOCKED", "DEPENDENCY_BLOCKED: linked selection-only port exists but independent reference runtime/bundle is absent" if row['port_ids'] else "PORT_MISSING: no linked Python port; original runtime/bundle also required")
             row["data"] = axis("BLOCKED", "DATA_BLOCKED: original licensed/versioned source snapshot not available locally")
             row["backtest"] = axis("BLOCKED", "ENGINE_UNSUPPORTED: futures contract/margin/roll model" if record["asset_class"] == "FUTURE" else "DEPENDENCY_BLOCKED: original Zipline/TEJ environment and bundle")
+            row['daily'] = axis('BLOCKED', 'ASSET_NOT_DAILY_SCREENABLE: portfolio/futures execution contract' if record['asset_class'] in ('FUTURE', 'ETF_PORTFOLIO') else 'NO_REGISTERED_DAILY_EXECUTOR: original Notebook research source')
         elif record["kind"] == "RESEARCH_SETTING":
             namespace = record["namespace"]
             run_file = output / (namespace + "_attempt.json")
@@ -267,6 +277,9 @@ def report(output):
         elif not record["counts_as_strategy"]:
             for field in ("parity", "data", "backtest", "oos", "daily"):
                 row[field] = axis("NOT_TESTED", "NOT_APPLICABLE: benchmark/analysis/signal-only source", applicable=False)
+        elif record['kind'] == 'UNREGISTERED':
+            row['data'] = axis('BLOCKED', 'SOURCE_DATA_CONTRACT_REVIEW_REQUIRED')
+            row['backtest'] = axis('BLOCKED', 'UNREGISTERED_EXECUTION_CONTRACT: review source and existing compatible engine before registration')
         else:
             row["data"] = axis("BLOCKED", "FROZEN_RUNTIME: existing independent PIT/Fresh OOS gate must pass")
             row["backtest"] = axis("BLOCKED", "FROZEN_RUNTIME: no mutation/reranking of frozen candidate; independent validation required")
@@ -284,17 +297,26 @@ def report(output):
     assert {r["id"] for r in rows} == {r["id"] for r in inventory["records"]}
     counted = [r for r in rows if r["counts_as_strategy"]]
     totals = {"discovered": len(counted), "records": len(rows), "ported": inventory["counts"]["ported_sources"],
-        "parity": dict(Counter(r["parity"]["status"] for r in counted if r["parity"]["applicable"])),
-        "backtest": dict(Counter(r["backtest"]["status"] for r in counted)),
+        "parity": {status: sum(r['parity']['applicable'] and r['parity']['status'] == status for r in counted) for status in ('PASS', 'FAIL', 'BLOCKED', 'NOT_TESTED')},
+        "backtest": {status: sum(r['backtest']['status'] == status for r in counted) for status in ('PASS', 'FAIL', 'BLOCKED', 'NOT_TESTED')},
         "blocked_unique": sum(any(r[f]["status"] == "BLOCKED" for f in ("parity", "data", "backtest", "oos", "daily")) for r in counted),
         "not_fully_validated": sum(r["verdict"] != "PASS" for r in counted),
-        "daily_capable": sum(r["daily"]["status"] == "PASS" for r in counted), "production_eligible": 0}
+        "daily_capable": sum(r["daily"]["status"] == "PASS" for r in counted),
+        "production_eligible_proven": sum(r['eligibility'] == 'PRODUCTION_ELIGIBLE' for r in counted)}
     totals["local_daily_capable"] = sum(bool(r.get("local_daily_capability")) for r in counted)
-    totals['replayed'] = len(stock_results) + sum(len(captures) for captures in research_diagnostics.values())
+    totals['replayed'] = sum(r.get('execution_status') == 'COMPLETED' for r in stock_results.values()) + sum(len(captures) for captures in research_diagnostics.values())
+    totals['stock_execution'] = {status: sum(r.get('execution_status') == status for r in stock_results.values())
+                               for status in sorted({r.get('execution_status', 'UNKNOWN') for r in stock_results.values()})}
     totals['quant_assessed'] = len(quant)
     totals['not_tested_applicable'] = sum(any(r[f]['applicable'] and r[f]['status'] == 'NOT_TESTED' for f in ('parity', 'data', 'backtest', 'oos', 'daily')) for r in counted)
     totals['static_source_semantics_fail'] = sum(r.get('source_semantics', {}).get('status') == 'FAIL' for r in counted)
-    write_json(output / "validation.json", {"totals": totals, "missing_reference_packages": missing, "records": rows})
+    environment = {'python': sys.version.split()[0]}
+    for package in ('numpy', 'pandas', 'vectorbt', 'scipy', 'SQLAlchemy', 'zipline-tej', 'tejapi', 'TejToolAPI', 'lightgbm'):
+        try:
+            environment[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            environment[package] = None
+    write_json(output / "validation.json", {"totals": totals, "environment": environment, "missing_reference_packages": missing, "records": rows})
     lines = ["# 2026-10-21 全策略驗證報告", "", "本輪保留每個策略、變體及失敗／阻擋項；能執行不等於回測驗證通過。", "",
         "```json", json.dumps(totals, ensure_ascii=False, indent=2), "```", "",
         "Parity 的 PASS／FAIL 僅計實際可重現比較；原始語義靜態差異另記 source_semantics。Daily PASS 僅代表既有載入／清單能力，不代表已啟用、資料合格或 PRODUCTION_ELIGIBLE。",
@@ -305,7 +327,9 @@ def report(output):
         lines.append("| `" + row["id"] + "` | " + row["source"][0]["path"] + " | " + " | ".join(row[f]["status"] for f in ("parity", "data", "backtest", "oos", "daily")) + " | " + row["verdict"] + " |")
     lines += ['', '## 本輪診斷績效（不是驗證通過）', '',
         '年化 252 個交易日、risk-free/MAR=0，沿用 core/backtest/metrics.py。研究勝率及交易數採扣費後 long-only flat-to-flat 完整現金週期；未平倉不計。股票採原引擎 closed trades。Turnover 為所有實際成交金額／期初資產。',
-        'GROSS／BASE_COST／STRESS_COST 的逐筆成交、曲線、historical 70/30 與 252/63 expanding folds 見 *_diagnostics.json。這些期間已用於研究選擇，全部不是 Fresh OOS。價格指數及連續行情分段僅作診斷，缺少含息／資產相符基準、最低費及流動性驗證維持 BLOCKED。', '',
+        '既有研究 CSV 及其原有指標定義完整保留。例如 Fundamental 舊 Sortino 使用負報酬的標準差，本表依既有 canonical metrics 使用全樣本 downside RMS；舊 trade_count 為成交筆數，另存 order_count，不與本表完整交易週期混用。統一診斷與舊 scoreboard 的指標定義差異，不代表重寫原始交易結果。',
+        'GROSS／BASE_COST／STRESS_COST 的逐筆成交、曲線、historical 70/30 與 252/63 expanding folds 見 *_diagnostics.json。這些期間已用於研究選擇，全部不是 Fresh OOS。Config.MARKET_SYMBOL 實為 2330，並非 TAIEX；早版誤標已另存更正證據，proxy 分段不能代表大盤行情，行情及基準驗證全部 BLOCKED。',
+        '本地股票診斷日期含週末，snapshot_quality.json 保留異常；資料供應者、官方交易日曆、資產範圍及調整來源未獨立認證。本表是原有儲存資料的引擎行為紀錄，不能當作已驗證的歷史績效。缺少含息基準、精確費稅、最低費及流動性仍維持 BLOCKED。', '',
         '| ID | CAGR | Sharpe | Sortino | MDD | Win Rate | Closed Trades | Turnover |',
         '|---|---:|---:|---:|---:|---:|---:|---:|']
     for row in counted:

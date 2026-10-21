@@ -1,0 +1,52 @@
+{
+  "phase": "2",
+  "inventory_counts": {
+    "strategies_and_execution_variants": 453,
+    "records": 461,
+    "by_kind": {
+      "REGISTERED": 19,
+      "RESEARCH_SETTING": 384,
+      "STRATEGY": 49,
+      "BENCHMARK": 5,
+      "ANALYSIS_ONLY": 1,
+      "FROZEN_RUNTIME": 1,
+      "SIGNAL_ONLY": 2
+    },
+    "notebook_sources": 41,
+    "ported_sources": 12,
+    "aliases": 14,
+    "parse_errors": 0
+  },
+  "stock_execution": {
+    "COMPLETED": 13,
+    "NOT_STARTED_DATA_GATE": 5,
+    "TERMINATED_BY_DATA_GATE": 1
+  },
+  "research_execution": {
+    "strategy_research": 300,
+    "portfolio_research": 48,
+    "fundamental_strategy_validation": 36
+  },
+  "backtest_certification": "No PASS; 13 completed stock characterizations fail same-close timing; other stocks stop at verified input-quality gate. Research certification remains BLOCKED.",
+  "baseline": {
+    "focused_prechange": "590 passed, 7 deselected, 1 xfailed",
+    "source_guard": "No strategy or backtest owner changed; snapshot/transactions/equity preserved for completed diagnostics; existing exact synthetic selection/trade fixtures rerun.",
+    "blocked_baseline": "Do not modify strategies lacking valid data/baseline. No claim of complete real original/port signal-holdings-fill parity, or original-vs-observer fill sequence, where originals did not export that ledger."
+  },
+  "evidence_sha256": {
+    "snapshot_manifest.json": "13b733b9719f714ad128aee4839206498bfbb874865ad64128ac94eaf502700b",
+    "snapshot_quality.json": "14eb3067541853b4cd70fb224245f3563ed29c67e56f1f3ad051cd441dc29b87",
+    "validation_plan.json": "f543f0d048cecf8f6dfc00e1d376682a2f776578976cee96912813ee3c7cf27b",
+    "stocks.json": "f34627790813bbf4393995c6c5e90ef733f9907f0bdfdd4de195c43b386de8b0",
+    "stocks_attempt.json": "f5ea79cc7df60210bdda3d84c716d61de14aa1edc6883e5a649c90ea5e998b53",
+    "replay_reproducibility.json": "51735c1188964442600731be5e742352978fbcaa66c428a00002c8634272eaaf",
+    "quant_assessment_plan_v2.json": "5242959d119fb2ccefa64bfdfe214e41f6251872142e4bfa8ba3781deca86619",
+    "quant_assessments.json": "8ebc22e62b84d90681a813fb3a6690e0e43e944e3c05f0c09490035f24736e31",
+    "benchmark_identity_correction.json": "27598b8fbe077967d26675a43ad6c5ea445411ff3aac30049c03f90171c3015f",
+    "safety_verification.json": "871da755e15215b1cc99b2c57e707c276732f561cefa975187b1799114b78fa3"
+  },
+  "asset_obstacles": "Original equity Notebook depends on missing reference environment/bundle; ETF effective-tax/portfolio data and futures contract/margin/roll execution model are not verified; no asset was forced through a stock screener.",
+  "metrics_authority": "core/backtest/metrics.py; existing research CSV conventions preserved separately",
+  "oos": "BLOCKED: historical selection periods are not new untouched OOS; LTR/XGBoost model provenance and label purging require original reference data",
+  "market_regimes_and_benchmark": "BLOCKED: MARKET_SYMBOL is single stock 2330, not TAIEX. Proxy diagnostics do not certify market regimes or asset-matched total-return benchmark."
+}
