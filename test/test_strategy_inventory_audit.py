@@ -75,12 +75,23 @@ def test_replay_output_directory_does_not_create_new_strategy_ids(tmp_path, monk
         path = tmp_path / 'outputs' / run / 'parameter_grid.csv'
         path.parent.mkdir(parents=True)
         path.write_text('config_id,combination_method,top_n,rebalance_days,stock_weighting\none,equal,20,20,equal\n')
+    (tmp_path / 'strategy_settings.json').write_text(json.dumps({'active_strategies': ['one']}))
     result = audit.inventory(tmp_path / 'evidence')
     research = [r for r in result['records'] if r['kind'] == 'RESEARCH_SETTING']
     assert len(research) == 1
     assert len(research[0]['sources']) == 2
+    assert any(ref.get('field') == 'active_strategies' and ref['id'] == 'one' for ref in result['json_identity_references'])
     path.write_text('config_id,combination_method,top_n,rebalance_days,stock_weighting\none,equal,30,20,equal\n')
     changed = audit.inventory(tmp_path / 'changed')
     variants = [r for r in changed['records'] if r['kind'] == 'RESEARCH_SETTING']
     assert len(variants) == 2
     assert {r['parameters']['top_n'] for r in variants} == {'20', '30'}
+    experimental = tmp_path / 'experimental/new_rule.py'
+    experimental.parent.mkdir()
+    experimental.write_text('class ContractStrategy(Protocol):\n def filter_candidates(self, frame): ...\nclass NewRule(BaseStrategy):\n def filter_candidates(self, frame):\n  return frame\n')
+    discovered = audit.inventory(tmp_path / 'extra')
+    found = [r for r in discovered['records'] if r['kind'] == 'UNREGISTERED']
+    assert len(found) == 1 and found[0]['counts_as_strategy']
+    assert found[0]['sources'][0]['path'] == 'experimental/new_rule.py'
+    assert discovered['source_availability']['status'] == 'MISSING_SOURCE'
+    assert all(not row['exists'] for row in discovered['source_availability']['checked_paths'])

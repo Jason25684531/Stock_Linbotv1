@@ -152,7 +152,7 @@ def notebook_inventory(path):
 
 def inventory(output):
     output.mkdir(parents=True, exist_ok=True)
-    records, notebook_sources, proxies, scanned, json_references, concrete_classes = [], [], [], [], [], []
+    records, notebook_sources, proxies, scanned, json_references, concrete_classes, python_errors = [], [], [], [], [], [], []
     for sid, factory in StrategyManager.CANONICAL_REGISTRY.items():
         meta = asdict(StrategyManager.STRATEGY_METADATA[sid])
         source = Path(*factory.rsplit(".", 1)[0].split(".")).with_suffix(".py")
@@ -166,12 +166,13 @@ def inventory(output):
     for key, target in StrategyManager.LEGACY_STRATEGY_REGISTRY.items():
         proxies.append({"alias": key, "target": target, "reason": "import-only proxy; no independent class"})
     grid_records = {}
+    python_rules = {}
     for directory, dirs, filenames in os.walk(ROOT):
         relative_directory = Path(directory).relative_to(ROOT).as_posix()
-        data_tree = relative_directory.startswith(("outputs/", "data/", "artifacts/"))
+        data_tree = relative_directory.split('/')[0] in {'outputs', 'data', 'artifacts'}
         # Market-response caches contain observations, not strategy definitions.
         dirs[:] = sorted(d for d in dirs if d not in EXCLUDED
-                         and not (data_tree and d.endswith("_cache")))
+                         and not (data_tree and (d.endswith("_cache") or d in {'_raw', 'raw'})))
         for filename in sorted(filenames):
             path = Path(directory) / filename
             rel = path.relative_to(ROOT).as_posix()
@@ -179,10 +180,30 @@ def inventory(output):
                 scanned.append(rel)
             if path.suffix == ".ipynb":
                 notebook_sources.append(notebook_inventory(path))
-            elif path.suffix == ".py" and rel.startswith("core/strategies/"):
-                tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+            elif path.suffix == ".py" and not rel.startswith(('test/', 'tests/')):
+                try:
+                    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+                except (SyntaxError, UnicodeError) as exc:
+                    python_errors.append({'path': rel, 'error_type': type(exc).__name__})
+                    continue
+                if rel.startswith('core/strategies/'):
+                    extracted = []
+                    for definition in tree.body:
+                        if isinstance(definition, ast.ClassDef):
+                            for member in definition.body:
+                                if isinstance(member, ast.Assign) or (isinstance(member, ast.FunctionDef) and member.name in {
+                                    'filter_candidates', 'signal', 'select_history', 'check_exit', 'calculate_dynamic_stop_loss'}):
+                                    if expression := safe_expression(member):
+                                        extracted.append({'class': definition.name, 'line': member.lineno, 'expression': expression})
+                    python_rules[rel] = extracted
                 for node in tree.body:
-                    if isinstance(node, ast.ClassDef) and node.name not in {"BaseStrategy", "TQuantStrategy"}:
+                    if not isinstance(node, ast.ClassDef) or node.name in {'BaseStrategy', 'TQuantStrategy'}:
+                        continue
+                    bases = {ast.unparse(base).rsplit('.', 1)[-1] for base in node.bases}
+                    if bases & {'Protocol', 'ABC'}:
+                        continue
+                    methods = {n.name for n in node.body if isinstance(n, ast.FunctionDef)}
+                    if bases & {'BaseStrategy', 'TQuantStrategy'} or (node.name.endswith('Strategy') and methods & {'filter_candidates', 'select_history'}):
                         concrete_classes.append({"path": rel, "class": node.name})
             elif filename in {"strategy_grid.csv", "strategy_search_manifest.csv", "parameter_grid.csv"} and rel.startswith("outputs/"):
                 namespace = path.relative_to(ROOT).parts[1]
@@ -211,11 +232,11 @@ def inventory(output):
                         record["sources"].append({"path": rel, "line": line, "sha256": digest(path)})
                         if row.get("config_hash") and row["config_hash"] not in record["config_hashes"]:
                             record["config_hashes"].append(row["config_hash"])
-            elif path.suffix == ".json" and not rel.startswith(("data/raw/", "test/", "outputs/strategy_validation/")) and path.stat().st_size < 2_000_000:
-                # Read all small configuration/artifact JSON, export identity references only.
+            elif path.suffix == ".json" and not rel.startswith(("test/", "outputs/strategy_validation/")):
+                # Read configuration/artifact JSON, export identity references only.
                 try:
                     raw = path.read_bytes()
-                    if b'"strategy_id"' not in raw and b'"config_id"' not in raw:
+                    if not any(key in raw for key in (b'"strategy_id"', b'"config_id"', b'"active_strategies"', b'"random_strategy_pool"', b'"strategies"')):
                         continue
                     payload = json.loads(raw.decode("utf-8-sig"))
                 except (ValueError, UnicodeError):
@@ -228,6 +249,10 @@ def inventory(output):
                                 if isinstance(obj.get("strategy_fingerprint"), str):
                                     ref["strategy_fingerprint"] = obj["strategy_fingerprint"]
                                 json_references.append(ref)
+                        for field in ('active_strategies', 'random_strategy_pool', 'strategies'):
+                            if isinstance(obj.get(field), list):
+                                json_references.extend({'path': rel, 'field': field, 'id': value}
+                                                       for value in obj[field] if isinstance(value, str))
                         for k, v in obj.items():
                             if not SENSITIVE.search(k):
                                 visit(v)
@@ -273,6 +298,10 @@ def inventory(output):
             "counts_as_strategy": False, "daily": "NO_REGISTERED_EXECUTOR", "production": "RESEARCH_ONLY",
             "reason": "signal/risk hints without standalone portfolio and execution contract"})
     for record in records:
+        record['port_ids'] = [r['id'] for r in records if r.get('original_notebook') and any(
+            Path(source['path']).name.strip() == Path(r['original_notebook']).name.strip() for source in record['sources'])]
+        if record['kind'] == 'REGISTERED':
+            record['python_rule_index'] = record['sources'][0]['path']
         record["selection_conditions"] = record.get("parameters", "See source_rules and effective callback coordinates")
         record["holding_count"] = record.get("parameters", {}).get("top_n", "NOT_SPECIFIED; source/engine policy required") if isinstance(record.get("parameters"), dict) else "See source_rules/runner MAX_HOLDINGS"
         record["rebalance_frequency"] = record.get("parameters", {}).get("rebalance_days", "See cost_or_schedule and callbacks") if isinstance(record.get("parameters"), dict) else "See cost_or_schedule and callbacks"
@@ -287,14 +316,33 @@ def inventory(output):
     known = {r.get("strategy_id", r["id"]) for r in records}
     known.update(a for r in records for a in r.get("aliases", []))
     unresolved_json = [r for r in json_references if r["id"] not in known]
-    registered_classes = {factory.rsplit(".", 1)[-1] for factory in StrategyManager.CANONICAL_REGISTRY.values()}
-    unregistered_classes = [c for c in concrete_classes if c["class"] not in registered_classes]
+    registered_classes = {(Path(*factory.rsplit('.', 1)[0].split('.')).with_suffix('.py').as_posix(), factory.rsplit('.', 1)[-1])
+                          for factory in StrategyManager.CANONICAL_REGISTRY.values()}
+    unregistered_classes = [c for c in concrete_classes if (c['path'], c['class']) not in registered_classes]
+    for implementation in unregistered_classes:
+        records.append({'id': 'unregistered:' + implementation['path'] + ':' + implementation['class'],
+            'display_name': implementation['class'], 'kind': 'UNREGISTERED', 'counts_as_strategy': True,
+            'sources': [{'path': implementation['path'], 'sha256': digest(ROOT / implementation['path'])}],
+            'asset_class': 'UNKNOWN: source contract must be reviewed before execution',
+            'implementation': implementation['class'], 'daily': 'NO_REGISTERED_EXECUTOR', 'production': 'RESEARCH_ONLY',
+            'selection_conditions': 'See concrete implementation; newly discovered, not automatically imported',
+            'holding_count': 'NOT_VERIFIED', 'rebalance_frequency': 'NOT_VERIFIED', 'required_data': 'SOURCE_REVIEW_REQUIRED',
+            'tests': ['test/test_strategy_inventory_audit.py'], 'validation_status': 'NOT_TESTED',
+            'blockers': ['UNREGISTERED_EXECUTION_CONTRACT']})
     # Source-level records retain unused methods, benchmarks, parse errors, and analysis.
+    source_paths = [ROOT / 'Strategy_example', ROOT.parent / 'Strategy_example', ROOT.parent.parent / 'Strategy_example']
+    source_availability = {'status': 'PRESENT' if (ROOT / 'Strategy_example').is_dir() else 'MISSING_SOURCE',
+        'checked_paths': [{'path': str(p), 'exists': p.is_dir()} for p in source_paths],
+        'import_references': [r['original_notebook'] for r in records if r.get('original_notebook')],
+        'note': 'Only discovered files were scanned; missing roots are never claimed complete.'}
     result = {"schema_version": 1, "records": records, "notebooks": notebook_sources,
+        'source_availability': source_availability,
         "proxies": proxies, "json_identity_references": json_references, "unresolved_json_identities": unresolved_json,
         "concrete_strategy_classes": concrete_classes, "unregistered_concrete_classes": unregistered_classes,
+        "python_parse_errors": python_errors,
+        'python_strategy_rules': python_rules,
         "scan": {"file_count": len(scanned), "paths_sha256": hashlib.sha256("\n".join(scanned).encode()).hexdigest(),
-                 "exclusions": sorted(EXCLUDED) + ["*_cache under data/artifacts/outputs: raw market responses"]},
+                 "exclusions": sorted(EXCLUDED) + ["*_cache, raw and _raw under data/artifacts/outputs: raw market responses"]},
         "counts": {"strategies_and_execution_variants": sum(r["counts_as_strategy"] for r in records),
             "records": len(records), "by_kind": dict(Counter(r["kind"] for r in records)),
             "notebook_sources": len(notebook_sources), "ported_sources": sum(bool(r.get("original_notebook")) for r in records),
@@ -314,7 +362,8 @@ def write_documents(result, output):
         "| 類別 | 數量 |", "|---|---:|"]
     lines.extend(f"| {key} | {value} |" for key, value in counts["by_kind"].items())
     lines += ["", f"Notebook：{counts['notebook_sources']}；來源 port：{counts['ported_sources']}；metadata aliases：{counts['aliases']}；解析錯誤：{counts['parse_errors']}。",
-        "5 筆已執行 benchmark、1 筆純分析與 2 筆 signal-only 留在清冊但不增加策略數。未執行的 callback（例如週期投資 handle_data_6 買入持有對照）保留在 Notebook 定義及原始規則索引，不當成本輪成功執行。",
+        f"Strategy_example 來源狀態：{result['source_availability']['status']}；Python 解析失敗：{len(result['python_parse_errors'])}。缺少來源的搜尋路徑與 Notebook 引用另存 JSON，不宣稱已掃描不存在的目錄。",
+        f"來源含 {counts['by_kind'].get('BENCHMARK', 0)} 筆 benchmark 執行路徑、{counts['by_kind'].get('ANALYSIS_ONLY', 0)} 筆純分析與 {counts['by_kind'].get('SIGNAL_ONLY', 0)} 筆 signal-only，留在清冊但不增加策略數；這不是本輪成功執行次數。未呼叫的 callback（例如週期投資 handle_data_6 買入持有對照）保留在 Notebook 定義及原始規則索引。",
         "同名策略的歷史 frozen fingerprint 保存在 JSON identity references；重跑／repro 不新增策略。Frozen runtime 是研究候選的部署變體，維持獨立 gate，不是 V alias。", "",
         "## 去重與完整性", "",
         "依 reachable trading AST、literal inputs、callback 與 execution entrypoint 比較；不同 dataset／輸出不是假冒新的演算法。相同名稱不足以合併，不同交易契約也不合併。"]
@@ -322,10 +371,10 @@ def write_documents(result, output):
         for match in source.get("equivalent_runs", []):
             lines.append(f"- `{source['source']}` cell {match['cell']} → `{match['equivalent_to']}`：{match['evidence']}。")
     lines += ["", f"未解 JSON 身分：{len(result['unresolved_json_identities'])}；未註冊 concrete strategy class：{len(result['unregistered_concrete_classes'])}。",
-        "所有 concrete class、7 個 V 匯入代理、JSON 身分引用與掃描排除規則均在機器可讀清冊。V30 的 signal 函式並非額外 canonical，LINE 的切換 alias 仍沿用既有路徑。",
-        "排除環境、第三方套件、測試 fixtures／cache、OpenSpec 歷史；data/artifacts/outputs 下的 *_cache 為行情／財報 API 回應，不作策略定義，父目錄 manifest 仍掃描。Strategy_example 全部子目錄皆納入。", "",
+        f"所有 concrete class、{len(result['proxies'])} 個 V 匯入代理、JSON 身分引用與掃描排除規則均在機器可讀清冊。V30 的 signal 函式並非額外 canonical，LINE 的切換 alias 仍沿用既有路徑。",
+        "排除環境、第三方套件、測試 fixtures／cache、OpenSpec 歷史；data/artifacts/outputs 下的 *_cache／raw／_raw 為行情／財報 API 回應，不作策略定義，父目錄 manifest 仍掃描。策略來源 JSON 不設大小上限，settings 的策略陣列亦核對。Strategy_example 全部子目錄皆納入。", "",
         "## 全量身分矩陣", "",
-        "原始訊號、選股條件、持股、頻率與成本的精確 AST／cell 座標見 [Notebook 邏輯索引](strategy_notebook_logic.md)；研究設定的 TopN／rebalance／weighting 在逐筆 JSON parameters。未定義值保留原因，不猜測。",
+        "原始訊號、選股條件、持股、頻率與成本的精確 AST／cell 座標見 [Notebook 邏輯索引](strategy_notebook_logic.md)；正式模組的條件／訊號／出場及 class 參數見 [Python 邏輯索引](strategy_python_logic.md)；研究設定的 TopN／rebalance／weighting 在逐筆 JSON parameters。未定義值保留原因，不猜測。",
         "Canonical 的 portfolio／exit 規則由 BaseStrategy、runner 與既有 overrides 決定；目前 daily/production 是接線資訊，不等於驗證 PASS。", "",
         "| ID／顯示名稱 | Source／原始對應 | Asset | 持股／頻率 | 實作與資格 |", "|---|---|---|---|---|"]
     for record in result["records"]:
@@ -350,6 +399,14 @@ def write_documents(result, output):
             lines += [f"cell {rule['cell']} L{rule['line']} `{rule['owner']}` / {rule['kind']}",
                       "```python", rule["expression"], "```", ""]
     (ROOT / "docs/strategy_notebook_logic.md").write_text("\n".join(lines), encoding="utf-8")
+    lines = ['# 2026-10-21 Python 策略邏輯索引', '',
+        '只讀 AST，不執行策略。列出 class 參數、篩選／訊號／出場方法；繼承行為另見 base.py／_tquant.py。實際持股上限、成本與成交時點由 runner/settings 決定，本輪不修改。', '']
+    for path, rules in result['python_strategy_rules'].items():
+        if rules:
+            lines += ['## ' + path, '']
+        for rule in rules:
+            lines += [f"`{rule['class']}` L{rule['line']}", '```python', rule['expression'], '```', '']
+    (ROOT / 'docs/strategy_python_logic.md').write_text('\n'.join(lines), encoding='utf-8')
 
 
 if __name__ == "__main__":

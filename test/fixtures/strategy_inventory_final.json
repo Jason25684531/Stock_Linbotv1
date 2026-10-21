@@ -1,0 +1,80 @@
+{
+  "phase": "4/5",
+  "counts": {
+    "discovered": 453,
+    "records": 461,
+    "ported": 12,
+    "parity": {
+      "PASS": 0,
+      "FAIL": 0,
+      "BLOCKED": 61,
+      "NOT_TESTED": 0
+    },
+    "backtest": {
+      "PASS": 0,
+      "FAIL": 13,
+      "BLOCKED": 440,
+      "NOT_TESTED": 0
+    },
+    "blocked_unique": 453,
+    "not_fully_validated": 453,
+    "daily_capable": 18,
+    "production_eligible_proven": 0,
+    "local_daily_capable": 19,
+    "replayed": 397,
+    "stock_execution": {
+      "COMPLETED": 13,
+      "NOT_STARTED_DATA_GATE": 5,
+      "TERMINATED_BY_DATA_GATE": 1
+    },
+    "quant_assessed": 397,
+    "not_tested_applicable": 0,
+    "static_source_semantics_fail": 12
+  },
+  "tasks_completed": 37,
+  "requirements_mapped": 18,
+  "scenarios_reviewed": 36,
+  "automated_tests": "=== 1080 passed, 8 deselected, 4 xfailed, 424 warnings in 94.57s (0:01:34) ====",
+  "test_limitations": "8 integration deselected, 4 xfailed; external Dashboard health module excluded after recorded timeout",
+  "strict_validation": "PASS: issues=[]; actual CLI artifact in evidence_sha256",
+  "audit_verification": "PASS for inventory/status tooling and minimal safe capability fix; strategy correctness remains FAIL/BLOCKED as reported",
+  "ponytail_review": "Lean already. Ship.",
+  "identity_set_reconciled": true,
+  "metrics_finite_or_null_with_reason": true,
+  "production_activation": "UNCHANGED",
+  "broker_submission": "DISABLED",
+  "deployment": "NOT_PERFORMED",
+  "evidence_sha256": {
+    "inventory.json": "d7736d0febce9e237467a6650d0c0ad4952c6577e8fa9e9cf66ac4dbc2d52721",
+    "validation.json": "aa23d18f27da689118b19751de8d3271797059d20449c3e6fba7f0d0d32796ee",
+    "safety_verification.json": "871da755e15215b1cc99b2c57e707c276732f561cefa975187b1799114b78fa3",
+    "strategy_full_inventory.md": "e23e14b8d169d5dbf97192cd28b748cc010a6f66d9d2a3614deed60f4c3aefea",
+    "strategy_validation_report.md": "bc615b96c4451494adf18d87807ef32e413db7fb182591d5dca8a865be9db063",
+    "tasks.md": "fa5a752b5c683987242856e59a9794a173c0e04d309db29c6134c663305822a5",
+    "verification.md": "00d1988e1abe8a8e686fa48b8350fbf9efbe7fc314dfaee180e16ec3fb131674",
+    "final_release_tests.log": "67666c6678cc4212fd7d202b556c903587350978b4c494585511797a857b9d35",
+    "final_focused_tests.log": "858800d087c0fdfabe3e3cda5817151ed483a214e942fdf7484a15c380242171",
+    "final_data_gate_tests.log": "31d3ca6161b8debaed8cc1401c231cff0d21bfeb811d65c792c5e439a7361560",
+    "openspec_strict_final.json": "b710855e6e43b2d0d4755c1a58f5fc864722bc0fa99ed79884c25d5871b0bfa1"
+  },
+  "ignored_local_artifacts": [
+    "docs/",
+    "openspec/",
+    "outputs/"
+  ],
+  "user_gitignore_preserved": true,
+  "committed_evidence": [
+    "strategy_inventory_phase0.json",
+    "strategy_inventory_phase1.json",
+    "strategy_inventory_phase2.json",
+    "strategy_inventory_phase3.json"
+  ],
+  "remaining_blockers": [
+    "Original reference environment/bundles and independent dynamic parity",
+    "Validated equity daily observations/calendar, PIT and next-session execution",
+    "ETF/futures institution/data contracts",
+    "Untouched OOS, liquidity and asset-matched total-return benchmark",
+    "Deploy scipy dependency fix separately"
+  ],
+  "safety_limit": "Full prechange hashes of ignored historical artifact trees unavailable; no stronger immutability claim than preserved recorded hashes/configs and new-output path confinement."
+}
