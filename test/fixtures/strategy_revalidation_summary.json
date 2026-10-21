@@ -1,0 +1,678 @@
+{
+  "change": "2026-10-21-all-strategy-historical-revalidation",
+  "summary": {
+    "family_count": 64,
+    "source_records": 461,
+    "historical_validation_identities": 453,
+    "non_strategy_tools": 7,
+    "research_parameters": 384,
+    "historical_completed_identities": 398,
+    "historical_completed_families": 28,
+    "verified_historical_identities": 384,
+    "reused_reproducible_identities": 384,
+    "new_valid_investment_backtests": 0,
+    "new_reproductions": 46,
+    "fresh_oos_certified": 0,
+    "manifest_status_counts": {
+      "PASS": 40,
+      "NOT_VERIFIABLE": 77,
+      "FAIL": 2
+    },
+    "blocked_families": 64,
+    "historical_owner_gate_fail": 36,
+    "historical_owner_gate_pass": 300,
+    "historical_shadow_approval": "SHADOW_APPROVED",
+    "production_eligible": 0,
+    "corrected_diagnostic_replays": 48,
+    "corrected_cost_tracks": 144,
+    "changed_d5_configurations": 2,
+    "current_engine_component_validated": 48,
+    "new_fully_reproduced_families": 0,
+    "current_frozen_oos_window": {
+      "cutoff": "2026-07-28",
+      "fresh_start": "2026-07-29",
+      "latest_available_date": "2026-10-14",
+      "trading_days": 53,
+      "calendar_months": 4,
+      "rebalance_count": 1
+    }
+  },
+  "tests": {
+    "baseline_characterization.log": "========== 56 passed, 5 deselected, 1 xfailed, 3 warnings in 17.12s ===========",
+    "research_before_fix.log": "======================= 44 passed, 4 warnings in 28.20s =======================",
+    "final_regressions.log": "=== 539 passed, 5 deselected, 1 xfailed, 414 warnings in 107.14s (0:01:47) ====",
+    "end_to_end_execution_tests.log": "========== 70 passed, 5 deselected, 1 xfailed, 7 warnings in 13.36s ===========",
+    "review_fix_tests.log": "======================= 23 passed, 4 warnings in 16.76s ======================="
+  },
+  "baseline_actual_argv": [
+    "myenv/Scripts/python.exe",
+    "-m",
+    "pytest",
+    "test/characterization",
+    "-m",
+    "not integration",
+    "-q"
+  ],
+  "baseline_command_note": "Exact argv corrects the prose not-integration shorthand in the Phase 1 receipt; original receipt retained.",
+  "preservation": {
+    "status": "PASS",
+    "identity_records": 461,
+    "family_records": 64,
+    "family_linked_records": 454,
+    "protected_identity_sources_checked": 74,
+    "historical_hashes_checked": 5463,
+    "historical_failures": [],
+    "intentional_source_changes": [
+      "core/backtest/runner.py",
+      "jobs/run_portfolio_research.py"
+    ],
+    "preserved_user_worktree_change": ".gitignore",
+    "BROKER_ORDER_SUBMISSION": "DISABLED"
+  },
+  "family_members": {
+    "family:anthony_contrarian": [
+      "notebook:TQ_安東尼·賣利亞反向操作策略:cell20:handle_data"
+    ],
+    "family:aroon_trend": [
+      "aroon_trend",
+      "notebook:TQ_阿隆指標交易策略:cell3:handle_data"
+    ],
+    "family:bias_breakout": [
+      "bias_reversion",
+      "notebook:TQ_乖離率策略:cell14:handle_data"
+    ],
+    "family:bollinger_reversion": [
+      "bollinger_reversion",
+      "notebook:TQ_布林通道交易策略:cell14:handle_data"
+    ],
+    "family:brandes_value": [
+      "notebook:TQ_查爾士．布蘭帝 價值型選股法則:cell7:handle_data_1"
+    ],
+    "family:dewood_growth_momentum": [
+      "notebook:TQ_德伍．卻斯動能策略:cell6:handle_data_1"
+    ],
+    "family:dreman_contrarian": [
+      "notebook:TQ_David_Dreman_逆向投資策略:cell18:handle_data"
+    ],
+    "family:etf_allocation": [
+      "notebook:TQ_ETF資產配置模型:cell15:initialize"
+    ],
+    "family:etf_premium_arbitrage": [
+      "notebook:TQ_造市商與一般投資人在 ETF 折溢價套利中的實作績效探討"
+    ],
+    "family:extended_volume_momentum": [
+      "notebook:TQ_延伸量能回測策略:cell27:initialize1"
+    ],
+    "family:fama_french": [
+      "notebook:TQ_尤金·法瑪(Eugene_Fama)三因子模型策略:cell6:handle_data"
+    ],
+    "family:fundamental_strategy_validation:G2_OPERATING_INCOME_YOY": [
+      "fundamental_strategy_validation:G2__EQUAL__TOP10__REB20__EQUAL",
+      "fundamental_strategy_validation:G2__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2__EQUAL__TOP10__REB60__EQUAL",
+      "fundamental_strategy_validation:G2__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2__EQUAL__TOP20__REB20__EQUAL",
+      "fundamental_strategy_validation:G2__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2__EQUAL__TOP20__REB60__EQUAL",
+      "fundamental_strategy_validation:G2__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2__EQUAL__TOP5__REB20__EQUAL",
+      "fundamental_strategy_validation:G2__EQUAL__TOP5__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2__EQUAL__TOP5__REB60__EQUAL",
+      "fundamental_strategy_validation:G2__EQUAL__TOP5__REB60__SCORE_WEIGHTED"
+    ],
+    "family:fundamental_strategy_validation:G2_OPERATING_INCOME_YOY+G3_EPS_YOY": [
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB20__EQUAL",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB60__EQUAL",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB20__EQUAL",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB60__EQUAL",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB20__EQUAL",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB60__EQUAL",
+      "fundamental_strategy_validation:G2_PLUS_G3__EQUAL__TOP5__REB60__SCORE_WEIGHTED",
+      "fundamental_g2g3_top5_reb60_score_weighted_v1"
+    ],
+    "family:fundamental_strategy_validation:G3_EPS_YOY": [
+      "fundamental_strategy_validation:G3__EQUAL__TOP10__REB20__EQUAL",
+      "fundamental_strategy_validation:G3__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G3__EQUAL__TOP10__REB60__EQUAL",
+      "fundamental_strategy_validation:G3__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G3__EQUAL__TOP20__REB20__EQUAL",
+      "fundamental_strategy_validation:G3__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G3__EQUAL__TOP20__REB60__EQUAL",
+      "fundamental_strategy_validation:G3__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G3__EQUAL__TOP5__REB20__EQUAL",
+      "fundamental_strategy_validation:G3__EQUAL__TOP5__REB20__SCORE_WEIGHTED",
+      "fundamental_strategy_validation:G3__EQUAL__TOP5__REB60__EQUAL",
+      "fundamental_strategy_validation:G3__EQUAL__TOP5__REB60__SCORE_WEIGHTED"
+    ],
+    "family:futures_impulse_macd": [
+      "notebook:TQ-Future_Impluse_MACD_期貨交易策略:cell14:initialize"
+    ],
+    "family:futures_institutional_oi": [
+      "notebook:TQ-Future_三大法人籌碼面台指期貨交易策略:cell12:initialize"
+    ],
+    "family:futures_ma_cross": [
+      "notebook:TQ-Future_黃金交叉期貨交易策略:cell2:initialize"
+    ],
+    "family:futures_retail_sentiment": [
+      "notebook:TQ_期貨策略範例:cell10:handle_data"
+    ],
+    "family:futures_vol_target_momentum": [
+      "notebook:TQ_Future_波動率調整持倉動能期貨策略:cell2:initialize"
+    ],
+    "family:gardner_small_growth": [
+      "notebook:TQ_從羅伯．加迪納的選股法出發：在台股尋找小型成長黑馬:cell8:handle_data_1"
+    ],
+    "family:ichimoku_ml": [
+      "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_ml"
+    ],
+    "family:ichimoku_ml_led_hybrid": [
+      "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix_2"
+    ],
+    "family:ichimoku_technical": [
+      "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_raw"
+    ],
+    "family:ichimoku_technical_led_hybrid": [
+      "notebook:TQ_機器學習算法 XGBoost 提升技術指標一目均衡表的投資績效:cell15:handle_data_mix"
+    ],
+    "family:industry_momentum_quality": [
+      "notebook:TQ_IMQ_IndMom_Quality:cell28:initialize_fn"
+    ],
+    "family:ivalue": [
+      "notebook:TQ_iValue:cell29:initialize"
+    ],
+    "family:kd_oversold": [
+      "kd_oversold",
+      "notebook:TQ_KD指標回測實戰:cell18:handle_data"
+    ],
+    "family:lambdamart_ranking": [
+      "notebook:TQ_LTR_LambdaMART截面排名:cell18:initialize"
+    ],
+    "family:large_holder_flow": [
+      "notebook:TQ_跟隨大戶策略:cell22:initialize"
+    ],
+    "family:long_term_trend": [
+      "long_term_trend",
+      "notebook:TQ_長期趨勢策略:cell23:initialize"
+    ],
+    "family:macd_cross": [
+      "macd_cross",
+      "notebook:TQ_MACD交易策略:cell13:handle_data"
+    ],
+    "family:macro_cycle_allocation": [
+      "notebook:TQ_週期投資:cell3:handle_data",
+      "notebook:TQ_週期投資:cell6:handle_data_2",
+      "notebook:TQ_週期投資:cell6:handle_data_3",
+      "notebook:TQ_週期投資:cell6:handle_data_4",
+      "notebook:TQ_週期投資:cell6:handle_data_5"
+    ],
+    "family:malkiel_growth": [
+      "notebook:TQ_柏頓．墨基爾成功選股法則:cell18:handle_data_1"
+    ],
+    "family:margin_maintenance": [
+      "notebook:TQ_融資維持率:cell17:handle_data"
+    ],
+    "family:michael_income": [
+      "notebook:TQ_大師策略＿麥克．喜偉收益型選股法:cell10:handle_data"
+    ],
+    "family:monthly_revenue_growth": [
+      "notebook:TQ_月營收成長率策略:cell49:initialize",
+      "notebook:TQ_月營收成長率策略_simple_algo:cell48:algo.run",
+      "notebook:TQ_月營收成長率策略_simple_algo:cell62:initialize"
+    ],
+    "family:moving_average_distance": [
+      "mad_distance",
+      "notebook:TQ_MAD_移動均線距離策略:cell20:handle_data"
+    ],
+    "family:native:defensive_low_volatility": [
+      "defensive_low_volatility"
+    ],
+    "family:native:growth_momentum_breakout": [
+      "growth_momentum_breakout"
+    ],
+    "family:native:hybrid_trend_rank": [
+      "hybrid_trend_rank"
+    ],
+    "family:native:institutional_flow_confirmation": [
+      "institutional_flow_confirmation"
+    ],
+    "family:native:mean_reversion": [
+      "mean_reversion"
+    ],
+    "family:native:quality_growth": [
+      "quality_growth"
+    ],
+    "family:native:quality_value_low_volatility": [
+      "quality_value_low_volatility"
+    ],
+    "family:oshaughnessy_value": [
+      "notebook:TQ_James_OShaughnessy_Value_v1:cell16:initialize"
+    ],
+    "family:portfolio_research:amihud_20d+momentum_12_1+momentum_20d+momentum_60d+near_high_252d": [
+      "portfolio_research:equal_top20_reb20_equal",
+      "portfolio_research:equal_top20_reb20_score_weighted",
+      "portfolio_research:equal_top20_reb60_equal",
+      "portfolio_research:equal_top20_reb60_score_weighted",
+      "portfolio_research:equal_top30_reb20_equal",
+      "portfolio_research:equal_top30_reb20_score_weighted",
+      "portfolio_research:equal_top30_reb60_equal",
+      "portfolio_research:equal_top30_reb60_score_weighted",
+      "portfolio_research:equal_top50_reb20_equal",
+      "portfolio_research:equal_top50_reb20_score_weighted",
+      "portfolio_research:equal_top50_reb60_equal",
+      "portfolio_research:equal_top50_reb60_score_weighted",
+      "portfolio_research:ic_top20_reb20_equal",
+      "portfolio_research:ic_top20_reb20_score_weighted",
+      "portfolio_research:ic_top20_reb60_equal",
+      "portfolio_research:ic_top20_reb60_score_weighted",
+      "portfolio_research:ic_top30_reb20_equal",
+      "portfolio_research:ic_top30_reb20_score_weighted",
+      "portfolio_research:ic_top30_reb60_equal",
+      "portfolio_research:ic_top30_reb60_score_weighted",
+      "portfolio_research:ic_top50_reb20_equal",
+      "portfolio_research:ic_top50_reb20_score_weighted",
+      "portfolio_research:ic_top50_reb60_equal",
+      "portfolio_research:ic_top50_reb60_score_weighted",
+      "portfolio_research:icir_top20_reb20_equal",
+      "portfolio_research:icir_top20_reb20_score_weighted",
+      "portfolio_research:icir_top20_reb60_equal",
+      "portfolio_research:icir_top20_reb60_score_weighted",
+      "portfolio_research:icir_top30_reb20_equal",
+      "portfolio_research:icir_top30_reb20_score_weighted",
+      "portfolio_research:icir_top30_reb60_equal",
+      "portfolio_research:icir_top30_reb60_score_weighted",
+      "portfolio_research:icir_top50_reb20_equal",
+      "portfolio_research:icir_top50_reb20_score_weighted",
+      "portfolio_research:icir_top50_reb60_equal",
+      "portfolio_research:icir_top50_reb60_score_weighted",
+      "portfolio_research:redundancy_adjusted_top20_reb20_equal",
+      "portfolio_research:redundancy_adjusted_top20_reb20_score_weighted",
+      "portfolio_research:redundancy_adjusted_top20_reb60_equal",
+      "portfolio_research:redundancy_adjusted_top20_reb60_score_weighted",
+      "portfolio_research:redundancy_adjusted_top30_reb20_equal",
+      "portfolio_research:redundancy_adjusted_top30_reb20_score_weighted",
+      "portfolio_research:redundancy_adjusted_top30_reb60_equal",
+      "portfolio_research:redundancy_adjusted_top30_reb60_score_weighted",
+      "portfolio_research:redundancy_adjusted_top50_reb20_equal",
+      "portfolio_research:redundancy_adjusted_top50_reb20_score_weighted",
+      "portfolio_research:redundancy_adjusted_top50_reb60_equal",
+      "portfolio_research:redundancy_adjusted_top50_reb60_score_weighted"
+    ],
+    "family:regression_alpha": [
+      "notebook:TQ_尋找Alpha:cell81:initialize"
+    ],
+    "family:regression_momentum": [
+      "regression_momentum",
+      "notebook:TQ_動量策略:cell28:initialize",
+      "notebook:TQ_期貨策略範例:cell25:initialize"
+    ],
+    "family:rosman_quality_growth": [
+      "notebook:TQ_霍華羅斯曼_審慎致富投資法:cell6:handle_data_1"
+    ],
+    "family:strategy_research:A101_003": [
+      "strategy_research:A101_003__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A101_003+A191_088": [
+      "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003+A191_088__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_088__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003+A191_088__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A101_003+A191_088+A191_132+RS_004_NEAR_HIGH_120D": [
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003+A191_088+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A101_003+A191_132": [
+      "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:A101_003+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A101_003+A191_132__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:A101_003+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A101_003+RS_004_NEAR_HIGH_120D": [
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A101_003__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A191_088": [
+      "strategy_research:A191_088__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:A191_088__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:A191_088__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:A191_088__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:A191_088__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:A191_088__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A191_088+A191_132": [
+      "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:A191_088+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_088+A191_132__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:A191_088+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A191_088+RS_004_NEAR_HIGH_120D": [
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_088__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A191_132": [
+      "strategy_research:A191_132__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_132__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_132__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_132__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:A191_132__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:A191_132__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:A191_132+RS_004_NEAR_HIGH_120D": [
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__EQUAL__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__FACTOR_SCORE__TOP30__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D+A191_132__ICIR__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:strategy_research:RS_004_NEAR_HIGH_120D": [
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP20__REB60__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB20__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB20__SCORE_WEIGHTED",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB60__EQUAL",
+      "strategy_research:RS_004_NEAR_HIGH_120D__EQUAL__TOP30__REB60__SCORE_WEIGHTED"
+    ],
+    "family:trend_following": [
+      "trend_following",
+      "notebook:TQ_趨勢跟蹤策略:cell23:initialize"
+    ],
+    "family:trend_pullback": [
+      "contrarian_pullback",
+      "notebook:TQ_期貨策略範例:cell17:initialize",
+      "notebook:TQ_逆勢交易策略:cell23:initialize"
+    ],
+    "family:vol_adjusted_equity_momentum": [
+      "volatility_adjusted_momentum",
+      "notebook:TQ_VAM_波動率調整截面動能_TWN100:cell14:handle_data"
+    ],
+    "family:volume_surge": [
+      "volume_surge",
+      "notebook:TQ_量能回測實戰:cell14:handle_data"
+    ]
+  },
+  "artifact_sha256": {
+    "docs/strategy_full_inventory.md": "a0ee83545992696dc83542cde66987824501218344d0011af6323219f1188c23",
+    "docs/strategy_validation_report.md": "a174d35bb8f9ebf2f96e3b1b6f97eb8891706f6f8ee5277dac9ec5c199701aed",
+    "docs/strategy_historical_backtest_audit.md": "99181d90eeebfa34f154a034560f583837b8f474c56ed39ac586b8e142852c35",
+    "docs/strategy_revalidation_summary.md": "a174d35bb8f9ebf2f96e3b1b6f97eb8891706f6f8ee5277dac9ec5c199701aed",
+    "openspec/changes/2026-10-21-all-strategy-historical-revalidation/proposal.md": "72ae712a7a65b2b8e8308575ccac45dde60e9b526dc29de440625075899e359e",
+    "openspec/changes/2026-10-21-all-strategy-historical-revalidation/design.md": "f880ec877f770acc9fb4b1becc235d355e834c4cdf4d0132b3b1c0fae1c25655",
+    "openspec/changes/2026-10-21-all-strategy-historical-revalidation/tasks.md": "fdbde5ac37cc8deb04b4ba30208be846eb01347b2be274c9e1ecdb0ce5947797",
+    "openspec/changes/2026-10-21-all-strategy-historical-revalidation/verification.md": "fb427e580484055a22eab245ffa0b502ceb37ed4c53baedd83cd374bd20b7308",
+    "outputs/strategy_revalidation/2026-10-21-audit/coverage_verification.json": "236a9e032dc505a213f17fded40d511d1eb9cb9d26cb0ab896d3b5e6eca5c133",
+    "outputs/strategy_revalidation/2026-10-21-audit/d5_repair_comparison.json": "055d62914fa15217b71a8ce4a426385818fad67f41216e6f4878f09e6fb31c46",
+    "outputs/strategy_revalidation/2026-10-21-audit/data_validation.json": "73f06e2cc3b155b9863f434fb626847b87c4deb8eb6c12a13b3c235c501d689e",
+    "outputs/strategy_revalidation/2026-10-21-audit/family_matrix.csv": "f2c2d7b9be88b5362405a17851446371a3096bd3b02b8295d62f963d62abbbeb",
+    "outputs/strategy_revalidation/2026-10-21-audit/family_matrix.json": "3cbf4ffc8b7a5b1a9aa4b15186e5c491db673a190bfe7972f68d37e8e9d53486",
+    "outputs/strategy_revalidation/2026-10-21-audit/identity_matrix.csv": "97ec9f71a3952eb20d4c1faf875b1fb59a4b0e139e9da1d731395bcbd2f1327a",
+    "outputs/strategy_revalidation/2026-10-21-audit/identity_matrix_final.json": "c839c85734f846668698e2178637e48a8dec060fe526ad360141776f0a10d795",
+    "outputs/strategy_revalidation/2026-10-21-audit/manifest_verification_corrected.json": "264d7e77aa4f48a9998cbae0d3d345e9577b250277f1a41a85a0cffc6d4560b9",
+    "outputs/strategy_revalidation/2026-10-21-audit/preservation_verification.json": "4615b6b158dc0561a4e747e1a3c45c6e81235b79639baf9c83ceb5fddd206801"
+  },
+  "broker_order_submission": "DISABLED",
+  "activation": "UNCHANGED",
+  "limitation": "Complete coverage and engineering repair; certified investment data and Fresh OOS remain BLOCKED."
+}

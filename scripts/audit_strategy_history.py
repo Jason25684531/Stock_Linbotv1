@@ -52,12 +52,20 @@ def verify_manifest(path, root, by_name, hashes):
     checks = []
     for field, key, expected in hash_claims(read(path)):
         local = path.parent / key
-        candidates = [local] if local.is_file() else by_name.get(Path(key).name, [])
+        # Inputs and archived parent manifests refer to other run directories.
+        # In particular input_hashes/run_manifest.json is NOT this run's manifest.
+        external = 'input_hash' in field or path.name.startswith('parent_')
+        direct = root / key
+        if direct.is_file() and ('/' in key or '\\' in key):
+            candidates = [direct]
+            hashes.setdefault(direct.relative_to(root).as_posix(), digest(direct))
+        else:
+            candidates = by_name.get(Path(key).name, []) if external else [local] if local.is_file() else by_name.get(Path(key).name, [])
         matching = [p for p in candidates if hashes.get(p.relative_to(root).as_posix()) == expected]
         checks.append({'field': field, 'expected': expected,
-                       'status': 'PASS' if matching else 'FAIL' if local.is_file() else 'BLOCKED',
+                       'status': 'PASS' if matching else 'FAIL' if not external and (local.is_file() or direct.is_file()) else 'BLOCKED',
                        'paths': [p.relative_to(root).as_posix() for p in matching],
-                       'reason': None if matching else 'HASH_MISMATCH' if local.is_file() else 'REFERENCED_FILE_NOT_RESOLVED'})
+                       'reason': None if matching else 'HASH_MISMATCH' if not external and (local.is_file() or direct.is_file()) else 'REFERENCED_FILE_NOT_RESOLVED'})
     return {'path': path.relative_to(root).as_posix(), 'sha256': hashes[path.relative_to(root).as_posix()],
             'status': ('PASS' if all(c['status'] == 'PASS' for c in checks) else 'FAIL' if any(c['status'] == 'FAIL' for c in checks) else 'BLOCKED') if checks else 'NOT_VERIFIABLE',
             'checks': checks}
@@ -67,12 +75,12 @@ def row_matches(record, row):
     """ID equality alone is insufficient when configuration hashes are available."""
     expected = record.get('configuration_fingerprint')
     actual = row.get('config_hash')
-    if expected and actual:
-        return expected == actual
+    if expected and actual and expected != actual:
+        return False
     aliases = {'stock_weighting': 'portfolio_weighting'}
     parameters = record.get('parameters') or {}
     for key in ('top_n', 'rebalance_days', 'factor_set', 'factor_weighting', 'portfolio_weighting', 'combination_method', 'stock_weighting'):
-        target = aliases.get(key, key)
+        target = key if key in parameters else aliases.get(key, key)
         if key in row and target in parameters:
             if str(row[key]).lower() != str(parameters[target]).lower():
                 return False

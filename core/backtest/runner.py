@@ -1556,6 +1556,12 @@ class PortfolioBacktestEngine:
         else:
             print("⚠️ 回測結果同步資料庫失敗（或因無有效市場資料被拒絕），已保留 CSV 檔案")
         
+        if self.execution_contract == 'next_session_open_v2':
+            metrics = {'execution_contract': self.execution_contract, 'risk_metrics': metrics['risk_metrics']}
+            for perf in strategy_performance.values():
+                if perf['trade_count'] == 0:
+                    perf['win_rate'] = None
+                    perf['win_rate_reason'] = 'No closed trades'
         return {
             'equity_curve': equity_df,
             'trades': all_trades,
