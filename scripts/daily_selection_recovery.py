@@ -484,6 +484,7 @@ Open items below need an explicit owner decision; nothing here was changed witho
 | OD-10 | V36 relaxed mode drops the consecutive-buy condition | `core/strategies/institutional_flow_confirmation.py` relaxed branch keeps stage-1 rows with chip_score >= 27.5; with real chips the neutral score is ~50, so the relaxed branch admits nearly every stage-1 row when stage 2 is empty | keep, tighten, or remove (strategy rule change) | unchanged; test documents it |
 | OD-11 | Ex-dividend bias in raw-price `high_60` (OD-2) | system has raw prices only; after ex-rights `high_60` stays above an adjusted high for up to 60 sessions | keep raw (stricter), or add adjusted prices | raw, reported |
 | OD-12 | Monthly revenue and post-FY2025 filings have no publication timestamp | `data_quality_report.json` FUNDAMENTALS / MONTHLY_REVENUE | add MOPS publication capture for revenue and recent quarters | DATA_BLOCKED, deadline estimate flagged |
+| OD-13 | Model-only inputs also exclude rule candidates | when the model contract loads (2026-10-13..16) stocks missing a model input (mostly no margin data) are excluded, e.g. 448 of 458 exclusions for mean_reversion on 2026-10-15; when the contract is refused no model exclusion applies, so candidate counts depend on model availability | keep (research engine does the same; parity relies on it), or exclude by rule inputs only and leave those stocks unscored | kept, identical in research and Daily |
 """
 
 
