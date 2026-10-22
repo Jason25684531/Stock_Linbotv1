@@ -497,7 +497,8 @@ class BacktestEngine:
                 raise ValueError('research_data requires a registered strategy')
             from core.research.native_frame import rule_inputs
             from core.research.native_models import load_model_contract
-            contract = load_model_contract(self.strategy_obj.name, self.research_data.available_inputs, self.start_date)
+            contract = load_model_contract(self.strategy_obj.name, self.research_data.available_inputs, self.start_date,
+                                           self.research_data.unavailable_inputs(self.start_date, self.end_date or self.start_date))
             self.model, self.features, self.model_identity = contract.model, contract.features, contract.identity
             self.required_inputs = sorted(rule_inputs(self.strategy_obj) | set(contract.required_raw))
         elif self.mode != 'v30':

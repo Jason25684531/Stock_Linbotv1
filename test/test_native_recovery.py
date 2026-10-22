@@ -160,6 +160,28 @@ def test_model_contract_never_falls_back_or_guesses(tmp_path, monkeypatch):
         load_model_contract("v95_nometa", FRAME_INPUTS, "2026-06-01")
 
 
+def test_null_source_blocks_the_contract_and_only_diagnostic_mode_fills_it(tmp_path, monkeypatch):
+    import joblib
+
+    features = ["rsi_z", "chip_score_z"]
+    joblib.dump({"model": SimpleNamespace(feature_importances_=[0.9, 0.1]), "features": features, "training_date": "2026-05-20 20:55:00"},
+                tmp_path / "stock_ai_model_v94_chip.pkl")
+    monkeypatch.setattr(native_models, "get_model_path", lambda name: str(tmp_path / f"stock_ai_model_{name}.pkl"))
+    snap = snapshot().assign(dealer_buy=np.nan, margin_balance=np.nan)  # sources never populated
+    fin, rev = fundamentals()
+    strict = NativeResearchData(snap, fin, rev)
+    empty = strict.unavailable_inputs(DAYS[0].strftime("%Y-%m-%d"), LAST.strftime("%Y-%m-%d"))
+    assert {"dealer_buy", "dealer_ratio", "margin_change_pct", "chip_score"} <= empty
+    with pytest.raises(ModelContractError, match="FEATURE_UNAVAILABLE_AT_SOURCE"):
+        load_model_contract("v94_chip", FRAME_INPUTS, "2026-06-01", empty)
+    # Diagnostic mode reproduces Daily (NULL -> 0) and says so; it never reports the sources as available data.
+    diagnostic = NativeResearchData(snap, fin, rev, daily_equivalent_fill=True)
+    assert diagnostic.unavailable_inputs("2026-03-02", "2026-08-14") == frozenset()
+    kept, note = diagnostic.frame(LAST.strftime("%Y-%m-%d"), ["chip_score", "dealer_buy", "foreign_ratio"])
+    assert len(kept) == 2 and (kept.chip_score == 0).all() and note["excluded"] == 0
+    assert strict.frame(LAST.strftime("%Y-%m-%d"), ["chip_score"])[0].empty  # strict research excludes instead of filling
+
+
 def test_institutional_strategy_declares_flow_inputs_and_refuses_without_them():
     from core.strategies.institutional_flow_confirmation import InstitutionalFlowConfirmationStrategy as Strategy
 

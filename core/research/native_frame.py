@@ -32,26 +32,31 @@ def rule_inputs(strategy) -> set[str]:
     return {t for t in re.findall(r"""['"]([a-z_0-9]+)['"]""", source) if t in FRAME_INPUTS}
 
 
-def _due(frame: pd.DataFrame, year, month, day) -> pd.Series:
+def _due(year, month, day) -> pd.Series:
     return pd.to_datetime(pd.DataFrame({"year": year, "month": month, "day": day}))
 
 
 class NativeResearchData:
     available_inputs = FRAME_INPUTS
 
-    def __init__(self, snapshot: pd.DataFrame, financials: pd.DataFrame, revenue: pd.DataFrame):
+    # Sources that are NULL for most of the history; Daily and the z-score builder silently turn them into 0.
+    NEVER_POPULATED = ("dealer_buy", "dealer_ratio", "margin_balance", "margin_change_pct", "chip_score")
+
+    def __init__(self, snapshot: pd.DataFrame, financials: pd.DataFrame, revenue: pd.DataFrame, daily_equivalent_fill: bool = False):
+        """daily_equivalent_fill=True reproduces Daily's NULL -> 0 for NEVER_POPULATED inputs (diagnostic only, never certified)."""
+        self.daily_equivalent_fill = daily_equivalent_fill
         self.snapshot = snapshot.sort_values(["stock_id", "trade_date"]).reset_index(drop=True)
         self._bars = self.snapshot.set_index(["stock_id", "trade_date"])
         self._closes = {sid: g.set_index("trade_date").close_price for sid, g in self.snapshot.groupby("stock_id")}
         fin = financials.assign(stock_id=financials.stock_id.astype(str))
         deadline = fin.quarter.map(QUARTER_DEADLINES)
-        fin["due"] = _due(fin, fin.year + deadline.str[2], deadline.str[0], deadline.str[1])
+        fin["due"] = _due(fin.year + deadline.str[2], deadline.str[0], deadline.str[1])
         revenue_ok = fin.revenue.where(fin.revenue > 0)
         fin["op_profit_margin"] = fin.operating_profit / revenue_ok  # Daily: operating_profit / revenue
         fin["rd_ratio"] = fin.rd_expense / revenue_ok
         self._fin = fin.sort_values(["stock_id", "year", "quarter"])[["stock_id", "due", "op_profit_margin", "rd_ratio", "eps"]]
         rev = revenue.assign(stock_id=revenue.stock_id.astype(str))
-        rev["due"] = _due(rev, rev.year + (rev.month == 12), rev.month % 12 + 1, 10)  # monthly revenue is due on the 10th
+        rev["due"] = _due(rev.year + (rev.month == 12), rev.month % 12 + 1, 10)  # monthly revenue is due on the 10th
         self._rev = rev.sort_values(["stock_id", "year", "month"])[["stock_id", "due", "revenue_yoy"]]
         self._cache: dict[pd.Timestamp, pd.DataFrame] = {}
 
@@ -85,11 +90,22 @@ class NativeResearchData:
         df["trust_consec_days"] = by_stock["trust_buy"].transform(calculate_consec_days)
         df["margin_change_pct"] = by_stock["margin_balance"].transform(calculate_margin_change_pct)
         df["chip_score"] = calculate_chip_score(df)
+        if self.daily_equivalent_fill:
+            df[list(self.NEVER_POPULATED)] = df[list(self.NEVER_POPULATED)].fillna(0)
         df = calculate_ratio_features(df)  # volume_ratio over the history, as in training
         latest = df[df.trade_date == date].merge(self._published(self._fin, date), on="stock_id", how="left")
         latest = latest.merge(self._published(self._rev, date), on="stock_id", how="left")
-        self._cache = {date: latest}  # one date at a time; replays walk forward
+        self._cache[date] = latest  # shared by every strategy replayed on this provider
         return latest
+
+    def unavailable_inputs(self, start: str, end: str) -> frozenset:
+        """Inputs whose source is entirely NULL in the window (strict mode); empty when diagnostic filling is on."""
+        if self.daily_equivalent_fill:
+            return frozenset()
+        window = self.snapshot[(self.snapshot.trade_date >= start) & (self.snapshot.trade_date <= end)]
+        empty = {"dealer_buy", "dealer_ratio"} if window.dealer_buy.isna().all() else set()
+        empty |= {"margin_balance", "margin_change_pct"} if window.margin_balance.isna().all() else set()
+        return frozenset(empty | ({"chip_score"} if empty else set()))
 
     def frame(self, date_str: str, required) -> tuple[pd.DataFrame, dict]:
         """Daily-equivalent candidate frame; stocks missing any required input are excluded and counted."""

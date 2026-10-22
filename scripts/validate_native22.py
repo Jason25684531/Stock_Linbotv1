@@ -384,7 +384,7 @@ def engine():
     print(json.dumps({'returncode': proc.returncode, 'counts': dict(counts)}))
 
 
-def native(start='2026-09-01', end='2026-10-20'):
+def native(start='2026-09-01', end='2026-10-20', contracts=('legacy_same_close', 'next_session_open_v2'), out_dir=None):
     """Replay the 7 native strategies under both contracts on one read-only MySQL snapshot (diagnostic only)."""
     import contextlib
     import random
@@ -414,8 +414,9 @@ def native(start='2026-09-01', end='2026-10-20'):
                 self.fills.append({'date': date_str, 'signal_date': self._execution_asof or date_str, 'stock_id': stock_id,
                                    'side': 'SELL', 'shares': shares, 'price': self.trades[-1]['sell_price'], 'reason': reason})
 
-    logs = OUT / 'native_logs'
-    logs.mkdir(exist_ok=True)
+    target = out_dir or OUT
+    logs = target / 'native_logs'
+    logs.mkdir(parents=True, exist_ok=True)
     engine_ = get_db_engine()
     settings_bytes = StrategyManager.SETTINGS_FILE.read_bytes()
     result = {'window': [start, end], 'seed': '2026-10-21', 'capital': 1_000_000,
@@ -434,7 +435,7 @@ def native(start='2026-09-01', end='2026-10-20'):
                     patch.object(runner, 'get_db_engine', return_value=engine_):
                 for sid in NATIVE:
                     result['strategies'][sid] = {}
-                    for contract in ('legacy_same_close', 'next_session_open_v2'):
+                    for contract in contracts:
                         print('NATIVE', sid, contract, flush=True)
                         random.seed('2026-10-21')
                         extra = {'trading_sessions': sessions} if contract == 'next_session_open_v2' else {}
@@ -453,23 +454,24 @@ def native(start='2026-09-01', end='2026-10-20'):
                             'data_exclusions': e.data_exclusions, 'metrics': metrics}
             conn.rollback()
     assert StrategyManager.SETTINGS_FILE.read_bytes() == settings_bytes
-    historical = read(ROOT / HISTORY / 'stocks.json')
-    key = lambda f: (f['date'], f['stock_id'], f['side'])
-    for sid, runs in result['strategies'].items():
-        old, new = runs['legacy_same_close'], runs['next_session_open_v2']
-        hist = [{'date': d, 'stock_id': s, 'side': side} for d, s, side, *_ in historical[sid].get('events', [])]
-        result['strategies'][sid]['diff'] = {
-            'legacy_fills': len(old['fills']), 'v2_fills': len(new['fills']),
-            'legacy_only': sorted(set(map(key, old['fills'])) - set(map(key, new['fills']))),
-            'v2_only': sorted(set(map(key, new['fills'])) - set(map(key, old['fills']))),
-            'v2_unfilled_events': [ev for ev in new['execution_events'] if ev['status'] != 'FILLED'],
-            'v2_rows_excluded_missing_inputs': sum(x['excluded_missing_inputs'] for x in new['data_exclusions']),
-            'v2_rows_seen': sum(x['rows'] for x in new['data_exclusions']),
-            'legacy_rerun_equals_2026_10_21_history': sorted(map(key, old['fills'])) == sorted(map(key, hist)),
-        }
-    write(out('native_contract_replay.json'), result)
+    if len(contracts) == 2:
+        historical = read(ROOT / HISTORY / 'stocks.json')
+        key = lambda f: (f['date'], f['stock_id'], f['side'])
+        for sid, runs in result['strategies'].items():
+            old, new = runs['legacy_same_close'], runs['next_session_open_v2']
+            hist = [{'date': d, 'stock_id': s, 'side': side} for d, s, side, *_ in historical[sid].get('events', [])]
+            result['strategies'][sid]['diff'] = {
+                'legacy_fills': len(old['fills']), 'v2_fills': len(new['fills']),
+                'legacy_only': sorted(set(map(key, old['fills'])) - set(map(key, new['fills']))),
+                'v2_only': sorted(set(map(key, new['fills'])) - set(map(key, old['fills']))),
+                'v2_unfilled_events': [ev for ev in new['execution_events'] if ev['status'] != 'FILLED'],
+                'v2_rows_excluded_missing_inputs': sum(x['excluded_missing_inputs'] for x in new['data_exclusions']),
+                'v2_rows_seen': sum(x['rows'] for x in new['data_exclusions']),
+                'legacy_rerun_equals_2026_10_21_history': sorted(map(key, old['fills'])) == sorted(map(key, hist)),
+            }
+    write(out('native_contract_replay.json') if out_dir is None else out_dir / 'native_contract_replay.json', result)
     print(json.dumps({sid: {k: v for k, v in r['diff'].items() if k in ('legacy_fills', 'v2_fills', 'v2_rows_excluded_missing_inputs', 'v2_rows_seen', 'legacy_rerun_equals_2026_10_21_history')}
-                      for sid, r in result['strategies'].items()}))
+                      if 'diff' in r else {c: len(r[c]['fills']) for c in contracts} for sid, r in result['strategies'].items()}))
 
 
 CERTIFIED = ('cagr', 'sharpe', 'sortino', 'max_drawdown', 'win_rate', 'trade_count', 'turnover', 'gross_return', 'net_return',
