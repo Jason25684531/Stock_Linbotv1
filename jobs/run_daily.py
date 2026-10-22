@@ -46,6 +46,8 @@ from core.research.native_models import ModelContractError, load_model_contract
 from config import Config
 
 FEATURE_MODES = ('legacy', 'recovered')
+RECOVERED_HISTORY_COLUMNS = ('trade_date', 'stock_id', 'open_price', 'high_price', 'low_price', 'close_price', 'volume',
+                             'foreign_buy', 'trust_buy', 'dealer_buy', 'margin_balance', 'short_balance')
 
 # 新聞族群加分快取（每日只呼叫一次 Gemini）
 _news_boost_cache: dict = {
@@ -224,6 +226,8 @@ def load_recovered_data(date_str: str, engine) -> NativeResearchData:
     history = _load_market_history(date_str, engine)
     if history.empty:
         raise RuntimeError(f'No valid market history for requested date {date_str}')
+    # Raw source columns only (the research snapshot's schema); legacy writes indicators and revenue_yoy back into this table.
+    history = history[[c for c in RECOVERED_HISTORY_COLUMNS if c in history.columns]]
     financials = pd.read_sql(text("""
         SELECT stock_id, year, quarter, revenue, rd_expense, operating_profit, eps
         FROM financial_statements WHERE year >= 1911
@@ -249,8 +253,11 @@ def recovered_strategy_frame(strategy, data: NativeResearchData, date_str: str):
     try:
         contract = load_model_contract(strategy.name, data.available_inputs, date_str, unavailable)
         required = rule_inputs(strategy) | set(contract.required_raw)
-        if contract.identity.get('training_data_end') is None:
-            status = 'MODEL_BLOCKED: TRAINING_DATA_END_MISSING (training_date is only an upper bound; scores are diagnostic)'
+        reasons = [] if contract.identity.get('training_data_end') else ['TRAINING_DATA_END_MISSING']
+        if 'chip_score_z' in contract.identity['features_used']:
+            reasons.append('CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN')  # trained with dealer/margin absent (OD-3)
+        if reasons:
+            status = f"MODEL_BLOCKED: {', '.join(reasons)} (scores are diagnostic, never published)"
     except ModelContractError as exc:
         required = rule_inputs(strategy)
         status = f'MODEL_BLOCKED: {exc}'

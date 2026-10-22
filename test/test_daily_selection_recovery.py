@@ -129,7 +129,7 @@ def test_actual_publication_date_precedes_the_statutory_deadline():
 # ---- recovered Daily: same core, guarded switch, strict scoring ----
 def fake_db(monkeypatch, run_daily, snap):
     fin, rev = fundamentals()
-    history = snap.drop(columns=["amount", "short_balance"])
+    history = snap.drop(columns=["amount"]).assign(revenue_yoy=0.0, ma60=0.0)  # legacy write-backs in the DB table are ignored
 
     def read_sql(sql, engine, params=None):
         text = str(sql)
