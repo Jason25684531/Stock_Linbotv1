@@ -1,0 +1,714 @@
+{
+  "dates": [
+    "2026-05-21",
+    "2026-06-04",
+    "2026-06-18",
+    "2026-07-03",
+    "2026-07-20"
+  ],
+  "inputs": "research_snapshot_official_chips.parquet + PIT fundamentals (actual publication date first)",
+  "ai_confidence_threshold_backtest_only": 0.6,
+  "strategies": {
+    "defensive_low_volatility": {
+      "strategy_name": "v33_low_vol",
+      "model_file": "stock_ai_model_v33_low_vol.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 5,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "2603",
+            "2882",
+            "2412"
+          ],
+          "daily_top3": [
+            "2603",
+            "2882",
+            "2412"
+          ],
+          "daily_candidates": 6,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 88,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "2637",
+            "4904",
+            "1101"
+          ],
+          "daily_top3": [
+            "2637",
+            "4904",
+            "1101"
+          ],
+          "daily_candidates": 3,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 82,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [
+            "1216",
+            "2330"
+          ],
+          "daily_top3": [
+            "1216",
+            "2330"
+          ],
+          "daily_candidates": 2,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "1909",
+            "2201",
+            "9945"
+          ],
+          "daily_top3": [
+            "1909",
+            "2201",
+            "9945"
+          ],
+          "daily_candidates": 6,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "2884",
+            "2812",
+            "2845"
+          ],
+          "daily_top3": [
+            "2884",
+            "2812",
+            "2845"
+          ],
+          "daily_candidates": 5,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 80,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    },
+    "growth_momentum_breakout": {
+      "strategy_name": "v34_turbo",
+      "model_file": "stock_ai_model_v34_turbo.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 5,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "4916",
+            "6449",
+            "2472"
+          ],
+          "daily_top3": [
+            "4916",
+            "6449",
+            "2472"
+          ],
+          "daily_candidates": 98,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 170,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "3312",
+            "8473",
+            "8070"
+          ],
+          "daily_top3": [
+            "3312",
+            "8473",
+            "8070"
+          ],
+          "daily_candidates": 136,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 164,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [
+            "2478",
+            "1714",
+            "2302"
+          ],
+          "daily_top3": [
+            "2478",
+            "1714",
+            "2302"
+          ],
+          "daily_candidates": 138,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 166,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "1617",
+            "2493",
+            "1708"
+          ],
+          "daily_top3": [
+            "1617",
+            "2493",
+            "1708"
+          ],
+          "daily_candidates": 95,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 166,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "6505",
+            "1467",
+            "2527"
+          ],
+          "daily_top3": [
+            "6505",
+            "1467",
+            "2527"
+          ],
+          "daily_candidates": 56,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 162,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    },
+    "hybrid_trend_rank": {
+      "strategy_name": "v31_hybrid",
+      "model_file": "stock_ai_model_v31_hybrid.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 4,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "2342",
+            "2354",
+            "3044"
+          ],
+          "daily_top3": [
+            "2342",
+            "2354",
+            "3044"
+          ],
+          "daily_candidates": 8,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 88,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "3048",
+            "1727"
+          ],
+          "daily_top3": [
+            "3048",
+            "1727"
+          ],
+          "daily_candidates": 3,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 82,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [],
+          "daily_top3": [],
+          "daily_candidates": 0,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "6531",
+            "2426",
+            "6155"
+          ],
+          "daily_top3": [
+            "6531",
+            "2426",
+            "6155"
+          ],
+          "daily_candidates": 9,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "2601"
+          ],
+          "daily_top3": [
+            "2601"
+          ],
+          "daily_candidates": 1,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 80,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    },
+    "institutional_flow_confirmation": {
+      "strategy_name": "v36_chip_momentum",
+      "model_file": "stock_ai_model_v36_chip_momentum.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 5,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "2383",
+            "3037",
+            "6412"
+          ],
+          "daily_top3": [
+            "2383",
+            "3037",
+            "6412"
+          ],
+          "daily_candidates": 48,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 88,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "2404",
+            "6139",
+            "8131"
+          ],
+          "daily_top3": [
+            "2404",
+            "6139",
+            "8131"
+          ],
+          "daily_candidates": 30,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 82,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [
+            "6005",
+            "6446",
+            "2414"
+          ],
+          "daily_top3": [
+            "6005",
+            "6446",
+            "2414"
+          ],
+          "daily_candidates": 19,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "1810",
+            "8131",
+            "2390"
+          ],
+          "daily_top3": [
+            "1810",
+            "8131",
+            "2390"
+          ],
+          "daily_candidates": 60,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "4763",
+            "1414",
+            "4904"
+          ],
+          "daily_top3": [
+            "4763",
+            "1414",
+            "4904"
+          ],
+          "daily_candidates": 26,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 80,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    },
+    "mean_reversion": {
+      "strategy_name": "v37_mean_reversion",
+      "model_file": "stock_ai_model_v37_mean_reversion.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 5,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "2368",
+            "7750",
+            "2383"
+          ],
+          "daily_top3": [
+            "2368",
+            "7750",
+            "2383"
+          ],
+          "daily_candidates": 64,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 88,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "7730",
+            "2383",
+            "2355"
+          ],
+          "daily_top3": [
+            "7730",
+            "2383",
+            "2355"
+          ],
+          "daily_candidates": 56,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 82,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [
+            "6451",
+            "4916",
+            "9105"
+          ],
+          "daily_top3": [
+            "6451",
+            "4916",
+            "9105"
+          ],
+          "daily_candidates": 49,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "4739",
+            "2881",
+            "6585"
+          ],
+          "daily_top3": [
+            "4739",
+            "2881",
+            "6585"
+          ],
+          "daily_candidates": 79,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 84,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "1718",
+            "6226",
+            "6409"
+          ],
+          "daily_top3": [
+            "1718",
+            "6226",
+            "6409"
+          ],
+          "daily_candidates": 41,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 80,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    },
+    "quality_growth": {
+      "strategy_name": "v35_innovation",
+      "model_file": "stock_ai_model_v35_innovation.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 5,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "6449",
+            "3443",
+            "3090"
+          ],
+          "daily_top3": [
+            "6449",
+            "3443",
+            "3090"
+          ],
+          "daily_candidates": 154,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 206,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "3008",
+            "8473",
+            "2344"
+          ],
+          "daily_top3": [
+            "3008",
+            "8473",
+            "2344"
+          ],
+          "daily_candidates": 183,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 201,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [
+            "2478",
+            "1714",
+            "2344"
+          ],
+          "daily_top3": [
+            "2478",
+            "1714",
+            "2344"
+          ],
+          "daily_candidates": 188,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 203,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "2493",
+            "2484",
+            "8261"
+          ],
+          "daily_top3": [
+            "2493",
+            "2484",
+            "8261"
+          ],
+          "daily_candidates": 180,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 203,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "6446",
+            "6505",
+            "2493"
+          ],
+          "daily_top3": [
+            "6446",
+            "6505",
+            "2493"
+          ],
+          "daily_candidates": 109,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 199,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    },
+    "quality_value_low_volatility": {
+      "strategy_name": "v38_value_dividend",
+      "model_file": "stock_ai_model_v38_value_dividend.pkl",
+      "PARITY": "PARITY_PASS",
+      "dates_with_candidates": 5,
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "research_top3": [
+            "6757",
+            "1609",
+            "2497"
+          ],
+          "daily_top3": [
+            "6757",
+            "1609",
+            "2497"
+          ],
+          "daily_candidates": 38,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1077,
+          "excluded": 127,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-04",
+          "research_top3": [
+            "4155",
+            "6757",
+            "2637"
+          ],
+          "daily_top3": [
+            "4155",
+            "6757",
+            "2637"
+          ],
+          "daily_candidates": 42,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 122,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-06-18",
+          "research_top3": [
+            "6505",
+            "1608",
+            "1529"
+          ],
+          "daily_top3": [
+            "6505",
+            "1608",
+            "1529"
+          ],
+          "daily_candidates": 55,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 124,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-03",
+          "research_top3": [
+            "2537"
+          ],
+          "daily_top3": [
+            "2537"
+          ],
+          "daily_candidates": 90,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1079,
+          "excluded": 124,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        },
+        {
+          "date": "2026-07-20",
+          "research_top3": [
+            "2201",
+            "2520",
+            "2364"
+          ],
+          "daily_top3": [
+            "2201",
+            "2520",
+            "2364"
+          ],
+          "daily_candidates": 49,
+          "equal": true,
+          "same_required_inputs": true,
+          "rows": 1081,
+          "excluded": 120,
+          "model_status": "MODEL_BLOCKED: TRAINING_DATA_END_MISSING, CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN (scores are diagnostic, never published)"
+        }
+      ]
+    }
+  }
+}

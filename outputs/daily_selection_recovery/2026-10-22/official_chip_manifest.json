@@ -1,0 +1,3653 @@
+{
+  "sources": {
+    "T86": "https://www.twse.com.tw/rwd/zh/fund/T86?date={d}&selectType=ALLBUT0999&response=json",
+    "MI_MARGN": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={d}&selectType=ALL&response=json"
+  },
+  "cache_dir": "artifacts/official_chip_cache/twse",
+  "window": [
+    "2025-12-15",
+    "2026-10-21"
+  ],
+  "field_definitions": {
+    "foreign_buy": "T86 外陸資買賣超股數(不含外資自營商), shares",
+    "foreign_dealer_buy": "T86 外資自營商買賣超股數, shares",
+    "trust_buy": "T86 投信買賣超股數, shares",
+    "dealer_buy": "T86 自營商買賣超股數 (自行買賣+避險), shares",
+    "margin_balance": "MI_MARGN 融資今日餘額, lots (張)"
+  },
+  "coverage": [
+    {
+      "dataset": "T86",
+      "date": "2025-12-15",
+      "stat": "OK",
+      "rows": 1274
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-15",
+      "stat": "OK",
+      "rows": 1238
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-16",
+      "stat": "OK",
+      "rows": 1282
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-16",
+      "stat": "OK",
+      "rows": 1238
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-17",
+      "stat": "OK",
+      "rows": 1275
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-17",
+      "stat": "OK",
+      "rows": 1239
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-18",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-18",
+      "stat": "OK",
+      "rows": 1240
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-19",
+      "stat": "OK",
+      "rows": 1262
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-19",
+      "stat": "OK",
+      "rows": 1241
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-22",
+      "stat": "OK",
+      "rows": 1267
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-22",
+      "stat": "OK",
+      "rows": 1241
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-23",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-23",
+      "stat": "OK",
+      "rows": 1242
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-24",
+      "stat": "OK",
+      "rows": 1263
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-24",
+      "stat": "OK",
+      "rows": 1243
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-26",
+      "stat": "OK",
+      "rows": 1255
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-26",
+      "stat": "OK",
+      "rows": 1243
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-29",
+      "stat": "OK",
+      "rows": 1262
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-29",
+      "stat": "OK",
+      "rows": 1245
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-30",
+      "stat": "OK",
+      "rows": 1270
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-30",
+      "stat": "OK",
+      "rows": 1245
+    },
+    {
+      "dataset": "T86",
+      "date": "2025-12-31",
+      "stat": "OK",
+      "rows": 1274
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2025-12-31",
+      "stat": "OK",
+      "rows": 1245
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-02",
+      "stat": "OK",
+      "rows": 1294
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-02",
+      "stat": "OK",
+      "rows": 1245
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-05",
+      "stat": "OK",
+      "rows": 1301
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-05",
+      "stat": "OK",
+      "rows": 1245
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-06",
+      "stat": "OK",
+      "rows": 1289
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-06",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-07",
+      "stat": "OK",
+      "rows": 1291
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-07",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-08",
+      "stat": "OK",
+      "rows": 1277
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-08",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-09",
+      "stat": "OK",
+      "rows": 1280
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-09",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-12",
+      "stat": "OK",
+      "rows": 1283
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-12",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-13",
+      "stat": "OK",
+      "rows": 1289
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-13",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-14",
+      "stat": "OK",
+      "rows": 1290
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-14",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-15",
+      "stat": "OK",
+      "rows": 1291
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-15",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-16",
+      "stat": "OK",
+      "rows": 1295
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-16",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-19",
+      "stat": "OK",
+      "rows": 1292
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-19",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-20",
+      "stat": "OK",
+      "rows": 1290
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-20",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-21",
+      "stat": "OK",
+      "rows": 1301
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-21",
+      "stat": "OK",
+      "rows": 1247
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-22",
+      "stat": "OK",
+      "rows": 1307
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-22",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-23",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-23",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-26",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-26",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-27",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-27",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-28",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-28",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-29",
+      "stat": "OK",
+      "rows": 1286
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-29",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-01-30",
+      "stat": "OK",
+      "rows": 1288
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-01-30",
+      "stat": "OK",
+      "rows": 1246
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-02",
+      "stat": "OK",
+      "rows": 1291
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-02",
+      "stat": "OK",
+      "rows": 1248
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-03",
+      "stat": "OK",
+      "rows": 1303
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-03",
+      "stat": "OK",
+      "rows": 1249
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-04",
+      "stat": "OK",
+      "rows": 1295
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-04",
+      "stat": "OK",
+      "rows": 1250
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-05",
+      "stat": "OK",
+      "rows": 1285
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-05",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-06",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-06",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-09",
+      "stat": "OK",
+      "rows": 1305
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-09",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-10",
+      "stat": "OK",
+      "rows": 1306
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-10",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-11",
+      "stat": "OK",
+      "rows": 1313
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-11",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-23",
+      "stat": "OK",
+      "rows": 1309
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-23",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-24",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-24",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-25",
+      "stat": "OK",
+      "rows": 1303
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-25",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-02-26",
+      "stat": "OK",
+      "rows": 1304
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-02-26",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-02",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-02",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-03",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-03",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-04",
+      "stat": "OK",
+      "rows": 1310
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-04",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-05",
+      "stat": "OK",
+      "rows": 1307
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-05",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-06",
+      "stat": "OK",
+      "rows": 1307
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-06",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-09",
+      "stat": "OK",
+      "rows": 1311
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-09",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-10",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-10",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-11",
+      "stat": "OK",
+      "rows": 1304
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-11",
+      "stat": "OK",
+      "rows": 1251
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-12",
+      "stat": "OK",
+      "rows": 1304
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-12",
+      "stat": "OK",
+      "rows": 1252
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-13",
+      "stat": "OK",
+      "rows": 1303
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-13",
+      "stat": "OK",
+      "rows": 1252
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-16",
+      "stat": "OK",
+      "rows": 1310
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-16",
+      "stat": "OK",
+      "rows": 1252
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-17",
+      "stat": "OK",
+      "rows": 1301
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-17",
+      "stat": "OK",
+      "rows": 1252
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-18",
+      "stat": "OK",
+      "rows": 1300
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-18",
+      "stat": "OK",
+      "rows": 1252
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-19",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-19",
+      "stat": "OK",
+      "rows": 1252
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-20",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-20",
+      "stat": "OK",
+      "rows": 1253
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-23",
+      "stat": "OK",
+      "rows": 1308
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-23",
+      "stat": "OK",
+      "rows": 1253
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-24",
+      "stat": "OK",
+      "rows": 1292
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-24",
+      "stat": "OK",
+      "rows": 1254
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-25",
+      "stat": "OK",
+      "rows": 1300
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-25",
+      "stat": "OK",
+      "rows": 1254
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-26",
+      "stat": "OK",
+      "rows": 1289
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-26",
+      "stat": "OK",
+      "rows": 1254
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-27",
+      "stat": "OK",
+      "rows": 1280
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-27",
+      "stat": "OK",
+      "rows": 1255
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-30",
+      "stat": "OK",
+      "rows": 1306
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-30",
+      "stat": "OK",
+      "rows": 1255
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-03-31",
+      "stat": "OK",
+      "rows": 1301
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-03-31",
+      "stat": "OK",
+      "rows": 1255
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-01",
+      "stat": "OK",
+      "rows": 1312
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-01",
+      "stat": "OK",
+      "rows": 1256
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-02",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-02",
+      "stat": "OK",
+      "rows": 1257
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-07",
+      "stat": "OK",
+      "rows": 1292
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-07",
+      "stat": "OK",
+      "rows": 1257
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-08",
+      "stat": "OK",
+      "rows": 1307
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-08",
+      "stat": "OK",
+      "rows": 1258
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-09",
+      "stat": "OK",
+      "rows": 1307
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-09",
+      "stat": "OK",
+      "rows": 1259
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-10",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-10",
+      "stat": "OK",
+      "rows": 1259
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-13",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-13",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-14",
+      "stat": "OK",
+      "rows": 1316
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-14",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-15",
+      "stat": "OK",
+      "rows": 1317
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-15",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-16",
+      "stat": "OK",
+      "rows": 1310
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-16",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-17",
+      "stat": "OK",
+      "rows": 1312
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-17",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-20",
+      "stat": "OK",
+      "rows": 1311
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-20",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-21",
+      "stat": "OK",
+      "rows": 1310
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-21",
+      "stat": "OK",
+      "rows": 1260
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-22",
+      "stat": "OK",
+      "rows": 1308
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-22",
+      "stat": "OK",
+      "rows": 1262
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-23",
+      "stat": "OK",
+      "rows": 1311
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-23",
+      "stat": "OK",
+      "rows": 1263
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-24",
+      "stat": "OK",
+      "rows": 1308
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-24",
+      "stat": "OK",
+      "rows": 1263
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-27",
+      "stat": "OK",
+      "rows": 1305
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-27",
+      "stat": "OK",
+      "rows": 1264
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-28",
+      "stat": "OK",
+      "rows": 1311
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-28",
+      "stat": "OK",
+      "rows": 1264
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-29",
+      "stat": "OK",
+      "rows": 1314
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-29",
+      "stat": "OK",
+      "rows": 1264
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-04-30",
+      "stat": "OK",
+      "rows": 1308
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-04-30",
+      "stat": "OK",
+      "rows": 1265
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-04",
+      "stat": "OK",
+      "rows": 1314
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-04",
+      "stat": "OK",
+      "rows": 1266
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-05",
+      "stat": "OK",
+      "rows": 1311
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-05",
+      "stat": "OK",
+      "rows": 1266
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-06",
+      "stat": "OK",
+      "rows": 1316
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-06",
+      "stat": "OK",
+      "rows": 1266
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-07",
+      "stat": "OK",
+      "rows": 1319
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-07",
+      "stat": "OK",
+      "rows": 1266
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-08",
+      "stat": "OK",
+      "rows": 1310
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-08",
+      "stat": "OK",
+      "rows": 1266
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-11",
+      "stat": "OK",
+      "rows": 1319
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-11",
+      "stat": "OK",
+      "rows": 1267
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-12",
+      "stat": "OK",
+      "rows": 1323
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-12",
+      "stat": "OK",
+      "rows": 1268
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-13",
+      "stat": "OK",
+      "rows": 1316
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-13",
+      "stat": "OK",
+      "rows": 1268
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-14",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-14",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-15",
+      "stat": "OK",
+      "rows": 1311
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-15",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-18",
+      "stat": "OK",
+      "rows": 1318
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-18",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-19",
+      "stat": "OK",
+      "rows": 1310
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-19",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-20",
+      "stat": "OK",
+      "rows": 1319
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-20",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-21",
+      "stat": "OK",
+      "rows": 1317
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-21",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-22",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-22",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-25",
+      "stat": "OK",
+      "rows": 1321
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-25",
+      "stat": "OK",
+      "rows": 1269
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-26",
+      "stat": "OK",
+      "rows": 1322
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-26",
+      "stat": "OK",
+      "rows": 1271
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-27",
+      "stat": "OK",
+      "rows": 1323
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-27",
+      "stat": "OK",
+      "rows": 1271
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-28",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-28",
+      "stat": "OK",
+      "rows": 1271
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-05-29",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-05-29",
+      "stat": "OK",
+      "rows": 1271
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-01",
+      "stat": "OK",
+      "rows": 1326
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-01",
+      "stat": "OK",
+      "rows": 1271
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-02",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-02",
+      "stat": "OK",
+      "rows": 1273
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-03",
+      "stat": "OK",
+      "rows": 1325
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-03",
+      "stat": "OK",
+      "rows": 1273
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-04",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-04",
+      "stat": "OK",
+      "rows": 1273
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-05",
+      "stat": "OK",
+      "rows": 1320
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-05",
+      "stat": "OK",
+      "rows": 1273
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-08",
+      "stat": "OK",
+      "rows": 1334
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-08",
+      "stat": "OK",
+      "rows": 1276
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-09",
+      "stat": "OK",
+      "rows": 1329
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-09",
+      "stat": "OK",
+      "rows": 1276
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-10",
+      "stat": "OK",
+      "rows": 1329
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-10",
+      "stat": "OK",
+      "rows": 1277
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-11",
+      "stat": "OK",
+      "rows": 1328
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-11",
+      "stat": "OK",
+      "rows": 1277
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-12",
+      "stat": "OK",
+      "rows": 1316
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-12",
+      "stat": "OK",
+      "rows": 1277
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-15",
+      "stat": "OK",
+      "rows": 1324
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-15",
+      "stat": "OK",
+      "rows": 1277
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-16",
+      "stat": "OK",
+      "rows": 1325
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-16",
+      "stat": "OK",
+      "rows": 1278
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-17",
+      "stat": "OK",
+      "rows": 1324
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-17",
+      "stat": "OK",
+      "rows": 1278
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-18",
+      "stat": "OK",
+      "rows": 1318
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-18",
+      "stat": "OK",
+      "rows": 1278
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-22",
+      "stat": "OK",
+      "rows": 1326
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-22",
+      "stat": "OK",
+      "rows": 1278
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-23",
+      "stat": "OK",
+      "rows": 1332
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-23",
+      "stat": "OK",
+      "rows": 1278
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-24",
+      "stat": "OK",
+      "rows": 1325
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-24",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-25",
+      "stat": "OK",
+      "rows": 1326
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-25",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-26",
+      "stat": "OK",
+      "rows": 1328
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-26",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-29",
+      "stat": "OK",
+      "rows": 1328
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-29",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-06-30",
+      "stat": "OK",
+      "rows": 1330
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-06-30",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-01",
+      "stat": "OK",
+      "rows": 1327
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-01",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-02",
+      "stat": "OK",
+      "rows": 1325
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-02",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-03",
+      "stat": "OK",
+      "rows": 1328
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-03",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-06",
+      "stat": "OK",
+      "rows": 1329
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-06",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-07",
+      "stat": "OK",
+      "rows": 1329
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-07",
+      "stat": "OK",
+      "rows": 1279
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-08",
+      "stat": "OK",
+      "rows": 1336
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-08",
+      "stat": "OK",
+      "rows": 1281
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-09",
+      "stat": "OK",
+      "rows": 1335
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-09",
+      "stat": "OK",
+      "rows": 1281
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-13",
+      "stat": "OK",
+      "rows": 1335
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-13",
+      "stat": "OK",
+      "rows": 1282
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-14",
+      "stat": "OK",
+      "rows": 1331
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-14",
+      "stat": "OK",
+      "rows": 1283
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-15",
+      "stat": "OK",
+      "rows": 1333
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-15",
+      "stat": "OK",
+      "rows": 1283
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-16",
+      "stat": "OK",
+      "rows": 1327
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-16",
+      "stat": "OK",
+      "rows": 1284
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-17",
+      "stat": "OK",
+      "rows": 1337
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-17",
+      "stat": "OK",
+      "rows": 1284
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-20",
+      "stat": "OK",
+      "rows": 1337
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-20",
+      "stat": "OK",
+      "rows": 1284
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-21",
+      "stat": "OK",
+      "rows": 1327
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-21",
+      "stat": "OK",
+      "rows": 1284
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-22",
+      "stat": "OK",
+      "rows": 1336
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-22",
+      "stat": "OK",
+      "rows": 1287
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-23",
+      "stat": "OK",
+      "rows": 1329
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-23",
+      "stat": "OK",
+      "rows": 1287
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-24",
+      "stat": "OK",
+      "rows": 1336
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-24",
+      "stat": "OK",
+      "rows": 1287
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-27",
+      "stat": "OK",
+      "rows": 1334
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-27",
+      "stat": "OK",
+      "rows": 1287
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-07-28",
+      "stat": "OK",
+      "rows": 1335
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-07-28",
+      "stat": "OK",
+      "rows": 1288
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-09-28",
+      "stat": "很抱歉，沒有符合條件的資料!",
+      "rows": 0
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-09-28",
+      "stat": "很抱歉，沒有符合條件的資料",
+      "rows": 0
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-09-29",
+      "stat": "OK",
+      "rows": 1333
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-09-29",
+      "stat": "OK",
+      "rows": 1297
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-09-30",
+      "stat": "OK",
+      "rows": 1341
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-09-30",
+      "stat": "OK",
+      "rows": 1297
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-01",
+      "stat": "OK",
+      "rows": 1337
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-01",
+      "stat": "OK",
+      "rows": 1297
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-02",
+      "stat": "OK",
+      "rows": 1338
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-02",
+      "stat": "OK",
+      "rows": 1297
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-05",
+      "stat": "OK",
+      "rows": 1344
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-05",
+      "stat": "OK",
+      "rows": 1297
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-06",
+      "stat": "OK",
+      "rows": 1340
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-06",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-07",
+      "stat": "OK",
+      "rows": 1339
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-07",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-08",
+      "stat": "OK",
+      "rows": 1325
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-08",
+      "stat": "OK",
+      "rows": 1298
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-09",
+      "stat": "很抱歉，沒有符合條件的資料!",
+      "rows": 0
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-09",
+      "stat": "很抱歉，沒有符合條件的資料",
+      "rows": 0
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-12",
+      "stat": "OK",
+      "rows": 1338
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-12",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-13",
+      "stat": "OK",
+      "rows": 1341
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-13",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-14",
+      "stat": "OK",
+      "rows": 1347
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-14",
+      "stat": "OK",
+      "rows": 1299
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-15",
+      "stat": "OK",
+      "rows": 1342
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-15",
+      "stat": "OK",
+      "rows": 1300
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-16",
+      "stat": "OK",
+      "rows": 1335
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-16",
+      "stat": "OK",
+      "rows": 1301
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-19",
+      "stat": "OK",
+      "rows": 1341
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-19",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-20",
+      "stat": "OK",
+      "rows": 1344
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-20",
+      "stat": "OK",
+      "rows": 1302
+    },
+    {
+      "dataset": "T86",
+      "date": "2026-10-21",
+      "stat": "OK",
+      "rows": 1340
+    },
+    {
+      "dataset": "MI_MARGN",
+      "date": "2026-10-21",
+      "stat": "OK",
+      "rows": 1302
+    }
+  ],
+  "files": {
+    "T86_20251215.json": {
+      "sha256": "c5c3ecb43ee5875cf4b0e768c9bd649756e35f499bfd5f91a2971d62331ca0c5",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251215&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:53:32.579314+00:00"
+    },
+    "MI_MARGN_20251215.json": {
+      "sha256": "4382f5536be683481605d4fd7eaecbcf5b0399c69978f4ad9dc6fabc86b948ac",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251215&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:53:33.157599+00:00"
+    },
+    "T86_20251216.json": {
+      "sha256": "09acf820f60c530edae8d33e0bed01e94e47e23058ab844bce1b4a7a81847a05",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251216&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:53:37.167247+00:00"
+    },
+    "MI_MARGN_20251216.json": {
+      "sha256": "cea0b2c8c5909fa14556e9b07e020894b46e88c1ff8d6ff1a49e62a99b22bfa2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251216&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:53:39.006203+00:00"
+    },
+    "T86_20251217.json": {
+      "sha256": "0a7b05e5faa6f52036bd7e560ca34651ab037290915eda9b87d4a9fa1ced3977",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251217&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:53:42.833157+00:00"
+    },
+    "MI_MARGN_20251217.json": {
+      "sha256": "b523d820ebf369445a8d40f1836c155a25dfbdbcc5c1e9f270dda88105a523fa",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251217&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:53:45.220801+00:00"
+    },
+    "T86_20251218.json": {
+      "sha256": "f1a6932e4e4743c8e1eea2da3783274692bf6476541d929c83b532a0098aa9bb",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251218&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:53:48.847939+00:00"
+    },
+    "MI_MARGN_20251218.json": {
+      "sha256": "e7ae207d49187b3a480b684451f8866a753cb0fb5660ed2170757425036fc704",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251218&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:53:51.950202+00:00"
+    },
+    "T86_20251219.json": {
+      "sha256": "2ed5379e8c628951ca0b3eb8eac3e16cefe6f698e81884f481e9688e47d1b2ed",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251219&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:53:54.877613+00:00"
+    },
+    "MI_MARGN_20251219.json": {
+      "sha256": "fe7cca170214e81074820565d27780ff22058c83c3de80b32ee8de529dc6440a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251219&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:53:57.176125+00:00"
+    },
+    "T86_20251222.json": {
+      "sha256": "b520561d7ad2d46c0d129864464f67546240bd70819f7acb956a0d385c229e0a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251222&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:00.882519+00:00"
+    },
+    "MI_MARGN_20251222.json": {
+      "sha256": "458afbe698d6322e24e950a1bd9244cd206d0a7c08dc495ab3501cb10e176bd9",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251222&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:03.029802+00:00"
+    },
+    "T86_20251223.json": {
+      "sha256": "de277d6ea83d8de7588d2247904209fa78b7f129f09f91352dcc3220cbfd57a3",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251223&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:07.837024+00:00"
+    },
+    "MI_MARGN_20251223.json": {
+      "sha256": "ddd65d5d010602dd7eafe6d4a3df2f6e229ec3cd169fb20694722597ea5a5bbf",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251223&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:09.951930+00:00"
+    },
+    "T86_20251224.json": {
+      "sha256": "f36a4af855d2dc4f583762b4f5663a0dd1f640a6fd395a95ee614ffe6ced6f66",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251224&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:12.724731+00:00"
+    },
+    "MI_MARGN_20251224.json": {
+      "sha256": "c19c868de567b7b5e0314713ece125a6d3be4feef745b1d18c8b26256a5e552b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251224&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:14.992617+00:00"
+    },
+    "T86_20251226.json": {
+      "sha256": "4453f98e9432dd67c37223162563628b32a9c28039d231eb6953d992db739d11",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251226&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:20.039914+00:00"
+    },
+    "MI_MARGN_20251226.json": {
+      "sha256": "fcf9227f96eea340b0ca8c6def3a3974c39fd18e4237c55ced305bb36c9066e2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251226&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:22.039978+00:00"
+    },
+    "T86_20251229.json": {
+      "sha256": "183e0928a0d06afd2c50f720285597acf181d2c1d044c9da5f86e965f8bfcc2b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251229&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:24.736495+00:00"
+    },
+    "MI_MARGN_20251229.json": {
+      "sha256": "3b8f24deb732f8a00c02225746ba403aad444be3c7e16aa22b435c4d67b9b813",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251229&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:27.063502+00:00"
+    },
+    "T86_20251230.json": {
+      "sha256": "13948958bf34c351a6e489d77c0db9ea9498bf2f8b0b81f052c88c99e952dae9",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251230&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:31.302706+00:00"
+    },
+    "MI_MARGN_20251230.json": {
+      "sha256": "e51927ab82d7084fafd17f68ded17b628f79d8b9074712196c4de1da6dae3971",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251230&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:33.023013+00:00"
+    },
+    "T86_20251231.json": {
+      "sha256": "2a56d92214a8a752fa9278466bb243b3bbcb776c9a4149f550a566f767cf998c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20251231&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:36.626625+00:00"
+    },
+    "MI_MARGN_20251231.json": {
+      "sha256": "c13512538b7bab589b6944e230707b020d87fc74d439db391744bfd78cb945c6",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20251231&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:39.647022+00:00"
+    },
+    "T86_20260102.json": {
+      "sha256": "2b6d99bace14943670b1e6fcf0e30190f29360d628acbbcf2b461e71977ecf39",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260102&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:42.721838+00:00"
+    },
+    "MI_MARGN_20260102.json": {
+      "sha256": "b66ae6a51c8bf99c69e8e5ad0c9a9183a7f8dfe2987ed9d11b378b51d158354a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260102&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:45.285163+00:00"
+    },
+    "T86_20260105.json": {
+      "sha256": "106538abc2d9ef481a880ccc74b2bc03a382c57ab732a73e57a28e22f538ff4b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260105&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:49.084526+00:00"
+    },
+    "MI_MARGN_20260105.json": {
+      "sha256": "fef69338224807290d4de1602b3fd54a57b62584d39306f955e55e1579a6b682",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260105&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:50.987181+00:00"
+    },
+    "T86_20260106.json": {
+      "sha256": "4e021caf3668499299acf177bdd570fdacb3a0f8aa8a4315dcf9ec5c543d4f0e",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260106&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:54:54.658879+00:00"
+    },
+    "MI_MARGN_20260106.json": {
+      "sha256": "6d3967b0757e2c60ee80dd969583a10e4e4d35fa3a6f670f636ad5e45f02bd2a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260106&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:54:57.760679+00:00"
+    },
+    "T86_20260107.json": {
+      "sha256": "32661ac23d8d0baf33315b01c4ff53d085ede4af512b5c32414b546702906c52",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260107&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:00.701136+00:00"
+    },
+    "MI_MARGN_20260107.json": {
+      "sha256": "698152beb6351befa8dccc1265bea726356c17fce36cae4630136d3cce9dc8ed",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260107&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:02.982576+00:00"
+    },
+    "T86_20260108.json": {
+      "sha256": "86b909870652ea19f1f01b8a1f91d5782a7a5d63dba69796057980c35f9ecdae",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260108&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:07.035284+00:00"
+    },
+    "MI_MARGN_20260108.json": {
+      "sha256": "b1928ebc4d538d2baa276c8bf22d1aeef376133721b6a3ff657c5bbb6cdf08c4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260108&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:09.994868+00:00"
+    },
+    "T86_20260109.json": {
+      "sha256": "c5baf341046cd87ac76f052a95b800e85e6e4d5d24b5ebba881204211782e76b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260109&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:12.740729+00:00"
+    },
+    "MI_MARGN_20260109.json": {
+      "sha256": "15c84b58777409579a7c8461bc860ac617931da02aaa11cf4ed583802f5509a7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260109&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:14.996805+00:00"
+    },
+    "T86_20260112.json": {
+      "sha256": "a37ba703211d7a5ba67e080e6717f0ec9d63edeb9a9768365222aaea9ed35d5e",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260112&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:18.701164+00:00"
+    },
+    "MI_MARGN_20260112.json": {
+      "sha256": "aecc0b0647ff1bb8c30698d9167f6c872d28009716d6525f0dce6a98f3f0a61b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260112&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:20.985650+00:00"
+    },
+    "T86_20260113.json": {
+      "sha256": "e5a1c3bfcfec90d784fc2e6827843b7b6e9d65a9a57181cb006cd830d245c4da",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260113&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:24.684628+00:00"
+    },
+    "MI_MARGN_20260113.json": {
+      "sha256": "c472b129bc19059528fa65fe8bf9a8805ca977cca15a6a961129924e1732d0ed",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260113&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:26.940603+00:00"
+    },
+    "T86_20260114.json": {
+      "sha256": "b9d35dc05ce0875d50d858a768ed991fe77591b194fbcce85d65b7ca90772597",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260114&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:30.681956+00:00"
+    },
+    "MI_MARGN_20260114.json": {
+      "sha256": "c0c095c1267039046d0c3cf92b507ab1a68441fa7b33e5d638823ef2a97d0db7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260114&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:32.985500+00:00"
+    },
+    "T86_20260115.json": {
+      "sha256": "a520cf2513f9bdfb27113f950585428e93920238742234b537f88204ae9f5d6a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260115&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:36.661882+00:00"
+    },
+    "MI_MARGN_20260115.json": {
+      "sha256": "c5de18289e7fd68bd1cbc37e0f3b11d9d0e37f43bc749caa28320e50f5352b1b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260115&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:38.940051+00:00"
+    },
+    "T86_20260116.json": {
+      "sha256": "a6c73b3cff3a7797f921c9ce92030174f4e96672f157becc3c9a0ac44e9df096",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260116&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:42.837132+00:00"
+    },
+    "MI_MARGN_20260116.json": {
+      "sha256": "81140a762fc5cbafd92b7699b756a3dec85cb6431ef5ba3d81b24ae1da081fd7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260116&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:45.242155+00:00"
+    },
+    "T86_20260119.json": {
+      "sha256": "a51ece045193f0275f5f355cacbe3f08e00e3c7c9770e59b8db3aabd27fea165",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260119&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:49.218023+00:00"
+    },
+    "MI_MARGN_20260119.json": {
+      "sha256": "071af3f21c3d5bf3bed1b7a3a17a083d921e52d1a10130ab95a794f54bf6022d",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260119&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:50.980371+00:00"
+    },
+    "T86_20260120.json": {
+      "sha256": "d64e4c320e20a3268a21b5d7400a8b0214245035fba2aae7f4b72a8954aeb4aa",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260120&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:55:54.764021+00:00"
+    },
+    "MI_MARGN_20260120.json": {
+      "sha256": "b08420a195c2a3f6f69512bb89e54ed9181bc82dc5570e73f512e560c8aa7d4a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260120&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:55:57.215934+00:00"
+    },
+    "T86_20260121.json": {
+      "sha256": "946773a2121cafb2d14d914031136bbe48a2fab7006f293b98039db30f55903b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260121&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:00.948503+00:00"
+    },
+    "MI_MARGN_20260121.json": {
+      "sha256": "231e1ca997e08b6854f438c97b2629ae713d96bdd83f71bd16daf722fa45c4c7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260121&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:02.965225+00:00"
+    },
+    "T86_20260122.json": {
+      "sha256": "ba797a774360d55477025acc704645c30b87bb62d136620fa80714e189c5ee1c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260122&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:06.843263+00:00"
+    },
+    "MI_MARGN_20260122.json": {
+      "sha256": "ace067c7c77110fdd6d4a07292e0702dc6facd2f1bc79f1a572e62095b71624e",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260122&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:08.978359+00:00"
+    },
+    "T86_20260123.json": {
+      "sha256": "43cd4126b0bda8a359b14a995db702abda3fd528412e390d34c963e3d733fb59",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260123&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:12.703272+00:00"
+    },
+    "MI_MARGN_20260123.json": {
+      "sha256": "459ba46ff888818cbc8ca01c0edc41070e63d5ecf788b8adcd0611057665fbe2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260123&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:14.865826+00:00"
+    },
+    "T86_20260126.json": {
+      "sha256": "8f4c588f5af74fd529a3d76c7425bb852f2e1bbd3e79d54310fdd85ff308377c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260126&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:19.195494+00:00"
+    },
+    "MI_MARGN_20260126.json": {
+      "sha256": "9d3d8d297c218256cf70625ec4d5335f55aca0477069d4b3bf6619ddf6ee776a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260126&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:20.868049+00:00"
+    },
+    "T86_20260127.json": {
+      "sha256": "fdfdd25807a14b908eae33b65073cff40f28dc7926357650aa68f3b02aa4f647",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260127&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:24.701518+00:00"
+    },
+    "MI_MARGN_20260127.json": {
+      "sha256": "2facec75080ee70fd9f08bdc720df0d1a56e0d25fdd7541668cbc3843230eb6c",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260127&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:26.871893+00:00"
+    },
+    "T86_20260128.json": {
+      "sha256": "a6a878b1d2b5c9a1382db7e30abea7c8fffdd3a5353c92ede224e6f8ce8729e8",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260128&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:30.818479+00:00"
+    },
+    "MI_MARGN_20260128.json": {
+      "sha256": "5d595a768294a57f3e9b8f46956d00a267bb15d574becc14a31f251162166dfb",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260128&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:32.856970+00:00"
+    },
+    "T86_20260129.json": {
+      "sha256": "68a7b9f5ba9ef10ab31ed13254bb8c678023fd942e1d10fb7d71da46b9951a4b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260129&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:36.642450+00:00"
+    },
+    "MI_MARGN_20260129.json": {
+      "sha256": "8ad9833cda4d777389ada5cd0c3f7d89f44f25f79ad4a7a0eb326121f1e2ddf9",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260129&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:38.874917+00:00"
+    },
+    "T86_20260130.json": {
+      "sha256": "f8be5ace8c4e1dcddeaaa88f171df6d5a9ef042313cf3cf7079ae91615a4a631",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260130&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:42.694043+00:00"
+    },
+    "MI_MARGN_20260130.json": {
+      "sha256": "3d3e0e9fb3a9545291d1ee32d85c1db91f84d930ee0f52242154bdc90d209e13",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260130&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:44.888767+00:00"
+    },
+    "T86_20260202.json": {
+      "sha256": "26da3b308dbb37d410385311dba8b0e70fc6200f999f680147e77d4875e82a20",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260202&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:48.753086+00:00"
+    },
+    "MI_MARGN_20260202.json": {
+      "sha256": "f3f879bc0c9224dc2fef87d969bca6411fc15bfbb14da86d8efe0cd29e46f866",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260202&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:50.854909+00:00"
+    },
+    "T86_20260203.json": {
+      "sha256": "181f8a104e6c957f65f56d66bfc50ce74bc8d911eced3e78a4092f50f4321e6f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260203&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:56:54.881635+00:00"
+    },
+    "MI_MARGN_20260203.json": {
+      "sha256": "b417994403566f98f0c33205bba7654032bd2269f31f44ab16a291732fb31624",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260203&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:56:56.940919+00:00"
+    },
+    "T86_20260204.json": {
+      "sha256": "b8887e51968293b8f493137eb9a23eaa627e88bf7b514d7068277d5697837698",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260204&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:00.874332+00:00"
+    },
+    "MI_MARGN_20260204.json": {
+      "sha256": "e41d4f4855e18805f8b9f08af6e7dccd830c4ae18f2deed0ac33e4bb4603ba0a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260204&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:02.862951+00:00"
+    },
+    "T86_20260205.json": {
+      "sha256": "7668edb3f93964c3a86825f915bbb4ab581647a22a6f5cb515386ab7bbab0e4a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260205&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:06.721415+00:00"
+    },
+    "MI_MARGN_20260205.json": {
+      "sha256": "0c0e9248f1fc49da677f254f61d9d8da59cf346cec19ea067e379a49b4c6fdae",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260205&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:08.862752+00:00"
+    },
+    "T86_20260206.json": {
+      "sha256": "e03d5c0d3f28944bc71aeeb77cfc7a014da30c116d921fd75495f131ee86e37a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260206&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:12.720726+00:00"
+    },
+    "MI_MARGN_20260206.json": {
+      "sha256": "ed35723c520f4c3df61c2d97bf887918283dda05d080b18391b678ede952bd33",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260206&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:14.877095+00:00"
+    },
+    "T86_20260209.json": {
+      "sha256": "31e8cb2d59bce73d913c707f1bdf41a843410999abb12bf3bb7315c7618dd952",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260209&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:19.657140+00:00"
+    },
+    "MI_MARGN_20260209.json": {
+      "sha256": "0d263ca6cbbbd32165dcdb8a1c2d0e74e120712a54074ef81c33b0b19bbc6036",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260209&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:20.879898+00:00"
+    },
+    "T86_20260210.json": {
+      "sha256": "ee808714dcde45ccdb276e8931b2a0d9e52dc9abd457c1647dc05e5e43464c79",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260210&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:25.778907+00:00"
+    },
+    "MI_MARGN_20260210.json": {
+      "sha256": "56b20f9d25aa7bdff52713386088cc12c313fb720a37872a711e89372c960b09",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260210&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:26.921091+00:00"
+    },
+    "T86_20260211.json": {
+      "sha256": "a6a220a34fa6482b0d951f05b19af35cca9fd788db8566ce687e64c4cc3d1542",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260211&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:30.639303+00:00"
+    },
+    "MI_MARGN_20260211.json": {
+      "sha256": "8a055efea2a84b58f3687c6c2ce65aea56e1391a434d7c61d3d25b01e66b1786",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260211&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:32.907067+00:00"
+    },
+    "T86_20260223.json": {
+      "sha256": "a22aacdb5f01d2319cdd556db7c07938bb0ec4a9a24c17686153a84007a4f258",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260223&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:36.717402+00:00"
+    },
+    "MI_MARGN_20260223.json": {
+      "sha256": "e6d16000162120c88e3edb376b0a7f2ed345f576b02c6cd5c226b20be5a226aa",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260223&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:38.906516+00:00"
+    },
+    "T86_20260224.json": {
+      "sha256": "b88171050559d2e3baa080bc002a3ed4543036554dcf9c481019ab26d4d060ad",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260224&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:42.633801+00:00"
+    },
+    "MI_MARGN_20260224.json": {
+      "sha256": "a94be1a4fa7dfb7e0472d05e72d44b77e031adc59dcb2868e2560dfa40192e78",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260224&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:44.903374+00:00"
+    },
+    "T86_20260225.json": {
+      "sha256": "385805fa4303a22df6e3436d753cd5ba83c53c6fca26351af281a24d2841dcfe",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260225&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:48.681400+00:00"
+    },
+    "MI_MARGN_20260225.json": {
+      "sha256": "ae1d570c108745116183bab976710625c52fe17299b3c76110cec6de237b965f",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260225&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:50.876269+00:00"
+    },
+    "T86_20260226.json": {
+      "sha256": "61edc403908aff7469a7fc80ea882125149e993d269496f0138a31e2e9860340",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260226&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:57:55.204408+00:00"
+    },
+    "MI_MARGN_20260226.json": {
+      "sha256": "cff24ab30edbf3ccef097e999aacdde9d8f1a89673f4161255ce94185710ff36",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260226&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:57:56.892934+00:00"
+    },
+    "T86_20260302.json": {
+      "sha256": "c5e31d97a71e119ebd27a478e3d26a3dedcafec7a4f7b91f9c22eff67a910443",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260302&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:00.710345+00:00"
+    },
+    "MI_MARGN_20260302.json": {
+      "sha256": "a1dd015d78a48bddbfa17542a8ac770ba12d7332b34b46aa453de042f270d6db",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260302&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:02.866403+00:00"
+    },
+    "T86_20260303.json": {
+      "sha256": "0341a3112de4569435102b71a6a2ce7971c34f34a023682456a2a0e5c5d9c74d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260303&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:07.496421+00:00"
+    },
+    "MI_MARGN_20260303.json": {
+      "sha256": "0bc577214e6b01225994b70512443a7a0dab8adb3d230a0b6a495a988f447001",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260303&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:08.874554+00:00"
+    },
+    "T86_20260304.json": {
+      "sha256": "b544c9e42d30a2cc93853500520fd24fc98ac732eb2df879260ab1789a40403d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260304&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:12.891715+00:00"
+    },
+    "MI_MARGN_20260304.json": {
+      "sha256": "03cd969de0d87eca4d5acbd991b06f9fd1249623a6832693d811430ce12d9461",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260304&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:14.887685+00:00"
+    },
+    "T86_20260305.json": {
+      "sha256": "daba4ac5e417e49a0bf8b262b329e17df39a2a788be7aa3979c0de331676817f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260305&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:18.682579+00:00"
+    },
+    "MI_MARGN_20260305.json": {
+      "sha256": "b034d48d7589e72ae973c6cd5a8b06ecee6e69c2694ee82279a3f5a995b019cb",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260305&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:20.865310+00:00"
+    },
+    "T86_20260306.json": {
+      "sha256": "2afe2ec5e56a28248b94d20afafa3ab1185f8ea736fd8efc3e09b97e82c966fb",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260306&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:25.709241+00:00"
+    },
+    "MI_MARGN_20260306.json": {
+      "sha256": "9bc15bd6ab8b51f84b44a11115bf3ab04e2f7af634ae29bda619c531a2e1295b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260306&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:26.877778+00:00"
+    },
+    "T86_20260309.json": {
+      "sha256": "1f1c8cfa59714ef505cd8cea7bcc72554d3137d8410c52b9dc1d122aff09443a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260309&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:30.648392+00:00"
+    },
+    "MI_MARGN_20260309.json": {
+      "sha256": "59870e4531a22835dda0ebf9b8885d7a3654ac9c59a3cbb61e0b8e8fe105d402",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260309&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:32.876722+00:00"
+    },
+    "T86_20260310.json": {
+      "sha256": "6ba16823e8b252f34e72b454bb15c53d75a964c325a14a8051402e3596115fb5",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260310&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:37.698220+00:00"
+    },
+    "MI_MARGN_20260310.json": {
+      "sha256": "9f206b2a9663c69e86e2deb0f70fd3c53425d3c0e2f7f078957c3425cc9ed30e",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260310&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:38.862115+00:00"
+    },
+    "T86_20260311.json": {
+      "sha256": "09a3c420a355b92cf6c4449feceb841ecb7e12b28bf55d5d9339268abacdb578",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260311&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:42.779347+00:00"
+    },
+    "MI_MARGN_20260311.json": {
+      "sha256": "4c219f867425d968e5715e01e83a2fee0f3a6e66ab561a16398589afefbc872f",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260311&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:44.872432+00:00"
+    },
+    "T86_20260312.json": {
+      "sha256": "e413d52280dd891d76ee35f04676a46a5488f2c3d4fdb36d96b2e158f925bf46",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260312&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:48.715390+00:00"
+    },
+    "MI_MARGN_20260312.json": {
+      "sha256": "08fd43e2dc47326a3e6810467644d8476d5f85e71f985eb08de15e23b6fd1cd7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260312&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:50.853482+00:00"
+    },
+    "T86_20260313.json": {
+      "sha256": "da256b605b97336f566d7e9144fa567785307f04bbaf595facc3ae12881015f7",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260313&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:58:54.694950+00:00"
+    },
+    "MI_MARGN_20260313.json": {
+      "sha256": "001913b57a93d3bad100624e140c06cb51bc26642fea368a8a755f6eb0910dc7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260313&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:58:56.886178+00:00"
+    },
+    "T86_20260316.json": {
+      "sha256": "6910d601d0ad03e87139ccb0aed44813abe42cf56294da6ce3174e393139648d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260316&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:00.758965+00:00"
+    },
+    "MI_MARGN_20260316.json": {
+      "sha256": "154d3a120f0c0326758cd3054e1da189f216d7b335a543da0887915a3004b37a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260316&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:02.878258+00:00"
+    },
+    "T86_20260317.json": {
+      "sha256": "1150b9e0c703c0812e448780c3ee79fecad33ec5803042b08ec646cbff679c06",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260317&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:06.595390+00:00"
+    },
+    "MI_MARGN_20260317.json": {
+      "sha256": "543effac4ffdbeea2e70ee810e8359f28d0ad147c2c721970b6b034c78342ce4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260317&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:08.864414+00:00"
+    },
+    "T86_20260318.json": {
+      "sha256": "eb476d1e064793d1c69b0f5189a959abe186bd6684114ed134268ce1e9dc1241",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260318&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:12.927767+00:00"
+    },
+    "MI_MARGN_20260318.json": {
+      "sha256": "da17be818742a282d938dc93cfcf8334a7b5d6eb1f18699345af3359573df55a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260318&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:14.889296+00:00"
+    },
+    "T86_20260319.json": {
+      "sha256": "e5dca8e72443e216c8618359e97c25f4436cfa4158354ff28c9a5f756ed3ee8a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260319&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:18.890438+00:00"
+    },
+    "MI_MARGN_20260319.json": {
+      "sha256": "a6f8156e9eb659fc89813562fba830cec69e62fbbae4c03b772013712178dfb4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260319&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:20.843794+00:00"
+    },
+    "T86_20260320.json": {
+      "sha256": "c231b960cde55737d130749eaa2c015a026ccbf0780f36844dfbe4cdeebf4187",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260320&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:24.597686+00:00"
+    },
+    "MI_MARGN_20260320.json": {
+      "sha256": "8490b75998c4707aa8fb529baea2d607e05bf454716db226b226e537ac09447f",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260320&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:26.914468+00:00"
+    },
+    "T86_20260323.json": {
+      "sha256": "248fa163d466d0a02188d9920e87d0a94b9b1e5dfb69f33e9ba4584fa114e834",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260323&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:31.169723+00:00"
+    },
+    "MI_MARGN_20260323.json": {
+      "sha256": "54df7fa84c16d3d0396f0779ca3153752b92e2bb850626e36633b56b81b17e75",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260323&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:32.890659+00:00"
+    },
+    "T86_20260324.json": {
+      "sha256": "24482433dde605e58e6b97b289ab5540bb22c3cd3cc8b31565ddbae3cbfefe8f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260324&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:36.967514+00:00"
+    },
+    "MI_MARGN_20260324.json": {
+      "sha256": "03745da0d033461fa390ac10e46486a818f9d8b398fa31ff2af7521cfbf54072",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260324&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:38.922149+00:00"
+    },
+    "T86_20260325.json": {
+      "sha256": "50fc688238c6b7ebd02342c2c57229c7ee9d08a12bb0bab02cb80dd53522ce24",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260325&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:42.643653+00:00"
+    },
+    "MI_MARGN_20260325.json": {
+      "sha256": "295329dcc53a30934c8c82150f23d2eae9e55ce19f2797e9e6a45e79113064b9",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260325&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:44.964246+00:00"
+    },
+    "T86_20260326.json": {
+      "sha256": "d8939c5e730147c66bf72def8e809157ddcefcdb9cd1836aa0a5c17da11d12ae",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260326&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:49.651841+00:00"
+    },
+    "MI_MARGN_20260326.json": {
+      "sha256": "a5075689f64bce4ec973b39c303c7ffb849746c6ac62b753e3b40f772a1ed7a7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260326&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:50.930853+00:00"
+    },
+    "T86_20260327.json": {
+      "sha256": "ef332bb5054930e9fb56da4f303b63df90dade2943cfdc86bcbc2048e310f102",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260327&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T12:59:55.302984+00:00"
+    },
+    "MI_MARGN_20260327.json": {
+      "sha256": "783c143cd6f5c02047e18e7b418b3167bdd1c0e7c914d28b67f5f25e599a6d9d",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260327&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T12:59:56.919518+00:00"
+    },
+    "T86_20260330.json": {
+      "sha256": "3e1aac51aabbb8d062c6b2c9fd2b990bff78ee7da31810fc6284695bcc388708",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260330&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:01.921957+00:00"
+    },
+    "MI_MARGN_20260330.json": {
+      "sha256": "6d592fab532e7b5fb8832067ac2e8eb3b85caaa0eae7e50829b63aea235c5a74",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260330&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:02.905162+00:00"
+    },
+    "T86_20260331.json": {
+      "sha256": "95af375e01b85084b7cdeca83d85831ca55ec31f11d13e8aec3e5bfc26199a80",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260331&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:09.691998+00:00"
+    },
+    "MI_MARGN_20260331.json": {
+      "sha256": "ac7ad5b283fcafa74a0364ec4a664a2c811086cfb7dd0a16331f8a5799eb908d",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260331&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:09.910798+00:00"
+    },
+    "T86_20260401.json": {
+      "sha256": "1a57084f4fb8f1d4e717280181716e25ef4a03feed8f897030889df9b59b3e0d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260401&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:14.283495+00:00"
+    },
+    "MI_MARGN_20260401.json": {
+      "sha256": "c92358efa0ed1e185c8d5d2dc280c23a2d40f6035223c6100eacf51940fe0ea4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260401&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:15.912915+00:00"
+    },
+    "T86_20260402.json": {
+      "sha256": "2c2edc07ab934b511f31a139938e9ff0c20e7e60a7713150d2f967edc716c329",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260402&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:19.848158+00:00"
+    },
+    "MI_MARGN_20260402.json": {
+      "sha256": "f8c4d1f3bb73811facde1515a36f7dc8f86c121632d076415bded6082e8384a1",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260402&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:21.906949+00:00"
+    },
+    "T86_20260407.json": {
+      "sha256": "7707e521ad8ff8314bcc6751393d718e5a84d6d64e70b4ed086198a62a41d205",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260407&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:26.678015+00:00"
+    },
+    "MI_MARGN_20260407.json": {
+      "sha256": "3f7e8cb232575859271770d4fff4da7e4b27afead75da3cde9c17a1f046dd9b3",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260407&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:27.918828+00:00"
+    },
+    "T86_20260408.json": {
+      "sha256": "87e4b1396e73414c79500c57a9e85f693972925b16ad2eb6d8568509ec31d28d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260408&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:33.224994+00:00"
+    },
+    "MI_MARGN_20260408.json": {
+      "sha256": "dad1d0ae1f197b33f833f87dcbf2c86aebe94569947f487f22457d7c1ea25ca5",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260408&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:33.991020+00:00"
+    },
+    "T86_20260409.json": {
+      "sha256": "17079eedfc5d7b340c32bce835efe7da75ceac059f9320f1be40dd7df6ca1c61",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260409&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:39.723708+00:00"
+    },
+    "MI_MARGN_20260409.json": {
+      "sha256": "c32d7d4c422c4909085d35472ed798e4dce26233378a3403d4315ce86449c7c6",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260409&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:40.008081+00:00"
+    },
+    "T86_20260410.json": {
+      "sha256": "37e5109d4a9cc21255433d3cc84a7ac5fbb51b2fce07aae233e3df685f951bbf",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260410&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:43.894773+00:00"
+    },
+    "MI_MARGN_20260410.json": {
+      "sha256": "f56073bd573eb7fcb4147a3a96aea92f51341ce60d5bfab9fdf230a4c02871a6",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260410&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:45.941772+00:00"
+    },
+    "T86_20260413.json": {
+      "sha256": "f3fd22c3885cda898516558d00eb3296870f57ddbc9727f617af2c25ae1d8764",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260413&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:49.751561+00:00"
+    },
+    "MI_MARGN_20260413.json": {
+      "sha256": "7725053a199acca9f881f85bb33cd6f7b596e337cd47633bb18c3602ddcc2356",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260413&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:51.924868+00:00"
+    },
+    "T86_20260414.json": {
+      "sha256": "86fb326d1a22c462cf0e2fd350fb7b79c088e7217682b5328901ff31400b2b09",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260414&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:00:55.689982+00:00"
+    },
+    "MI_MARGN_20260414.json": {
+      "sha256": "0369508148305aab50130a2906119b54cc139c884099cbaac45b7ed14eeceed8",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260414&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:00:57.910660+00:00"
+    },
+    "T86_20260415.json": {
+      "sha256": "5f88d6bf5d43305d03f76e471010ff435c9850afe45312071266dc28abeb819f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260415&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:02.105746+00:00"
+    },
+    "MI_MARGN_20260415.json": {
+      "sha256": "76a79276296ba1cb3b0777227a83be7576487746292d0ac771b6ed46b36b85e6",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260415&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:03.919557+00:00"
+    },
+    "T86_20260416.json": {
+      "sha256": "40b29796501b6edac8db651da687e7525c82e50c6a0c91f75c707e44d072e618",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260416&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:07.794287+00:00"
+    },
+    "MI_MARGN_20260416.json": {
+      "sha256": "c51596e38f50fdfa94a4deeddc0a76b93d6791b2d0cbb941a1cabfafc5aeaea7",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260416&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:09.911367+00:00"
+    },
+    "T86_20260417.json": {
+      "sha256": "ee0123b2baf9bbfeeed282e2f7e5735b9d0c72b78e273632b3f4dd1d6d189e25",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260417&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:14.428120+00:00"
+    },
+    "MI_MARGN_20260417.json": {
+      "sha256": "9ba444c353e9f16db9e48f4decac6750e1baf424751c373bf5c2712ec15f45b1",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260417&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:16.033798+00:00"
+    },
+    "T86_20260420.json": {
+      "sha256": "c0ce46d9b7bc987608e87f443924f872103f23d6ce3dfb26de60b181c249a837",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260420&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:22.876319+00:00"
+    },
+    "MI_MARGN_20260420.json": {
+      "sha256": "2e8c2fb7033740a0945a75f7312d2454f5d8fd53bc65394ecedc654e3f9de566",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260420&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:23.184248+00:00"
+    },
+    "T86_20260421.json": {
+      "sha256": "975652b59558a96be60a8ff9dd6f1f6f0b3b2babd85f987dab829d913fe4a851",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260421&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:27.227775+00:00"
+    },
+    "MI_MARGN_20260421.json": {
+      "sha256": "d20adbb3ae561af069d94bc261b38aa1dfbf711949287af39a2e4249228cc456",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260421&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:29.131812+00:00"
+    },
+    "T86_20260422.json": {
+      "sha256": "cbd8a936062c8340939b8d258178a2e3ec3f5e9d5a6db413c228f3b81bc88b39",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260422&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:35.983927+00:00"
+    },
+    "MI_MARGN_20260422.json": {
+      "sha256": "236fe3fedc3e3ac919d26615a90fe533f45c307aa20a6d2a284d56d400bd52c2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260422&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:36.238537+00:00"
+    },
+    "T86_20260423.json": {
+      "sha256": "2c827f49e76900e788213a4aa039a4dd252ac233a607758d1bf9fd637b362f81",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260423&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:39.992199+00:00"
+    },
+    "MI_MARGN_20260423.json": {
+      "sha256": "4a92d4d4e705689732532102f634662331c2383476a23a9e6119672ccc2e4b1f",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260423&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:42.200062+00:00"
+    },
+    "T86_20260424.json": {
+      "sha256": "9d7c1d45b8bd7a00a5592df1ad75ee8b613ea8a81e165060862276f880f4260e",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260424&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:49.310417+00:00"
+    },
+    "MI_MARGN_20260424.json": {
+      "sha256": "02e9b1ce03e2396bb5f01f14224d2bfcde910a2be4a7f4f0ca071771a7d40601",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260424&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:49.582003+00:00"
+    },
+    "T86_20260427.json": {
+      "sha256": "646e5e1fa3624dccb262619063e4c5493acc745089c6b179a5b6c51d2241d49f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260427&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:54.849206+00:00"
+    },
+    "MI_MARGN_20260427.json": {
+      "sha256": "7a07c8353f4e8c167a3712c74988a8f33c2b72f67f0b9cb9adb168e53062d812",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260427&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:01:55.499363+00:00"
+    },
+    "T86_20260428.json": {
+      "sha256": "a8a83baee9f48235a5db3c706ba6bada65201bae9ff360ebba084977c3fb75ea",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260428&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:01:59.392776+00:00"
+    },
+    "MI_MARGN_20260428.json": {
+      "sha256": "92192b5297145808cda7261c6b60f384366677a628ba77bc03c25dfc6210dbc3",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260428&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:01.522367+00:00"
+    },
+    "T86_20260429.json": {
+      "sha256": "d817d490f889e3f05beca651e0315c26ddc02d1af38481e8dec7b8479eac5833",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260429&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:05.774493+00:00"
+    },
+    "MI_MARGN_20260429.json": {
+      "sha256": "8fb0730256b1904090f94a57de276bdcd67334aef811895c3924ab72a57c6724",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260429&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:07.572033+00:00"
+    },
+    "T86_20260430.json": {
+      "sha256": "8f4557d5f1c89273e6b4e487639d8cdd8207aae0a406a514c23f87fd50ed40bd",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260430&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:12.718941+00:00"
+    },
+    "MI_MARGN_20260430.json": {
+      "sha256": "e2dd0acde585af57d5f84bb1b539547fd5f12dfd5f0bf0171dda0c6acfad9de2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260430&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:13.574225+00:00"
+    },
+    "T86_20260504.json": {
+      "sha256": "6ffb481a36888797ba7ad8da65457f49631a24f1950b28a6bcfb48c26acc0744",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260504&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:18.540237+00:00"
+    },
+    "MI_MARGN_20260504.json": {
+      "sha256": "2d363aa77100a62d52ffda81caa6d79c3a49d3d14fb7ffc04c68454345aa0985",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260504&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:19.523398+00:00"
+    },
+    "T86_20260505.json": {
+      "sha256": "d323849f1d162b6e8f4ca582117de26e37ef04af755db0aeed7d5259291a029c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260505&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:23.796435+00:00"
+    },
+    "MI_MARGN_20260505.json": {
+      "sha256": "e387ba487344d8192360e272192f763424e257d4ed6d431f39cd9fcc5e26dc17",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260505&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:25.530508+00:00"
+    },
+    "T86_20260506.json": {
+      "sha256": "a3e277da4863063db0c800328a2aa390cca5a12e6f231cfe254ac3b76568fc50",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260506&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:29.633402+00:00"
+    },
+    "MI_MARGN_20260506.json": {
+      "sha256": "64e332ad8a8ddb4dddb62d6e3e9627753eb285ef08d619f8af201e9c5f435c44",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260506&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:31.594754+00:00"
+    },
+    "T86_20260507.json": {
+      "sha256": "831b445ae610e2c0bcd8752f377f664584a56ba8fef67d93f7cb0c67a110405c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260507&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:36.114274+00:00"
+    },
+    "MI_MARGN_20260507.json": {
+      "sha256": "dbb6f332597b1883deb36937184a05901270b2dfdb8a8b0ca25c43721a034161",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260507&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:37.524139+00:00"
+    },
+    "T86_20260508.json": {
+      "sha256": "3df899d41dc90c2c21f08c26588435d0a8d7ef165f7aa5a605368f718399b718",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260508&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:41.498998+00:00"
+    },
+    "MI_MARGN_20260508.json": {
+      "sha256": "8d79c4bc1171f94e80142b71b8d3aa1140a3c6ab28ddec8622cd1b2a5e7189ba",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260508&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:43.534100+00:00"
+    },
+    "T86_20260511.json": {
+      "sha256": "1a10b01a9295f1621a827c294556025b8e3b87858cd7f2ce2e7191714c98777a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260511&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:47.564628+00:00"
+    },
+    "MI_MARGN_20260511.json": {
+      "sha256": "d383e79d1d1d40ed1a40c5d1d2937e96defe9b894d0bc324f7a989a169c7a5d4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260511&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:49.526282+00:00"
+    },
+    "T86_20260512.json": {
+      "sha256": "04458afe6421808dcc67d4c6736be5597d4e3dbb9a8fd21a8113df5ffad52ff5",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260512&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:53.282167+00:00"
+    },
+    "MI_MARGN_20260512.json": {
+      "sha256": "1ca4b4c1416f91aa1cf530b9c232c99c1f2fb841dacdb7cd45d6b75b7928291b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260512&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:02:55.557361+00:00"
+    },
+    "T86_20260513.json": {
+      "sha256": "980c86f59d590fcb0591f5efe77f811d92629937fdeaaba350cc1a48b1b42063",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260513&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:02:59.386106+00:00"
+    },
+    "MI_MARGN_20260513.json": {
+      "sha256": "96e75d83de4f2e8c151c201dff04c08f545c5940ab75547dd6295edfcc4bdd54",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260513&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:01.512393+00:00"
+    },
+    "T86_20260514.json": {
+      "sha256": "da8eda3b2a403240bab95e1c0d504d24333cf3daeaf07f9b442738ea53783b3e",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260514&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:06.536664+00:00"
+    },
+    "MI_MARGN_20260514.json": {
+      "sha256": "7f0cd3cb38064e6c56a0a8f8bff87213dc2f941c3a628f0f50fed35b59ee51e2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260514&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:07.504270+00:00"
+    },
+    "T86_20260515.json": {
+      "sha256": "297b6a3d8cbea3328692466930fd59781acbac9eceeba3b8038724ce37e80d19",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260515&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:11.479023+00:00"
+    },
+    "MI_MARGN_20260515.json": {
+      "sha256": "624743b972ef27bb4f26b7d656a8413ccec286bd74e5b48366ba00a06573dca2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260515&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:13.539117+00:00"
+    },
+    "T86_20260518.json": {
+      "sha256": "0e8216ed9a7aa3baa0afe6627f25b727c7c1148d8f073d84916175116d12f6c9",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260518&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:17.289651+00:00"
+    },
+    "MI_MARGN_20260518.json": {
+      "sha256": "d1c74819c37493e18dffb972763ff4e347194bbb2d56114e510b4e906fc01e6a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260518&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:19.544032+00:00"
+    },
+    "T86_20260519.json": {
+      "sha256": "67f575020d7d30e98b2f2692e3d2abfc7c19942ffa90f60b3f7126a1c76a8d9d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260519&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:23.369647+00:00"
+    },
+    "MI_MARGN_20260519.json": {
+      "sha256": "e2c52edc37c71926c3a99f4c4abc7948f316c85a7f6957e934d69b30407fae2c",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260519&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:25.543550+00:00"
+    },
+    "T86_20260520.json": {
+      "sha256": "f25392594fe9d70e27b1d002c1bb57bd8a9bf89ff081e4c1e2806bde46ed4ed0",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260520&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:29.385379+00:00"
+    },
+    "MI_MARGN_20260520.json": {
+      "sha256": "d00a7f42e54447ccaea54171c9dc86389c406301a100fd990c9b3f7d7df3b2df",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260520&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:31.535060+00:00"
+    },
+    "T86_20260521.json": {
+      "sha256": "1d3a9d0cedfc731438fcc78336830a39805fc3f6827c6e11f6cd49b12bb04152",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260521&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:35.343031+00:00"
+    },
+    "MI_MARGN_20260521.json": {
+      "sha256": "2d46353b409538c81ed029591f72038a754adc4ed88825b83f80d5534bec8011",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260521&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:37.560176+00:00"
+    },
+    "T86_20260522.json": {
+      "sha256": "8dbd415fcb6f461700289ccff052b429dcec4cf7ca38c2585fb24b308c64ecdb",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260522&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:41.418027+00:00"
+    },
+    "MI_MARGN_20260522.json": {
+      "sha256": "6a08430b382c7a4015fd3d4d9292b01ca9e37b17a46dbdab259d6254b7662a42",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260522&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:43.528159+00:00"
+    },
+    "T86_20260525.json": {
+      "sha256": "6eca84f8f52a3bc4f85d2de857fec0b0eb4ffdee2b0712e2b325b9c60250dcf7",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260525&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:47.297311+00:00"
+    },
+    "MI_MARGN_20260525.json": {
+      "sha256": "ed11a3e3a39bb5f7f3a142c14f633527089e06869a2c64bb8e14a26306df1c7b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260525&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:49.533978+00:00"
+    },
+    "T86_20260526.json": {
+      "sha256": "7ce80c5566e6f3fd62ccf14c6af6807258aeb79f8b4fc8d219cf73c719077baf",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260526&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:54.500909+00:00"
+    },
+    "MI_MARGN_20260526.json": {
+      "sha256": "71faae941b5ea910b478851ada0dee19260af11c2a68d50824014e132232f525",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260526&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:03:55.579478+00:00"
+    },
+    "T86_20260527.json": {
+      "sha256": "4a483109509535b18d5592e044878df20e024e6e4ac81f5df0498eceb9b48a0c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260527&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:03:59.464885+00:00"
+    },
+    "MI_MARGN_20260527.json": {
+      "sha256": "ba3b430627dcf92bf3838166ff62620d816985c9ddb66e77fd79d814e9f20b86",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260527&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:01.640237+00:00"
+    },
+    "T86_20260528.json": {
+      "sha256": "6e5ec8376ec15fa08347745ab425afd5dc1ba7dcdce4b53e2b48799bae7c201f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260528&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:05.925666+00:00"
+    },
+    "MI_MARGN_20260528.json": {
+      "sha256": "3fd6259d649b9134dc54ee33d1e46ca0537060262b7724c4d165795ffad76fbb",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260528&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:07.590430+00:00"
+    },
+    "T86_20260529.json": {
+      "sha256": "cca18c36423006e820fd5f5f82b9f0ef14aa124fa45c5756cb6fe71bde20af5e",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260529&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:13.266589+00:00"
+    },
+    "MI_MARGN_20260529.json": {
+      "sha256": "5db33cc73300a2964779f60c0cbc1d19adc42ecc66e54bf9730fa9aefbbe7e69",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260529&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:13.610295+00:00"
+    },
+    "T86_20260601.json": {
+      "sha256": "0f9a2d104cd657ca0ec7752990613f78789c0af34579faea5c83213df7df227d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260601&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:17.650815+00:00"
+    },
+    "MI_MARGN_20260601.json": {
+      "sha256": "34425748cf6fc1a5f8552bc6dbe1beda72b5e69ece2520c1ed856e7d7c1d516c",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260601&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:19.564423+00:00"
+    },
+    "T86_20260602.json": {
+      "sha256": "6cf4bb7c70c084806228c426547ac73ba1066bd1a0251eb32f8b01b9b4ba1bd1",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260602&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:25.091501+00:00"
+    },
+    "MI_MARGN_20260602.json": {
+      "sha256": "4b94a266a02fa8dfec0014c4df376561745960b0231f189c7ae530b1067a7c32",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260602&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:25.538431+00:00"
+    },
+    "T86_20260603.json": {
+      "sha256": "765760b025c28fa35722c0d506140199e9ed6d6112d2e99780670d5591e67642",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260603&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:29.982851+00:00"
+    },
+    "MI_MARGN_20260603.json": {
+      "sha256": "ee0fe91a0cf80657bff4d809ae429aab3e5ea1ef51dea4a305da17bddb10d171",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260603&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:31.542137+00:00"
+    },
+    "T86_20260604.json": {
+      "sha256": "445fea60e2b7c73ae45fd855482c8d98efdd873060ac9834b0bddf14bb4a4e74",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260604&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:35.395570+00:00"
+    },
+    "MI_MARGN_20260604.json": {
+      "sha256": "e33f3e7307d5f9e709e970ae3768701088d9288ff13260e01afa5c4a67f4dc7b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260604&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:37.562553+00:00"
+    },
+    "T86_20260605.json": {
+      "sha256": "0b1b7281075e892e571bc03824f6e1b1ad62ecb628cdcbc53b354c30d21b9f18",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260605&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:42.865133+00:00"
+    },
+    "MI_MARGN_20260605.json": {
+      "sha256": "ebf568d62ac548306109ad824b736edcb96d994c429b8c2f10942119058169c3",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260605&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:43.562156+00:00"
+    },
+    "T86_20260608.json": {
+      "sha256": "966118bec84200d7305b588c43c1b59de6c6052b250dc084a927d54c7e1dc6a2",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260608&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:47.363632+00:00"
+    },
+    "MI_MARGN_20260608.json": {
+      "sha256": "a1a963a172651d9585a47bb3a9ce4faf64f0035184e0fe58f0e27a89223582e1",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260608&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:49.565438+00:00"
+    },
+    "T86_20260609.json": {
+      "sha256": "16777bf35be678eb09dd66b6bbc6c3173b3da104b9441da159f526bbf7a7c9de",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260609&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:53.305841+00:00"
+    },
+    "MI_MARGN_20260609.json": {
+      "sha256": "5c97233fb9e8c726fba9910f243a5ff86c6beae2870a49633e01049e8f502e1c",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260609&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:04:55.571158+00:00"
+    },
+    "T86_20260610.json": {
+      "sha256": "979353625dc719cffd9652924a18d4465d8440356f3ab6aa2030a16d3bc4147c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260610&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:04:59.334631+00:00"
+    },
+    "MI_MARGN_20260610.json": {
+      "sha256": "ec21913a570b4302ab63a78723c70e5efb679e9133d93526060327d611a9c8a8",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260610&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:01.557653+00:00"
+    },
+    "T86_20260611.json": {
+      "sha256": "dcaf468c55cdabcafc2735fae7922c44cc1f745fd1801a73afb9e9f952302a2b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260611&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:06.001911+00:00"
+    },
+    "MI_MARGN_20260611.json": {
+      "sha256": "f3b26558b55d3a18b3f7ba5e0f8cb96260adc6ec273992463616e4058cbf57f5",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260611&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:07.613501+00:00"
+    },
+    "T86_20260612.json": {
+      "sha256": "028714d5237e65fae597b5c61a6683059be5082d1f15da599821f953784caae9",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260612&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:12.698886+00:00"
+    },
+    "MI_MARGN_20260612.json": {
+      "sha256": "6da2f21f67794099f4819d5feb63de2eddf1f0b77a4ff8fbdf434d69ebec590d",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260612&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:13.563278+00:00"
+    },
+    "T86_20260615.json": {
+      "sha256": "807ff04a6cb19bfab698b80c5c82255b506a72672e1062d6c1652d087cce8138",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260615&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:17.470145+00:00"
+    },
+    "MI_MARGN_20260615.json": {
+      "sha256": "ec5fcfd2dbcdbe2909973e0edf48011ef480c2a0d61a5acce0d161e78e0fea5b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260615&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:19.586217+00:00"
+    },
+    "T86_20260616.json": {
+      "sha256": "c869237c19ac147fa84fc74ff3ad3ff7c247d97aa6b8eac01688fac7cf7a6e01",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260616&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:23.468539+00:00"
+    },
+    "MI_MARGN_20260616.json": {
+      "sha256": "0dc221f0636ed8f3aea75f2aa6cb25e8069068af4da7b1b626c9e31a22bcb3fb",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260616&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:25.571815+00:00"
+    },
+    "T86_20260617.json": {
+      "sha256": "8409e71a94b18ca926f3e85f08d2c84ffae2623200d6a5f629897be576420286",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260617&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:29.309285+00:00"
+    },
+    "MI_MARGN_20260617.json": {
+      "sha256": "c98fccdac937276f3c34b2cb9531ddd026bde3cc3dfcd56c6e8798412825cead",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260617&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:31.644877+00:00"
+    },
+    "T86_20260618.json": {
+      "sha256": "b7f03bd56c2ebf54e8e0b173fcaa064d3d7ce106d6e8bd2a8f914c9122c81250",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260618&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:35.563720+00:00"
+    },
+    "MI_MARGN_20260618.json": {
+      "sha256": "24e6078d82535a0d3bf42ef2370879fe82dfb7853657e4367068807b46b338e5",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260618&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:37.677993+00:00"
+    },
+    "T86_20260622.json": {
+      "sha256": "da76d3494179c2e05bc308e43944ae604e583dd7b97276bd1e59c51e88772737",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260622&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:43.065098+00:00"
+    },
+    "MI_MARGN_20260622.json": {
+      "sha256": "05b7953220d6a4a83de14805d914baf0aeb330012281da1db3f884dba2447fe2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260622&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:44.178444+00:00"
+    },
+    "T86_20260623.json": {
+      "sha256": "4011051ec5b640b9a84a3a7b67f40c67e05b49fe9fee09b0412848000e60d3ad",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260623&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:48.553561+00:00"
+    },
+    "MI_MARGN_20260623.json": {
+      "sha256": "25bd6c743f446fdc5237cb3f90094f4e701906acfc5bc34367716038c84e78ba",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260623&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:50.501727+00:00"
+    },
+    "T86_20260624.json": {
+      "sha256": "b17418914cc0163060cc1e817b31718a1d4aaab3eb5eeed35bbe112e169a88ad",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260624&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:05:53.518139+00:00"
+    },
+    "MI_MARGN_20260624.json": {
+      "sha256": "7b4b00c279fee38ffe35e55a3764dc3907e292c2fb38ca38c3562a9159184391",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260624&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:05:55.878246+00:00"
+    },
+    "T86_20260625.json": {
+      "sha256": "c9c514502594d250ca579af0a52b8cb9113f86ebe0a036d5bde220d816ba419d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260625&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:00.312782+00:00"
+    },
+    "MI_MARGN_20260625.json": {
+      "sha256": "0e6b9aaf85cd6162bb1ef1b9b1c6c92f01245bfda49cb048f19dc5993cd08b9e",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260625&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:02.070199+00:00"
+    },
+    "T86_20260626.json": {
+      "sha256": "2eefeabdf2e1b7bcf80d6c5b4669982ea5f8322e56178f0b1cfa35798892f798",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260626&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:05.402577+00:00"
+    },
+    "MI_MARGN_20260626.json": {
+      "sha256": "d8d23b1b229d8577a7ff33430e05e426ce590d53453bff4f1f9e20656ee482ed",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260626&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:07.731547+00:00"
+    },
+    "T86_20260629.json": {
+      "sha256": "cc8a42f8d3f4982ec2a9d48b94a607f3d6640e4f1cb0ab64f10f519403345e97",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260629&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:11.525652+00:00"
+    },
+    "MI_MARGN_20260629.json": {
+      "sha256": "718a35fcd1676a347f8039f72e9edc7be554b011658b3eaf18a6bc55cdb7d2b0",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260629&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:14.946118+00:00"
+    },
+    "T86_20260630.json": {
+      "sha256": "ac7375b71758d226561d8b6e6be2e912efca3f50d43a1a3686a40a45773175ea",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260630&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:18.427062+00:00"
+    },
+    "MI_MARGN_20260630.json": {
+      "sha256": "f48d31c570e96faaf21a4af5b101fcc85df8327d3059d694f7a630810709ac4c",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260630&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:19.933039+00:00"
+    },
+    "T86_20260701.json": {
+      "sha256": "798bbe22174b9191863e67edceb8206463914e611baaed6191afbeb3e4ec96ac",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260701&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:23.503331+00:00"
+    },
+    "MI_MARGN_20260701.json": {
+      "sha256": "763b96d92b87abc2fd250c2a881ff55e485a96cff4f1137ac93b5a5f87057bba",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260701&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:25.668711+00:00"
+    },
+    "T86_20260702.json": {
+      "sha256": "c05833aa9222475d1526924307cd00afc0545556f56073eb6c856cc300c09edb",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260702&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:30.584641+00:00"
+    },
+    "MI_MARGN_20260702.json": {
+      "sha256": "a22cb2ed4fba760b177c2071eb0aa092fb5302286b61bd570377581998ac9c68",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260702&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:31.742628+00:00"
+    },
+    "T86_20260703.json": {
+      "sha256": "ac2979d0d18830a8b10ad531d16fd538e0dc007c6e0cdb56c317af87fbccb672",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260703&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:35.647386+00:00"
+    },
+    "MI_MARGN_20260703.json": {
+      "sha256": "01bb807945b5cc74d4f240df3fdc2ccd15fc8a0e2117c2d4940fa8be86154eb4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260703&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:40.141273+00:00"
+    },
+    "T86_20260706.json": {
+      "sha256": "772b3fda2bf90619fc98ccde8a7abe54653d5e766eb0351356ba7d8fed0e004c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260706&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:41.640156+00:00"
+    },
+    "MI_MARGN_20260706.json": {
+      "sha256": "ad5575e8549e11ef24947a0363e5198238b5e8eb92ba6ba3843a7e5ddd0f5e42",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260706&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:45.221962+00:00"
+    },
+    "T86_20260707.json": {
+      "sha256": "d73fd8c4567289b07961057440c980fa6d773373bab7e51a7d33f4e30e2e25e8",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260707&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:47.662422+00:00"
+    },
+    "MI_MARGN_20260707.json": {
+      "sha256": "fd7c1bdbac24e4cfb49fa246794ecd611df05330329f8d894208fe16381b58da",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260707&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:49.948916+00:00"
+    },
+    "T86_20260708.json": {
+      "sha256": "95dcc2c4acf984d89db96178a2da76a7c2ddb9422bd28ad4007c7e016e23a98b",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260708&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:54.766958+00:00"
+    },
+    "MI_MARGN_20260708.json": {
+      "sha256": "5eaa381bbc829a449fe9d8aafdd1dbaad6c4c0b6c073f41dbaabdf9fb5a70d67",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260708&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:06:55.730077+00:00"
+    },
+    "T86_20260709.json": {
+      "sha256": "753260845b5b8f02ed3f8462127c8dc53f99c4b2f2e36c451d5a20d04e23e352",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260709&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:06:59.641376+00:00"
+    },
+    "MI_MARGN_20260709.json": {
+      "sha256": "bf9cb1140a9cf81c5e958d365adef43e4f9106f3f41032a9b0fda5d01a270184",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260709&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:02.267138+00:00"
+    },
+    "T86_20260713.json": {
+      "sha256": "79f07f1184eff6331dd902fe5fabb9b3fd11d244b784aad70faa7efb2d7625df",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260713&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:05.427090+00:00"
+    },
+    "MI_MARGN_20260713.json": {
+      "sha256": "8f7058ecdc58a14ba5f8966173b039b74b0ff3673473227d0cc6883fbe34b293",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260713&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:07.902630+00:00"
+    },
+    "T86_20260714.json": {
+      "sha256": "8bee0a326ca5140431e8b8e0fc8cd1907018d714cfbcdd794e13e9ba7af99653",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260714&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:11.764900+00:00"
+    },
+    "MI_MARGN_20260714.json": {
+      "sha256": "b54f515e786f93ca5fe455ff2360a33b1a449311b945804b9d25f25f86853dba",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260714&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:13.721213+00:00"
+    },
+    "T86_20260715.json": {
+      "sha256": "8d76b6e650ba0881ea175313d1332e225e4414a1cfc169aa66215bef8d7a69b0",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260715&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:17.447689+00:00"
+    },
+    "MI_MARGN_20260715.json": {
+      "sha256": "05eb5d122d24add667aa0db6177b672e7f5e62b8312e2191cea244dca4918f0b",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260715&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:19.814544+00:00"
+    },
+    "T86_20260716.json": {
+      "sha256": "c179a4767a8d8be1f0ecc1cd178a61239dd78b2f877ff8769a3cf91efa8797ac",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260716&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:24.085806+00:00"
+    },
+    "MI_MARGN_20260716.json": {
+      "sha256": "c84934b7142c3d884f3117ebc06a98b5444778f8058fd09a26d853c06072536e",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260716&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:25.810829+00:00"
+    },
+    "T86_20260717.json": {
+      "sha256": "e1c007e9bb3600285134a2c6d28984a09737ed8137525d4580f93bfc83edc208",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260717&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:29.649017+00:00"
+    },
+    "MI_MARGN_20260717.json": {
+      "sha256": "a97a35a2659bfc6f07681a2090d4e80752fc6178fb21e9b76c0f54732866846a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260717&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:32.684553+00:00"
+    },
+    "T86_20260720.json": {
+      "sha256": "8e7ca2d46024cb421c2cd7fb40e9d4a57fbd43920fe211f972ccdc2307fdf1f1",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260720&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:38.666472+00:00"
+    },
+    "MI_MARGN_20260720.json": {
+      "sha256": "bb5d89bd90c2164a196096acad51216da92ffc2a3c59c7e09639638359b00917",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260720&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:40.437970+00:00"
+    },
+    "T86_20260721.json": {
+      "sha256": "b54ff498a10e9c27c4776d8068b202446958cc00bfba65a0626673baadc1564e",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260721&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:42.841622+00:00"
+    },
+    "MI_MARGN_20260721.json": {
+      "sha256": "1d8d0efab3305d82b48ed05ef0b8245a986ba76fb729b0bc26c07b4990cc70f4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260721&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:45.113189+00:00"
+    },
+    "T86_20260722.json": {
+      "sha256": "9748419eb6ed1eeb7781d19f6b6ec9029e974ec42c899e5445d46c18225e8649",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260722&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:48.720297+00:00"
+    },
+    "MI_MARGN_20260722.json": {
+      "sha256": "10f4036260ab8851da093f898272453dfd1f099f3cfdb20c87e6a46386fb96b9",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260722&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:50.988715+00:00"
+    },
+    "T86_20260723.json": {
+      "sha256": "7616a7f521c66f54268ee3876c6f171fb011847aa0151735050271585e789784",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260723&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:07:54.649234+00:00"
+    },
+    "MI_MARGN_20260723.json": {
+      "sha256": "aaa321926cb5f43efac3578646e8585fac4e298a08a550323c87e050b8375816",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260723&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:07:56.985098+00:00"
+    },
+    "T86_20260724.json": {
+      "sha256": "14c0bff8326b251d6363c4ae10bccabf69329d2bb1cd907f65a0abb30c7a4ac4",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260724&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:00.691254+00:00"
+    },
+    "MI_MARGN_20260724.json": {
+      "sha256": "aa720a869bd9ae06d5b65def9b03899fccb5d2cfe82e6360dce334d02ff5015d",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260724&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:02.942268+00:00"
+    },
+    "T86_20260727.json": {
+      "sha256": "720ff0729bf0292ca273505afceb30a575be8b8575ccc1d18713b88a301c9414",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260727&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:06.635456+00:00"
+    },
+    "MI_MARGN_20260727.json": {
+      "sha256": "ac4130b841cf357ce88408136481cb0b7aa3f838a44833a1d9877df9e974c7d5",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260727&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:09.481242+00:00"
+    },
+    "T86_20260728.json": {
+      "sha256": "912d85f92f2228fbe380bfb69e11d81ba1755f9cedcd05e695b664e4fbbf030a",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260728&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:12.893846+00:00"
+    },
+    "MI_MARGN_20260728.json": {
+      "sha256": "f308c4937ada8dcbcc945078724e6229d1e22eda8a05058a3bcf2f9f3f773d8a",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260728&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:14.972374+00:00"
+    },
+    "T86_20260928.json": {
+      "sha256": "b32125d0522389d773814d2be85a9d7363b2c21185aab3d55708a2a8014a18a9",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260928&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:17.868185+00:00"
+    },
+    "MI_MARGN_20260928.json": {
+      "sha256": "1857ef3a55678c4757560d15a68c3b7823fd0023b6762656faa31acce2d13538",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260928&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:20.952186+00:00"
+    },
+    "T86_20260929.json": {
+      "sha256": "951fc55a07468b5f3ce2f67dcb37cda1ebe254356dc05aeee1380f4ea7b415f0",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260929&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:23.880437+00:00"
+    },
+    "MI_MARGN_20260929.json": {
+      "sha256": "4236cf58e37f7a0f443f528e15c8efe29b0686ea0fcb3e4959e9608a4e53ad53",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260929&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:26.978921+00:00"
+    },
+    "T86_20260930.json": {
+      "sha256": "cd265d2195145ce9738984fd0142bf8dfcc857c2b7c85c3f9f08a28ba64041ae",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20260930&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:29.880493+00:00"
+    },
+    "MI_MARGN_20260930.json": {
+      "sha256": "179a93fbcc44df0471a5b01020c04fed93078c1649a444d664607e5faa66a278",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260930&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:32.874823+00:00"
+    },
+    "T86_20261001.json": {
+      "sha256": "68b0997bde61c51409f50ac2521deb126fc7ce34d86a00232034389f0fdd624c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261001&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:35.905418+00:00"
+    },
+    "MI_MARGN_20261001.json": {
+      "sha256": "84604115d0bb73cae5eb1811c2b2ec2e73495b10a0e35931f37d71a58314659c",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261001&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:38.875430+00:00"
+    },
+    "T86_20261002.json": {
+      "sha256": "58996ee3dce92333bacf596eb0cd1faef4cd40c3c37749971baeacd2592d770f",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261002&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:41.880461+00:00"
+    },
+    "MI_MARGN_20261002.json": {
+      "sha256": "0049f1f5f8747a612b1621e7782763e990d5af1e68f92ae0cedcea43718d167e",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261002&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:45.015216+00:00"
+    },
+    "T86_20261005.json": {
+      "sha256": "5b228c416715d0666edebe5c51a16004acb2b6a863bfe2d346483e0fa9ac75e0",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261005&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:47.854100+00:00"
+    },
+    "MI_MARGN_20261005.json": {
+      "sha256": "9a09af61c68df9654c0bafa2b631641b9cdf47493a3af185da172fe54d6439a4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261005&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:50.999198+00:00"
+    },
+    "T86_20261006.json": {
+      "sha256": "78fc317cb5f8a0b0ea0c81247ffb84bb884d2fa600cb8209aee388d1bb7b8565",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261006&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:53.892357+00:00"
+    },
+    "MI_MARGN_20261006.json": {
+      "sha256": "73c3da536df251e2abefa7a07f703880d160f331c589e43b5a775328beecd935",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261006&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:08:56.998957+00:00"
+    },
+    "T86_20261007.json": {
+      "sha256": "fce93602ab6265fdff7ed5bf440e04ce67d3f0bc813e979ba0428d0eb9631cf1",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261007&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:08:59.921908+00:00"
+    },
+    "MI_MARGN_20261007.json": {
+      "sha256": "0f977a4ddd5ea6e4cbb616957b4484710d233bfa680d60442a6667876e13b7c4",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261007&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:02.924297+00:00"
+    },
+    "T86_20261008.json": {
+      "sha256": "68ee9232d925828a6a91d066df1ebf6e0d37c7bf807dd5ed862e92c4e9b313dd",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261008&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:05.897181+00:00"
+    },
+    "MI_MARGN_20261008.json": {
+      "sha256": "d3e0f8954b8b659ff1adb64d650ca90e3e3f65548b41e4981d301560edb3fc70",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261008&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:09.012854+00:00"
+    },
+    "T86_20261009.json": {
+      "sha256": "b32125d0522389d773814d2be85a9d7363b2c21185aab3d55708a2a8014a18a9",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261009&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:11.892284+00:00"
+    },
+    "MI_MARGN_20261009.json": {
+      "sha256": "1857ef3a55678c4757560d15a68c3b7823fd0023b6762656faa31acce2d13538",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261009&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:14.916025+00:00"
+    },
+    "T86_20261012.json": {
+      "sha256": "e4ec0924ae0739d37df59640e7e3efde6f56cc24372b4053b7f10dd4487e8012",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261012&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:17.888867+00:00"
+    },
+    "MI_MARGN_20261012.json": {
+      "sha256": "a27f7d7df4499092b07be81229fe3066c2cfeb8e49935af6bdbf15fc4db04f47",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261012&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:20.887817+00:00"
+    },
+    "T86_20261013.json": {
+      "sha256": "86b3cd96bf10602e0d4a7165c75474d51887b0bb6c1f40c91ab442110d3c3e36",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261013&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:23.913117+00:00"
+    },
+    "MI_MARGN_20261013.json": {
+      "sha256": "d8cc5512b8d43d26f645657ede5df42bbf7067fb773de8235295fcbc0397d8a2",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261013&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:26.992256+00:00"
+    },
+    "T86_20261014.json": {
+      "sha256": "1ef164a5554162ce58e95788d0d917010127c4f3ee94089af51bf54b25d4f4c6",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261014&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:29.921976+00:00"
+    },
+    "MI_MARGN_20261014.json": {
+      "sha256": "528bfdb1bcce9168218a4f0c9aef5bfe966ea39fc2ad7c08dd01c91893f3b6aa",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261014&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:32.905409+00:00"
+    },
+    "T86_20261015.json": {
+      "sha256": "64eef188224df36d2f7d7671393afca07c43d2356fb8abfeb6024360383b6c8c",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261015&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:35.999944+00:00"
+    },
+    "MI_MARGN_20261015.json": {
+      "sha256": "32096bc776a7e2a070dd52772261c314277570ad01ae6ced08e2185f2b915494",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261015&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:38.957497+00:00"
+    },
+    "T86_20261016.json": {
+      "sha256": "7c4314eefcf07d78a9bb3f72727be51978117e4572618b89ea562730a5ba48cd",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261016&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:41.915864+00:00"
+    },
+    "MI_MARGN_20261016.json": {
+      "sha256": "bd3c7028031bcc81421dc89c86df1bc1c09a57a093d2c4a9a6e4aa9701eb1b56",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261016&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:44.935481+00:00"
+    },
+    "T86_20261019.json": {
+      "sha256": "302497dcc18cfb3941840987ada759f0e3e6bb1796b9fc42d7afcdb33d55f65d",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261019&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:47.905440+00:00"
+    },
+    "MI_MARGN_20261019.json": {
+      "sha256": "c6dfa864138f000db4aad05df6869fc00608d40810a497c7ff686c41d5402baa",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261019&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:50.908167+00:00"
+    },
+    "T86_20261020.json": {
+      "sha256": "85ee6035d16803b83421dce63a13c631ea18a146c8af7c2cecf9682193e76590",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261020&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:53.952296+00:00"
+    },
+    "MI_MARGN_20261020.json": {
+      "sha256": "2589204b30cfebd841ddf15a2ca49f45c72eddfc98cfc8f16e84c775abb546c8",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261020&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:09:56.926268+00:00"
+    },
+    "T86_20261021.json": {
+      "sha256": "444ced777dcde9585b7f307d69a5948093277354b3705a8d54b17601cc34c7a5",
+      "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=20261021&selectType=ALLBUT0999&response=json",
+      "retrieved_at": "2026-10-22T13:09:59.928349+00:00"
+    },
+    "MI_MARGN_20261021.json": {
+      "sha256": "0d4253cc3d6b5f2294ac1145e5a0427e12eb1f7e460ac27e93062b794853c1ab",
+      "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20261021&selectType=ALL&response=json",
+      "retrieved_at": "2026-10-22T13:10:02.897454+00:00"
+    }
+  },
+  "official_chips_sha256": "9c187ef90ee42abc6ce3a5b7bb3d431c80c031669af9124b16a1e0a9d9e11abe"
+}

@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "preservation": {
+    "status": "FAIL",
+    "historical_hashes_checked": 5463,
+    "historical_changed": [],
+    "protected_sources_checked": 74,
+    "protected_changed": [
+      "core/strategies/growth_momentum_breakout.py"
+    ],
+    "source_records": 461,
+    "inventory_identities_equal": true
+  },
+  "intentional_protected_source_change": {
+    "core/strategies/growth_momentum_breakout.py": "P0-3 guard only; legacy behavior identical (verified diff)"
+  },
+  "counts": {
+    "families": 22,
+    "parameters": 384,
+    "identities": 453,
+    "source_records": 461
+  },
+  "frozen_cutoff": "2026-07-28",
+  "frozen_fingerprint_unchanged": true,
+  "archived_outputs_verified": {
+    "outputs/native7_recovery/2026-10-22": 29,
+    "outputs/native22_validation/2026-10-22": 17
+  },
+  "production_surface_unchanged_since_1e43f1d": true,
+  "DAILY_FEATURE_MODE_default": "legacy",
+  "strategy_parameters_unchanged": true,
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}
