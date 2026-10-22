@@ -350,8 +350,200 @@ def contracts():
     print({k: (r['MODEL_STATUS'], r['contract_error']) for k, r in rows.items()}, trace)
 
 
+TESTS = ['test/test_daily_selection_recovery.py', 'test/test_native_recovery.py', 'test/characterization', 'test/test_run_daily.py',
+         'test/test_run_daily_persistence.py', 'test/test_daily_platform_parity.py', 'test/test_daily_pipeline_consolidation_contract.py',
+         'test/test_native22_engine_contracts.py', 'test/test_next_session_execution.py', 'test/test_research_execution_price.py',
+         'test/test_strategy_center.py', 'test/test_strategy_search.py']
+
+
+def tests():
+    import subprocess
+    import xml.etree.ElementTree as ET
+    from collections import Counter
+
+    junit = out('test_junit.xml')
+    proc = subprocess.run([sys.executable, '-m', 'pytest', *TESTS, '-q', '-p', 'no:cacheprovider', f'--junitxml={junit}'],
+                          cwd=ROOT, capture_output=True, text=True)
+    cases = [{'test': f"{c.get('classname')}::{c.get('name')}",
+              'status': 'FAIL' if c.find('failure') is not None or c.find('error') is not None else 'SKIP' if c.find('skipped') is not None else 'PASS'}
+             for c in ET.parse(junit).getroot().iter('testcase')]
+    write(out('test_results.json'), {'command': 'python -m pytest ' + ' '.join(TESTS), 'returncode': proc.returncode,
+                                     'summary': proc.stdout.strip().splitlines()[-1], 'counts': dict(Counter(c['status'] for c in cases)), 'cases': cases})
+    print(proc.returncode, proc.stdout.strip().splitlines()[-1])
+
+
+COMPARED = ('volume_ratio', 'high_60', 'chip_score', 'ma60', 'kd_k', 'margin_change_pct', 'revenue_yoy', 'eps', 'op_profit_margin')
+# Which gates an input depends on, research window (official chips) and live October (MySQL).
+FUNDAMENTAL_GATES = {'revenue_yoy': 'MONTHLY_REVENUE', 'eps': 'FUNDAMENTALS', 'op_profit_margin': 'FUNDAMENTALS'}
+
+
+def report():
+    """Before/after tables, owner decisions and the reproduction manifest from the stage outputs (no new computation)."""
+    import csv
+    import platform
+    import subprocess
+
+    before, after = read(OUT / 'before_legacy/selection.json'), read(OUT / 'after_recovered/selection.json')
+    contracts_report, parity_report = read(OUT / 'model_contract_report.json'), read(OUT / 'parity_results.json')
+    gates = {g['gate']: g['status'] for g in read(OUT / 'data_quality_report.json')['gates']}
+    feature_rows, summary = [], []
+    for day in before:
+        old = pd.read_parquet(OUT / f'before_legacy/features_{day}.parquet').set_index('stock_id')
+        new = pd.read_parquet(OUT / f'after_recovered/features_{day}.parquet').set_index('stock_id')
+        old['high_60'] = old.high_price  # legacy V34 value: a one-day rolling max is today's high
+        old, new = old.apply(pd.to_numeric, errors='coerce'), new.apply(pd.to_numeric, errors='coerce')
+        shared = old.index.intersection(new.index)
+        frame = pd.DataFrame({'date': day, 'stock_id': shared})
+        for c in COMPARED:
+            frame[f'{c}_before'], frame[f'{c}_after'] = old.loc[shared, c].to_numpy(), new.loc[shared, c].to_numpy()
+            b, a = old.loc[shared, c], new.loc[shared, c]
+            summary.append({'date': day, 'feature': c, 'stocks': len(shared), 'before_distinct': int(b.nunique()), 'after_distinct': int(a.nunique()),
+                            'before_null': int(b.isna().sum()), 'after_null': int(a.isna().sum()),
+                            'before_zero': int((b == 0).sum()), 'after_zero': int((a == 0).sum()),
+                            'before_equals_1': int((b == 1).sum()) if c == 'volume_ratio' else None,
+                            'changed': int(((b - a).abs() > 1e-12 + 1e-9 * a.abs()).sum() + (b.isna() ^ a.isna()).sum())})
+        feature_rows.append(frame)
+    pd.concat(feature_rows).to_csv(out('feature_comparison.csv'), index=False, encoding='utf-8-sig')
+    pd.DataFrame(summary).to_csv(out('feature_comparison_summary.csv'), index=False, encoding='utf-8-sig')
+
+    selection = []
+    for key in NATIVE:
+        info = contracts_report['strategies'][key]
+        name = info['strategy_name']
+        live_gates = sorted({'MYSQL_TRUST_BUY_LIVE_2026_10', 'UNIVERSE_TPEX'} | {FUNDAMENTAL_GATES[i] for i in info['required_inputs'] if i in FUNDAMENTAL_GATES})
+        research_gates = sorted({'CALENDAR', 'PRICES_TWSE', 'INSTITUTIONAL_FLOWS_OFFICIAL', 'MARGIN_OFFICIAL'}
+                                | {FUNDAMENTAL_GATES[i] for i in info['required_inputs'] if i in FUNDAMENTAL_GATES})
+        for day in before:
+            b, a = before[day]['strategies'][key], after[day]['strategies'][key]
+            note = after[day]['exclusions'][name]
+            research = day in SNAPSHOT_DATES
+            used = research_gates if research else live_gates
+            data_status = 'DATA_PASS' if all(gates.get(g) == 'DATA_PASS' for g in used) else \
+                'DATA_FAIL' if any(gates.get(g) == 'DATA_FAIL' for g in used) else 'DATA_BLOCKED'
+            selection.append({
+                'strategy': key, 'strategy_name': name, 'date': day, 'source': 'mysql_dry_run',
+                'before_candidates': b['candidates'], 'after_candidates': a['candidates'],
+                'before_missing_excluded': 0, 'after_missing_excluded': note['excluded'], 'after_rows': note['rows'],
+                'after_missing_by_reason': json.dumps(pd.Series([r['reason'] for r in note['excluded_rows']], dtype=object).value_counts().to_dict()),
+                'before_top3': ' '.join(b['ranked'][:3]), 'after_top3_diagnostic': ' '.join(a['ranked'][:3]),
+                'before_model_features': 'INVALID: features zero-filled, volume_ratio 1.0, chip_score from zero-filled inputs',
+                'after_model_features': after[day]['model_status'][name] or 'MODEL_VALID',
+                'before_conditions': 'DEGRADED: volume_ratio constant, V34 high_60 = today high, NULL -> 0 inputs pass conditions',
+                'after_conditions': 'COMPLETE: every rule input present; rows missing any are excluded before the strategy',
+                'engineering_before': 'ENGINE_FAIL (P0-1..P0-4)',
+                'engineering_after': 'ENGINE_PASS' if parity_report['strategies'][key]['PARITY'] == 'PARITY_PASS' else parity_report['strategies'][key]['PARITY'],
+                'data_after': data_status, 'data_gates_used': ' '.join(used),
+                'publishable_after': 'NO (OD-5/OD-7: recovered is shadow-only; model blocked)'})
+    with out('strategy_selection_comparison.csv').open('w', newline='', encoding='utf-8-sig') as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(selection[0]))
+        writer.writeheader()
+        writer.writerows(selection)
+
+    (out('owner_decisions_required.md')).write_text(OWNER_DECISIONS, encoding='utf-8')
+    outputs = {p.relative_to(OUT).as_posix(): digest(p) for p in sorted(OUT.rglob('*')) if p.is_file() and '_aborted' not in p.parts}
+    chip_manifest = read(OUT / 'official_chip_manifest.json')
+    write(out('reproduction_manifest.json'), {
+        'change': 'openspec/changes/2026-10-22-recover-daily-selection-pipeline', 'output_dir': OUT.relative_to(ROOT).as_posix(),
+        'git_head': subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, text=True).stdout.strip(),
+        'baseline_head': '1e43f1d773f33d6643a082a783a8138fd10712a1',
+        'commands': [f'python scripts/daily_selection_recovery.py {s}' for s in
+                     ('baseline  # run at 1e43f1d before the code change', 'chips', 'reconcile', 'shadow', 'contracts', 'parity', 'tests', 'report', 'verify')],
+        'inputs': {'native7_research_snapshot': digest(NATIVE7 / 'research_snapshot.parquet'),
+                   'mysql_financial_snapshot': digest(ROOT / 'outputs/strategy_validation/2026-10-21/snapshot_financial_statements.parquet'),
+                   'mysql_revenue_snapshot': digest(ROOT / 'outputs/strategy_validation/2026-10-21/snapshot_monthly_revenue.parquet'),
+                   'fundamental_pit_v3_records': digest(ROOT / 'data/processed/fundamental_pit_v3/fundamental_records.parquet'),
+                   'official_chip_files': len(chip_manifest['files']), 'official_chips': chip_manifest['official_chips_sha256'],
+                   'user_settings': digest(NATIVE7 / 'user_settings.json'),
+                   'mysql_live': 'read-only queries at run time; live Daily dry-runs are not byte-reproducible after the DB changes'},
+        'code': {p: digest(ROOT / p) for p in ('scripts/daily_selection_recovery.py', 'jobs/run_daily.py', 'core/calc_indicators.py',
+                                                'core/research/native_frame.py', 'core/research/native_models.py',
+                                                'core/strategies/growth_momentum_breakout.py', 'config/settings.py',
+                                                'test/test_daily_selection_recovery.py')},
+        'models': {k: v['identity'] and v['identity']['sha256'] for k, v in contracts_report['strategies'].items()},
+        'environment': {'python': platform.python_version(), 'pandas': pd.__version__, 'platform': platform.platform()},
+        'outputs': outputs, 'BROKER_ORDER_SUBMISSION': 'DISABLED', 'DAILY_FEATURE_MODE_default': 'legacy'})
+    print(pd.DataFrame(selection).groupby('strategy')[['before_candidates', 'after_candidates', 'after_missing_excluded']].sum().to_dict())
+
+
+OWNER_DECISIONS = """# Owner Decisions Required — 2026-10-22 Daily Selection Recovery
+
+Decided this round (OD-1..OD-7) are recorded in `openspec/changes/2026-10-22-recover-daily-selection-pipeline/design.md` §9.
+Open items below need an explicit owner decision; nothing here was changed without one.
+
+| ID | Item | Evidence | Options | Current state |
+|---|---|---|---|---|
+| OD-3a | Training-time `chip_score` differs from the formula with real dealer/margin data | `model_contract_report.json` `chip_score_training_trace`: dealer/margin NULL in every training row; `dealer_ratio_z` importance 0, `chip_score_z` > 0 in all 7 models | (a) retrain on certified chips with `training_data_end` recorded; (b) keep models blocked | MODEL_BLOCKED, not retrained |
+| OD-3b | Models lack `training_data_end` | all 7 pickles: keys without `training_data_end` | re-export metadata from the training run, or retrain with it recorded | MODEL_BLOCKED |
+| OD-5a | Recovered candidates without valid AI scores | every native model is MODEL_BLOCKED, so recovered Daily has no publishable ranking | publish by rule order, wait for models, or keep shadow | shadow only |
+| OD-7a | Switch production to `DAILY_FEATURE_MODE=recovered` | parity and tests in this directory | separate acceptance run, then approval | legacy; recovered refuses non-dry-run |
+| OD-8 | TPEx rows in live recovered Daily | research excludes TPEx (no official TPEx cache); live MySQL still carries TPEx stocks (weekend/duplicate history, native7 `tpex_audit.json`) | restrict live recovered to TWSE, or fetch and certify TPEx official data | uncertified, reported |
+| OD-9 | MySQL institutional flows stored as 0 on whole dates | `data_quality_report.json` MYSQL_FOREIGN_BUY/TRUST_BUY_RESEARCH_WINDOW: 19 dates with < 99% agreement, MySQL 0 vs official non-zero; Oct trust 53 mismatches | repair the crawler/DB from official T86 (DB write needs approval) | research uses official T86; MySQL untouched |
+| OD-10 | V36 relaxed mode drops the consecutive-buy condition | `core/strategies/institutional_flow_confirmation.py` relaxed branch keeps stage-1 rows with chip_score >= 27.5; with real chips the neutral score is ~50, so the relaxed branch admits nearly every stage-1 row when stage 2 is empty | keep, tighten, or remove (strategy rule change) | unchanged; test documents it |
+| OD-11 | Ex-dividend bias in raw-price `high_60` (OD-2) | system has raw prices only; after ex-rights `high_60` stays above an adjusted high for up to 60 sessions | keep raw (stricter), or add adjusted prices | raw, reported |
+| OD-12 | Monthly revenue and post-FY2025 filings have no publication timestamp | `data_quality_report.json` FUNDAMENTALS / MONTHLY_REVENUE | add MOPS publication capture for revenue and recent quarters | DATA_BLOCKED, deadline estimate flagged |
+"""
+
+
+V34_SOURCE = 'core/strategies/growth_momentum_breakout.py'
+V34_GUARD_COMMENT = "# Recovered Daily and research provide high_60 from each stock's history; a one-day legacy frame cannot."
+
+
+def verify():
+    """Historical results, frozen candidate, archived evidence and production defaults unchanged."""
+    import csv
+    import hashlib
+    import subprocess
+
+    from scripts.validate_native22 import preservation
+
+    kept = preservation()
+    # The only protected identity source changed on purpose is V34 (P0-3): the 60-day-high block now runs only when the
+    # input has no high_60. Legacy frames (one-day Daily frame, DB backtest rows) never carry high_60, so legacy results
+    # are behavior-identical; the diff must be exactly the guard and the DB must not hold a high_60 column.
+    assert not kept['historical_changed'] and kept['inventory_identities_equal'], 'PRESERVATION'
+    assert set(kept['protected_changed']) <= {V34_SOURCE}, 'PROTECTED_SOURCE_CHANGED: ' + str(kept['protected_changed'])
+    v34 = [l for l in subprocess.run(['git', 'diff', '1e43f1d', '--', V34_SOURCE], cwd=ROOT, capture_output=True, text=True, encoding='utf-8',
+                                     check=True).stdout.splitlines() if l.startswith(('+', '-')) and not l.startswith(('+++', '---'))]
+    removed = [l[1:].strip() for l in v34 if l.startswith('-')]
+    added = [l[1:].strip() for l in v34 if l.startswith('+')]
+    assert added[:2] == [V34_GUARD_COMMENT, "if 'high_60' not in df_sorted.columns:"] and added[2:] == removed, 'V34_DIFF_NOT_GUARD_ONLY'
+    assert 'high_60' not in read(OUT / 'model_contract_report.json')['chip_score_training_trace']['daily_market_data_columns_now'], 'DB_HIGH_60'
+    summary = read(ROOT / 'outputs/strategy_revalidation/2026-10-21-audit/identity_matrix_final.json')['summary']
+    families = list(csv.DictReader(open(ROOT / 'outputs/native22_validation/2026-10-22/family_validation_matrix.csv', encoding='utf-8-sig')))
+    params = list(csv.DictReader(open(ROOT / 'outputs/native22_validation/2026-10-22/parameter_validation_matrix.csv', encoding='utf-8-sig')))
+    counts = {'families': len(families), 'parameters': len(params), 'identities': summary['historical_validation_identities'],
+              'source_records': summary['source_records']}
+    assert counts == {'families': 22, 'parameters': 384, 'identities': 453, 'source_records': 461}, counts
+    review = read(ROOT / 'outputs/strategy_revalidation/2026-10-21-audit/frozen_gate_evidence.json')['documents']['promotion_review']
+    from core.runtime.fundamental_shadow import FrozenStrategyLoader
+    assert FrozenStrategyLoader().load().fingerprint == review['strategy_fingerprint'], 'FROZEN_FINGERPRINT_CHANGED'
+    assert review['evaluation_window']['cutoff'] == '2026-07-28' and review['BROKER_ORDER_SUBMISSION'] == 'DISABLED', 'FROZEN_OR_BROKER'
+    archived = {}
+    for folder in ('outputs/native7_recovery/2026-10-22', 'outputs/native22_validation/2026-10-22'):
+        recorded = read(ROOT / folder / 'reproduction_manifest.json')['outputs']
+        changed = [n for n, h in recorded.items() if hashlib.sha256((ROOT / folder / n).read_bytes()).hexdigest() != h]
+        assert not changed, f'ARCHIVED_EVIDENCE_CHANGED: {folder} {changed}'
+        archived[folder] = len(recorded)
+    touched = subprocess.run(['git', 'diff', '--name-only', '1e43f1d', '--', 'execution', 'core/runtime', 'jobs/scheduler.py', 'strategy_settings.json',
+                              '4_run_backtest.py', '5_push_to_line.py', 'core/backtest', 'app', 'services'],
+                             cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    assert not touched, 'PRODUCTION_SURFACE_CHANGED: ' + str(touched)
+    from config import Config
+    assert Config.DAILY_FEATURE_MODE == 'legacy', 'DEFAULT_MODE'
+    params_changed = subprocess.run(['git', 'diff', '1e43f1d', '--', 'config/settings.py'], cwd=ROOT, capture_output=True, text=True, encoding='utf-8').stdout
+    assert [l for l in params_changed.splitlines() if l.startswith(('+', '-')) and not l.startswith(('+++', '---'))
+            and 'DAILY_FEATURE_MODE' not in l and 'dry-run/shadow' not in l] == [], 'STRATEGY_PARAMETERS_CHANGED'
+    write(out('verification.json'), {'status': 'PASS', 'preservation': kept, 'intentional_protected_source_change': {
+                                         V34_SOURCE: 'P0-3 guard only; legacy behavior identical (verified diff)'} if kept['protected_changed'] else {},
+                                     'counts': counts, 'frozen_cutoff': '2026-07-28',
+                                     'frozen_fingerprint_unchanged': True, 'archived_outputs_verified': archived,
+                                     'production_surface_unchanged_since_1e43f1d': True, 'DAILY_FEATURE_MODE_default': 'legacy',
+                                     'strategy_parameters_unchanged': True, 'BROKER_ORDER_SUBMISSION': 'DISABLED'})
+    print('VERIFY PASS', counts, archived)
+
+
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')  # strategies print emoji; the Windows console defaults to cp950
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('stage', choices=('baseline', 'chips', 'reconcile', 'shadow', 'contracts', 'parity'))
+    parser.add_argument('stage', choices=('baseline', 'chips', 'reconcile', 'shadow', 'contracts', 'parity', 'tests', 'report', 'verify'))
     globals()[parser.parse_args().stage]()
