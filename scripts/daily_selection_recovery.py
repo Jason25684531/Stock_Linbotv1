@@ -410,14 +410,14 @@ def report():
     for key in NATIVE:
         info = contracts_report['strategies'][key]
         name = info['strategy_name']
-        live_gates = sorted({'MYSQL_TRUST_BUY_LIVE_2026_10', 'UNIVERSE_TPEX'} | {FUNDAMENTAL_GATES[i] for i in info['required_inputs'] if i in FUNDAMENTAL_GATES})
-        research_gates = sorted({'CALENDAR', 'PRICES_TWSE', 'INSTITUTIONAL_FLOWS_OFFICIAL', 'MARGIN_OFFICIAL'}
-                                | {FUNDAMENTAL_GATES[i] for i in info['required_inputs'] if i in FUNDAMENTAL_GATES})
+        fundamental = {FUNDAMENTAL_GATES[i] for i in info['required_inputs'] if i in FUNDAMENTAL_GATES}
         for day in before:
             b, a = before[day]['strategies'][key], after[day]['strategies'][key]
             note = after[day]['exclusions'][name]
-            research = day in SNAPSHOT_DATES
-            used = research_gates if research else live_gates
+            # These runs read MySQL (dry-run), so the MySQL gates apply; official-input evidence is in parity_results.json.
+            window = 'RESEARCH_WINDOW' if day in SNAPSHOT_DATES else 'LIVE_2026_10'
+            used = sorted({f'MYSQL_{c.upper()}_{window}' for c in CHIPS} | {'UNIVERSE_TPEX'} | fundamental)
+            scored = a['ai_score'] is not None and any(v is not None for v in a['ai_score'])
             data_status = 'DATA_PASS' if all(gates.get(g) == 'DATA_PASS' for g in used) else \
                 'DATA_FAIL' if any(gates.get(g) == 'DATA_FAIL' for g in used) else 'DATA_BLOCKED'
             selection.append({
@@ -425,7 +425,10 @@ def report():
                 'before_candidates': b['candidates'], 'after_candidates': a['candidates'],
                 'before_missing_excluded': 0, 'after_missing_excluded': note['excluded'], 'after_rows': note['rows'],
                 'after_missing_by_reason': json.dumps(pd.Series([r['reason'] for r in note['excluded_rows']], dtype=object).value_counts().to_dict()),
-                'before_top3': ' '.join(b['ranked'][:3]), 'after_top3_diagnostic': ' '.join(a['ranked'][:3]),
+                'before_top3': ' '.join(b['ranked'][:3]),
+                'after_top3': ' '.join(a['ranked'][:3]) + ' (diagnostic AI score; model blocked)' if scored and a['ranked'] else
+                'NOT_VERIFIABLE (no candidates)' if not a['ranked'] else 'NOT_VERIFIABLE (unscored)',
+                'after_rule_order_top3': ' '.join(a['ranked'][:3]),
                 'before_model_features': 'INVALID: features zero-filled, volume_ratio 1.0, chip_score from zero-filled inputs',
                 'after_model_features': after[day]['model_status'][name] or 'MODEL_VALID',
                 'before_conditions': 'DEGRADED: volume_ratio constant, V34 high_60 = today high, NULL -> 0 inputs pass conditions',
