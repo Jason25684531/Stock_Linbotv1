@@ -123,6 +123,30 @@ STRATEGY_MODE_PRESETS = {
 }
 
 
+# Statutory filing deadlines (month, day, year offset) by quarter; Q4 is due 3/31 next year.
+_QUARTER_DEADLINES = {1: (5, 15, 0), 2: (8, 14, 0), 3: (11, 14, 0), 4: (3, 31, 1)}
+
+
+def pit_fundamentals(revenue: pd.DataFrame, financials: pd.DataFrame, date_str: str) -> pd.DataFrame:
+    """Latest revenue/financial period per stock whose filing deadline passed before date_str.
+
+    ponytail: statutory deadline approximates publication (MySQL has no filing timestamps);
+    swap in MOPS publication dates when the tables carry them.
+    """
+    asof = pd.Timestamp(date_str)
+    rev = revenue.assign(_due=pd.to_datetime(dict(year=revenue['year'] + (revenue['month'] == 12),
+                                                  month=revenue['month'] % 12 + 1, day=10)))
+    rev = rev[rev['_due'] < asof].sort_values(['stock_id', 'year', 'month']).drop_duplicates('stock_id', keep='last')
+    deadline = financials['quarter'].map(_QUARTER_DEADLINES)
+    fin = financials.assign(_due=pd.to_datetime(dict(year=financials['year'] + deadline.str[2],
+                                                     month=deadline.str[0], day=deadline.str[1])))
+    fin = fin[fin['_due'] < asof].sort_values(['stock_id', 'year', 'quarter']).drop_duplicates('stock_id', keep='last')
+    result = pd.DataFrame({'revenue_yoy': rev.set_index('stock_id')['revenue_yoy'].clip(-100, 500)})
+    result = result.join(pd.DataFrame({'op_profit_margin': fin.set_index('stock_id')['operating_margin'] / 100,
+                                       'eps': fin.set_index('stock_id')['eps']}), how='outer')
+    return result.apply(pd.to_numeric, errors='coerce')
+
+
 def _parse_iso_date(value: str) -> str:
     """將 CLI 日期參數標準化為 YYYY-MM-DD。"""
     try:
@@ -446,6 +470,7 @@ class BacktestEngine:
                 raise ValueError('Research execution requires persist_results=False and persist_to_db=False')
         self.pending_orders = []
         self.execution_events = []
+        self.data_exclusions = []
         self._execution_asof = None
         self.mode = mode.lower()
         self.start_date = start_date or BACKTEST_START
@@ -775,6 +800,8 @@ class BacktestEngine:
         - AI 模式（有模型時）：加入 AI 評分排序
         - 使用快取避免重複查詢 monthly_revenue / financial_statements
         """
+        # Research contract: point-in-time fundamentals, missing inputs excluded not zero-filled.
+        pit = getattr(self, 'execution_contract', 'legacy_same_close') == 'next_session_open_v2'
         # 🔥 統一使用單一連線（避免 Too many connections）
         with self.engine.connect() as conn:
             # 基礎查詢
@@ -811,10 +838,19 @@ class BacktestEngine:
                             if vol_map.get(r['stock_id'], 0) > 0 else 1.0, axis=1
                         )
                 except Exception:
-                    pass
+                    if pit:
+                        raise
             
+            if pit:
+                if self._revenue_cache is None:
+                    self._revenue_cache = pd.read_sql(text('SELECT stock_id, year, month, revenue_yoy FROM monthly_revenue'), conn)
+                    self._financial_cache = pd.read_sql(text('SELECT stock_id, year, quarter, operating_margin, eps FROM financial_statements'), conn)
+                known = pit_fundamentals(self._revenue_cache, self._financial_cache, date_str)
+                for col in ('revenue_yoy', 'op_profit_margin', 'eps'):
+                    df[col] = df['stock_id'].map(known[col])
+
             # 補充 revenue_yoy（使用快取，整個回測只查一次）
-            if 'revenue_yoy' not in df.columns or df['revenue_yoy'].isna().all() or (df['revenue_yoy'] == 0).all():
+            if not pit and ('revenue_yoy' not in df.columns or df['revenue_yoy'].isna().all() or (df['revenue_yoy'] == 0).all()):
                 if self._revenue_cache is None:
                     try:
                         rev_query = text("""
@@ -849,7 +885,7 @@ class BacktestEngine:
                 or df['eps'].isna().all()
                 or (df['eps'] == 0).all()
             )
-            if needs_op_margin or needs_eps:
+            if not pit and (needs_op_margin or needs_eps):
                 if self._financial_cache is None:
                     try:
                         fin_query = text("""
@@ -884,7 +920,18 @@ class BacktestEngine:
                 if col not in df.columns:
                     df[col] = 0
                 else:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    if not pit:
+                        df[col] = df[col].fillna(0)
+        if pit:
+            # Strategies coerce NaN to 0, so ma60=0 would pass close > ma60. Never let a missing input pass.
+            required = [c for c in dict.fromkeys(['ma20', 'ma60', *getattr(self.strategy_obj, 'features', []), *(self.features or [])])
+                        if c in df.columns]
+            missing = df[required].isna().any(axis=1)
+            self.data_exclusions.append({'date': date_str, 'rows': len(df), 'excluded_missing_inputs': int(missing.sum())})
+            df = df[~missing]
+            if df.empty:
+                return []
         
         # 依據策略模式選擇篩選邏輯
         if self.strategy_obj is not None:
@@ -1252,6 +1299,7 @@ class BacktestEngine:
                 return {'execution_contract': self.execution_contract,
                         'risk_metrics': metrics['risk_metrics'],
                         'execution_events': self.execution_events,
+                        'data_exclusions': getattr(self, 'data_exclusions', []),
                         'unexecuted_end_of_window_signals': self.pending_orders}
 
         return metrics if return_metrics else roi
