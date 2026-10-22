@@ -14,6 +14,7 @@ from scripts.revalidate_strategy_history import emit_csv
 
 AUDIT = ROOT / 'outputs/strategy_revalidation/2026-10-21-audit'
 OUT = ROOT / 'outputs/native22_validation/2026-10-22'
+BASELINE_COMMIT = '5c4a4b29a1b12621c99a08a5b0487696a6b67f63'  # last commit before this change
 NATIVE = ('defensive_low_volatility', 'growth_momentum_breakout', 'hybrid_trend_rank', 'institutional_flow_confirmation',
           'mean_reversion', 'quality_growth', 'quality_value_low_volatility')
 DAY3 = ('A101_003', 'A101_003+A191_088', 'A101_003+A191_088+A191_132+RS_004_NEAR_HIGH_120D', 'A101_003+A191_132',
@@ -124,7 +125,7 @@ def matrix():
             'native_diagnostic_trades': len(stocks[native['id']].get('closed_trades', [])) if native else None,
             'source_sha256': {s['path']: s['sha256'] for r in members for s in r.get('sources', [])} if native else None,
         })
-    emit_csv(out('family_validation_matrix.csv'), rows)
+    emit_csv(out('family_history_matrix.csv'), rows)
     param_rows = []
     for r in sorted(params, key=lambda r: (r['family_id'], r['id'])):
         links = [l for l in r['historical_runs'] if l['configuration_match']]
@@ -134,7 +135,7 @@ def matrix():
             'historical_evidence_verified': r['historical_evidence_verified'], 'reproducible': r['reproducible'],
             'corrected_replay': (r.get('corrected_replay') or {}).get('status'),
             **historical_metrics(r)})
-    emit_csv(out('parameter_validation_matrix.csv'), param_rows)
+    emit_csv(out('parameter_history_matrix.csv'), param_rows)
     totals = {'families': len(rows), 'parameters': len(param_rows), 'by_group': dict(counts),
               'source_records': len(records), 'validation_identities': read(AUDIT / 'family_matrix.json')['summary']['historical_validation_identities']}
     print(json.dumps(totals, ensure_ascii=False))
@@ -471,8 +472,224 @@ def native(start='2026-09-01', end='2026-10-20'):
                       for sid, r in result['strategies'].items()}))
 
 
+CERTIFIED = ('cagr', 'sharpe', 'sortino', 'max_drawdown', 'win_rate', 'trade_count', 'turnover', 'gross_return', 'net_return',
+             'stress_cost', 'benchmark_excess_return', 'is_oos', 'walk_forward')
+
+
+def median(values):
+    values = sorted(v for v in values if v is not None)
+    if not values:
+        return None
+    mid = len(values) // 2
+    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+
+
+def stdev(values):
+    values = [v for v in values if v is not None]
+    if len(values) < 2:
+        return None
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((v - mean) ** 2 for v in values) / (len(values) - 1))
+
+
+def g2g3_comparison(params):
+    """Same top_n / rebalance / weighting cells; dual factor vs each single factor (historical reference)."""
+    rows = [p for p in params if p['group'] == 'A_FUNDAMENTAL']
+    cells = {}
+    for p in rows:
+        cfg = json.loads(p['parameters'])
+        cells.setdefault((cfg['top_n'], cfg['rebalance_days'], cfg['portfolio_weighting']), {})[cfg['factor_set_id']] = p
+    pairs = []
+    for cell, by in sorted(cells.items()):
+        g2, g3, dual = by.get('G2'), by.get('G3'), by.get('G2_PLUS_G3')
+        if not (g2 and g3 and dual):
+            continue
+        f = lambda p, k: num(p[k])
+        pairs.append({'top_n': cell[0], 'rebalance_days': cell[1], 'portfolio_weighting': cell[2],
+                      **{f'{name}_{k}': f(p, 'historical_' + k) for name, p in (('g2', g2), ('g3', g3), ('dual', dual))
+                         for k in ('sharpe', 'max_drawdown', 'positive_fold_ratio', 'stress_sharpe')},
+                      'dual_sharpe_above_both': f(dual, 'historical_sharpe') > max(f(g2, 'historical_sharpe'), f(g3, 'historical_sharpe')),
+                      'dual_mdd_better_than_both': f(dual, 'historical_max_drawdown') > max(f(g2, 'historical_max_drawdown'), f(g3, 'historical_max_drawdown'))})
+    summary = {name: {'median_sharpe': median([r[f'{name}_sharpe'] for r in pairs]), 'sharpe_stdev_across_cells': stdev([r[f'{name}_sharpe'] for r in pairs]),
+                      'median_mdd': median([r[f'{name}_max_drawdown'] for r in pairs]), 'median_positive_fold_ratio': median([r[f'{name}_positive_fold_ratio'] for r in pairs])}
+               for name in ('g2', 'g3', 'dual')}
+    return {'scope': 'HISTORICAL_REFERENCE (development data, DATA_BLOCKED); not certified performance', 'cells': len(pairs), 'pairs': pairs,
+            'summary': summary, 'dual_sharpe_above_both_count': sum(r['dual_sharpe_above_both'] for r in pairs),
+            'dual_mdd_better_than_both_count': sum(r['dual_mdd_better_than_both'] for r in pairs)}
+
+
+def day3_comparison(params):
+    rows = [p for p in params if p['group'] == 'D_DAY3']
+    single = {}
+    for p in rows:
+        cfg = json.loads(p['parameters'])
+        if '+' not in cfg['factor_set']:
+            single[(cfg['factor_set'], cfg['top_n'], cfg['rebalance_days'], cfg['portfolio_weighting'])] = num(p['historical_sharpe'])
+    gains = []
+    for p in rows:
+        cfg = json.loads(p['parameters'])
+        if '+' in cfg['factor_set']:
+            parts = [single.get((f, cfg['top_n'], cfg['rebalance_days'], cfg['portfolio_weighting'])) for f in cfg['factor_set'].split('+')]
+            best = max(v for v in parts if v is not None)
+            gains.append({'id': p['id'], 'factor_weighting': cfg['factor_weighting'], 'sharpe': num(p['historical_sharpe']),
+                          'best_single_sharpe': best, 'gain': num(p['historical_sharpe']) - best})
+    by_method = {m: {'configs': len(g), 'positive_gain': sum(x['gain'] > 0 for x in g), 'median_gain': median([x['gain'] for x in g])}
+                 for m in sorted({x['factor_weighting'] for x in gains}) for g in [[x for x in gains if x['factor_weighting'] == m]]}
+    corr_path = ROOT / 'outputs/factor_validation/factor_validation_20260910_v1/factor_redundancy_matrix.csv'
+    ids = {'A101_003', 'A191_088', 'A191_132', 'RS_004_NEAR_HIGH_120D'}
+    corr = [{'pair': f"{r['factor_id']}~{r['other_factor_id']}", 'rank_correlation': num(r['rank_correlation'])}
+            for r in csv_rows(corr_path) if r['factor_id'] in ids and r['other_factor_id'] in ids and r['factor_id'] < r['other_factor_id']]
+    return {'scope': 'HISTORICAL_REFERENCE; best-of-grid Sharpe is a multiple-testing statistic, not evidence of effectiveness',
+            'multi_factor_configs': len(gains), 'positive_gain_vs_best_constituent': sum(x['gain'] > 0 for x in gains),
+            'median_gain': median([x['gain'] for x in gains]), 'by_factor_weighting': by_method,
+            'factor_rank_correlations': corr or None,
+            'factor_rank_correlations_reason': None if corr else 'Accepted Day3 factors absent from factor_validation_20260910_v1 redundancy matrix',
+            'correlation_source': corr_path.relative_to(ROOT).as_posix(), 'gains': gains}
+
+
+def d5_evidence():
+    comparison = read(AUDIT / 'd5_repair_comparison.json')
+    before, after = read(ROOT / comparison['before_path']), read(ROOT / comparison['after_path'])
+    changed = []
+    for r in comparison['records']:
+        sid = r['id'].split(':', 1)[1]
+        for track, t in r['tracks'].items():
+            if t['ordered_fill_identity_equal'] and t['fill_amounts_equal'] and t['equity_equal']:
+                continue
+            key = lambda x: (x['date'], x['asset'], x['side'])
+            old, new = set(map(key, before[sid][track]['fills'])), set(map(key, after[sid][track]['fills']))
+            changed.append({'id': r['id'], 'track': track, 'before_orders': t['before_order_count'], 'after_orders': t['after_order_count'],
+                            'removed_fills': sorted(old - new), 'added_fills': sorted(new - old),
+                            'sharpe_before_after': [t['before_metrics']['sharpe']['value'], t['after_metrics']['sharpe']['value']]})
+    return {'configurations': comparison['configurations'], 'cost_tracks': comparison['cost_tracks'],
+            'unchanged_configurations': comparison['configurations'] - comparison['changed_configurations'],
+            'changed_configurations': comparison['changed_configurations'], 'target_weights_unchanged': all(r['target_weights_unchanged'] for r in comparison['records']),
+            'cause': 'Pre-fix replay carried the last observed price into sessions with a missing open, filling orders at a stale price (fixed fb39b99).',
+            'changed': changed, 'source': 'outputs/strategy_revalidation/2026-10-21-audit/d5_repair_comparison.json',
+            'scope': 'Corrected diagnostic replay; DATA_BLOCKED, not certified performance'}
+
+
+def report():
+    params = csv_rows(OUT / 'parameter_history_matrix.csv')
+    history = csv_rows(OUT / 'family_history_matrix.csv')
+    data_report = read(OUT / 'data_quality_report.json')
+    engine_report = read(OUT / 'engine_test_results.json')
+    native = read(OUT / 'native_contract_replay.json')
+    frozen = read(AUDIT / 'frozen_gate_evidence.json')
+    stocks = read(ROOT / HISTORY / 'stocks.json')
+    window = frozen['documents']['promotion_review']['evaluation_window']
+    minimum = frozen['documents']['FreshOOSAvailabilityReport'].get('minimum_requirement')
+    from core.runtime.fundamental_shadow import FrozenStrategyLoader
+    fingerprint = FrozenStrategyLoader().load().fingerprint
+    assert fingerprint == frozen['documents']['promotion_review']['strategy_fingerprint'], 'FROZEN_FINGERPRINT_CHANGED'
+
+    comparisons = {'g2g3': g2g3_comparison(params), 'day3': day3_comparison(params), 'd5': d5_evidence(),
+                   'frozen_candidate': {'id': 'fundamental_g2g3_top5_reb60_score_weighted_v1', 'fingerprint': fingerprint,
+                                        'fingerprint_unchanged': True, 'cutoff': window['cutoff'], 'window': window, 'minimum': minimum}}
+    write(out('comparisons.json'), comparisons)
+
+    blocked_reason = 'DATA_BLOCKED: no independently certified snapshot (see data_quality_report.json); certified metric undefined'
+    certified_null = {f'certified_{k}': None for k in CERTIFIED}
+    oos_reason = {'A_FUNDAMENTAL': f"Fresh OOS after cutoff {window['cutoff']}: {window['trading_days']} days / {window['calendar_months']} months / {window['rebalance_count']} rebalances < minimum {json.dumps(minimum)}; only the Frozen Candidate accrues Fresh OOS",
+                  'C_D5': 'No Fresh OOS ledger; development splits cannot be relabelled OOS',
+                  'D_DAY3': 'Strict OOS window 2026-01-01..2026-07-28 kept untouched by Day3 (strict_oos_rows_read=0); not opened while DATA_BLOCKED',
+                  'B_NATIVE': 'No frozen untouched OOS; diagnostic window is not OOS'}
+
+    def axes(group, family):
+        return {'ENGINE': engine_report['families'][family]['ENGINE'], 'DATA': data_report['families'][family]['DATA'],
+                'BACKTEST': 'BACKTEST_BLOCKED', 'OOS': 'OOS_BLOCKED', 'PRODUCTION_ELIGIBLE': 'NO'}
+
+    param_rows, results = [], []
+    for p in params:
+        family = p['family_id']
+        status = axes(p['group'], family)
+        param_rows.append({**p, **status, 'backtest_reason': blocked_reason, 'oos_reason': oos_reason[p['group']]})
+        results.append({'family_id': family, 'group': p['group'], 'id': p['id'], 'contract': CONTRACT[p['group']],
+                        **certified_null, 'certified_reason': blocked_reason,
+                        **{k: v for k, v in p.items() if k.startswith('historical_') and k not in ('historical_runs', 'historical_run_sha256')},
+                        'historical_win_rate_reason': None if p['historical_win_rate'] else 'Not reported by the research scoreboard',
+                        'historical_benchmark_excess_reason': 'No TAIEX benchmark in research scoreboards',
+                        'd5_corrected_replay': p['corrected_replay'] or None})
+    for sid in NATIVE:
+        family = 'family:native:' + sid
+        hist = stocks[sid]['metrics']
+        v2 = native['strategies'][sid]['next_session_open_v2']['metrics']
+        results.append({'family_id': family, 'group': 'B_NATIVE', 'id': sid, 'contract': CONTRACT['B_NATIVE'],
+                        **certified_null, 'certified_reason': blocked_reason,
+                        'historical_source': f'{HISTORY.as_posix()}/stocks.json#{sid}', 'historical_owner_gate': 'DIAGNOSTIC_ONLY',
+                        **{f'historical_{k}': hist[k]['value'] for k in hist},
+                        **{f'diagnostic_v2_{k}': v['value'] for k, v in v2.items()},
+                        'diagnostic_v2_scope': 'next_session_open_v2 on DATA_BLOCKED MySQL (native_contract_replay.json); not performance'})
+    emit_csv(out('parameter_validation_matrix.csv'), param_rows)
+    emit_csv(out('backtest_results.csv'), results)
+
+    families, blocked = [], []
+    for row in history:
+        group, family = row['group'], row['family_id']
+        status = axes(group, family)
+        engine_reasons = engine_report['families'][family].get('reasons') or engine_report['families'][family].get('caveats')
+        native_diff = native['strategies'][family.split(':')[-1]]['diff'] if group == 'B_NATIVE' else None
+        families.append({**row, **status, 'engine_detail': engine_reasons,
+                         'native_contract_diff': {k: native_diff[k] for k in ('legacy_fills', 'v2_fills', 'v2_rows_excluded_missing_inputs', 'v2_rows_seen', 'legacy_rerun_equals_2026_10_21_history')} if native_diff else None,
+                         'evidence': ['family_history_matrix.csv', 'data_quality_report.json', 'engine_test_results.json',
+                                      'native_contract_replay.json' if native_diff else 'comparisons.json', 'oos_validation_results.json']})
+        if status['ENGINE'] == 'ENGINE_FAIL':
+            blocked += [{'family_id': family, 'axis': 'ENGINE', 'status': 'ENGINE_FAIL', 'reason': r} for r in engine_reasons]
+        blocked += [{'family_id': family, 'axis': 'DATA', 'status': 'DATA_BLOCKED', 'reason': r} for r in data_report['families'][family]['reasons']]
+        blocked += [{'family_id': family, 'axis': 'BACKTEST', 'status': 'BACKTEST_BLOCKED', 'reason': 'Requires DATA_PASS and a valid corrected-contract backtest'},
+                    {'family_id': family, 'axis': 'OOS', 'status': 'OOS_BLOCKED', 'reason': oos_reason[group]}]
+    emit_csv(out('family_validation_matrix.csv'), families)
+    emit_csv(out('blocked_reasons.csv'), blocked)
+    write(out('oos_validation_results.json'), {
+        'frozen_candidate': {**comparisons['frozen_candidate'], 'status': 'OOS_BLOCKED', 'reason': oos_reason['A_FUNDAMENTAL'],
+                             'ledger_source': frozen['source_root'], 'ledger_mutated': False},
+        'families': {f: {'OOS': 'OOS_BLOCKED', 'reason': oos_reason[g]} for g, f in FAMILIES},
+        'rules': 'No development sample relabelled OOS; original cutoffs and frozen minimums retained.',
+        'certified_oos': 0})
+    counts = {'families': len(families), 'engine_pass': sum(f['ENGINE'] == 'ENGINE_PASS' for f in families),
+              'engine_fail': sum(f['ENGINE'] == 'ENGINE_FAIL' for f in families), 'data_pass': sum(f['DATA'] == 'DATA_PASS' for f in families),
+              'valid_backtests': 0, 'backtest_pass': 0, 'backtest_fail': 0, 'valid_oos': 0,
+              'still_blocked': sum(f['BACKTEST'] == 'BACKTEST_BLOCKED' for f in families), 'parameters': len(param_rows)}
+    inputs = [AUDIT / n for n in ('identity_matrix_final.json', 'family_matrix.csv', 'd5_repair_comparison.json', 'data_validation.json',
+                                  'frozen_gate_evidence.json', 'historical_hashes.json', 'manifest_verification_corrected.json')]
+    inputs += [ROOT / HISTORY / 'stocks.json', ROOT / 'data/processed/fundamental_pit_v3/fundamental_records.parquet']
+    write(out('reproduction_manifest.json'), {
+        'git_head': git_head(), 'output_dir': OUT.relative_to(ROOT).as_posix(), 'counts': counts,
+        'commands': ['python scripts/validate_native22.py ' + m for m in ('matrix', 'preservation', 'data', 'engine', 'native', 'report', 'verify')],
+        'inputs': {p.relative_to(ROOT).as_posix(): digest(p) for p in inputs},
+        'code': {p: digest(ROOT / p) for p in ('scripts/validate_native22.py', 'core/backtest/runner.py', 'test/test_native22_engine_contracts.py')},
+        'outputs': {p.name: digest(p) for p in sorted(OUT.glob('*')) if p.is_file() and p.name != 'reproduction_manifest.json'},
+        'BROKER_ORDER_SUBMISSION': 'DISABLED'})
+    print(json.dumps(counts))
+
+
+def verify():
+    families = csv_rows(OUT / 'family_validation_matrix.csv')
+    params = csv_rows(OUT / 'parameter_validation_matrix.csv')
+    results = csv_rows(OUT / 'backtest_results.csv')
+    assert len(families) == 22 and len({f['family_id'] for f in families}) == 22, 'FAMILY_COUNT'
+    assert len(params) == 384 and len({p['id'] for p in params}) == 384, 'PARAMETER_COUNT'
+    assert len(results) == 384 + len(NATIVE), 'RESULT_COUNT'
+    for row in families + params:
+        assert row['BACKTEST'] != 'BACKTEST_PASS' or row['DATA'] == 'DATA_PASS', 'BACKTEST_WITHOUT_DATA'
+        assert row['OOS'] != 'OOS_PASS' or row['BACKTEST'] == 'BACKTEST_PASS', 'OOS_WITHOUT_BACKTEST'
+        assert row['PRODUCTION_ELIGIBLE'] == 'NO', 'PRODUCTION'
+    for row in results:
+        assert all(row[f'certified_{k}'] == '' for k in CERTIFIED) and row['certified_reason'], 'CERTIFIED_METRIC_WITHOUT_DATA'
+    review = read(AUDIT / 'frozen_gate_evidence.json')['documents']['promotion_review']
+    assert review['BROKER_ORDER_SUBMISSION'] == 'DISABLED', 'BROKER'
+    touched = subprocess.run(['git', 'diff', '--name-only', BASELINE_COMMIT, '--', 'execution', 'core/runtime', 'jobs/scheduler.py'],
+                             cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    assert not touched, 'BROKER_OR_RUNTIME_CHANGED: ' + str(touched)
+    kept = preservation()
+    assert kept['status'] == 'PASS', 'PRESERVATION'
+    write(out('verification.json'), {'status': 'PASS', 'families': 22, 'parameters': 384, 'results': len(results),
+                                     'preservation': kept, 'BROKER_ORDER_SUBMISSION': 'DISABLED'})
+    print('VERIFY PASS')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('matrix', 'preservation', 'data', 'engine', 'native'))
+    parser.add_argument('mode', choices=('matrix', 'preservation', 'data', 'engine', 'native', 'report', 'verify'))
     args = parser.parse_args()
     globals()[args.mode]()
