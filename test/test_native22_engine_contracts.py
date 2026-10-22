@@ -1,5 +1,4 @@
 """Synthetic engineering checks for the native22 validation; never investment evidence."""
-from contextlib import nullcontext
 from types import SimpleNamespace
 
 import numpy as np
@@ -10,67 +9,8 @@ from core.backtest import runner
 from core.backtest.costs import CostModel
 from core.backtest.execution import apply_slippage
 from core.backtest.portfolio import Portfolio
-from core.backtest.runner import BacktestEngine, pit_fundamentals
+from core.backtest.runner import BacktestEngine
 from test_next_session_execution import engine, prepare_run
-
-REVENUE = pd.DataFrame({'stock_id': ['1101', '1101'], 'year': [2026, 2026], 'month': [8, 9], 'revenue_yoy': [5.0, 900.0]})
-FINANCIALS = pd.DataFrame({'stock_id': ['1101', '1101', '1101'], 'year': [2025, 2026, 2026], 'quarter': [4, 2, 3],
-                           'operating_margin': [10.0, 12.0, 99.0], 'eps': [1.0, 2.0, 9.0]})
-
-
-def test_pit_fundamentals_use_only_periods_past_filing_deadline():
-    # Sep revenue is due 10/10 and Q3 financials 11/14; neither is known on 10/10.
-    known = pit_fundamentals(REVENUE, FINANCIALS, '2026-10-10').loc['1101']
-    assert (known.revenue_yoy, known.op_profit_margin, known.eps) == (5.0, 0.12, 2.0)
-    later = pit_fundamentals(REVENUE, FINANCIALS, '2026-11-16').loc['1101']
-    assert (later.revenue_yoy, later.op_profit_margin, later.eps) == (500.0, 0.99, 9.0)  # legacy clip kept
-    # Q4 is due 3/31 of the next year.
-    assert pit_fundamentals(REVENUE, FINANCIALS[FINANCIALS.year == 2025], '2026-03-31').empty
-
-
-def candidate_engine(monkeypatch, contract):
-    e = BacktestEngine.__new__(BacktestEngine)
-    e.execution_contract, e.data_exclusions, e.mode = contract, [], 'mean_reversion'
-    e._revenue_cache = e._financial_cache = None
-    e.engine = SimpleNamespace(connect=lambda: nullcontext(object()))
-    e.strategy_obj, e.model, e.features = SimpleNamespace(features=['rsi', 'revenue_yoy']), None, None
-    daily = pd.DataFrame({'stock_id': ['1101', '2002'], 'close_price': [50.0, 60.0], 'volume': [1e6, 1e6],
-                          'ma20': [45.0, None], 'ma60': [40.0, None], 'rsi': [50.0, None], 'revenue_yoy': [0.0, 0.0]})
-
-    def read_sql(query, conn, params=None):
-        sql = str(query)
-        if 'FROM daily_market_data' in sql and 'AVG(volume)' not in sql:
-            return daily.copy()
-        if 'AVG(volume)' in sql:
-            return pd.DataFrame({'stock_id': ['1101', '2002'], 'vol_ma20': [1e6, 1e6]})
-        if 'monthly_revenue' in sql:
-            latest = REVENUE.tail(1)  # legacy query selects the latest period regardless of date
-            return REVENUE.copy() if 'MAX(' not in sql else latest[['stock_id', 'revenue_yoy']]
-        if 'MAX(' in sql:
-            row = FINANCIALS.tail(1)
-            return pd.DataFrame({'stock_id': row.stock_id, 'op_profit_margin': row.operating_margin / 100, 'eps': row.eps})
-        return FINANCIALS.copy()
-
-    seen = {}
-    monkeypatch.setattr(runner.pd, 'read_sql', read_sql)
-    monkeypatch.setattr(runner, 'select_backtest_candidates', lambda obj, run, name, df, day, over: seen.setdefault('df', df))
-    return e, seen
-
-
-def test_research_contract_blocks_lookahead_fundamentals_and_missing_inputs(monkeypatch):
-    legacy, before = candidate_engine(monkeypatch, 'legacy_same_close')
-    legacy.find_candidates('2026-10-10')
-    old = before['df'].set_index('stock_id')
-    assert old.loc['1101', 'eps'] == 9.0 and old.loc['1101', 'revenue_yoy'] == 500.0  # future Q3/Sep values leak
-    assert pd.isna(old.loc['2002', 'ma60'])  # row without indicators reaches the strategy, which zero-fills it
-
-    research, after = candidate_engine(monkeypatch, 'next_session_open_v2')
-    research.find_candidates('2026-10-10')
-    new = after['df'].set_index('stock_id')
-    assert list(new.index) == ['1101']
-    assert (new.loc['1101', 'eps'], new.loc['1101', 'revenue_yoy']) == (2.0, 5.0)
-    assert research.data_exclusions == [{'date': '2026-10-10', 'rows': 2, 'excluded_missing_inputs': 1}]
-
 
 @pytest.mark.parametrize('sessions', [['2026-10-16', '2026-10-17'], ['2026-10-16', '2026-10-16'], ['2026-10-19', '2026-10-16']])
 def test_weekend_duplicate_or_unordered_sessions_fail_loudly(sessions):

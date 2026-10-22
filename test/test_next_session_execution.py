@@ -8,7 +8,7 @@ from core.backtest.costs import CostModel
 
 def engine(contract='next_session_open_v2'):
     e = BacktestEngine.__new__(BacktestEngine)
-    e.execution_contract = contract
+    e.execution_contract, e.research_data = contract, None
     e.pending_orders, e.execution_events = [], []
     e._execution_asof = None
     e.initial_capital = 1_000_000
