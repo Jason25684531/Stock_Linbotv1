@@ -92,6 +92,23 @@ def snapshot():
     print(json.dumps({k: audit[k] for k in ('price_match_rate', 'snapshot_rows', 'official_sessions_missing_in_mysql')}))
 
 
+def tpex():
+    """Root-cause evidence: weekend and duplicate rows come from four-digit ids that are not on the official TWSE list."""
+    daily = pd.read_parquet(MYSQL / 'snapshot_daily_market_data.parquet', columns=['stock_id', 'trade_date', 'close_price'])
+    official = set(pd.read_parquet(OUT / 'research_snapshot.parquet', columns=['stock_id']).stock_id)
+    daily['trade_date'] = pd.to_datetime(daily.trade_date)
+    four = daily[daily.stock_id.str.fullmatch(r'[1-9]\d{3}')]
+    result = {}
+    for name, frame in (('twse_official_ids', four[four.stock_id.isin(official)]), ('non_twse_four_digit_ids', four[~four.stock_id.isin(official)])):
+        weekend = frame.trade_date.dt.dayofweek >= 5
+        monthly = frame[~weekend].groupby(frame.trade_date.dt.to_period('M')).stock_id.nunique()
+        result[name] = {'ids': int(frame.stock_id.nunique()), 'rows': len(frame), 'weekend_rows': int(weekend.sum()),
+                        'weekday_duplicate_keys': int(frame[~weekend].duplicated(['stock_id', 'trade_date']).sum()),
+                        'first_date': str(frame.trade_date.min().date()), 'weekday_ids_per_month': {str(k): int(v) for k, v in monthly.items()}}
+    write(out('tpex_audit.json'), result)
+    print({k: (v['ids'], v['weekend_rows'], v['weekday_duplicate_keys'], v['first_date']) for k, v in result.items()})
+
+
 def contracts():
     import joblib
     from config import Config
@@ -379,5 +396,5 @@ def verify():
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')  # strategies print emoji; the Windows console defaults to cp950
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('stage', choices=('snapshot', 'contracts', 'engine', 'parity', 'replay', 'report', 'verify'))
+    parser.add_argument('stage', choices=('snapshot', 'tpex', 'contracts', 'engine', 'parity', 'replay', 'report', 'verify'))
     globals()[parser.parse_args().stage]()
