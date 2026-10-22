@@ -60,7 +60,7 @@ def load_model_contract(strategy_name: str, available_inputs, window_start: str,
         raise ModelContractError(f"WINDOW_NOT_AFTER_TRAINING: window starts {window_start}, model trained {trained:%Y-%m-%d}; "
                                  "training-data cutoff is not recorded, so earlier dates may overlap training data")
     identity = {"path": path.as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "version": data.get("version"),
-                "training_date": str(data["training_date"]), "feature_order": features,
+                "training_date": str(data["training_date"]), "training_data_end": data.get("training_data_end"), "feature_order": features,
                 "features_ignored_by_model": [f for f, w in zip(features, importance) if w <= 0],
                 "features_used": relevant, "raw_inputs_required": raw}
     return ModelContract(model, features, raw, identity)

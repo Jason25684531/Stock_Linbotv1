@@ -1,20 +1,18 @@
 """Research data provider: Daily-equivalent cross-sections built from the official snapshot.
 
-Indicators, chip features and the z-score matrix use the same functions and window as
-jobs/run_daily.py (150 calendar days, one-day cross-section). Missing inputs stay NaN and the
+Indicators, chip features and the z-score matrix come from core.calc_indicators.build_feature_history, the
+same core recovered Daily selection uses (jobs/run_daily.load_recovered_data). Missing inputs stay NaN and the
 stock is excluded with a recorded reason; nothing is zero-filled.
 """
 from __future__ import annotations
 
 import inspect
 import re
+from pathlib import Path
 
 import pandas as pd
 
-from core.calc_indicators import (
-    build_multi_factor_matrix, calculate_atr, calculate_bb_width, calculate_chip_score, calculate_consec_days,
-    calculate_kd, calculate_macd, calculate_margin_change_pct, calculate_natr, calculate_ratio_features,
-    calculate_rsi, calculate_std_20)
+from core.calc_indicators import build_feature_history, build_multi_factor_matrix
 
 LOOKBACK_DAYS = 150  # run_daily.compute_indicators_from_history window
 # Statutory filing deadlines (month, day, year offset); the latest legally public period, never later data.
@@ -23,7 +21,11 @@ FRAME_INPUTS = frozenset({
     "ma5", "ma20", "ma60", "bias", "rsi", "macd_hist", "kd_k", "bb_width", "atr", "natr", "std_20", "volume_ratio",
     "foreign_ratio", "trust_ratio", "dealer_ratio", "foreign_consec_days", "trust_consec_days", "margin_change_pct",
     "chip_score", "foreign_buy", "trust_buy", "dealer_buy", "margin_balance", "revenue_yoy", "op_profit_margin",
-    "eps", "rd_ratio"})
+    "eps", "rd_ratio", "high_60"})
+PIT_RECORDS = Path(__file__).resolve().parents[2] / "data/processed/fundamental_pit_v3/fundamental_records.parquet"
+CHIP_INPUTS = frozenset({"dealer_buy", "dealer_ratio", "margin_balance", "margin_change_pct", "chip_score"})
+FLOW_INPUTS = frozenset({"foreign_buy", "trust_buy", "foreign_ratio", "trust_ratio", "foreign_consec_days", "trust_consec_days"})
+FUNDAMENTAL_INPUTS = frozenset({"revenue_yoy", "op_profit_margin", "eps", "rd_ratio"})
 
 
 def rule_inputs(strategy) -> set[str]:
@@ -36,28 +38,68 @@ def _due(year, month, day) -> pd.Series:
     return pd.to_datetime(pd.DataFrame({"year": year, "month": month, "day": day}))
 
 
+def load_publication_dates() -> pd.DataFrame | None:
+    """First MOPS publication date per (stock, year, quarter) from the PIT dataset; None when it is not present."""
+    if not PIT_RECORDS.is_file():
+        return None
+    records = pd.read_parquet(PIT_RECORDS, columns=["ticker", "fiscal_year", "quarter", "publication_date", "data_version"])
+    records = records[records.data_version == "fundamental-pit-v3"]
+    first = records.groupby(["ticker", "fiscal_year", "quarter"]).publication_date.min().reset_index()
+    return pd.DataFrame({"stock_id": first.ticker.astype(str), "year": first.fiscal_year.astype(int), "quarter": first.quarter.astype(int),
+                         "publication_date": pd.to_datetime(first.publication_date)})
+
+
+def prepare_fundamentals(financials: pd.DataFrame, revenue: pd.DataFrame, publications: pd.DataFrame | None = None):
+    """Availability-dated fundamentals with Daily's definitions (owner decision OD-4).
+
+    A filing is usable after its actual MOPS publication date when known; otherwise after the statutory deadline,
+    a conservative estimate flagged as such (a late filer could still be early-dated). Monthly revenue has no
+    publication source and always uses the deadline (10th of the next month).
+    """
+    fin = financials.assign(stock_id=financials.stock_id.astype(str))
+    deadline = fin.quarter.map(QUARTER_DEADLINES)
+    fin["due"] = _due(fin.year + deadline.str[2], deadline.str[0], deadline.str[1])
+    fin["availability_source"] = "statutory_deadline"
+    if publications is not None:
+        fin = fin.merge(publications, on=["stock_id", "year", "quarter"], how="left")
+        known = fin.publication_date.notna()
+        fin.loc[known, "due"] = fin.loc[known, "publication_date"]
+        fin.loc[known, "availability_source"] = "mops_publication"
+    revenue_ok = fin.revenue.where(fin.revenue > 0)
+    fin["op_profit_margin"] = fin.operating_profit / revenue_ok  # Daily: operating_profit / revenue
+    fin["rd_ratio"] = fin.rd_expense / revenue_ok
+    fin = fin.sort_values(["stock_id", "year", "quarter"])[["stock_id", "due", "availability_source", "op_profit_margin", "rd_ratio", "eps"]]
+    rev = revenue.assign(stock_id=revenue.stock_id.astype(str))
+    rev["due"] = _due(rev.year + (rev.month == 12), rev.month % 12 + 1, 10)  # monthly revenue is due on the 10th
+    rev["availability_source"] = "statutory_deadline"
+    return fin, rev.sort_values(["stock_id", "year", "month"])[["stock_id", "due", "availability_source", "revenue_yoy"]]
+
+
+def exclusion_reason(missing) -> str:
+    missing = set(missing)
+    if missing & CHIP_INPUTS:
+        return "CHIP_SOURCE_MISSING"
+    if missing & FLOW_INPUTS:
+        return "FLOW_SOURCE_MISSING"
+    if missing & FUNDAMENTAL_INPUTS:
+        return "FUNDAMENTAL_NOT_PUBLISHED_OR_MISSING"
+    return "INSUFFICIENT_HISTORY_OR_MISSING_BAR"
+
+
 class NativeResearchData:
     available_inputs = FRAME_INPUTS
 
     # Sources that are NULL for most of the history; Daily and the z-score builder silently turn them into 0.
     NEVER_POPULATED = ("dealer_buy", "dealer_ratio", "margin_balance", "margin_change_pct", "chip_score")
 
-    def __init__(self, snapshot: pd.DataFrame, financials: pd.DataFrame, revenue: pd.DataFrame, daily_equivalent_fill: bool = False):
+    def __init__(self, snapshot: pd.DataFrame, financials: pd.DataFrame, revenue: pd.DataFrame, daily_equivalent_fill: bool = False,
+                 publications: pd.DataFrame | None = None):
         """daily_equivalent_fill=True reproduces Daily's NULL -> 0 for NEVER_POPULATED inputs (diagnostic only, never certified)."""
         self.daily_equivalent_fill = daily_equivalent_fill
         self.snapshot = snapshot.sort_values(["stock_id", "trade_date"]).reset_index(drop=True)
         self._bars = self.snapshot.set_index(["stock_id", "trade_date"])
         self._closes = {sid: g.set_index("trade_date").close_price for sid, g in self.snapshot.groupby("stock_id")}
-        fin = financials.assign(stock_id=financials.stock_id.astype(str))
-        deadline = fin.quarter.map(QUARTER_DEADLINES)
-        fin["due"] = _due(fin.year + deadline.str[2], deadline.str[0], deadline.str[1])
-        revenue_ok = fin.revenue.where(fin.revenue > 0)
-        fin["op_profit_margin"] = fin.operating_profit / revenue_ok  # Daily: operating_profit / revenue
-        fin["rd_ratio"] = fin.rd_expense / revenue_ok
-        self._fin = fin.sort_values(["stock_id", "year", "quarter"])[["stock_id", "due", "op_profit_margin", "rd_ratio", "eps"]]
-        rev = revenue.assign(stock_id=revenue.stock_id.astype(str))
-        rev["due"] = _due(rev.year + (rev.month == 12), rev.month % 12 + 1, 10)  # monthly revenue is due on the 10th
-        self._rev = rev.sort_values(["stock_id", "year", "month"])[["stock_id", "due", "revenue_yoy"]]
+        self._fin, self._rev = prepare_fundamentals(financials, revenue, publications)
         self._cache: dict[pd.Timestamp, pd.DataFrame] = {}
 
     def _published(self, table: pd.DataFrame, date: pd.Timestamp) -> pd.DataFrame:
@@ -69,32 +111,12 @@ class NativeResearchData:
         df = self.snapshot[(self.snapshot.trade_date >= date - pd.Timedelta(days=LOOKBACK_DAYS)) & (self.snapshot.trade_date <= date)].copy()
         if df.empty or df.trade_date.max() != date:
             raise ValueError(f"NO_OFFICIAL_SESSION_DATA: {date:%Y-%m-%d}")
-        by_stock = df.groupby("stock_id")
-        close = by_stock["close_price"]
-        df["ma5"] = close.transform(lambda x: x.rolling(5, min_periods=3).mean())
-        df["ma20"] = close.transform(lambda x: x.rolling(20, min_periods=10).mean())
-        df["ma60"] = close.transform(lambda x: x.rolling(60, min_periods=30).mean())
-        df["bias"] = (df.close_price - df.ma20) / df.ma20.where(df.ma20 != 0) * 100  # Daily fills 0 here; NaN is kept
-        df["rsi"] = close.transform(calculate_rsi)
-        df["macd_hist"] = close.transform(calculate_macd)
-        df["kd_k"] = by_stock.apply(calculate_kd).reset_index(level=0, drop=True)
-        df["bb_width"] = close.transform(calculate_bb_width)
-        df["atr"] = by_stock.apply(calculate_atr).reset_index(level=0, drop=True)
-        df["natr"] = by_stock.apply(calculate_natr).reset_index(level=0, drop=True)
-        df["std_20"] = close.transform(calculate_std_20)
-        vol_safe = df.volume.replace(0, 1)
-        for side in ("dealer", "foreign", "trust"):
-            df[f"{side}_ratio"] = (df[f"{side}_buy"] / vol_safe).clip(-0.5, 0.5)
-        by_stock = df.groupby("stock_id")
-        df["foreign_consec_days"] = by_stock["foreign_buy"].transform(calculate_consec_days)
-        df["trust_consec_days"] = by_stock["trust_buy"].transform(calculate_consec_days)
-        df["margin_change_pct"] = by_stock["margin_balance"].transform(calculate_margin_change_pct)
-        df["chip_score"] = calculate_chip_score(df)
+        df = build_feature_history(df)
         if self.daily_equivalent_fill:
             df[list(self.NEVER_POPULATED)] = df[list(self.NEVER_POPULATED)].fillna(0)
-        df = calculate_ratio_features(df)  # volume_ratio over the history, as in training
-        latest = df[df.trade_date == date].merge(self._published(self._fin, date), on="stock_id", how="left")
-        latest = latest.merge(self._published(self._rev, date), on="stock_id", how="left")
+        fin = self._published(self._fin, date).rename(columns={"availability_source": "fundamental_availability_source"})
+        rev = self._published(self._rev, date).rename(columns={"availability_source": "revenue_availability_source"})
+        latest = df[df.trade_date == date].merge(fin, on="stock_id", how="left").merge(rev, on="stock_id", how="left")
         self._cache[date] = latest  # shared by every strategy replayed on this provider
         return latest
 
@@ -112,8 +134,11 @@ class NativeResearchData:
         full = self.cross_section(pd.Timestamp(date_str))
         absent = full[sorted(required)].isna()
         keep = ~absent.any(axis=1)
+        dropped = absent[~keep]
+        rows = [{"stock_id": str(sid), "missing_columns": cols, "reason": exclusion_reason(cols)}
+                for sid, cols in zip(full.stock_id[~keep], (list(dropped.columns[r]) for r in dropped.to_numpy()))]
         note = {"date": date_str, "rows": len(full), "excluded": int((~keep).sum()),
-                "missing_input_counts": {c: int(absent[c].sum()) for c in absent if absent[c].any()}}
+                "missing_input_counts": {c: int(absent[c].sum()) for c in absent if absent[c].any()}, "excluded_rows": rows}
         kept = full[keep]
         if kept.empty:
             return kept, note

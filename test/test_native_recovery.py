@@ -110,10 +110,13 @@ def test_daily_pipeline_defects_are_reproduced_not_hidden():
 
 
 def test_research_indicators_match_daily_pipeline(monkeypatch):
-    """Same inputs, same window, same functions: indicator values equal jobs.run_daily.compute_indicators_from_history."""
+    """Complete inputs, same window: indicator values equal legacy jobs.run_daily.compute_indicators_from_history.
+
+    A zero margin balance makes margin_change_pct undefined; legacy turns it into 0 and the shared core keeps NaN,
+    so the fixture uses a positive balance (test_daily_selection_recovery covers the missing cases)."""
     from jobs import run_daily
 
-    snap = snapshot()
+    snap = snapshot().assign(margin_balance=lambda d: 1000.0 + d.groupby("stock_id").cumcount())
     history = snap.assign(dealer_buy=0.0).drop(columns=["amount", "short_balance"])
     window = lambda day: history[history.trade_date >= pd.Timestamp(day) - pd.Timedelta(days=150)].copy()
     monkeypatch.setattr(run_daily.pd, "read_sql", lambda sql, engine, params: window(params["date"]))

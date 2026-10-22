@@ -166,10 +166,12 @@ class GrowthMomentumBreakoutStrategy(BaseStrategy):
         # 1. 計算 60 日高點
         print(f"   📊 計算 60 日高點...")
         df_sorted = df.sort_values(['stock_id', 'trade_date'])
-        df_sorted['high_60'] = df_sorted.groupby('stock_id')['high_price'].transform(
-            lambda x: x.rolling(60, min_periods=1).max()
-        )
-        df_sorted['high_60'] = df_sorted['high_60'].fillna(df_sorted['high_price'])
+        # Recovered Daily and research provide high_60 from each stock's history; a one-day legacy frame cannot.
+        if 'high_60' not in df_sorted.columns:
+            df_sorted['high_60'] = df_sorted.groupby('stock_id')['high_price'].transform(
+                lambda x: x.rolling(60, min_periods=1).max()
+            )
+            df_sorted['high_60'] = df_sorted['high_60'].fillna(df_sorted['high_price'])
         
         # 取最新資料
         latest_date = df_sorted['trade_date'].max()

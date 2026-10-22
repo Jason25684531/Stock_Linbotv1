@@ -41,7 +41,11 @@ from core.calc_indicators import (
     build_multi_factor_matrix,
 )
 from core.model_utils import load_model
+from core.research.native_frame import NativeResearchData, load_publication_dates, rule_inputs
+from core.research.native_models import ModelContractError, load_model_contract
 from config import Config
+
+FEATURE_MODES = ('legacy', 'recovered')
 
 # 新聞族群加分快取（每日只呼叫一次 Gemini）
 _news_boost_cache: dict = {
@@ -59,28 +63,8 @@ def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
 # 模型存放目錄（與 jobs/train_model.py 一致）
 
 
-def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False) -> pd.DataFrame:
-    """
-    從歷史資料計算技術指標，並回傳最新一天含指標的完整 DataFrame。
-
-    因為 daily_market_data 中只有原始行情（MA/RSI/NATR 等為 NULL），
-    需要載入足夠長度的歷史資料才能正確計算滾動窗口指標。
-
-    流程：
-    1. 從 DB 載入最近 150 天全市場資料
-    2. 逐股票計算 MA5/MA20/MA60、RSI、MACD、KD、BB、ATR、NATR、STD_20
-    3. 取最新交易日的橫截面資料
-    4. 同步回寫指標到 daily_market_data（供 get_market_trend 使用）
-
-    Args:
-        date_str: 目標日期字串 (YYYY-MM-DD)
-        engine: SQLAlchemy engine
-
-    Returns:
-        DataFrame: 最新日含完整技術指標的全市場資料
-    """
-    print("📊 計算技術指標（載入歷史資料中）...")
-
+def _load_market_history(date_str: str, engine) -> pd.DataFrame:
+    """150 calendar days of cleaned history up to date_str (2330-anchored sessions, stock/ETF codes, deduplicated)."""
     sql = text("""
         SELECT * FROM daily_market_data
         WHERE trade_date >= DATE_SUB(:date, INTERVAL 150 DAY)
@@ -112,6 +96,34 @@ def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False
     df = df.sort_values(['stock_id', 'trade_date']).reset_index(drop=True)
     if df.empty or df['trade_date'].max().strftime('%Y-%m-%d') != date_str:
         raise RuntimeError(f'No valid market history for requested date {date_str}')
+    return df
+
+
+def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False) -> pd.DataFrame:
+    """
+    從歷史資料計算技術指標，並回傳最新一天含指標的完整 DataFrame。
+
+    因為 daily_market_data 中只有原始行情（MA/RSI/NATR 等為 NULL），
+    需要載入足夠長度的歷史資料才能正確計算滾動窗口指標。
+
+    流程：
+    1. 從 DB 載入最近 150 天全市場資料
+    2. 逐股票計算 MA5/MA20/MA60、RSI、MACD、KD、BB、ATR、NATR、STD_20
+    3. 取最新交易日的橫截面資料
+    4. 同步回寫指標到 daily_market_data（供 get_market_trend 使用）
+
+    Args:
+        date_str: 目標日期字串 (YYYY-MM-DD)
+        engine: SQLAlchemy engine
+
+    Returns:
+        DataFrame: 最新日含完整技術指標的全市場資料
+    """
+    print("📊 計算技術指標（載入歷史資料中）...")
+
+    df = _load_market_history(date_str, engine)
+    if df.empty:
+        return pd.DataFrame()
 
     # ---- 計算滾動指標（groupby stock_id）----
     print("  ✓ 計算 MA5 / MA20 / MA60...")
@@ -205,6 +217,45 @@ def compute_indicators_from_history(date_str: str, engine, dry_run: bool = False
         _write_indicators_to_db(latest_df, engine)
 
     return latest_df
+
+
+def load_recovered_data(date_str: str, engine) -> NativeResearchData:
+    """Recovered Daily inputs: the same feature core, PIT fundamentals and exclusions as research (no zero filling)."""
+    history = _load_market_history(date_str, engine)
+    if history.empty:
+        raise RuntimeError(f'No valid market history for requested date {date_str}')
+    financials = pd.read_sql(text("""
+        SELECT stock_id, year, quarter, revenue, rd_expense, operating_profit, eps
+        FROM financial_statements WHERE year >= 1911
+    """), engine)
+    revenue = pd.read_sql(text("SELECT stock_id, year, month, revenue_yoy FROM monthly_revenue"), engine)
+    return NativeResearchData(history, financials, revenue, publications=load_publication_dates())
+
+
+def resolve_feature_mode(feature_mode: str | None, dry_run: bool) -> str:
+    """legacy is production; recovered stays dry-run/shadow in this change even when configured (owner decision OD-7)."""
+    mode = feature_mode or Config.DAILY_FEATURE_MODE
+    if mode not in FEATURE_MODES:
+        raise ValueError(f'Unknown DAILY_FEATURE_MODE: {mode}')
+    if mode == 'recovered' and not dry_run:
+        raise RuntimeError('RECOVERED_MODE_DRY_RUN_ONLY: recovered Daily selection needs --dry-run until the owner approves the switch')
+    return mode
+
+
+def recovered_strategy_frame(strategy, data: NativeResearchData, date_str: str):
+    """Per-strategy frame without rows missing rule or model inputs, the strict model contract or its blocking reason."""
+    contract, status = None, None
+    unavailable = data.unavailable_inputs(date_str, date_str)
+    try:
+        contract = load_model_contract(strategy.name, data.available_inputs, date_str, unavailable)
+        required = rule_inputs(strategy) | set(contract.required_raw)
+        if contract.identity.get('training_data_end') is None:
+            status = 'MODEL_BLOCKED: TRAINING_DATA_END_MISSING (training_date is only an upper bound; scores are diagnostic)'
+    except ModelContractError as exc:
+        required = rule_inputs(strategy)
+        status = f'MODEL_BLOCKED: {exc}'
+    frame, note = data.frame(date_str, sorted(required))
+    return frame, note, contract, status
 
 
 def _write_indicators_to_db(df: pd.DataFrame, engine):
@@ -629,8 +680,13 @@ def _select_legacy_candidates(strategy, df: pd.DataFrame, date_str: str, runner)
     return candidates
 
 
-def run_strategy(strategy, df, date_str, engine, dry_run: bool = False, *, runner=None):
-    """執行單一策略的選股流程（自動載入策略專屬模型）"""
+def run_strategy(strategy, df, date_str, engine, dry_run: bool = False, *, runner=None,
+                 recovered: bool = False, contract=None, model_status: str | None = None):
+    """執行單一策略的選股流程（自動載入策略專屬模型）
+
+    recovered=True: score only with the strict model contract, never fill a feature; without a contract the
+    candidates stay unscored (ai_score NaN) with ai_status, and are never published (owner decision OD-5).
+    """
     print(f"\n{'='*40}")
     print(f"📊 執行策略: {strategy.display_name} ({strategy.name})")
     print(f"🎯 目標報酬: {strategy.target_return}%")
@@ -669,8 +725,20 @@ def run_strategy(strategy, df, date_str, engine, dry_run: bool = False, *, runne
             print(f"⚠️ {strategy.name}: 心跳寫入失敗: {e}")
         return candidates
     
-    # 載入此策略專屬的 AI 模型
-    model, model_features = load_strategy_model(strategy.name)
+    if recovered:
+        candidates = candidates.copy()
+        candidates['ai_status'] = model_status or 'MODEL_VALID'
+        candidates['ai_score'] = np.nan
+        if contract is not None:
+            X = candidates[contract.features].apply(pd.to_numeric, errors='coerce')
+            if X.isna().any().any():
+                raise ValueError(f'MODEL_FEATURE_MISSING_VALUE: {strategy.name} recovered scoring never fills features')
+            candidates['ai_score'] = contract.model.predict_proba(X)[:, 1]
+            candidates = candidates.sort_values('ai_score', ascending=False, kind='stable')
+        model = None
+    else:
+        # 載入此策略專屬的 AI 模型
+        model, model_features = load_strategy_model(strategy.name)
     
     # AI 預測
     if model:
@@ -818,7 +886,9 @@ def run_fundamental_production(date_str: str, engine=None, dry_run: bool = False
     return result
 
 
-def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
+def run_daily_for_date(target_date: str | None = None, dry_run: bool = False, feature_mode: str | None = None):
+    feature_mode = resolve_feature_mode(feature_mode, dry_run)
+    recovered = feature_mode == 'recovered'
     print("\n" + "="*50)
     print("🤖 Stock AI 每日選股執行中...")
     if dry_run:
@@ -848,7 +918,11 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
     print(f"✅ 資料日期: {date_str}")
 
     # 3. 從歷史資料計算完整技術指標（核心步驟）
-    if dry_run:
+    if recovered:
+        print("[RECOVERED] shared feature core, PIT fundamentals, missing inputs excluded (dry-run only)")
+        recovered_data = load_recovered_data(date_str, engine)
+        df = recovered_data.cross_section(pd.Timestamp(date_str))
+    elif dry_run:
         df = compute_indicators_from_history(date_str, engine, dry_run=True)
     else:
         df = compute_indicators_from_history(date_str, engine)
@@ -857,24 +931,25 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
         return
     print(f"✅ 總計 {len(df)} 檔股票（含完整技術指標）\n")
     
-    # 4. 計算比率特徵
-    print("🔧 計算比率特徵...")
-    df = calculate_ratio_features(df)
-    print("✅ 特徵計算完成\n")
-    
-    # 5. [V35 升級] 合併財報數據（含營業利益率）
-    print("🧪 合併財報數據（含營業利益）...")
-    df = merge_financial_data(df, engine)
-    print("✅ 財報數據合併完成\n")
-    
-    # 6. [V35 升級] 合併月營收 YoY（供 V34/V35 策略使用）
-    print("💰 合併月營收資料...")
-    if dry_run:
-        df = merge_revenue_data(df, engine, dry_run=True)
-    else:
-        df = merge_revenue_data(df, engine)
-    print("✅ 月營收合併完成\n")
-    
+    if not recovered:
+        # 4. 計算比率特徵
+        print("🔧 計算比率特徵...")
+        df = calculate_ratio_features(df)
+        print("✅ 特徵計算完成\n")
+
+        # 5. [V35 升級] 合併財報數據（含營業利益率）
+        print("🧪 合併財報數據（含營業利益）...")
+        df = merge_financial_data(df, engine)
+        print("✅ 財報數據合併完成\n")
+
+        # 6. [V35 升級] 合併月營收 YoY（供 V34/V35 策略使用）
+        print("💰 合併月營收資料...")
+        if dry_run:
+            df = merge_revenue_data(df, engine, dry_run=True)
+        else:
+            df = merge_revenue_data(df, engine)
+        print("✅ 月營收合併完成\n")
+
     # 7. 新聞族群分析（全策略共用，只呼叫一次 Gemini）
     global _news_boost_cache, _stock_news_cache
     _news_boost_cache = {
@@ -941,9 +1016,10 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
             print(f"⚠️ 個股新聞偵測失敗（不影響選股）: {e}")
 
     # 8. 遍歷所有策略執行選股（每策略動態載入專屬模型）
-    matrix_sentiment = resolve_matrix_news_sentiment(date_str)
-    df = build_multi_factor_matrix(df, trade_date=date_str, news_sentiment=matrix_sentiment)
-    print(f"[AI] Z-Score matrix ready for daily inference: {len(df)} rows")
+    if not recovered:  # recovered: each strategy's matrix is built from its own included rows, as in research
+        matrix_sentiment = resolve_matrix_news_sentiment(date_str)
+        df = build_multi_factor_matrix(df, trade_date=date_str, news_sentiment=matrix_sentiment)
+        print(f"[AI] Z-Score matrix ready for daily inference: {len(df)} rows")
 
     required_supplement_cols = ['revenue_yoy', 'op_profit_margin', 'eps']
     present_supplement_cols = [col for col in required_supplement_cols if col in df.columns]
@@ -956,16 +1032,24 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
 
     all_results = {}
     strategy_errors = {}
+    exclusions = {}
+    model_status = {}
     for strategy in strategies:
         try:
-            candidates = run_strategy(
-                strategy,
-                df,
-                date_str,
-                engine,
-                dry_run=dry_run,
-                runner=strategy_runner,
-            )
+            if recovered:
+                frame, exclusions[strategy.name], contract, model_status[strategy.name] = recovered_strategy_frame(
+                    strategy, recovered_data, date_str)
+                candidates = run_strategy(strategy, frame, date_str, engine, dry_run=dry_run, runner=strategy_runner,
+                                          recovered=True, contract=contract, model_status=model_status[strategy.name])
+            else:
+                candidates = run_strategy(
+                    strategy,
+                    df,
+                    date_str,
+                    engine,
+                    dry_run=dry_run,
+                    runner=strategy_runner,
+                )
         except Exception as exc:
             if not dry_run:
                 raise
@@ -1012,6 +1096,8 @@ def run_daily_for_date(target_date: str | None = None, dry_run: bool = False):
             'missing': missing_supplement_cols,
         },
     }
+    if recovered:
+        summary.update(feature_mode=feature_mode, exclusions=exclusions, model_status=model_status)
     if dry_run:
         print(
             "[DRY-RUN] summary: "
@@ -1027,12 +1113,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='執行每日選股流程，可指定單日回補日期。')
     parser.add_argument('--date', help='指定要執行的交易日期 (YYYY-MM-DD)。')
     parser.add_argument('--dry-run', action='store_true', help='Preview recommendations without DB writes or status updates.')
+    parser.add_argument('--feature-mode', choices=FEATURE_MODES,
+                        help='Feature path (default: Config.DAILY_FEATURE_MODE). recovered requires --dry-run.')
     return parser
 
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    resolve_feature_mode(args.feature_mode, args.dry_run)  # refuse before any pipeline status is written
     pipeline_name, step_name, run_date = _resolve_pipeline_run_context('run_daily')
     if not args.dry_run:
         record_pipeline_step_start(
@@ -1041,7 +1130,7 @@ def main(argv=None):
             run_date=run_date,
         )
     try:
-        summary = run_daily_for_date(args.date, dry_run=args.dry_run)
+        summary = run_daily_for_date(args.date, dry_run=args.dry_run, feature_mode=args.feature_mode)
         trade_date = normalize_date_str((summary or {}).get('date') if isinstance(summary, dict) else args.date)
         strategy_counts = (summary or {}).get('strategy_counts', {}) if isinstance(summary, dict) else {}
         rows_inserted = sum(int(value or 0) for value in strategy_counts.values()) if isinstance(strategy_counts, dict) else None

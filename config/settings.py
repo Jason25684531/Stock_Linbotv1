@@ -95,6 +95,8 @@ class Config:
 
     BOND_SYMBOL = "00679B"
     MARKET_SYMBOL = "2330"
+    # Daily selection feature path: "legacy" (production) or "recovered" (dry-run/shadow only until owner approval).
+    DAILY_FEATURE_MODE = os.getenv("DAILY_FEATURE_MODE", "legacy")
     TARGET_THRESHOLD = 0.02
 
     FEE_RATE = 0.001425

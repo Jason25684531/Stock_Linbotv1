@@ -605,6 +605,54 @@ def calculate_chip_score(df: pd.DataFrame) -> pd.Series:
     return score.clip(0, 100).round(2)
 
 
+CHIP_SOURCE_COLUMNS = ('foreign_buy', 'trust_buy', 'dealer_buy', 'margin_balance')
+VOLUME_RATIO_MIN_OBSERVATIONS = 20  # owner decision OD-1: training uses min_periods=1; fewer than 20 volumes -> NaN
+HIGH_60_SESSIONS = 60  # owner decision OD-2: V34 "60-day high" needs 60 sessions of raw high_price, including today
+
+
+def build_feature_history(df: pd.DataFrame) -> pd.DataFrame:
+    """Per-stock time-series features shared by recovered Daily selection and research; nothing is filled.
+
+    Input: one row per (stock_id, trade_date) with OHLCV and the raw chip columns. Every rolling window runs over
+    each stock's own history, so the signal-date row is taken only after the computation. A session without a
+    trade (no close) is not a bar, as in Daily. Missing sources and short histories stay NaN.
+    """
+    df = df.dropna(subset=['close_price']).sort_values(['stock_id', 'trade_date']).reset_index(drop=True)
+    for column in CHIP_SOURCE_COLUMNS:
+        if column not in df.columns:
+            df[column] = np.nan  # an absent source is missing, never 0
+    by_stock = df.groupby('stock_id')
+    close = by_stock['close_price']
+    df['ma5'] = close.transform(lambda x: x.rolling(5, min_periods=3).mean())
+    df['ma20'] = close.transform(lambda x: x.rolling(20, min_periods=10).mean())
+    df['ma60'] = close.transform(lambda x: x.rolling(60, min_periods=30).mean())
+    df['bias'] = (df.close_price - df.ma20) / df.ma20.where(df.ma20 != 0) * 100
+    df['rsi'] = close.transform(calculate_rsi)
+    df['macd_hist'] = close.transform(calculate_macd)
+    df['kd_k'] = by_stock.apply(calculate_kd).reset_index(level=0, drop=True)
+    df['bb_width'] = close.transform(calculate_bb_width)
+    df['atr'] = by_stock.apply(calculate_atr).reset_index(level=0, drop=True)
+    df['natr'] = by_stock.apply(calculate_natr).reset_index(level=0, drop=True)
+    df['std_20'] = close.transform(calculate_std_20)
+    df['high_60'] = by_stock['high_price'].transform(lambda x: x.rolling(HIGH_60_SESSIONS, min_periods=1).max()).where(
+        by_stock.cumcount() >= HIGH_60_SESSIONS - 1)
+    vol_safe = df.volume.replace(0, 1)
+    for side in ('dealer', 'foreign', 'trust'):
+        df[f'{side}_ratio'] = (df[f'{side}_buy'] / vol_safe).clip(-0.5, 0.5)
+    # The shared helpers turn a missing flow into "not buying" and a missing balance into 0 %; keep those NaN here
+    # (the helpers stay as they are because legacy Daily and training call them).
+    df['foreign_consec_days'] = by_stock['foreign_buy'].transform(calculate_consec_days).where(df.foreign_buy.notna())
+    df['trust_consec_days'] = by_stock['trust_buy'].transform(calculate_consec_days).where(df.trust_buy.notna())
+    prior_margin = by_stock['margin_balance'].shift(1)
+    df['margin_change_pct'] = by_stock['margin_balance'].transform(calculate_margin_change_pct).where(
+        df.margin_balance.notna() & prior_margin.notna() & prior_margin.ne(0))
+    df['chip_score'] = calculate_chip_score(df)  # NaN when any component source is missing
+    observed = df.volume.notna().groupby(df.stock_id).transform(lambda x: x.rolling(VOLUME_RATIO_MIN_OBSERVATIONS, min_periods=1).sum())
+    df = calculate_ratio_features(df)  # training formula over the history (20 sessions, including today)
+    df['volume_ratio'] = df.volume_ratio.where(observed >= VOLUME_RATIO_MIN_OBSERVATIONS)
+    return df
+
+
 def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     一次性計算所有技術指標 (便捷函數，用於單一股票)
