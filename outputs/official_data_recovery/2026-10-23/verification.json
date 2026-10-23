@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "official_requests": 194,
+  "budget": 197,
+  "runs": [
+    {
+      "requests": 194,
+      "seconds": 855.9
+    }
+  ],
+  "spacing_evidence": "run duration >= (requests - 1) x 3.2 s; per-request send instants were not recorded",
+  "stage2_executed": false,
+  "models_unchanged_and_blocked": 7,
+  "training_executed": false,
+  "mysql": "SELECT only",
+  "production_code_unchanged_since": "0521d1efd5be4e28e07a04e64ce944bbeb15062a",
+  "archived_outputs_unchanged": true,
+  "preservation": {
+    "status": "FAIL",
+    "historical_hashes_checked": 5463,
+    "historical_changed": [
+      "outputs/fundamental_runtime_shadow/operate-fundamental-shadow-until-oos-ready-v1/fundamental_production_status.json"
+    ],
+    "protected_sources_checked": 74,
+    "protected_changed": [
+      "core/strategies/growth_momentum_breakout.py"
+    ],
+    "source_records": 461,
+    "inventory_identities_equal": true
+  },
+  "external_runtime_change": {
+    "file": "outputs/fundamental_runtime_shadow/operate-fundamental-shadow-until-oos-ready-v1/fundamental_production_status.json",
+    "recorded_sha256": "bb561a27c5559ea248c059fa63a908bdaa4eaf76db7e524e63efa23e39b011b1",
+    "current_sha256": "53e8810be60d9e415b621995086b9d4857b08cdb0d0386bcd39a3a58ac0ac81c",
+    "asof_date": "2026-10-22",
+    "written_by": "not this change (unidentified runtime process, 2026-10-23 18:34 +08:00)",
+    "content_checks": "broker DISABLED, production_enable_flag false, production_ready NO"
+  },
+  "spec_sha256": "acfc4d76e517f88177cd9413d239bbba3845052b3530bfe983c4fc35fa512288",
+  "DAILY_FEATURE_MODE": "legacy",
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}

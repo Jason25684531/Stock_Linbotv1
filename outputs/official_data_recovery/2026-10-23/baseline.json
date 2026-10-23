@@ -1,0 +1,68 @@
+{
+  "git_head": "0521d1efd5be4e28e07a04e64ce944bbeb15062a",
+  "git_status": [
+    " M .gitignore",
+    "?? scripts/official_data_recovery.py",
+    "?? test/test_official_data_recovery.py"
+  ],
+  "models_unchanged": true,
+  "model_sha256": {
+    "defensive_low_volatility": "c2ab124f7ea0624c2cc6dada901e8777877be6c6697b209f57dd2a814768aa45",
+    "growth_momentum_breakout": "d117215b31c62e9da8e70455f234fb7928e6c85b677694c882d0fe90aea3aaa2",
+    "hybrid_trend_rank": "b8a2325db6937cf1fc36f43ef9bea0e39ccdde77d81df0d8033febff7f05764e",
+    "institutional_flow_confirmation": "676dd2b91c89f882301082a3aa2f390042060fa07515704e6df5e291a678f777",
+    "mean_reversion": "0e294998283492633dbb45b95427f2ba322766036e9ba71428c33d88d19ae249",
+    "quality_growth": "2a866550b81104661762f2581f0c5e5836c464edbc28e797a5d533475686a446",
+    "quality_value_low_volatility": "39b44ebc5529cf60784e82cbe8cfbebd862586488678876ab23678c4d2adf140"
+  },
+  "model_status": {
+    "defensive_low_volatility": "MODEL_BLOCKED",
+    "growth_momentum_breakout": "MODEL_BLOCKED",
+    "hybrid_trend_rank": "MODEL_BLOCKED",
+    "institutional_flow_confirmation": "MODEL_BLOCKED",
+    "mean_reversion": "MODEL_BLOCKED",
+    "quality_growth": "MODEL_BLOCKED",
+    "quality_value_low_volatility": "MODEL_BLOCKED"
+  },
+  "retrain_decision": {
+    "defensive_low_volatility": "RETRAIN_REQUIRED",
+    "growth_momentum_breakout": "RETRAIN_REQUIRED",
+    "hybrid_trend_rank": "RETRAIN_RECOMMENDED",
+    "institutional_flow_confirmation": "RETRAIN_REQUIRED",
+    "mean_reversion": "RETRAIN_REQUIRED",
+    "quality_growth": "RETRAIN_REQUIRED",
+    "quality_value_low_volatility": "RETRAIN_REQUIRED"
+  },
+  "archived_outputs": {
+    "outputs/daily_selection_recovery/2026-10-22": {
+      "files": 61,
+      "changed": []
+    },
+    "outputs/native7_recovery/2026-10-22": {
+      "files": 29,
+      "changed": []
+    },
+    "outputs/native22_validation/2026-10-22": {
+      "files": 17,
+      "changed": []
+    },
+    "outputs/model_data_validation/2026-10-23": {
+      "files": 18,
+      "changed": []
+    }
+  },
+  "preservation": {
+    "status": "FAIL",
+    "historical_hashes_checked": 5463,
+    "historical_changed": [],
+    "protected_sources_checked": 74,
+    "protected_changed": [
+      "core/strategies/growth_momentum_breakout.py"
+    ],
+    "source_records": 461,
+    "inventory_identities_equal": true
+  },
+  "frozen_fingerprint_unchanged": true,
+  "BROKER_ORDER_SUBMISSION": "DISABLED",
+  "DAILY_FEATURE_MODE": "legacy"
+}

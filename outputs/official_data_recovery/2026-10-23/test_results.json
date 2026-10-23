@@ -1,0 +1,555 @@
+{
+  "command": "python -m pytest test/test_official_data_recovery.py test/test_model_data_validation.py test/test_daily_selection_recovery.py test/test_native_recovery.py test/characterization test/test_run_daily.py test/test_native22_engine_contracts.py test/test_next_session_execution.py",
+  "returncode": 0,
+  "summary": "========== 132 passed, 3 skipped, 1 xfailed, 2394 warnings in 51.24s ==========",
+  "counts": {
+    "PASS": 132,
+    "SKIP": 4
+  },
+  "cases": [
+    {
+      "test": "test.test_official_data_recovery::test_budget_blocks_the_request_after_the_limit",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_cached_file_is_not_requested_again_and_a_changed_hash_is_flagged",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_new_session_costs_exactly_one_request",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_response_for_another_date_is_rejected_and_quarantined",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_failed_request_invents_nothing_and_unpublished_trading_day_is_not_a_holiday",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_exact_match_has_no_mismatch_and_a_whole_day_of_zeros_is_flagged",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_null_missing_and_non_listed_rows_are_counted_apart",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_ohlc_is_one_field_and_any_unequal_price_is_a_mismatch",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_sample_never_becomes_a_pass",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_no_label_horizon_crosses_a_split_boundary[5]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_no_label_horizon_crosses_a_split_boundary[7]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_no_label_horizon_crosses_a_split_boundary[8]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_no_label_horizon_crosses_a_split_boundary[10]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_no_label_horizon_crosses_a_split_boundary[15]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_no_label_horizon_crosses_a_split_boundary[20]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_changing_a_threshold_changes_the_specification_hash",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_official_data_recovery::test_features_without_a_certified_source_are_not_in_the_model",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_model_data_validation::test_proven_wrong_training_flows_require_retraining",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_model_data_validation::test_changed_definition_requires_retraining_only_with_ranking_impact",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_model_data_validation::test_unknown_cutoff_is_never_not_required",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_model_data_validation::test_cached_sessions_are_not_requested_again",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_model_data_validation::test_read_periods_never_count_as_oos",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_model_data_validation::test_session_date_uses_known_calendar_then_weekday_estimate",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_volume_ratio_follows_twenty_session_history_and_differs_by_stock",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_volume_ratio_needs_twenty_observations",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_high_60_is_the_sixty_session_high_not_todays_high",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_v34_uses_history_high_and_keeps_its_threshold",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_chip_score_is_nan_without_dealer_or_margin_and_varies_with_them",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_institutional_stage_two_really_filters",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_institutional_strategy_sees_no_row_with_missing_chip_score",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_future_sessions_never_change_past_features",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_missing_indicators_are_recorded_with_reason",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_actual_publication_date_precedes_the_statutory_deadline",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_recovered_daily_frame_equals_research_frame",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_recovered_mode_is_dry_run_only",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_daily_selection_recovery::test_recovered_scoring_never_fills_features",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_future_filing_never_changes_selection_inputs",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_missing_indicator_is_excluded_not_zero_filled[ma60]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_missing_indicator_is_excluded_not_zero_filled[kd_k]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_missing_indicator_is_excluded_not_zero_filled[natr]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_short_history_leaves_ma60_null",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_zero_filling_would_create_a_false_signal_but_exclusion_prevents_it",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_missing_flows_on_signal_date_exclude_the_stock",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_z_matrix_is_built_only_from_included_rows",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_daily_pipeline_defects_are_reproduced_not_hidden",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_research_indicators_match_daily_pipeline",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_model_contract_reports_identity_and_ignores_zero_importance_features",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_model_contract_never_falls_back_or_guesses",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_null_source_blocks_the_contract_and_only_diagnostic_mode_fills_it",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_institutional_strategy_declares_flow_inputs_and_refuses_without_them",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_research_engine_requires_provider_and_never_zero_fills_features",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_snapshot_builder_quarantines_misdated_duplicate_and_missing_rows",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native_recovery::test_corporate_action_check_requires_official_previous_close",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_atomic_replace_table::test_atomic_replace_swaps_full_content",
+      "status": "SKIP"
+    },
+    {
+      "test": "test.characterization.test_atomic_replace_table::test_atomic_replace_can_preserve_rows_matching_where",
+      "status": "SKIP"
+    },
+    {
+      "test": "test.characterization.test_atomic_replace_table::test_atomic_replace_failure_leaves_original_table_intact",
+      "status": "SKIP"
+    },
+    {
+      "test": "test.characterization.test_backtest_seed::test_backtest_seed_makes_slippage_rng_reproducible",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_c2_no_caller_adoption::test_existing_production_callers_do_not_import_c2_adapter",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[records-market]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[records-chip]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[empty-market]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[empty-chip]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[none-market]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[none-chip]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[mcp_error-market]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[mcp_error-chip]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[exception-market]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[exception-chip]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[cache-market]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_records_outputs_and_cache_match_precleanup_golden[cache-chip]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_cleanup_records_baseline::test_postback_cache_expiry_and_taipei_day_boundary",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_daily_selection_deterministic::test_daily_dry_run_preserves_frozen_strategy_outputs",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_daily_selection_deterministic::test_daily_persistence_shapes_rows_without_writing",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_daily_selection_regression::test_daily_selection_live_db_smoke",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_dashboard_payload_baseline::test_health_check_payload_matches_baseline",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_dashboard_payload_baseline::test_macro_payload_matches_baseline",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_dashboard_payload_baseline::test_health_check_local_fallback_contract",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_backtest_result::test_backtest_baseline_declares_the_legacy_result_contract",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_cli::test_backtest_launchers_keep_the_legacy_parameter_surface",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[hybrid_trend_rank]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[defensive_low_volatility]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[growth_momentum_breakout]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[quality_growth]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[institutional_flow_confirmation]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[mean_reversion]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_legacy_strategy_selection_deterministic::test_canonical_and_legacy_aliases_preserve_frozen_candidate_order[quality_value_low_volatility]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_valid_parameter_baseline[\\u8a2d\\u5b9aV34 18 0.93 0.9-\\u2705 V34 \\u56b4\\u683c\\u53c3\\u6578\\u5df2\\u66f4\\u65b0\\nYoY>18.0% / \\u7a81\\u7834>=0.93 / \\u91cf\\u6bd4>0.90-expected_updates0]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_valid_parameter_baseline[\\u8a2d\\u5b9aV34\\u653e\\u5bec 10 0.90 0.7-\\u2705 V34 \\u653e\\u5bec\\u53c3\\u6578\\u5df2\\u66f4\\u65b0\\nYoY>10.0% / \\u7a81\\u7834>=0.90 / \\u91cf\\u6bd4>0.70-expected_updates1]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_valid_parameter_baseline[\\u8a2d\\u5b9aV35 6 0 0.8-\\u2705 V35 \\u56b4\\u683c\\u53c3\\u6578\\u5df2\\u66f4\\u65b0\\n\\u5229\\u76ca\\u7387>6.0% / YoY>0.0% / \\u91cf\\u6bd4>0.80-expected_updates2]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_valid_parameter_baseline[\\u8a2d\\u5b9aV35\\u653e\\u5bec 4 -5 0.6-\\u2705 V35 \\u653e\\u5bec\\u53c3\\u6578\\u5df2\\u66f4\\u65b0\\n\\u5229\\u76ca\\u7387>4.0% / YoY>-5.0% / \\u91cf\\u6bd4>0.60-expected_updates3]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_out_of_range_parameter_baseline[\\u8a2d\\u5b9aV34 301 0.93 0.9-\\u274c \\u53c3\\u6578\\u8d85\\u51fa\\u7bc4\\u570d\\nYoY: -50~300, \\u7a81\\u7834: 0.70~1.10, \\u91cf\\u6bd4: 0~5]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_out_of_range_parameter_baseline[\\u8a2d\\u5b9aV34\\u653e\\u5bec 10 1.11 0.7-\\u274c \\u53c3\\u6578\\u8d85\\u51fa\\u7bc4\\u570d\\nYoY: -50~300, \\u7a81\\u7834: 0.70~1.10, \\u91cf\\u6bd4: 0~5]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_out_of_range_parameter_baseline[\\u8a2d\\u5b9aV35 101 0 0.8-\\u274c \\u53c3\\u6578\\u8d85\\u51fa\\u7bc4\\u570d\\n\\u5229\\u76ca\\u7387%: -20~100, YoY: -100~300, \\u91cf\\u6bd4: 0~5]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_out_of_range_parameter_baseline[\\u8a2d\\u5b9aV35\\u653e\\u5bec 4 -101 0.6-\\u274c \\u53c3\\u6578\\u8d85\\u51fa\\u7bc4\\u570d\\n\\u5229\\u76ca\\u7387%: -20~100, YoY: -100~300, \\u91cf\\u6bd4: 0~5]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_malformed_parameter_baseline[\\u8a2d\\u5b9aV34 1..2 0.93 0.9-\\u274c \\u683c\\u5f0f\\u932f\\u8aa4\\n\\u7528\\u6cd5\\uff1a\\u8a2d\\u5b9aV34 18 0.93 0.9]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_malformed_parameter_baseline[\\u8a2d\\u5b9aV34\\u653e\\u5bec 1..2 0.90 0.7-\\u274c \\u683c\\u5f0f\\u932f\\u8aa4\\n\\u7528\\u6cd5\\uff1a\\u8a2d\\u5b9aV34\\u653e\\u5bec 10 0.90 0.7]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_malformed_parameter_baseline[\\u8a2d\\u5b9aV35 1..2 0 0.8-\\u274c \\u683c\\u5f0f\\u932f\\u8aa4\\n\\u7528\\u6cd5\\uff1a\\u8a2d\\u5b9aV35 6 0 0.8]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_v34_v35_malformed_parameter_baseline[\\u8a2d\\u5b9aV35\\u653e\\u5bec 1..2 -5 0.6-\\u274c \\u683c\\u5f0f\\u932f\\u8aa4\\n\\u7528\\u6cd5\\uff1a\\u8a2d\\u5b9aV35\\u653e\\u5bec 4 -5 0.6]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_line_command_baseline::test_unrecognized_message_fallback_help_baseline",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_save_backtest_results_baseline::test_invalid_market_data_short_circuits_before_any_db_call",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_save_backtest_results_baseline::test_valid_market_data_still_reaches_db_layer",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_scheduler_baseline::test_scheduler_remains_the_single_pipeline_owner",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_scheduler_baseline::test_scheduler_stop_on_error_preserves_short_circuit",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_strategy_listing_baseline::test_current_listing_and_legacy_resolution_baseline",
+      "status": "SKIP"
+    },
+    {
+      "test": "test.characterization.test_strategy_platform_identity_baseline::test_exact_canonical_and_alias_identity_contract",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_strategy_platform_identity_baseline::test_fundamental_runtime_registration_stays_outside_legacy_listing",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_strategy_registry_regression::test_canonical_registry_resolves_existing_settings_keys",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_trade_sequence_regression::test_seeded_v31_trade_sequence_matches_the_characterization_baseline",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_backtest_persistence_baseline::test_run_portfolio_backtest_defaults_to_no_db_persist",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_backtest_persistence_baseline::test_run_portfolio_backtest_can_opt_in_to_db_persist",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_ui_restructure_baseline::test_primary_html_route_inventory_is_explicit_after_migration",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_ui_restructure_baseline::test_phase1_stock_analysis_adapter_preserves_series_schema",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_ui_restructure_baseline::test_phase1_strategy_identity_and_fundamental_isolation",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_ui_restructure_baseline::test_phase1_backtest_selection_surface_is_legacy_canonical_only",
+      "status": "PASS"
+    },
+    {
+      "test": "test.characterization.test_web_ui_restructure_baseline::test_phase1_settings_are_not_modified_by_read_only_inventory",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_run_daily::test_run_strategy_writes_heartbeat_when_candidates_empty",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_run_daily::test_compute_indicators_from_history_supports_current_pandas_groupby_apply",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_run_daily::test_daily_recovery_ignores_anomalies_without_changing_clean_indicators",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_weekend_duplicate_or_unordered_sessions_fail_loudly[sessions0]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_weekend_duplicate_or_unordered_sessions_fail_loudly[sessions1]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_weekend_duplicate_or_unordered_sessions_fail_loudly[sessions2]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_insufficient_cash_never_overbuys",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_costs_minimum_fee_tax_on_sell_only_and_adverse_slippage",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_same_inputs_reproduce_identical_execution",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_fundamental_replay_defers_missing_price_without_stale_fill",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_native22_engine_contracts::test_factor_values_ignore_future_rows",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_close_signals_fill_at_next_observed_open_for_both_entry_and_exit",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_missing_open_expires_unfilled_without_close_substitution[None]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_missing_open_expires_unfilled_without_close_substitution[0]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_missing_open_expires_unfilled_without_close_substitution[-1]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_missing_open_expires_unfilled_without_close_substitution[nan]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_missing_open_expires_unfilled_without_close_substitution[inf]",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_same_session_execution_is_rejected_and_legacy_behavior_is_preserved",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_new_contract_requires_session_list_and_prohibits_old_result_persistence",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_full_single_run_preserves_terminal_signal_as_unexecuted",
+      "status": "PASS"
+    },
+    {
+      "test": "test.test_next_session_execution::test_portfolio_run_uses_same_entry_and_exit_schedule",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,510 @@
+{
+  "version": "retraining-spec-v1",
+  "status": "DRAFT_PENDING_OWNER_APPROVAL",
+  "created": "2026-10-23",
+  "universe": {
+    "market": "TWSE-listed four-digit common stocks (MI_INDEX closing table)",
+    "tpex": "excluded this round (no certified TPEx source); Owner decision",
+    "prices": "raw prices (price return); ex-rights days are flagged, not adjusted"
+  },
+  "population_rule": "complete case: a row enters training, validation, test and inference only if every model feature is non-null",
+  "zscore": {
+    "population": "all complete-case rows of the same session (not narrowed by strategy rules)",
+    "formula": "(x - mean) / std over that session (ddof=0), std = 0 -> 0",
+    "nan_handling": "rows with NaN features are not in the population and are never filled"
+  },
+  "feature_window": "150 calendar days ending at the session, computed by build_feature_history exactly as in recovered Daily",
+  "features": {
+    "rsi_z": {
+      "formula": "calculate_rsi(close)",
+      "source": "MI_INDEX close",
+      "null_rule": "NaN until the indicator window is filled",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "bias_z": {
+      "formula": "(close - ma20) / ma20 * 100",
+      "source": "MI_INDEX close",
+      "null_rule": "NaN when ma20 is NaN or 0",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "macd_hist_z": {
+      "formula": "calculate_macd(close)",
+      "source": "MI_INDEX close",
+      "null_rule": "NaN until the window is filled",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "kd_k_z": {
+      "formula": "calculate_kd(high, low, close)",
+      "source": "MI_INDEX high/low/close",
+      "null_rule": "NaN until the window is filled",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "bb_width_z": {
+      "formula": "calculate_bb_width(close)",
+      "source": "MI_INDEX close",
+      "null_rule": "NaN until the window is filled",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "volume_ratio_z": {
+      "formula": "volume.replace(0, 1) / mean of the last 20 volumes, clip 0..5",
+      "source": "MI_INDEX volume",
+      "null_rule": "NaN below 20 volume observations (OD-1)",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "natr_z": {
+      "formula": "calculate_natr(high, low, close)",
+      "source": "MI_INDEX high/low/close",
+      "null_rule": "NaN until the window is filled",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "std_20_z": {
+      "formula": "calculate_std_20(close)",
+      "source": "MI_INDEX close",
+      "null_rule": "NaN until the window is filled",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "foreign_ratio_z": {
+      "formula": "foreign_buy / volume.replace(0, 1), clip +-0.5",
+      "source": "T86 foreign (ex foreign dealers) / MI_INDEX volume",
+      "null_rule": "NaN when the stock is absent from T86",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "trust_ratio_z": {
+      "formula": "trust_buy / volume.replace(0, 1), clip +-0.5",
+      "source": "T86 trust / MI_INDEX volume",
+      "null_rule": "NaN when absent from T86",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "dealer_ratio_z": {
+      "formula": "dealer_buy / volume.replace(0, 1), clip +-0.5",
+      "source": "T86 dealer / MI_INDEX volume",
+      "null_rule": "NaN when absent from T86",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "foreign_consec_days_z": {
+      "formula": "consecutive sessions with foreign_buy > 0 over the stock history",
+      "source": "T86 foreign",
+      "null_rule": "NaN when foreign_buy is NaN",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "trust_consec_days_z": {
+      "formula": "consecutive sessions with trust_buy > 0 over the stock history",
+      "source": "T86 trust",
+      "null_rule": "NaN when trust_buy is NaN",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "dealer_consec_days_z": {
+      "formula": "consecutive sessions with dealer_buy > 0 over the stock history",
+      "source": "T86 dealer",
+      "null_rule": "NaN when dealer_buy is NaN",
+      "in_model": true,
+      "excluded_reason": "CODE FIX REQUIRED FIRST: the shared core derives it from the one-day cross-section (always 0 or 1)"
+    },
+    "institutional_net_buy_z": {
+      "formula": "foreign_buy + trust_buy + dealer_buy",
+      "source": "T86",
+      "null_rule": "NaN if any component is NaN",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "institutional_consec_buy_days_z": {
+      "formula": "foreign + trust + dealer consecutive days, 0 when net buy <= 0",
+      "source": "T86",
+      "null_rule": "NaN if any component is NaN",
+      "in_model": true,
+      "excluded_reason": "CODE FIX REQUIRED FIRST: depends on dealer_consec_days"
+    },
+    "chip_score_z": {
+      "formula": "0.4 f + 0.3 t + 0.15 d + 0.15 m scores (Config.CHIP_WEIGHT_*), 0..100",
+      "source": "T86 + MI_MARGN",
+      "null_rule": "NaN if any component is NaN (no neutral 50)",
+      "in_model": true,
+      "excluded_reason": ""
+    },
+    "large_holder_ratio_z": {
+      "formula": "large-holder ratio",
+      "source": "none (no official or MySQL source)",
+      "null_rule": "n/a",
+      "in_model": false,
+      "excluded_reason": "no certified source"
+    },
+    "large_holder_ratio_change_z": {
+      "formula": "change of the large-holder ratio",
+      "source": "none",
+      "null_rule": "n/a",
+      "in_model": false,
+      "excluded_reason": "no certified source"
+    },
+    "news_sentiment_score_z": {
+      "formula": "one market-wide sentiment code per session",
+      "source": "news agent (no history)",
+      "null_rule": "n/a",
+      "in_model": false,
+      "excluded_reason": "constant across stocks within a session: z-score is 0, no cross-sectional information, no historical record"
+    },
+    "revenue_yoy_z": {
+      "formula": "monthly revenue year-over-year %",
+      "source": "MySQL monthly_revenue",
+      "null_rule": "NaN when not yet published",
+      "in_model": false,
+      "excluded_reason": "no official publication time (statutory-deadline estimate only); revisit when a timestamp source exists (OD-12)"
+    },
+    "rd_ratio_z": {
+      "formula": "rd_expense / revenue",
+      "source": "MOPS PIT v3",
+      "null_rule": "NaN when the latest filing has no actual publication date",
+      "in_model": false,
+      "excluded_reason": "publication dates exist only to FY2025; FY2026 filings are deadline estimates"
+    },
+    "op_profit_margin_z": {
+      "formula": "operating_profit / revenue",
+      "source": "MOPS PIT v3",
+      "null_rule": "same",
+      "in_model": false,
+      "excluded_reason": "same as rd_ratio"
+    },
+    "eps_z": {
+      "formula": "quarterly EPS",
+      "source": "MOPS PIT v3",
+      "null_rule": "same",
+      "in_model": false,
+      "excluded_reason": "same as rd_ratio"
+    }
+  },
+  "feature_order": [
+    "rsi_z",
+    "bias_z",
+    "macd_hist_z",
+    "kd_k_z",
+    "bb_width_z",
+    "volume_ratio_z",
+    "natr_z",
+    "std_20_z",
+    "foreign_ratio_z",
+    "trust_ratio_z",
+    "dealer_ratio_z",
+    "foreign_consec_days_z",
+    "trust_consec_days_z",
+    "dealer_consec_days_z",
+    "institutional_net_buy_z",
+    "institutional_consec_buy_days_z",
+    "chip_score_z"
+  ],
+  "label": {
+    "definition": "1 if max(high over the next N official sessions) / close - 1 > target_return else 0",
+    "N_and_target": "per model, see strategies",
+    "rows_without_a_full_horizon": "dropped (the old code labelled them 0)",
+    "horizon_must_end_by": "training data end"
+  },
+  "strategies": {
+    "defensive_low_volatility": {
+      "model_name": "v33_low_vol",
+      "label": {
+        "look_ahead_sessions": 10,
+        "target_return": 0.05,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-22",
+          671
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-10-30",
+          212
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-10-07",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    },
+    "growth_momentum_breakout": {
+      "model_name": "v34_turbo",
+      "label": {
+        "look_ahead_sessions": 5,
+        "target_return": 0.1,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-29",
+          676
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-11-06",
+          217
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-10-15",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    },
+    "hybrid_trend_rank": {
+      "model_name": "v31_hybrid",
+      "label": {
+        "look_ahead_sessions": 7,
+        "target_return": 0.08,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-27",
+          674
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-11-04",
+          215
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-10-13",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    },
+    "institutional_flow_confirmation": {
+      "model_name": "v36_chip_momentum",
+      "label": {
+        "look_ahead_sessions": 10,
+        "target_return": 0.07,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-22",
+          671
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-10-30",
+          212
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-10-07",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    },
+    "mean_reversion": {
+      "model_name": "v37_mean_reversion",
+      "label": {
+        "look_ahead_sessions": 8,
+        "target_return": 0.05,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-26",
+          673
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-11-03",
+          214
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-10-12",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    },
+    "quality_growth": {
+      "model_name": "v35_innovation",
+      "label": {
+        "look_ahead_sessions": 20,
+        "target_return": 0.15,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-08",
+          661
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-10-15",
+          202
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-09-21",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    },
+    "quality_value_low_volatility": {
+      "model_name": "v38_value_dividend",
+      "label": {
+        "look_ahead_sessions": 15,
+        "target_return": 0.05,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "illustrative_split_if_data_end_is_latest_session": {
+        "data_end": "2026-10-22",
+        "train": [
+          "2022-02-22",
+          "2024-11-15",
+          666
+        ],
+        "validation": [
+          "2024-12-16",
+          "2025-10-22",
+          207
+        ],
+        "test": [
+          "2025-11-21",
+          "2026-10-22",
+          222
+        ],
+        "last_labelled_test_session": "2026-09-30",
+        "note": "boundaries are frozen with the data manifest, not now"
+      }
+    }
+  },
+  "split": {
+    "train": 0.6,
+    "validation": 0.2,
+    "test": 0.2,
+    "embargo_sessions": 5,
+    "purge_sessions": "the model look_ahead_days"
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "learning_rate": 0.03,
+    "max_depth": 5,
+    "min_child_weight": 3,
+    "subsample": 0.7,
+    "colsample_bytree": 0.7,
+    "scale_pos_weight": "(negatives / positives) * 0.5 on the training segment only",
+    "random_state": 42,
+    "eval_metric": "logloss",
+    "tuning": "none (same values as jobs/train_model.py); validation is used for acceptance only, not early stopping"
+  },
+  "acceptance": {
+    "population": "complete-case rows of the segment (all TWSE-listed common stocks); every metric is per session, then averaged over the segment",
+    "metrics": {
+      "top_decile_lift_mean": {
+        "min": 1.2,
+        "definition": "precision of label = 1 among the top 10 % by score in a session / that session base rate"
+      },
+      "monthly_lift_positive_share": {
+        "min": 0.6,
+        "definition": "share of calendar months whose mean top-decile lift is above 1.0"
+      },
+      "pooled_roc_auc": {
+        "min": 0.55,
+        "definition": "ROC AUC of the score against the label over the whole segment"
+      },
+      "mean_rank_ic": {
+        "min": 0.02,
+        "definition": "mean per-session Spearman correlation of score and realised future max return"
+      }
+    },
+    "must_pass_on": [
+      "validation",
+      "test"
+    ],
+    "test_evaluations_allowed": 1,
+    "guards": [
+      "label horizon of every training row ends before the next segment starts (purge check)",
+      "features at session t are identical when all data after t is removed (future-independence check)",
+      "AUC with permuted labels lies within 0.48..0.52",
+      "no session belongs to two segments",
+      "model feature list equals this specification",
+      "data manifest SHA-256 equals the registered one"
+    ],
+    "status": "PROPOSED thresholds; frozen only by the SHA-256 of the owner-approved version",
+    "on_failure": "the model is rejected; no tuning on validation or test; a new model needs a new specification version"
+  },
+  "training_period": {
+    "start": "first session with complete features (about 2022-02)",
+    "data_end": "last session certified in the frozen data manifest",
+    "recorded_in_model": [
+      "training_data_start",
+      "training_data_end",
+      "split boundaries",
+      "spec sha256",
+      "data manifest sha256",
+      "code commit"
+    ]
+  },
+  "versioning": {
+    "model_version": "<strategy_name>-TS2-<spec sha256[:8]>",
+    "old_models": "kept unchanged beside the new files until certification"
+  },
+  "inference_contract": {
+    "features": "build_feature_history + build_multi_factor_matrix, order and names equal to the model feature list",
+    "universe": "TWSE-listed four-digit codes only",
+    "zscore_population": "all complete-case rows of the session",
+    "missing": "rows with a missing model input are excluded, never filled; no valid model -> no published ranking",
+    "score": "predict_proba[:, 1]",
+    "model_gate": "training_data_end and spec sha256 present, window start after training_data_end"
+  },
+  "code_changes_required_before_training": [
+    "core/calc_indicators.build_feature_history: dealer_consec_days (and so institutional_consec_buy_days) over the stock history, NaN when dealer_buy is NaN",
+    "z-score over all complete-case rows of the session (recovered Daily and research currently z-score over rows left after strategy rules)",
+    "recovered Daily: restrict the frame to TWSE-listed codes",
+    "core/research/native_models: read training_data_end and spec sha256; use training_data_end instead of training_date as the window bound",
+    "jobs/run_daily recovered: drop the CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN flag for models carrying a spec sha256",
+    "new training script (the old jobs/train_model.py reads SELECT * from MySQL and labels incomplete horizons 0)"
+  ],
+  "oos": {
+    "start": "the session after training_data_end",
+    "minimum_sessions": 252,
+    "counting": "only sessions never read by any backtest, diagnostic or tuning",
+    "earliest_if_data_end_is_2026-10-23": "2027-11-09",
+    "rules": [
+      "no retraining or threshold change after seeing OOS results",
+      "metrics and thresholds are the acceptance metrics above",
+      "the test segment is not OOS",
+      "the 252-session minimum is not lowered"
+    ]
+  },
+  "sha256": "acfc4d76e517f88177cd9413d239bbba3845052b3530bfe983c4fc35fa512288"
+}

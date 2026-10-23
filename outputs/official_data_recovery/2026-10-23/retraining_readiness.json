@@ -1,0 +1,333 @@
+{
+  "spec": {
+    "version": "retraining-spec-v1",
+    "status": "DRAFT_PENDING_OWNER_APPROVAL",
+    "sha256": "acfc4d76e517f88177cd9413d239bbba3845052b3530bfe983c4fc35fa512288"
+  },
+  "models": {
+    "defensive_low_volatility": {
+      "model": "v33_low_vol",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 10,
+        "target_return": 0.05,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    },
+    "growth_momentum_breakout": {
+      "model": "v34_turbo",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 5,
+        "target_return": 0.1,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    },
+    "hybrid_trend_rank": {
+      "model": "v31_hybrid",
+      "retrain_decision": "RETRAIN_RECOMMENDED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 7,
+        "target_return": 0.08,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    },
+    "institutional_flow_confirmation": {
+      "model": "v36_chip_momentum",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 10,
+        "target_return": 0.07,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    },
+    "mean_reversion": {
+      "model": "v37_mean_reversion",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 8,
+        "target_return": 0.05,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    },
+    "quality_growth": {
+      "model": "v35_innovation",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 20,
+        "target_return": 0.15,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    },
+    "quality_value_low_volatility": {
+      "model": "v38_value_dividend",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "label": {
+        "look_ahead_sessions": 15,
+        "target_return": 0.05,
+        "source": "existing model metadata (strategy parameters unchanged)"
+      },
+      "feature_count": 17,
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED",
+        "STAGE2_DATA_NOT_DOWNLOADED (914 T86 + 958 MI_MARGN requests)",
+        "CORE_CODE_CHANGES_REQUIRED (6 items)",
+        "OWNER_DECISIONS_OPEN"
+      ]
+    }
+  },
+  "stage2": {
+    "approved": false,
+    "requests": 1872,
+    "hours_at_3_2s": 1.66,
+    "batches": [
+      {
+        "batch": "2022Q1",
+        "from": "2022-01-03",
+        "to": "2022-03-31",
+        "sessions": 56,
+        "T86_requests": 53,
+        "MI_MARGN_requests": 56,
+        "requests": 109,
+        "minutes_at_3_2s": 5.8
+      },
+      {
+        "batch": "2022Q2",
+        "from": "2022-04-01",
+        "to": "2022-06-30",
+        "sessions": 61,
+        "T86_requests": 58,
+        "MI_MARGN_requests": 61,
+        "requests": 119,
+        "minutes_at_3_2s": 6.3
+      },
+      {
+        "batch": "2022Q3",
+        "from": "2022-07-01",
+        "to": "2022-09-30",
+        "sessions": 65,
+        "T86_requests": 62,
+        "MI_MARGN_requests": 65,
+        "requests": 127,
+        "minutes_at_3_2s": 6.8
+      },
+      {
+        "batch": "2022Q4",
+        "from": "2022-10-03",
+        "to": "2022-12-30",
+        "sessions": 64,
+        "T86_requests": 61,
+        "MI_MARGN_requests": 64,
+        "requests": 125,
+        "minutes_at_3_2s": 6.7
+      },
+      {
+        "batch": "2023Q1",
+        "from": "2023-01-03",
+        "to": "2023-03-31",
+        "sessions": 54,
+        "T86_requests": 51,
+        "MI_MARGN_requests": 54,
+        "requests": 105,
+        "minutes_at_3_2s": 5.6
+      },
+      {
+        "batch": "2023Q2",
+        "from": "2023-04-06",
+        "to": "2023-06-30",
+        "sessions": 59,
+        "T86_requests": 56,
+        "MI_MARGN_requests": 59,
+        "requests": 115,
+        "minutes_at_3_2s": 6.1
+      },
+      {
+        "batch": "2023Q3",
+        "from": "2023-07-03",
+        "to": "2023-09-28",
+        "sessions": 63,
+        "T86_requests": 60,
+        "MI_MARGN_requests": 63,
+        "requests": 123,
+        "minutes_at_3_2s": 6.6
+      },
+      {
+        "batch": "2023Q4",
+        "from": "2023-10-02",
+        "to": "2023-12-29",
+        "sessions": 63,
+        "T86_requests": 60,
+        "MI_MARGN_requests": 63,
+        "requests": 123,
+        "minutes_at_3_2s": 6.6
+      },
+      {
+        "batch": "2024Q1",
+        "from": "2024-01-02",
+        "to": "2024-03-29",
+        "sessions": 56,
+        "T86_requests": 53,
+        "MI_MARGN_requests": 56,
+        "requests": 109,
+        "minutes_at_3_2s": 5.8
+      },
+      {
+        "batch": "2024Q2",
+        "from": "2024-04-01",
+        "to": "2024-06-28",
+        "sessions": 61,
+        "T86_requests": 58,
+        "MI_MARGN_requests": 61,
+        "requests": 119,
+        "minutes_at_3_2s": 6.3
+      },
+      {
+        "batch": "2024Q3",
+        "from": "2024-07-01",
+        "to": "2024-09-30",
+        "sessions": 63,
+        "T86_requests": 59,
+        "MI_MARGN_requests": 63,
+        "requests": 122,
+        "minutes_at_3_2s": 6.5
+      },
+      {
+        "batch": "2024Q4",
+        "from": "2024-10-01",
+        "to": "2024-12-31",
+        "sessions": 62,
+        "T86_requests": 59,
+        "MI_MARGN_requests": 62,
+        "requests": 121,
+        "minutes_at_3_2s": 6.5
+      },
+      {
+        "batch": "2025Q1",
+        "from": "2025-01-02",
+        "to": "2025-03-31",
+        "sessions": 55,
+        "T86_requests": 52,
+        "MI_MARGN_requests": 55,
+        "requests": 107,
+        "minutes_at_3_2s": 5.7
+      },
+      {
+        "batch": "2025Q2",
+        "from": "2025-04-01",
+        "to": "2025-06-30",
+        "sessions": 61,
+        "T86_requests": 58,
+        "MI_MARGN_requests": 61,
+        "requests": 119,
+        "minutes_at_3_2s": 6.3
+      },
+      {
+        "batch": "2025Q3",
+        "from": "2025-07-01",
+        "to": "2025-09-30",
+        "sessions": 65,
+        "T86_requests": 64,
+        "MI_MARGN_requests": 65,
+        "requests": 129,
+        "minutes_at_3_2s": 6.9
+      },
+      {
+        "batch": "2025Q4",
+        "from": "2025-10-01",
+        "to": "2025-12-12",
+        "sessions": 50,
+        "T86_requests": 50,
+        "MI_MARGN_requests": 50,
+        "requests": 100,
+        "minutes_at_3_2s": 5.3
+      }
+    ],
+    "certification_standard": [
+      "every session of the batch has a cached file whose payload date equals the requested date and whose stat is OK, or a MI_INDEX-confirmed holiday",
+      "schema check passes (T86 19 fields with the known names; MI_MARGN table with the stock-code, margin-balance and short-balance columns)",
+      "file count and SHA-256 recorded in the download manifest; no HASH_MISMATCH, no rejected file left unexplained",
+      "a trading session without data is MISSING_ON_TRADING_DAY and blocks DATA_PASS for the whole range",
+      "MySQL reconciliation is run for the batch and reported; official gates (coverage) and MySQL gates (agreement) are graded separately",
+      "the range is DATA_PASS only when every session is covered; a partial range or a sample stays SAMPLE_AUDIT / DATA_BLOCKED"
+    ],
+    "procedure": [
+      "reuse acquire_chip / fetch_raw (cache first, SHA-256 verified)",
+      "one batch per quarter, oldest first",
+      "stop after 5 consecutive failures; rerun resumes",
+      "reconcile and grade after every batch",
+      "freeze the data manifest only when all batches are covered"
+    ]
+  },
+  "fit_split_sample_audit": {
+    "sessions": 44,
+    "foreign_mismatch_stock_days": 1361,
+    "note": "SAMPLE_AUDIT only, not a certification"
+  },
+  "recommendation": {
+    "approve_stage2_download": true,
+    "reason": "the 44-session sample cannot certify the period and MySQL flows are known to contain whole-day zeros; official history is needed either way",
+    "approve_retraining_now": false,
+    "retraining_preconditions": [
+      "Owner approves the specification hash",
+      "Stage 2 downloaded and certified",
+      "core code changes implemented and tested",
+      "open Owner decisions closed"
+    ]
+  }
+}

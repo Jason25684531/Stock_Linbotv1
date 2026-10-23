@@ -1,0 +1,62 @@
+{
+  "change": "openspec/changes/2026-10-23-recover-official-data-and-retraining-spec",
+  "output_dir": "outputs/official_data_recovery/2026-10-23",
+  "git_head": "ff454d872d5f5a5225fa00ba10ffd1f47f3ac426",
+  "baseline_head": "0521d1efd5be4e28e07a04e64ce944bbeb15062a",
+  "commands": [
+    "python scripts/official_data_recovery.py baseline",
+    "python scripts/official_data_recovery.py download  # run twice: the second run resumes and requests only the missing day",
+    "python scripts/official_data_recovery.py reconcile",
+    "python scripts/official_data_recovery.py spec",
+    "python scripts/official_data_recovery.py gaps",
+    "python scripts/official_data_recovery.py tests",
+    "python scripts/official_data_recovery.py manifest",
+    "python scripts/official_data_recovery.py verify"
+  ],
+  "official_requests": {
+    "sent": 194,
+    "budget": 197,
+    "min_interval_seconds": 3.2,
+    "ledger": "request_ledger.jsonl"
+  },
+  "inputs": {
+    "previous_chip_manifest": "4afaaf077dd54aaaca22a485afc5658b572ded03b5eadd5cf89e766c8ea2127a",
+    "previous_validation_manifest": "588e8934fc9f5bb6f830dba1c68da3c45fe813f47dcd12ee138ed3058be81bab",
+    "mi_index_cached_files": "official_download_manifest.json (new files) and mi_index_cache_hashes.json of the previous run (older files)",
+    "mysql": "SELECT only at run time; the aggregates are in official_mysql_reconciliation.csv"
+  },
+  "code": {
+    "scripts/official_data_recovery.py": "7df084de55cb7da7ec2b612d69ac1ddecf9853404ff157af7d877d67d9b7dbc2",
+    "test/test_official_data_recovery.py": "4017da32ee779f7f69b07dfcb59310bbb86dbf0caf865a6968e1f2cacb69d066"
+  },
+  "spec_sha256": "acfc4d76e517f88177cd9413d239bbba3845052b3530bfe983c4fc35fa512288",
+  "model_sha256": {
+    "defensive_low_volatility": "c2ab124f7ea0624c2cc6dada901e8777877be6c6697b209f57dd2a814768aa45",
+    "growth_momentum_breakout": "d117215b31c62e9da8e70455f234fb7928e6c85b677694c882d0fe90aea3aaa2",
+    "hybrid_trend_rank": "b8a2325db6937cf1fc36f43ef9bea0e39ccdde77d81df0d8033febff7f05764e",
+    "institutional_flow_confirmation": "676dd2b91c89f882301082a3aa2f390042060fa07515704e6df5e291a678f777",
+    "mean_reversion": "0e294998283492633dbb45b95427f2ba322766036e9ba71428c33d88d19ae249",
+    "quality_growth": "2a866550b81104661762f2581f0c5e5836c464edbc28e797a5d533475686a446",
+    "quality_value_low_volatility": "39b44ebc5529cf60784e82cbe8cfbebd862586488678876ab23678c4d2adf140"
+  },
+  "environment": {
+    "python": "3.11.9",
+    "pandas": "2.2.3"
+  },
+  "outputs": {
+    "baseline.json": "27887a1aeaf9efc81f256fe165bcd478c6d34a3fb9391a921cb1e72d711acd5d",
+    "baseline_tests.log": "40de144aceb9e8685832417b70881b37e5d9d246bb4c7920fc2e9edc26ec8d85",
+    "data_gate_results.json": "de2f7bf0474458138df373acc6f5a3b20d444740296fbd4decbebb4322385e94",
+    "official_download_manifest.json": "de0d81e7c3779c8da4afa3bf563b248adf60d322ef64aa8e16f2abfaf38c8d87",
+    "official_mysql_reconciliation.csv": "7c69f492829bbf29490c9cbb366172bb10a3ab313bc83310c5a36cc1e8837c4a",
+    "reconciliation_calendar.json": "eca5deef5bcd3562037f7d79af3254a07cc174b8df7782f9e8a0f0f3d7ab62f7",
+    "remaining_data_gaps.csv": "b83e93118f3366e2c14aceadf6c0b1a124b8c00b4fb34b6e7210fc00e8de6b14",
+    "request_ledger.jsonl": "a72ec9b4c91d106c5f66088b52bfcea7eb515bfd210bb8d2e00776698e7c1468",
+    "retraining_readiness.json": "d6e2a94e9f4c32492c3f5484f9b0ca6fa4e83f8acaa625b96f4e01e94458ad12",
+    "retraining_spec.json": "d747620473d5c40f399b8e18ab96df4ad81e7b33edef58a729ba8a7818896f52",
+    "test_junit.xml": "e2f99829a333a3ea96eebc800243d8bb1263273be0c9dab526e7f45a3689b8fb",
+    "test_results.json": "3cc7653f3c2842be1bc09fe18c4036ed1d1fac201dff4d528df068b75775a1d4",
+    "verification.json": "39560bda65bff691b58e7e8f47bd4a8fa9c787c704210a49b9f073e3334c2631"
+  },
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}

@@ -1,0 +1,14 @@
+﻿item,class,have,missing_requests,needed_for,note
+T86 2022-01-03..2025-12-12,NEEDS_DOWNLOAD,sample sessions only,914.0,"training features, fit-split audit","Stage 2, not approved"
+MI_MARGN 2022-01-03..2025-12-12,NEEDS_DOWNLOAD,none,958.0,"chip_score, margin_change_pct","Stage 2, not approved"
+T86 / MI_MARGN 2025-12-15..2026-10-23,AVAILABLE_NOW,cached + this round,0.0,training and OOS clock,
+MI_INDEX prices and official calendar 2021-12-30..2026-10-23,AVAILABLE_NOW,cached + this round,0.0,"prices, labels, universe, calendar",
+TWT49U ex-rights events 2022 and after 2026-07-28,NEEDS_DOWNLOAD,2023-01-03..2026-07-28,2.0,flag labels whose horizon contains an ex-rights day,one range request each
+Cash dividend amounts (separate from the combined rights + dividend value),OWNER_DECISION,TWT49U combined value only,1600.0,total return in backtests (not for training labels),"per-event MOPS detail pages, about 1,600 events since 2023; estimate"
+Quarterly filings FY2026Q1..Q2 publication times,NEEDS_DOWNLOAD,FY2013..FY2025,1780.0,"fundamental features rd_ratio, op_profit_margin, eps (excluded from v1 model)",only if the Owner adds fundamentals; estimate from the PIT ledger rate
+Monthly revenue publication times,OWNER_DECISION,values only (MOPS summary pages carry no announcement time),,revenue_yoy (excluded from v1 model; used by V34/V35 rules),no timestamped official source found in the endpoint probes
+"TPEx universe (prices, flows, margin)",OWNER_DECISION,none,3495.0,including TPEx stocks,recommended: exclude this round and filter live Daily to TWSE codes
+large_holder_ratio / large_holder_ratio_change,OWNER_DECISION,none,,two model features,no source; excluded from v1
+news_sentiment_score history,OWNER_DECISION,none,,one model feature,constant across stocks within a session; excluded from v1
+"Core code fixes (dealer_consec_days history, z-score population, TWSE universe filter, model contract fields)",CODE_CHANGE_REQUIRED,see retraining_spec.json,0.0,train / inference parity,not allowed in this round (core/ unchanged)
+"Owner approval of the retraining specification (thresholds, feature set, universe, hyper-parameters)",OWNER_DECISION,draft with SHA-256,0.0,freezing before training,DRAFT_PENDING_OWNER_APPROVAL

@@ -1,0 +1,346 @@
+{
+  "grades": "DATA_PASS / DATA_FAIL / DATA_BLOCKED / SAMPLE_AUDIT (a sample is never extrapolated)",
+  "gates": [
+    {
+      "gate": "OFFICIAL_CALENDAR_PRICES_RECENT",
+      "range": [
+        "2026-07-29",
+        "2026-10-23"
+      ],
+      "status": "DATA_PASS",
+      "evidence": "59 sessions, 4 weekday non-trading responses, unresolved []",
+      "unconfirmed_latest_date": "2026-10-23",
+      "note": "2026-10-23 answered 'no data' at 18:29 Taipei; a holiday and an unpublished day give the same answer, so it is not counted as a session and must be re-requested on the next trading day"
+    },
+    {
+      "gate": "OFFICIAL_T86_RECENT",
+      "status": "DATA_PASS",
+      "evidence": "59/59 sessions"
+    },
+    {
+      "gate": "OFFICIAL_MI_MARGN_RECENT",
+      "status": "DATA_PASS",
+      "evidence": "59/59 sessions"
+    },
+    {
+      "gate": "MYSQL_OHLC_RECENT",
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 83,
+        "shared_keys": 61743,
+        "mismatch": 0,
+        "match_rate": 1.0,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 0,
+        "official_present": 63913,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 2323,
+        "mysql_only_not_listed": 70424,
+        "mysql_listed_absent_from_official_field": 0
+      },
+      "official_sessions_without_mysql_rows": [
+        "2026-08-26",
+        "2026-09-21"
+      ]
+    },
+    {
+      "gate": "MYSQL_VOLUME_RECENT",
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 83,
+        "shared_keys": 61743,
+        "mismatch": 27,
+        "match_rate": 0.999563,
+        "dates_with_mismatch": 1,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 0,
+        "official_present": 64066,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 2323,
+        "mysql_only_not_listed": 70424,
+        "mysql_listed_absent_from_official_field": 0
+      },
+      "official_sessions_without_mysql_rows": [
+        "2026-08-26",
+        "2026-09-21"
+      ]
+    },
+    {
+      "gate": "MYSQL_FOREIGN_BUY_RECENT",
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 83,
+        "shared_keys": 61251,
+        "mismatch": 0,
+        "match_rate": 1.0,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 0,
+        "official_present": 63426,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 2460,
+        "mysql_only_not_listed": 70424,
+        "mysql_listed_absent_from_official_field": 422
+      },
+      "official_sessions_without_mysql_rows": [
+        "2026-08-26",
+        "2026-09-21"
+      ]
+    },
+    {
+      "gate": "MYSQL_TRUST_BUY_RECENT",
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 83,
+        "shared_keys": 61251,
+        "mismatch": 53,
+        "match_rate": 0.999135,
+        "dates_with_mismatch": 4,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 0,
+        "official_present": 63426,
+        "mysql_zero_official_nonzero": 2,
+        "official_only_stock_days": 2460,
+        "mysql_only_not_listed": 70424,
+        "mysql_listed_absent_from_official_field": 422
+      },
+      "official_sessions_without_mysql_rows": [
+        "2026-08-26",
+        "2026-09-21"
+      ]
+    },
+    {
+      "gate": "MYSQL_DEALER_BUY_RECENT",
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 83,
+        "shared_keys": 9682,
+        "mismatch": 0,
+        "match_rate": 1.0,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 51569,
+        "official_present": 63426,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 2460,
+        "mysql_only_not_listed": 70424,
+        "mysql_listed_absent_from_official_field": 0
+      },
+      "official_sessions_without_mysql_rows": [
+        "2026-08-26",
+        "2026-09-21"
+      ]
+    },
+    {
+      "gate": "MYSQL_MARGIN_BALANCE_RECENT",
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 83,
+        "shared_keys": 9487,
+        "mismatch": 0,
+        "match_rate": 1.0,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 50553,
+        "official_present": 62442,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 2460,
+        "mysql_only_not_listed": 70424,
+        "mysql_listed_absent_from_official_field": 0
+      },
+      "official_sessions_without_mysql_rows": [
+        "2026-08-26",
+        "2026-09-21"
+      ]
+    },
+    {
+      "gate": "MYSQL_OHLC_FULL_CACHED_PERIOD",
+      "range": [
+        "2021-12-30",
+        "2026-07-28"
+      ],
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 1152,
+        "shared_keys": 973108,
+        "mismatch": 1067,
+        "match_rate": 0.998904,
+        "dates_with_mismatch": 1,
+        "whole_day_error_dates": [
+          "2026-04-07"
+        ],
+        "mysql_null_official_present": 0,
+        "official_present": 1117246,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 146619,
+        "mysql_only_not_listed": 124535,
+        "mysql_listed_absent_from_official_field": 12
+      },
+      "calendar": {
+        "official_sessions": 1106,
+        "official_weekday_holidays": 88,
+        "mysql_dates": 1143,
+        "mysql_duplicate_keys": 25826,
+        "mysql_rows_on_weekend_dates": 35716,
+        "mysql_weekend_dates": 41,
+        "mysql_dates_not_official_sessions_count": 46,
+        "official_sessions_missing_in_mysql": [
+          "2021-12-30",
+          "2023-03-31",
+          "2023-04-06",
+          "2023-04-07",
+          "2023-07-12",
+          "2023-10-11",
+          "2024-02-26",
+          "2025-08-13",
+          "2025-12-29"
+        ]
+      }
+    },
+    {
+      "gate": "MYSQL_VOLUME_FULL_CACHED_PERIOD",
+      "range": [
+        "2021-12-30",
+        "2026-07-28"
+      ],
+      "status": "DATA_FAIL",
+      "stats": {
+        "dates": 1152,
+        "shared_keys": 973120,
+        "mismatch": 7732,
+        "match_rate": 0.992054,
+        "dates_with_mismatch": 22,
+        "whole_day_error_dates": [
+          "2026-01-07",
+          "2026-01-08",
+          "2026-01-09",
+          "2026-02-10",
+          "2026-02-11",
+          "2026-04-07",
+          "2026-04-15"
+        ],
+        "mysql_null_official_present": 0,
+        "official_present": 1119739,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 146619,
+        "mysql_only_not_listed": 124535,
+        "mysql_listed_absent_from_official_field": 0
+      },
+      "calendar": {
+        "official_sessions": 1106,
+        "official_weekday_holidays": 88,
+        "mysql_dates": 1143,
+        "mysql_duplicate_keys": 25826,
+        "mysql_rows_on_weekend_dates": 35716,
+        "mysql_weekend_dates": 41,
+        "mysql_dates_not_official_sessions_count": 46,
+        "official_sessions_missing_in_mysql": [
+          "2021-12-30",
+          "2023-03-31",
+          "2023-04-06",
+          "2023-04-07",
+          "2023-07-12",
+          "2023-10-11",
+          "2024-02-26",
+          "2025-08-13",
+          "2025-12-29"
+        ]
+      }
+    },
+    {
+      "gate": "MYSQL_FOREIGN_BUY_FIT_SPLIT_SAMPLE",
+      "status": "SAMPLE_AUDIT",
+      "sample_sessions": 44,
+      "stats": {
+        "dates": 44,
+        "shared_keys": 35762,
+        "mismatch": 990,
+        "match_rate": 0.972317,
+        "dates_with_mismatch": 1,
+        "whole_day_error_dates": [
+          "2024-07-18"
+        ],
+        "mysql_null_official_present": 0,
+        "official_present": 42739,
+        "mysql_zero_official_nonzero": 990,
+        "official_only_stock_days": 6977,
+        "mysql_only_not_listed": 0,
+        "mysql_listed_absent_from_official_field": 584
+      },
+      "certified_scope": "none: 44 sampled sessions only; the other sessions of 2022-01-03..2025-12-12 stay uncertified"
+    },
+    {
+      "gate": "MYSQL_TRUST_BUY_FIT_SPLIT_SAMPLE",
+      "status": "SAMPLE_AUDIT",
+      "sample_sessions": 44,
+      "stats": {
+        "dates": 44,
+        "shared_keys": 35762,
+        "mismatch": 371,
+        "match_rate": 0.989626,
+        "dates_with_mismatch": 3,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 0,
+        "official_present": 42739,
+        "mysql_zero_official_nonzero": 368,
+        "official_only_stock_days": 6977,
+        "mysql_only_not_listed": 0,
+        "mysql_listed_absent_from_official_field": 584
+      },
+      "certified_scope": "none: 44 sampled sessions only; the other sessions of 2022-01-03..2025-12-12 stay uncertified"
+    },
+    {
+      "gate": "MYSQL_DEALER_BUY_FIT_SPLIT_SAMPLE",
+      "status": "SAMPLE_AUDIT",
+      "sample_sessions": 44,
+      "stats": {
+        "dates": 44,
+        "shared_keys": 0,
+        "mismatch": 0,
+        "match_rate": null,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 35762,
+        "official_present": 42739,
+        "mysql_zero_official_nonzero": 0,
+        "official_only_stock_days": 6977,
+        "mysql_only_not_listed": 0,
+        "mysql_listed_absent_from_official_field": 0
+      },
+      "certified_scope": "none: 44 sampled sessions only; the other sessions of 2022-01-03..2025-12-12 stay uncertified"
+    },
+    {
+      "gate": "FIT_SPLIT_FLOWS_FULL",
+      "status": "DATA_BLOCKED",
+      "reason": "T86 for 914 and MI_MARGN for 958 sessions of 2022-01-03..2025-12-12 are not downloaded (Stage 2 not approved)"
+    },
+    {
+      "gate": "MARGIN_FIT_SPLIT_SAMPLE",
+      "status": "DATA_BLOCKED",
+      "reason": "Stage 1 approved T86 only; MySQL margin_balance is NULL before 2026-10-12"
+    },
+    {
+      "gate": "FUNDAMENTALS",
+      "status": "DATA_BLOCKED",
+      "availability_sources": {
+        "statutory_deadline": 21830,
+        "mops_publication": 12790
+      },
+      "reason": "Actual MOPS publication dates cover FY2025 and earlier only; later periods use the statutory deadline, which cannot prove availability for late filers (OD-4: no DATA_PASS from deadlines)",
+      "inherited_from": "daily_selection_recovery 2026-10-22"
+    },
+    {
+      "gate": "MONTHLY_REVENUE",
+      "status": "DATA_BLOCKED",
+      "reason": "No official source or publication timestamp; statutory 10th-of-month estimate only",
+      "inherited_from": "daily_selection_recovery 2026-10-22"
+    },
+    {
+      "gate": "UNIVERSE_TPEX",
+      "status": "DATA_BLOCKED",
+      "reason": "No official TPEx price/calendar cache; research excludes TPEx. Live recovered Daily still sees TPEx rows from MySQL (uncertified, see owner_decisions_required.md OD-8)",
+      "inherited_from": "daily_selection_recovery 2026-10-22"
+    }
+  ]
+}
