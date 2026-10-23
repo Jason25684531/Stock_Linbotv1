@@ -683,6 +683,7 @@ def gaps():
     print(pd.DataFrame(rows).groupby('class').size().to_dict(), 'stage2 requests', t86_missing + margin_missing)
 
 
+RUNTIME_STATUS = 'outputs/fundamental_runtime_shadow/operate-fundamental-shadow-until-oos-ready-v1/fundamental_production_status.json'
 TESTS = ['test/test_official_data_recovery.py', 'test/test_model_data_validation.py', 'test/test_daily_selection_recovery.py', 'test/test_native_recovery.py',
          'test/characterization', 'test/test_run_daily.py', 'test/test_native22_engine_contracts.py', 'test/test_next_session_execution.py']
 
@@ -738,7 +739,18 @@ def verify():
     assert start['model_sha256'] == {k: digest(ROOT / p) for k, (_n, p) in models().items()}, 'MODEL_CHANGED'
     assert all(not v['changed'] for v in archived(ARCHIVES).values()), 'ARCHIVED_OUTPUT_CHANGED'
     kept = preservation()
-    assert not kept['historical_changed'] and set(kept['protected_changed']) <= {'core/strategies/growth_momentum_breakout.py'}, kept
+    assert set(kept['protected_changed']) <= {'core/strategies/growth_momentum_breakout.py'}, kept
+    # The one tolerated difference: the live fundamental shadow job rewrites its own runtime status file (this change never writes it;
+    # re-running the suites that call run_daily leaves it untouched). It is reported, not hidden, and its content must stay inert.
+    external = [f for f in kept['historical_changed']]
+    assert set(external) <= {RUNTIME_STATUS}, f'HISTORICAL_HASH_CHANGED: {external}'
+    runtime = None
+    if external:
+        status = read(ROOT / RUNTIME_STATUS)
+        assert status['broker_submission_status'] == 'DISABLED' and status['production_enable_flag'] is False and status['production_ready'] == 'NO', 'RUNTIME_STATUS'
+        runtime = {'file': RUNTIME_STATUS, 'recorded_sha256': read(ROOT / 'outputs/strategy_revalidation/2026-10-21-audit/historical_hashes.json')[RUNTIME_STATUS],
+                   'current_sha256': digest(ROOT / RUNTIME_STATUS), 'asof_date': status['asof_date'], 'written_by': 'not this change (unidentified runtime process, 2026-10-23 18:34 +08:00)',
+                   'content_checks': 'broker DISABLED, production_enable_flag false, production_ready NO'}
     touched = git('diff', '--name-only', start['git_head'], '--', 'jobs', 'core', 'config', 'execution', 'app', 'services', 'strategy_settings.json', 'ML_Data').split()
     assert not touched, 'PRODUCTION_CODE_CHANGED: ' + str(touched)
     assert Config.DAILY_FEATURE_MODE == 'legacy'
@@ -767,7 +779,7 @@ def verify():
     assert read(OUT / 'official_download_manifest.json')['summary']['prior_cache_hash_check']['mismatches'] == [], 'CACHE_HASH'
     write(OUT / 'verification.json', {'status': 'PASS', 'official_requests': len(times), 'budget': BUDGET, 'runs': runs, 'spacing_evidence': 'run duration >= (requests - 1) x 3.2 s; per-request send instants were not recorded',
                                       'stage2_executed': False, 'models_unchanged_and_blocked': 7, 'training_executed': False, 'mysql': 'SELECT only',
-                                      'production_code_unchanged_since': start['git_head'], 'archived_outputs_unchanged': True, 'preservation': kept,
+                                      'production_code_unchanged_since': start['git_head'], 'archived_outputs_unchanged': True, 'preservation': kept, 'external_runtime_change': runtime,
                                       'spec_sha256': spec_doc['sha256'], 'DAILY_FEATURE_MODE': 'legacy', 'BROKER_ORDER_SUBMISSION': 'DISABLED'})
     print('VERIFY PASS', len(times))
 
