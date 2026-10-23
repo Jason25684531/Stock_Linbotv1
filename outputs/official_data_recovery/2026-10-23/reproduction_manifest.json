@@ -1,7 +1,7 @@
 {
   "change": "openspec/changes/2026-10-23-recover-official-data-and-retraining-spec",
   "output_dir": "outputs/official_data_recovery/2026-10-23",
-  "git_head": "ff454d872d5f5a5225fa00ba10ffd1f47f3ac426",
+  "git_head": "d65b5258f49ad364fda6fbae70eb6f8fcf3257f5",
   "baseline_head": "0521d1efd5be4e28e07a04e64ce944bbeb15062a",
   "commands": [
     "python scripts/official_data_recovery.py baseline",
