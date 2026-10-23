@@ -406,6 +406,13 @@ def select_backtest_candidates(
     )
 
 
+VALUATION_POLICIES = ('legacy', 'finite_positive_stale')
+
+
+def _valid_close(price):
+    return price is not None and math.isfinite(float(price)) and float(price) > 0
+
+
 class BacktestEngine:
     """
     多策略回測引擎
@@ -415,7 +422,7 @@ class BacktestEngine:
     def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
                  persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None,
                  persist_to_db: bool | None = None, execution_contract='legacy_same_close', trading_sessions=None,
-                 research_data=None, rules_only=False):
+                 research_data=None, rules_only=False, valuation_policy='legacy'):
         """
         初始化回測引擎
 
@@ -433,6 +440,12 @@ class BacktestEngine:
         """
         if execution_contract not in {'legacy_same_close', 'next_session_open_v2'}:
             raise ValueError('Unknown execution contract')
+        if valuation_policy not in VALUATION_POLICIES:
+            raise ValueError(f'Unknown valuation_policy: {valuation_policy}')
+        if valuation_policy != 'legacy' and (execution_contract != 'next_session_open_v2' or research_data is None):
+            raise ValueError('finite_positive_stale is a research valuation policy (next_session_open_v2 with research_data)')
+        self.valuation_policy = valuation_policy
+        self.valuation_events = []  # STALE_VALUATION records (research policy only)
         self.execution_contract = execution_contract
         self.trading_sessions = list(trading_sessions or [])
         if execution_contract == 'next_session_open_v2':
@@ -643,6 +656,40 @@ class BacktestEngine:
                 WHERE stock_id = :sid AND trade_date = :dt
             """)
             return conn.execute(query, {'sid': stock_id, 'dt': date_str}).mappings().fetchone()
+
+    def _mark_position(self, sid, info, date_str):
+        """Close-of-session value of one position (valuation only; never an order or fill price).
+
+        legacy (default): the stored close of the session row, whatever it is (NaN, inf, 0 included); no row -> last mark, else cost.
+        finite_positive_stale (research, OD-29): only a finite positive close updates the mark. Otherwise the last valid close is carried and a
+        STALE_VALUATION event is recorded; with no valid close since entry the run stops with VALUATION_BLOCKED (never 0, never NaN).
+        """
+        curr = self.get_data(sid, date_str)
+        if getattr(self, 'valuation_policy', 'legacy') == 'legacy':
+            if curr:
+                last_price = curr['close_price']
+                info['last_price'] = last_price  # 快取最後已知價格
+            else:
+                last_price = info.get('last_price', info.get('cost', 0))
+            return info['shares'] * last_price
+        close = curr.get('close_price') if curr else None
+        if _valid_close(close):
+            info['last_valid_close'], info['last_valid_date'], info['stale_days'] = float(close), date_str, 0
+            return info['shares'] * float(close)
+        if info.get('last_valid_close') is None:
+            raise ValueError(f'VALUATION_BLOCKED: {sid} has no valid close since entry ({date_str})')
+        info['stale_days'] = info.get('stale_days', 0) + 1
+        if not curr:
+            reason = 'NO_BAR_ROW'
+        elif close is not None and math.isfinite(float(close)):
+            reason = 'NON_POSITIVE_CLOSE'
+        else:
+            reason = 'NO_VALID_CLOSE_WITH_VOLUME' if (curr.get('volume') or 0) > 0 else 'NO_VALID_CLOSE_NO_VOLUME'
+        value = info['shares'] * info['last_valid_close']
+        self.valuation_events.append({'type': 'STALE_VALUATION', 'date': date_str, 'stock_id': sid, 'reason': reason, 'close_value': None if close is None else repr(float(close)),
+                                      'price': info['last_valid_close'], 'price_source_date': info['last_valid_date'], 'stale_days': info['stale_days'],
+                                      'shares': info['shares'], 'value': value})
+        return value
 
     def _apply_execution_slippage(self, price: float, side: str) -> float:
         """Apply adverse execution-only slippage without mutating market data."""
@@ -1137,14 +1184,11 @@ class BacktestEngine:
             
             # V32: 記錄每日資產（用於 MDD 和 Sharpe 計算）
             daily_asset = self.capital
+            first_event = len(getattr(self, 'valuation_events', []))
             for sid, info in self.positions.items():
-                curr = self.get_data(sid, date_str)
-                if curr:
-                    last_price = curr['close_price']
-                    info['last_price'] = last_price  # 快取最後已知價格
-                else:
-                    last_price = info.get('last_price', info.get('cost', 0))
-                daily_asset += info['shares'] * last_price
+                daily_asset += self._mark_position(sid, info, date_str)
+            for event in getattr(self, 'valuation_events', [])[first_event:]:
+                event['equity_share'] = event['value'] / daily_asset
             self.daily_assets.append(daily_asset)
             self.daily_dates.append(date_str)
             
@@ -1156,6 +1200,8 @@ class BacktestEngine:
         for sid, info in self.positions.items():
             if self.research_data is not None:
                 price = self.research_data.last_close(sid, final_trade_date)
+                if getattr(self, 'valuation_policy', 'legacy') == 'finite_positive_stale' and not _valid_close(price):
+                    price = info.get('last_valid_close')  # carried mark (recorded as STALE_VALUATION on the last session); None -> MISSING_END_MARK
             else:
                 with self.engine.connect() as conn:
                     query = text("""
@@ -1458,13 +1504,7 @@ class PortfolioBacktestEngine:
                 
                 # 加上持倉市值（若當日無資料，使用最後已知價格）
                 for stock_id, position_info in strategy_engine.positions.items():
-                    curr_data = strategy_engine.get_data(stock_id, date_str)
-                    if curr_data:
-                        last_price = curr_data['close_price']
-                        position_info['last_price'] = last_price
-                    else:
-                        last_price = position_info.get('last_price', position_info.get('cost', 0))
-                    strategy_value += position_info['shares'] * last_price
+                    strategy_value += strategy_engine._mark_position(stock_id, position_info, date_str)
                 
                 daily_total += strategy_value
                 

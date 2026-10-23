@@ -1,0 +1,290 @@
+{
+ "valid": {
+  "error": null,
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "1004666.0",
+   "1006646.0",
+   "1008626.0",
+   "1010606.0",
+   "1012586.0"
+  ],
+  "trades": [],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "no_row": {
+  "error": null,
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "1002686.0",
+   "1006646.0",
+   "1008626.0",
+   "1010606.0",
+   "1012586.0"
+  ],
+  "trades": [],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "nan_close_with_volume": {
+  "error": "AttributeError: 'float' object has no attribute 'numerator'",
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "nan",
+   "1006646.0",
+   "1008626.0",
+   "1010606.0",
+   "1012586.0"
+  ],
+  "trades": [],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "nan_close_no_volume": {
+  "error": "AttributeError: 'float' object has no attribute 'numerator'",
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "nan",
+   "1006646.0",
+   "1008626.0",
+   "1010606.0",
+   "1012586.0"
+  ],
+  "trades": [],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "inf_close": {
+  "error": "AttributeError: 'float' object has no attribute 'numerator'",
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "inf",
+   "1004746.0",
+   "1004746.0",
+   "1004746.0",
+   "1004746.0"
+  ],
+  "trades": [
+   {
+    "stock_id": "2330",
+    "strategy": "v30",
+    "buy_date": "2026-10-13",
+    "sell_date": "2026-10-16",
+    "buy_price": 101.0,
+    "sell_price": 104.0,
+    "profit_pct": 2.369871769264571,
+    "reason": "停利",
+    "days": 3
+   }
+  ],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   },
+   {
+    "side": "SELL",
+    "stock_id": "2330",
+    "signal_date": "2026-10-15",
+    "reason": null,
+    "execution_date": "2026-10-16",
+    "price": 104.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "zero_close": {
+  "error": null,
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "799736.0",
+   "1004746.0",
+   "1004746.0",
+   "1004746.0",
+   "1004746.0"
+  ],
+  "trades": [
+   {
+    "stock_id": "2330",
+    "strategy": "v30",
+    "buy_date": "2026-10-13",
+    "sell_date": "2026-10-16",
+    "buy_price": 101.0,
+    "sell_price": 104.0,
+    "profit_pct": 2.369871769264571,
+    "reason": "停損",
+    "days": 3
+   }
+  ],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   },
+   {
+    "side": "SELL",
+    "stock_id": "2330",
+    "signal_date": "2026-10-15",
+    "reason": null,
+    "execution_date": "2026-10-16",
+    "price": 104.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "negative_close": {
+  "error": null,
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "797756.0",
+   "1004746.0",
+   "1004746.0",
+   "1004746.0",
+   "1004746.0"
+  ],
+  "trades": [
+   {
+    "stock_id": "2330",
+    "strategy": "v30",
+    "buy_date": "2026-10-13",
+    "sell_date": "2026-10-16",
+    "buy_price": 101.0,
+    "sell_price": 104.0,
+    "profit_pct": 2.369871769264571,
+    "reason": "停損",
+    "days": 3
+   }
+  ],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   },
+   {
+    "side": "SELL",
+    "stock_id": "2330",
+    "signal_date": "2026-10-15",
+    "reason": null,
+    "execution_date": "2026-10-16",
+    "price": 104.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "three_sessions_invalid": {
+  "error": "AttributeError: 'float' object has no attribute 'numerator'",
+  "daily_assets": [
+   "1000000.0",
+   "1000706.0",
+   "1002686.0",
+   "nan",
+   "nan",
+   "nan",
+   "1010606.0",
+   "1012586.0"
+  ],
+  "trades": [],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   }
+  ]
+ },
+ "no_valid_close_since_entry": {
+  "error": "AttributeError: 'float' object has no attribute 'numerator'",
+  "daily_assets": [
+   "1000000.0",
+   "nan",
+   "1002686.0",
+   "1004666.0",
+   "1006646.0",
+   "1008626.0",
+   "1010606.0",
+   "1012586.0"
+  ],
+  "trades": [],
+  "execution_events": [
+   {
+    "side": "BUY",
+    "stock_id": "2330",
+    "signal_date": "2026-10-12",
+    "reason": null,
+    "execution_date": "2026-10-13",
+    "price": 101.0,
+    "status": "FILLED"
+   }
+  ]
+ }
+}

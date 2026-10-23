@@ -62,3 +62,41 @@ def test_paired_difference_interval_separates_a_real_gap_from_noise():
     assert same['lower'] < 0 < same['upper']  # two nearly identical series cannot be told apart
     better = st.paired_block_bootstrap_sharpe_difference(noise(mean=0.004, sd=0.005, seed=5), noise(seed=6))
     assert better['lower'] > 0 and better['difference'] > 0
+
+
+# ---- the candidate decision itself (the real results contain no candidate, so the rule is proven on constructed rows) ----
+def candidate_row(**override):
+    regime = {'bull': {'sessions': 300, 'annualized_excess': 0.1, 'status': 'POSITIVE'}, 'bear': {'sessions': 200, 'annualized_excess': 0.05, 'status': 'POSITIVE'}}
+    row = {'family': 'D5', 'config_id': 'c1', 'sharpe_net_2x_cost': 2.0, 'excess_sharpe_2x_cost': 1.5, 'top5_assets_profit_share': 0.3, 'best5pct_days_return_share': 0.4,
+           'regime': regime, 'execution_audit': 'PASS_FLAG_ONLY', 'held_on_nonofficial_prices': 0, 'delisting_status': 'NO_DELISTED_HOLDING', 'beyond_boundary': False,
+           'total_return_status': 'TOTAL_RETURN_PURE_CASH_ONLY'}
+    return {**row, **override}
+
+
+def decide(**override):
+    from scripts import track_b_evaluate as ev
+
+    x = pd.Series(np.random.default_rng(1).normal(0.004, 0.004, 700), index=pd.bdate_range('2023-01-02', periods=700))
+    others = {f'o{i}': pd.Series(np.random.default_rng(10 + i).normal(0.0, 0.01, 700), index=x.index) for i in range(60)}  # many comparable trials, as in the real study
+    frame, _ = ev.apply_statistics(pd.DataFrame([candidate_row(**override)]), {'c1': x, **others})
+    return frame.iloc[0]
+
+
+def test_every_condition_met_gives_a_candidate_and_never_an_oos_or_production_label():
+    row = decide()
+    assert row.statistical_gates_pass and row.BACKTEST == 'DEVELOPMENT' and row.EVIDENCE == 'CANDIDATE_FOR_INDEPENDENT_VALIDATION'
+    text = ' '.join(str(v) for v in row.to_dict().values())
+    assert not {'OOS_PASS', 'PROFITABLE_PROVEN', 'PRODUCTION_READY'} & set(text.split())
+
+
+@pytest.mark.parametrize('override', [{'total_return_status': 'TOTAL_RETURN_BLOCKED'}, {'delisting_status': 'DELISTING_EXIT_UNVERIFIED'}, {'execution_audit': 'FLAGGED_MATERIAL'},
+                                      {'held_on_nonofficial_prices': 1}, {'beyond_boundary': True}, {'family': 'G2G3'}, {'top5_assets_profit_share': 0.7},
+                                      {'best5pct_days_return_share': None}, {'excess_sharpe_2x_cost': -0.1}])
+def test_any_missing_certification_or_failed_gate_blocks_the_candidate(override):
+    assert decide(**override).EVIDENCE == 'INSUFFICIENT'
+
+
+def test_a_short_regime_is_undetermined_not_stable():
+    regime = {'bull': {'sessions': 500, 'annualized_excess': 0.1, 'status': 'POSITIVE'}, 'bear': {'sessions': 30, 'annualized_excess': 0.2, 'status': 'UNDETERMINED_SAMPLE_TOO_SHORT'}}
+    row = decide(regime=regime)
+    assert row.g5_regimes == 'UNDETERMINED' and row.EVIDENCE == 'INSUFFICIENT'

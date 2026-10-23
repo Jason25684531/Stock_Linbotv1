@@ -30,7 +30,7 @@ def out(name):
     return path
 
 
-def baseline():
+def baseline(name='baseline.json'):
     from config import Config
     from core.runtime.fundamental_shadow import FrozenStrategyLoader
     from scripts.validate_native22 import preservation
@@ -40,7 +40,7 @@ def baseline():
     review = read(ROOT / 'outputs/strategy_revalidation/2026-10-21-audit/frozen_gate_evidence.json')['documents']['promotion_review']
     kept = preservation()
     changed = set(kept['historical_changed'])
-    write(out('baseline.json'), {
+    write(out(name), {
         'git_head': git('rev-parse', 'HEAD').strip(), 'git_status': git('status', '--short').splitlines(),
         'models_unchanged': before == now, 'model_sha256': now,
         'model_status': {k: v['MODEL_STATUS'] for k, v in read(ROOT / 'outputs/model_data_validation/2026-10-23/retrain_decision.json')['models'].items()},
@@ -51,7 +51,7 @@ def baseline():
                    'cutoff': review['evaluation_window']['cutoff']},
         'fresh_oos_ledger_sha256': digest(FRESH_LEDGER), 'BROKER_ORDER_SUBMISSION': review['BROKER_ORDER_SUBMISSION'],
         'DAILY_FEATURE_MODE': Config.DAILY_FEATURE_MODE})
-    b = read(OUT / 'baseline.json')
+    b = read(OUT / name)
     assert b['models_unchanged'] and set(b['model_status'].values()) == {'MODEL_BLOCKED'}, 'MODELS'
     assert all(not v['changed'] for v in b['archived_outputs'].values()), 'ARCHIVED'
     assert set(kept['protected_changed']) <= KNOWN_EXCEPTIONS, kept['protected_changed']
@@ -101,7 +101,7 @@ def integrity():
 
 # ---- Stage 2 and supplementary official downloads (OD-22) ----
 import functools  # noqa: E402
-from datetime import date  # noqa: E402
+from datetime import date, datetime  # noqa: E402
 
 import pandas as pd  # noqa: E402
 
@@ -318,7 +318,142 @@ def certify():
     print({g['gate']: g['status'] for g in gates})
 
 
-STAGES = ('baseline', 'integrity', 'supplements', 'stage2', 'certify')
+FORBIDDEN_LABELS = ('OOS_PASS', 'PROFITABLE_PROVEN', 'PRODUCTION_READY')
+BOUNDARY = {'DAY3': '2025-12-31', 'G2G3': '2026-07-28', 'D5': '2026-07-28'}
+EXPECTED_CODE_CHANGES = {'core/calc_indicators.py', 'core/research/native_frame.py', 'core/research/native_models.py', 'core/research/model_training.py',
+                         'core/backtest/runner.py', 'jobs/run_daily.py'}
+TESTS = ['test/test_track_a_fixes.py', 'test/test_track_b_stats.py', 'test/test_dual_track_validation.py', 'test/test_official_data_recovery.py', 'test/test_model_data_validation.py',
+         'test/test_daily_selection_recovery.py', 'test/test_native_recovery.py', 'test/characterization', 'test/test_run_daily.py', 'test/test_run_daily_persistence.py',
+         'test/test_daily_platform_parity.py', 'test/test_daily_pipeline_consolidation_contract.py', 'test/test_native22_engine_contracts.py', 'test/test_next_session_execution.py',
+         'test/test_strategy_center.py', 'test/test_native7_rules_only.py', 'test/test_track_b_formulas.py', 'test/test_valuation_policy.py']
+
+
+def deliverables():
+    """The 384-configuration run list and the per-configuration execution audit, taken from the evaluation results."""
+    results = pd.read_csv(OUT / 'backtest_results.csv')
+    grids = {'G2G3': 'track_b_runs/g2g3/strategy_grid.csv', 'D5': 'track_b_runs/d5/parameter_grid.csv', 'DAY3': 'track_b_runs/day3/strategy_search_manifest.csv'}
+    reproduction = {f: read(OUT / f'rerun_{f.lower()}.json')['reproduction'] for f in grids}
+    rows = []
+    for family, path in grids.items():
+        grid = pd.read_csv(OUT / path)
+        ids = grid[grid.columns[0]].astype(str)
+        done = set(results[results.family == family].config_id.astype(str))
+        for config_id in ids:
+            rows.append({'family': family, 'config_id': config_id, 'run_status': 'DONE' if config_id in done else 'PENDING', 'rerun_reproduces_archived_csv': reproduction[family]['status']})
+    run_list = pd.DataFrame(rows)
+    run_list = run_list.merge(results[['config_id', 'BACKTEST', 'EVIDENCE', 'blockers']], on='config_id', how='left')
+    run_list.to_csv(OUT / 'run_list_384.csv', index=False, encoding='utf-8-sig')
+    audit_columns = [c for c in results.columns if c.startswith(('over_', 'unfillable', 'locked', 'no_', 'price_mismatch', 'share_unknown', 'execution_audit', 'held_', 'delist', 'total_return_status'))]
+    results[['family', 'config_id', 'trade_count', *audit_columns]].to_csv(OUT / 'execution_audit.csv', index=False, encoding='utf-8-sig')
+    print(len(run_list), 'configurations;', run_list.run_status.value_counts().to_dict())
+
+
+def tests():
+    import subprocess
+    import xml.etree.ElementTree as ET
+    from collections import Counter
+
+    junit = out('test_junit.xml')
+    proc = subprocess.run([sys.executable, '-m', 'pytest', *TESTS, '-q', '-p', 'no:cacheprovider', f'--junitxml={junit}'], cwd=ROOT, capture_output=True, text=True, encoding='utf-8')
+    cases = [{'test': f"{c.get('classname')}::{c.get('name')}", 'status': 'FAIL' if c.find('failure') is not None or c.find('error') is not None else 'SKIP' if c.find('skipped') is not None else 'PASS'}
+             for c in ET.parse(junit).getroot().iter('testcase')]
+    write(out('test_results.json'), {'command': 'python -m pytest ' + ' '.join(TESTS), 'returncode': proc.returncode, 'summary': proc.stdout.strip().splitlines()[-1],
+                                     'counts': dict(Counter(c['status'] for c in cases)), 'cases': cases})
+    print(proc.returncode, proc.stdout.strip().splitlines()[-1])
+
+
+def manifest():
+    import platform
+
+    summary = read(OUT / 'stage2_manifest.json')
+    write(out('reproduction_manifest.json'), {
+        'change': 'openspec/changes/2026-10-23-validate-22-strategies-dual-track', 'output_dir': OUT.relative_to(ROOT).as_posix(), 'git_head': git('rev-parse', 'HEAD').strip(),
+        'baseline_head': read(OUT / 'baseline.json')['git_head'],
+        'commands': ['python scripts/dual_track_validation.py baseline', 'python scripts/dual_track_validation.py integrity', 'python scripts/dual_track_validation.py supplements',
+                     'python scripts/dual_track_validation.py stage2   # resumable; rerun until every batch is complete', 'python scripts/track_b_validation.py probe',
+                     'python scripts/track_b_capture.py G2G3 | D5 | DAY3', 'python scripts/track_b_data.py panel | certify_d3 | delistings', 'python scripts/dual_track_validation.py certify',
+                     'python scripts/track_b_evaluate.py', 'python scripts/track_b_formulas.py',
+                     'python scripts/native7_nan_trace.py --start 2023-01-03 --end 2026-05-14 --strategy mean_reversion | hybrid_trend_rank   # first non-finite equity',
+                     'python scripts/od29_valuation.py preserve | profile', 'python scripts/od29_valuation.py replay before-seeded   # with the pre-OD29 runner',
+                     'python scripts/od29_valuation.py replay after-seeded-legacy | after-seeded-finite_positive_stale', 'python scripts/od29_valuation.py compare',
+                     'python scripts/native7_rules_only.py --start 2023-01-03 --end 2026-05-14 --tag od29_<strategy> --strategies <strategy> --valuation-policy finite_positive_stale --out-dir <OUT>/native7_od29',
+                     'python scripts/native7_rules_only.py --start 2023-01-03 --end 2026-05-14 --tag od29legacy_<strategy> --strategies <strategy> --out-dir <OUT>/native7_od29_legacy',
+                     'python scripts/od29_valuation.py results',
+                     'python scripts/dual_track_matrix.py readiness | matrix', 'python scripts/dual_track_validation.py deliverables | tests | manifest | verify'],
+        'official_requests': {'sent': odr.sent_count(OUT / 'request_ledger.jsonl'), 'budget': BUDGET, 'stage2_requests': summary['requests_sent']},
+        'inputs': {'previous_manifest': digest(PREV_OUT / 'reproduction_manifest.json'), 'official_bars': digest(OUT / 'official_bars.parquet'),
+                   'd3_certification': digest(OUT / 'd3_certification.json'), 'spec_sha256': read(PREV_OUT / 'retraining_spec.json')['sha256'],
+                   'official_caches': 'T86 / MI_MARGN / MI_INDEX / TWT49U / delisting list files are listed with SHA-256 in stage2_manifest.json, supplements_manifest.json and the previous manifests'},
+        'code': {p: digest(ROOT / p) for p in sorted(EXPECTED_CODE_CHANGES | {f'scripts/{n}' for n in ('dual_track_validation.py', 'track_b_validation.py', 'track_b_capture.py', 'track_b_data.py',
+                                                                                                             'track_b_evaluate.py', 'track_b_stats.py', 'native7_rules_only.py', 'dual_track_matrix.py',
+                                                                                                             'track_b_formulas.py', 'native7_nan_trace.py', 'od29_valuation.py')})},
+        'native7_slippage_seed': 20261023, 'native7_valuation_policy': 'finite_positive_stale (research only; engine default legacy)',
+        'model_sha256': read(OUT / 'baseline.json')['model_sha256'], 'environment': {'python': platform.python_version(), 'pandas': pd.__version__},
+        'outputs': {p.relative_to(OUT).as_posix(): digest(p) for p in sorted(OUT.rglob('*')) if p.is_file() and not any(part in ('_superseded', 'track_b_runs') for part in p.parts)
+                    and p.name != 'reproduction_manifest.json' and p.suffix != '.parquet' and not p.name.startswith('native7_smoke')},
+        'BROKER_ORDER_SUBMISSION': 'DISABLED'})
+    print('manifest written')
+
+
+def verify():
+    import re
+
+    from config import Config
+    from scripts.validate_native22 import preservation
+
+    start = read(OUT / 'baseline.json')
+    assert start['model_sha256'] == {k: digest(ROOT / p) for k, (_n, p) in models().items()}, 'MODEL_CHANGED'
+    assert all(not v['changed'] for v in archived(ARCHIVES + [PREV_OUT]).values()), 'ARCHIVED_OUTPUT_CHANGED'
+    kept = preservation()
+    assert set(kept['protected_changed']) <= KNOWN_EXCEPTIONS, kept['protected_changed']
+    assert set(kept['historical_changed']) <= {RUNTIME_STATUS}, f"UNEXPECTED_HISTORICAL_CHANGE {kept['historical_changed']}"  # no new exception is ever added
+    runtime_now = digest(ROOT / RUNTIME_STATUS)
+    changed = git('diff', '--name-only', start['git_head'], '--', 'jobs', 'core', 'config', 'execution', 'app', 'services', 'strategy_settings.json', 'ML_Data').split()
+    assert set(changed) <= EXPECTED_CODE_CHANGES, f'UNEXPECTED_CODE_CHANGE {changed}'
+    assert not (set(changed) & {'config/settings.py', 'jobs/scheduler.py'}) and Config.DAILY_FEATURE_MODE == 'legacy'
+    rows = odr.ledger_rows(OUT / 'request_ledger.jsonl')
+    sent = sum(r['event'] == 'SENT' for r in rows)
+    rows_released = [r for r in rows if r['event'] == 'RELEASED']
+    released = [datetime.fromisoformat(r['ts']) for r in rows_released]
+    gaps = [(b - a).total_seconds() for a, b in zip(released, released[1:])]
+    runs = sum(g > 600 for g in gaps)  # a long gap is a restart of the process, not a spacing violation
+    close = [g for g in gaps if g <= 600]
+    assert sent <= BUDGET and min(r.get('attempt', 1) for r in rows if r['event'] == 'RELEASED') >= 1 and max(r.get('attempt', 1) for r in rows if r['event'] == 'RELEASED') <= MAX_ATTEMPTS
+    short = [(rows_released[i]['dataset'], rows_released[i]['date'], rows_released[i + 1]['dataset'], rows_released[i + 1]['date'], round(g, 3))
+             for i, g in enumerate(gaps) if g < 3.1]  # threshold unchanged; a short logged gap is reported as a failed check, never waived
+    results = pd.read_csv(OUT / 'backtest_results.csv')
+    for family, boundary in BOUNDARY.items():
+        assert pd.to_datetime(results[results.family == family].end).max() <= pd.Timestamp(boundary), f'{family} read past its boundary'
+    text = ' '.join(str(v) for col in ('BACKTEST', 'EVIDENCE') for v in results[col].unique()) + (OUT / 'strategy_status_matrix.csv').read_text(encoding='utf-8-sig')
+    assert not any(label in text for label in FORBIDDEN_LABELS), 'FORBIDDEN_LABEL'
+    source = ' '.join((ROOT / 'scripts' / n).read_text(encoding='utf-8') for n in ('dual_track_validation.py', 'track_b_capture.py', 'track_b_data.py', 'track_b_evaluate.py',
+                                                                                 'native7_rules_only.py', 'dual_track_matrix.py', 'track_b_formulas.py', 'native7_nan_trace.py',
+                                                                                 'od29_valuation.py'))
+    assert not re.search(r"text\(f?['\"](?!SELECT)", source) and not re.search(r"\.(to_sql|executemany)\(", source), 'MYSQL_WRITE_PATH'
+    review = read(ROOT / 'outputs/strategy_revalidation/2026-10-21-audit/frozen_gate_evidence.json')['documents']['promotion_review']
+    assert review['BROKER_ORDER_SUBMISSION'] == 'DISABLED' and review['evaluation_window']['cutoff'] == '2026-07-28'
+    assert digest(FRESH_LEDGER) == start['fresh_oos_ledger_sha256'], 'FRESH_OOS_LEDGER_CHANGED'
+    od29 = read(OUT / 'od29_valuation' / 'replay_comparison.json')  # OD-29: the runner change may not move the legacy default
+    assert od29['LEGACY_CHARACTERIZATION'] == 'PASS' and od29['ORDERS_UNCHANGED_BY_STALE_POLICY'] == 'PASS', 'OD29_CHARACTERIZATION'
+    assert od29['runner_sha256']['after'] == digest(ROOT / 'core/backtest/runner.py'), 'RUNNER_DIFFERS_FROM_CHARACTERIZED_VERSION'
+    failed = ['REQUEST_SPACING'] if short else []
+    write(out('verification.json'), {
+        'status': 'FAIL' if failed else 'PASS', 'failed_checks': failed,
+        'request_spacing': {'threshold_seconds': 3.1, 'required_seconds': MIN_INTERVAL, 'released_pairs_below_threshold': short,
+                            'note': 'RELEASED is wall-clock time logged after RequestGate.wait() returns; the gate itself sleeps on a monotonic clock until 3.2 s have passed. '
+                                    'A logged gap below 3.1 s is not explained by the gate and no system clock change was recorded; it stays a failed check.'}, 'models_unchanged': True, 'archived_outputs_unchanged': True, 'preservation': kept,
+        'historical_hash_exceptions': sorted(kept['historical_changed']), 'protected_source_exceptions': sorted(kept['protected_changed']),
+        'runtime_status_file': {'sha256_at_round_start': start['runtime_status_file']['sha256_at_round_start'], 'sha256_now': runtime_now,
+                                'changed_during_round': runtime_now != start['runtime_status_file']['sha256_at_round_start']},
+        'code_changed_since_baseline': sorted(changed), 'official_requests_sent': sent, 'budget': BUDGET, 'process_restarts_seen_in_ledger': runs + 1,
+        'min_release_spacing_seconds': round(min(close), 3), 'max_attempts_per_session': MAX_ATTEMPTS, 'family_boundaries_respected': BOUNDARY,
+        'forbidden_labels_absent': list(FORBIDDEN_LABELS), 'mysql': 'SELECT only (no write statement in any script of this change)', 'frozen_cutoff': review['evaluation_window']['cutoff'],
+        'fresh_oos_ledger_unchanged': True, 'od29_legacy_characterization': 'PASS', 'od29_orders_unchanged_by_stale_policy': 'PASS',
+        'od29_runner_sha256': digest(ROOT / 'core/backtest/runner.py'), 'DAILY_FEATURE_MODE': Config.DAILY_FEATURE_MODE, 'BROKER_ORDER_SUBMISSION': 'DISABLED', 'training_executed': False})
+    print('VERIFY', 'FAIL ' + ','.join(failed) if failed else 'PASS', sent, short)
+
+
+STAGES = ('baseline', 'integrity', 'supplements', 'stage2', 'certify', 'deliverables', 'tests', 'manifest', 'verify')
 
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')
