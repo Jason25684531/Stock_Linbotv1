@@ -1,0 +1,481 @@
+{
+  "rule": "design.md §4; decide() in scripts/validate_model_data.py",
+  "models": {
+    "defensive_low_volatility": {
+      "model": "v33_low_vol",
+      "decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "PROVEN",
+          "value": [
+            "2026-07-20"
+          ],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 1 of 5 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 10 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    },
+    "growth_momentum_breakout": {
+      "model": "v34_turbo",
+      "decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "PROVEN",
+          "value": [
+            "2026-07-03"
+          ],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 1 of 5 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 5 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    },
+    "hybrid_trend_rank": {
+      "model": "v31_hybrid",
+      "decision": "RETRAIN_RECOMMENDED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "NOT_OBSERVED",
+          "value": [],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 0 of 4 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 7 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    },
+    "institutional_flow_confirmation": {
+      "model": "v36_chip_momentum",
+      "decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "PROVEN",
+          "value": [
+            "2026-05-21",
+            "2026-06-04",
+            "2026-07-03"
+          ],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 3 of 5 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 10 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    },
+    "mean_reversion": {
+      "model": "v37_mean_reversion",
+      "decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "PROVEN",
+          "value": [
+            "2026-05-21",
+            "2026-06-04",
+            "2026-06-18",
+            "2026-07-03"
+          ],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 4 of 5 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 8 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    },
+    "quality_growth": {
+      "model": "v35_innovation",
+      "decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "PROVEN",
+          "value": [
+            "2026-05-21",
+            "2026-06-04"
+          ],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 2 of 5 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 20 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    },
+    "quality_value_low_volatility": {
+      "model": "v38_value_dividend",
+      "decision": "RETRAIN_REQUIRED",
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "criteria": {
+        "wrong_flows_in_fit": {
+          "grade": "UNKNOWN",
+          "value": {
+            "fit_split": "2022-01-03..2025-07-30",
+            "whole_day_foreign_zero_dates_in_fit": [
+              "2024-07-18"
+            ]
+          },
+          "evidence": "MySQL flows before 2025-12-15 were never reconciled with official T86; the fit split shows 1 whole-day zero dates by pattern only"
+        },
+        "wrong_flows_in_evaluation": {
+          "grade": "PROVEN",
+          "value": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ],
+          "evidence": "reported accuracy/precision come from the test split, which contains dates where MySQL stored 0 against non-zero official T86, weekend TPEx rows and NULL indicators"
+        },
+        "definition_changed": {
+          "grade": "PROVEN",
+          "value": [
+            "macd_hist_z",
+            "institutional_net_buy_z",
+            "institutional_consec_buy_days_z",
+            "chip_score_z",
+            "z-score population (all features)"
+          ],
+          "evidence": "dealer/margin columns absent at training (PROVEN); macd_hist stored vs recomputed within 1% for 89.6% only; training z-score over all rows of a date, recovered over included rows"
+        },
+        "ranking_impact": {
+          "grade": "PROVEN",
+          "value": [
+            "2026-05-21",
+            "2026-06-18",
+            "2026-07-20"
+          ],
+          "evidence": "feature_ranking_impact.json: top-3 under training emulation differs on 3 of 5 scored dates"
+        },
+        "cutoff_provable": {
+          "grade": "UNKNOWN",
+          "value": null,
+          "evidence": "training_data_end not recorded; DB changed after training"
+        },
+        "leakage": {
+          "grade": "INFERRED",
+          "value": "labels of the last 15 sessions before the boundary read test-period prices; tail rows labelled 0",
+          "evidence": "train_model.py:calculate_future_target"
+        },
+        "distribution_shift": {
+          "grade": "INFERRED",
+          "value": "dealer/margin constant in training, real now; natr/std_20/revenue_yoy 0 in training",
+          "evidence": "feature_definition_diff.csv"
+        }
+      }
+    }
+  },
+  "executed_training": false
+}

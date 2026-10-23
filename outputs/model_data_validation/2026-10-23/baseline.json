@@ -1,0 +1,75 @@
+{
+  "git_head": "884ac647dc15f5eefcbe04690102f563416a2eee",
+  "git_status": [
+    " M .gitignore",
+    "?? scripts/validate_model_data.py"
+  ],
+  "archived_outputs": {
+    "outputs/daily_selection_recovery/2026-10-22": {
+      "files": 61,
+      "changed": []
+    },
+    "outputs/native7_recovery/2026-10-22": {
+      "files": 29,
+      "changed": []
+    },
+    "outputs/native22_validation/2026-10-22": {
+      "files": 17,
+      "changed": []
+    }
+  },
+  "preservation": {
+    "status": "FAIL",
+    "historical_hashes_checked": 5463,
+    "historical_changed": [],
+    "protected_sources_checked": 74,
+    "protected_changed": [
+      "core/strategies/growth_momentum_breakout.py"
+    ],
+    "source_records": 461,
+    "inventory_identities_equal": true
+  },
+  "frozen": {
+    "fingerprint_unchanged": true,
+    "cutoff": "2026-07-28",
+    "BROKER_ORDER_SUBMISSION": "DISABLED"
+  },
+  "models": {
+    "defensive_low_volatility": {
+      "name": "v33_low_vol",
+      "path": "ML_Data/pkl/stock_ai_model_v33_low_vol.pkl",
+      "sha256": "c2ab124f7ea0624c2cc6dada901e8777877be6c6697b209f57dd2a814768aa45"
+    },
+    "growth_momentum_breakout": {
+      "name": "v34_turbo",
+      "path": "ML_Data/pkl/stock_ai_model_v34_turbo.pkl",
+      "sha256": "d117215b31c62e9da8e70455f234fb7928e6c85b677694c882d0fe90aea3aaa2"
+    },
+    "hybrid_trend_rank": {
+      "name": "v31_hybrid",
+      "path": "ML_Data/pkl/stock_ai_model_v31_hybrid.pkl",
+      "sha256": "b8a2325db6937cf1fc36f43ef9bea0e39ccdde77d81df0d8033febff7f05764e"
+    },
+    "institutional_flow_confirmation": {
+      "name": "v36_chip_momentum",
+      "path": "ML_Data/pkl/stock_ai_model_v36_chip_momentum.pkl",
+      "sha256": "676dd2b91c89f882301082a3aa2f390042060fa07515704e6df5e291a678f777"
+    },
+    "mean_reversion": {
+      "name": "v37_mean_reversion",
+      "path": "ML_Data/pkl/stock_ai_model_v37_mean_reversion.pkl",
+      "sha256": "0e294998283492633dbb45b95427f2ba322766036e9ba71428c33d88d19ae249"
+    },
+    "quality_growth": {
+      "name": "v35_innovation",
+      "path": "ML_Data/pkl/stock_ai_model_v35_innovation.pkl",
+      "sha256": "2a866550b81104661762f2581f0c5e5836c464edbc28e797a5d533475686a446"
+    },
+    "quality_value_low_volatility": {
+      "name": "v38_value_dividend",
+      "path": "ML_Data/pkl/stock_ai_model_v38_value_dividend.pkl",
+      "sha256": "39b44ebc5529cf60784e82cbe8cfbebd862586488678876ab23678c4d2adf140"
+    }
+  },
+  "DAILY_FEATURE_MODE": "legacy"
+}

@@ -1,0 +1,11 @@
+﻿item,affects,class,evidence,unblock_condition,effort
+MODEL_TRAINING_DATA_END,all 7 models,UNPROVABLE,"no log, snapshot or metadata; DB changed after training",record training_data_end in a retrained model,retraining (owner)
+MODEL_FEATURE_CONTRACT,"6 models RETRAIN_REQUIRED, hybrid RETRAIN_RECOMMENDED",OWNER_DECISION,retrain_decision.json: definitions differ (PROVEN) and top-3 changes,approve retraining with certified data,retraining run
+INSTITUTIONAL_FLOWS_FIT_SPLIT,all 7 (training input),DATA_REPAIRABLE,MySQL flows 2022..2025 never reconciled,"download plan B stage 1 (44 requests) to measure, stage 2 to certify",2 min / 1.6 h
+INSTITUTIONAL_FLOWS_AFTER_2026_07_28,all 7,DATA_REPAIRABLE,no official T86/MI_MARGN for 2026-07-29..09-25,download plan B stage 3,8 min
+CALENDAR_PRICES_AFTER_2026_07_28,all 7,DATA_REPAIRABLE,MI_INDEX cache ends 2026-07-28,download plan B stage 3,included
+MYSQL_FLOWS_PRODUCTION,live Daily,OWNER_DECISION,whole-day zeros stored in MySQL,approve staged DB repair (P-3),DB change window
+FUNDAMENTALS_FY2026,"growth_momentum_breakout, quality_growth, quality_value_low_volatility",DATA_REPAIRABLE,publication dates only to FY2025,"MOPS FY2026 filings (stage 4, ~1,780 requests)",1.5 h
+MONTHLY_REVENUE_TIMING,"growth_momentum_breakout, quality_growth",UNPROVABLE,official summary pages have values but no announcement time (probe),find a timestamped official source,unknown
+TPEX_UNIVERSE,live Daily,DATA_REPAIRABLE,no official TPEx cache,stage 4 TPEx per-day endpoints,~5 h
+OOS_252_SESSIONS,all 7,WAIT_FOR_SAMPLES,oos_feasibility.json,252 clean sessions after a certified cutoff,see oos_feasibility.json

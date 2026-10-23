@@ -1,0 +1,67 @@
+{
+  "change": "openspec/changes/2026-10-23-validate-model-training-and-data",
+  "output_dir": "outputs/model_data_validation/2026-10-23",
+  "git_head": "bb91cd477cc6f01585dec92dd62b499d3087afed",
+  "commands": [
+    "python scripts/validate_model_data.py baseline",
+    "python scripts/validate_model_data.py provenance",
+    "python scripts/validate_model_data.py features",
+    "python scripts/validate_model_data.py decision",
+    "python scripts/validate_model_data.py inventory",
+    "python scripts/validate_model_data.py probe",
+    "python scripts/validate_model_data.py plan",
+    "python scripts/validate_model_data.py oos",
+    "python scripts/validate_model_data.py classify",
+    "python scripts/validate_model_data.py tests",
+    "python scripts/validate_model_data.py manifest",
+    "python scripts/validate_model_data.py verify"
+  ],
+  "inputs": {
+    "previous_manifest": "0db6df5ac5e22f49a386bd79745ea86694279c6b46a5f189bd70b36c3a30ae11",
+    "official_chips_snapshot": "af06a6180d2c380cfdf82db8d94e13af942120bdb87e552a164d28fc8eb26a65",
+    "native7_research_snapshot": "392836482088d8afcc478ac71c37c6dd9fe2644d97407a451543ecaa95eb14ac",
+    "fundamental_pit_v3_records": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+    "mi_index_cache": "mi_index_cache_hashes.json",
+    "probe_cache": "probe_log.json",
+    "mysql": "read-only aggregates at run time (training_period_daily_stats.csv records what was read)"
+  },
+  "code": {
+    "scripts/validate_model_data.py": "c1fe5ec182e4aca7e1985e4bf23f54c8849f53d3170ae38a3cc9788eff200833",
+    "test/test_model_data_validation.py": "22220fccb180b05df5aedc84dc742c2bd4cf7633b3d2805f3c216285170a8d81"
+  },
+  "models": {
+    "defensive_low_volatility": "c2ab124f7ea0624c2cc6dada901e8777877be6c6697b209f57dd2a814768aa45",
+    "growth_momentum_breakout": "d117215b31c62e9da8e70455f234fb7928e6c85b677694c882d0fe90aea3aaa2",
+    "hybrid_trend_rank": "b8a2325db6937cf1fc36f43ef9bea0e39ccdde77d81df0d8033febff7f05764e",
+    "institutional_flow_confirmation": "676dd2b91c89f882301082a3aa2f390042060fa07515704e6df5e291a678f777",
+    "mean_reversion": "0e294998283492633dbb45b95427f2ba322766036e9ba71428c33d88d19ae249",
+    "quality_growth": "2a866550b81104661762f2581f0c5e5836c464edbc28e797a5d533475686a446",
+    "quality_value_low_volatility": "39b44ebc5529cf60784e82cbe8cfbebd862586488678876ab23678c4d2adf140"
+  },
+  "environment": {
+    "python": "3.11.9",
+    "pandas": "2.2.3"
+  },
+  "outputs": {
+    "baseline.json": "21317ca3fc46e52ad6de6aebbfc0adb220fadb5d3d1cd539ea5661bbff1a42fd",
+    "baseline_tests.log": "444c614edc0e651deccd3cdc02cbf328c5f7c1a7c0ae60387a5a9eeef289237d",
+    "blocked_classification.csv": "8acc2688b449ac32982d6ec231740062c5450cb417e311ea43bc48a274aca73f",
+    "download_request_estimate.json": "76b2b38e89837aa70908d0b1a2c032d242d47bcc7b9c5729a9a1ba4f4a21ac50",
+    "feature_definition_diff.csv": "3af24802d4e247bab3b3c576dd39bbc5bc38b6e942f4143f51fa78b62ce97e32",
+    "feature_ranking_impact.json": "8d54e8555bd3b7f3e87f6ccb5f7704d4379d98c6e29fa23f93a2cd9c1e078057",
+    "features_stdout.log": "872c488037f521a2bc7741d61610fbd92c29e672e15e324763e3946a9e2133fb",
+    "mi_index_cache_hashes.json": "66e0efdd405e6c91f4ad79585086b6f69643ad3e608a6213bba6385d4cf5ff59",
+    "official_data_gap_inventory.csv": "4059240a6fd2e9fe43b6ca47e26f25f2e0b0f3fb36e6f5befcdcb56363127144",
+    "oos_feasibility.json": "8ff83062d54bcd86b03591c5b4dc8f7d7191690e1b9bdfeb288d5312e3af943b",
+    "optimized_download_plan.md": "78c2efa63b8a85790c0178053a07229277517d2511a55f6f1bd56b551992a504",
+    "owner_proposals.md": "f3f5870df223236e0a9ba37822b3053bc2671bf5850925d5ad64156e36e4d516",
+    "probe_log.json": "2dec96cf97c2fcaa2f147c97280b6c24a04ecd562790875b66c730a4c5cd7247",
+    "retrain_decision.json": "e87b1ce5b66352ae803cf9e3263e23752d000d701178b1147ef863d838a1e696",
+    "test_junit.xml": "b72dc094c7fade32e78fb2682e6eaca45f42d4b2cd8955b358cfbd8b2700a08e",
+    "test_results.json": "92cca37a24e7a38b665722138c2be68d355493538c325dce431e7cac7fb53cce",
+    "training_period_daily_stats.csv": "edb3df79d6b6a84d4c1839abaf8449f9e765c97581ccb75404134bdccdf2c6e8",
+    "training_provenance.json": "59c43419492d92c17927a703792586ee1af9d1430c9ab737c9be9c9948a9711f"
+  },
+  "official_requests_this_change": 5,
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}

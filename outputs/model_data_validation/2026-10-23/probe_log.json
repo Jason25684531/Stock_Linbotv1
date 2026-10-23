@@ -1,0 +1,100 @@
+[
+  {
+    "question": "t86_month_query",
+    "url": "https://www.twse.com.tw/rwd/zh/fund/T86?date=202507&selectType=ALLBUT0999&response=json",
+    "status": 200,
+    "bytes": 74,
+    "sha256": "28fb75233d46872c9e67bc0b881c662fdd1a1712caeb8367b24d33b44f90665f",
+    "content_type": "application/json;charset=UTF-8",
+    "summary": {
+      "stat": "查詢日期小於101年05月02日，請重新查詢!",
+      "date": null,
+      "rows": 0
+    },
+    "retrieved_at": "2026-10-23T09:48:14.890738+00:00"
+  },
+  {
+    "question": "mi_margn_month_query",
+    "url": "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=202507&selectType=ALL&response=json",
+    "status": 200,
+    "bytes": 50,
+    "sha256": "1857ef3a55678c4757560d15a68c3b7823fd0023b6762656faa31acce2d13538",
+    "content_type": "application/json;charset=UTF-8",
+    "summary": {
+      "stat": "很抱歉，沒有符合條件的資料",
+      "date": null,
+      "rows": 0
+    },
+    "retrieved_at": "2026-10-23T09:48:17.347378+00:00"
+  },
+  {
+    "question": "twse_openapi_catalog",
+    "url": "https://openapi.twse.com.tw/v1/swagger.json",
+    "status": 200,
+    "bytes": 309960,
+    "sha256": "06e1cea82448361e733a0ad1ae16e52f5d5d6b71905acd078472f852c32c0eb0",
+    "content_type": "application/json",
+    "summary": {
+      "paths": 143,
+      "related": [
+        "/exchangeReport/MI_INDEX",
+        "/fund/MI_QFIIS_cat",
+        "/fund/MI_QFIIS_sort_20",
+        "/exchangeReport/MI_INDEX4",
+        "/exchangeReport/MI_INDEX20",
+        "/exchangeReport/MI_MARGN"
+      ]
+    },
+    "retrieved_at": "2026-10-23T09:48:20.782630+00:00"
+  },
+  {
+    "question": "tpex_openapi_catalog",
+    "url": "https://www.tpex.org.tw/openapi/swagger.json",
+    "status": 200,
+    "bytes": 476923,
+    "sha256": "05af7755d0d528626c104f7a8ccd7b00c6a0cf228d30bcb4669020e514eb0c7e",
+    "content_type": "application/json",
+    "summary": {
+      "paths": 225,
+      "related": [
+        "/tpex_mainboard_daily_close_quotes",
+        "/tpex_mainboard_quotes",
+        "/tpex_mainboard_margin_balance",
+        "/tpex_margin_sbl",
+        "/tpex_margin_trading_term",
+        "/tpex_margin_trading_adjust",
+        "/tpex_margin_trading_lend",
+        "/tpex_margin_trading_marginspot",
+        "/tpex_margin_trading_margin_mark",
+        "/tpex_margin_trading_margin_used",
+        "/tpex_margin_trading_short_sell",
+        "/tpex_3insti_qfii",
+        "/tpex_3insti_qfii_industry",
+        "/tpex_3insti_daily_trading",
+        "/tpex_3insti_dealer_trading",
+        "/tpex_3insti_summary",
+        "/tpex_3insti_trading",
+        "/tpex_international_bond_quotes",
+        "/tpex_opfund_latest",
+        "/tpex_opfund_recommended_dealer",
+        "/tpex_opfund_market_highlight",
+        "/tpex_3insti_qfii_trading"
+      ]
+    },
+    "retrieved_at": "2026-10-23T09:48:24.318909+00:00"
+  },
+  {
+    "question": "mops_monthly_revenue_summary",
+    "url": "https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_114_6_0.html",
+    "status": 200,
+    "bytes": 449814,
+    "sha256": "40ab3093da50bb40d50589d4202790cf8f144d0f1482a6abe4dbaddcfc309a00",
+    "content_type": "text/html",
+    "summary": {
+      "bytes": 449814,
+      "has_table": true,
+      "mentions_announcement_time": false
+    },
+    "retrieved_at": "2026-10-23T09:48:27.844575+00:00"
+  }
+]

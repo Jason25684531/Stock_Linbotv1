@@ -1,0 +1,1096 @@
+{
+  "dates": [
+    "2026-05-21",
+    "2026-06-04",
+    "2026-06-18",
+    "2026-07-03",
+    "2026-07-20"
+  ],
+  "inputs": "previous run research_snapshot_official_chips.parquet; same candidates per variant",
+  "variants": {
+    "recovered": "shared core; z-score over the strategy's included rows (Daily and research today)",
+    "population_full_market": "same raw features; z-score over the whole cross-section with NaN -> z 0 (training population)",
+    "training_emulation": "population_full_market plus dealer_buy = 0 and margin_change_pct = 0 (training chip_score)"
+  },
+  "stored_indicator_check": {
+    "window": [
+      "2025-06-02",
+      "2025-07-30"
+    ],
+    "rows": 44845,
+    "per_indicator": {
+      "rsi": {
+        "pairs": 44779,
+        "equal_rtol_1e-9": 1.0,
+        "within_1pct": 1.0,
+        "median_abs_diff": 0.0,
+        "db_zero": 89,
+        "core_null": 66
+      },
+      "bias": {
+        "pairs": 44799,
+        "equal_rtol_1e-9": 0.9989,
+        "within_1pct": 0.9989,
+        "median_abs_diff": 0.0,
+        "db_zero": 159,
+        "core_null": 46
+      },
+      "macd_hist": {
+        "pairs": 44845,
+        "equal_rtol_1e-9": 0.0155,
+        "within_1pct": 0.8963,
+        "median_abs_diff": 9.3e-05,
+        "db_zero": 5,
+        "core_null": 0
+      },
+      "kd_k": {
+        "pairs": 44804,
+        "equal_rtol_1e-9": 1.0,
+        "within_1pct": 1.0,
+        "median_abs_diff": 0.0,
+        "db_zero": 41,
+        "core_null": 41
+      },
+      "bb_width": {
+        "pairs": 44749,
+        "equal_rtol_1e-9": 1.0,
+        "within_1pct": 1.0,
+        "median_abs_diff": 0.0,
+        "db_zero": 96,
+        "core_null": 96
+      }
+    }
+  },
+  "strategies": {
+    "defensive_low_volatility": [
+      {
+        "date": "2026-05-21",
+        "candidates": 6,
+        "top3": {
+          "recovered": [
+            "2603",
+            "2882",
+            "2412"
+          ],
+          "population_full_market": [
+            "2603",
+            "2882",
+            "2412"
+          ],
+          "training_emulation": [
+            "2603",
+            "2882",
+            "2412"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9429,
+          "training_emulation": 0.9429
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 3,
+        "top3": {
+          "recovered": [
+            "2637",
+            "4904",
+            "1101"
+          ],
+          "population_full_market": [
+            "2637",
+            "4904",
+            "1101"
+          ],
+          "training_emulation": [
+            "2637",
+            "4904",
+            "1101"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 1.0,
+          "training_emulation": 1.0
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 2,
+        "top3": {
+          "recovered": [
+            "1216",
+            "2330"
+          ],
+          "population_full_market": [
+            "1216",
+            "2330"
+          ],
+          "training_emulation": [
+            "1216",
+            "2330"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": null,
+          "training_emulation": null
+        }
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 6,
+        "top3": {
+          "recovered": [
+            "1909",
+            "2201",
+            "9945"
+          ],
+          "population_full_market": [
+            "1909",
+            "9945",
+            "2201"
+          ],
+          "training_emulation": [
+            "1909",
+            "2201",
+            "9945"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9429,
+          "training_emulation": 1.0
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 5,
+        "top3": {
+          "recovered": [
+            "2884",
+            "2812",
+            "2845"
+          ],
+          "population_full_market": [
+            "2884",
+            "2812",
+            "2845"
+          ],
+          "training_emulation": [
+            "2884",
+            "2812",
+            "2801"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 1.0,
+          "training_emulation": 0.7
+        }
+      }
+    ],
+    "growth_momentum_breakout": [
+      {
+        "date": "2026-05-21",
+        "candidates": 98,
+        "top3": {
+          "recovered": [
+            "4916",
+            "6449",
+            "2472"
+          ],
+          "population_full_market": [
+            "4916",
+            "6449",
+            "2472"
+          ],
+          "training_emulation": [
+            "4916",
+            "6449",
+            "2472"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9982,
+          "training_emulation": 0.9983
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 136,
+        "top3": {
+          "recovered": [
+            "3312",
+            "8473",
+            "8070"
+          ],
+          "population_full_market": [
+            "3312",
+            "8473",
+            "8070"
+          ],
+          "training_emulation": [
+            "3312",
+            "8473",
+            "8070"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9966,
+          "training_emulation": 0.9956
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 138,
+        "top3": {
+          "recovered": [
+            "2478",
+            "1714",
+            "2302"
+          ],
+          "population_full_market": [
+            "2478",
+            "1714",
+            "2302"
+          ],
+          "training_emulation": [
+            "2478",
+            "1714",
+            "2302"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9969,
+          "training_emulation": 0.9961
+        }
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 95,
+        "top3": {
+          "recovered": [
+            "1617",
+            "2493",
+            "1708"
+          ],
+          "population_full_market": [
+            "1617",
+            "1326",
+            "2634"
+          ],
+          "training_emulation": [
+            "1617",
+            "1326",
+            "2634"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9774,
+          "training_emulation": 0.9674
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 56,
+        "top3": {
+          "recovered": [
+            "6505",
+            "1467",
+            "2527"
+          ],
+          "population_full_market": [
+            "6505",
+            "1467",
+            "2527"
+          ],
+          "training_emulation": [
+            "6505",
+            "1467",
+            "2527"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9927,
+          "training_emulation": 0.9684
+        }
+      }
+    ],
+    "hybrid_trend_rank": [
+      {
+        "date": "2026-05-21",
+        "candidates": 8,
+        "top3": {
+          "recovered": [
+            "2342",
+            "2354",
+            "3044"
+          ],
+          "population_full_market": [
+            "2342",
+            "2354",
+            "3044"
+          ],
+          "training_emulation": [
+            "2342",
+            "2354",
+            "3044"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 1.0,
+          "training_emulation": 1.0
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 3,
+        "top3": {
+          "recovered": [
+            "3048",
+            "1727",
+            "3033"
+          ],
+          "population_full_market": [
+            "3048",
+            "1727",
+            "3033"
+          ],
+          "training_emulation": [
+            "3048",
+            "1727",
+            "3033"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 1.0,
+          "training_emulation": 1.0
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 0,
+        "skipped": "no contract or no candidates"
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 9,
+        "top3": {
+          "recovered": [
+            "6531",
+            "2426",
+            "6155"
+          ],
+          "population_full_market": [
+            "6531",
+            "2426",
+            "6155"
+          ],
+          "training_emulation": [
+            "6531",
+            "2426",
+            "6155"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9833,
+          "training_emulation": 0.9333
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 1,
+        "top3": {
+          "recovered": [
+            "2601"
+          ],
+          "population_full_market": [
+            "2601"
+          ],
+          "training_emulation": [
+            "2601"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": null,
+          "training_emulation": null
+        }
+      }
+    ],
+    "institutional_flow_confirmation": [
+      {
+        "date": "2026-05-21",
+        "candidates": 48,
+        "top3": {
+          "recovered": [
+            "2383",
+            "3037",
+            "6412"
+          ],
+          "population_full_market": [
+            "2383",
+            "3037",
+            "8105"
+          ],
+          "training_emulation": [
+            "2383",
+            "3037",
+            "8105"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9931,
+          "training_emulation": 0.9929
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 30,
+        "top3": {
+          "recovered": [
+            "2404",
+            "6139",
+            "8131"
+          ],
+          "population_full_market": [
+            "6139",
+            "2404",
+            "8131"
+          ],
+          "training_emulation": [
+            "6139",
+            "2404",
+            "8131"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9644,
+          "training_emulation": 0.9742
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 19,
+        "top3": {
+          "recovered": [
+            "6005",
+            "6446",
+            "2414"
+          ],
+          "population_full_market": [
+            "6005",
+            "6446",
+            "2414"
+          ],
+          "training_emulation": [
+            "6005",
+            "6446",
+            "2414"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9895,
+          "training_emulation": 0.9877
+        }
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 60,
+        "top3": {
+          "recovered": [
+            "1810",
+            "8131",
+            "2390"
+          ],
+          "population_full_market": [
+            "1810",
+            "2390",
+            "8131"
+          ],
+          "training_emulation": [
+            "1810",
+            "2390",
+            "8131"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9689,
+          "training_emulation": 0.9683
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 26,
+        "top3": {
+          "recovered": [
+            "4763",
+            "1414",
+            "4904"
+          ],
+          "population_full_market": [
+            "4763",
+            "1414",
+            "4904"
+          ],
+          "training_emulation": [
+            "4763",
+            "1414",
+            "4904"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9904,
+          "training_emulation": 0.9904
+        }
+      }
+    ],
+    "mean_reversion": [
+      {
+        "date": "2026-05-21",
+        "candidates": 64,
+        "top3": {
+          "recovered": [
+            "2368",
+            "7750",
+            "2383"
+          ],
+          "population_full_market": [
+            "7750",
+            "2368",
+            "8271"
+          ],
+          "training_emulation": [
+            "7750",
+            "2368",
+            "2308"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9704,
+          "training_emulation": 0.967
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 56,
+        "top3": {
+          "recovered": [
+            "7730",
+            "2383",
+            "2355"
+          ],
+          "population_full_market": [
+            "7730",
+            "2383",
+            "2355"
+          ],
+          "training_emulation": [
+            "2383",
+            "7730",
+            "2355"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9913,
+          "training_emulation": 0.982
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 49,
+        "top3": {
+          "recovered": [
+            "6451",
+            "4916",
+            "9105"
+          ],
+          "population_full_market": [
+            "6451",
+            "9105",
+            "2353"
+          ],
+          "training_emulation": [
+            "6451",
+            "9105",
+            "2353"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9943,
+          "training_emulation": 0.9918
+        }
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 79,
+        "top3": {
+          "recovered": [
+            "4739",
+            "2881",
+            "6585"
+          ],
+          "population_full_market": [
+            "4739",
+            "2344",
+            "6585"
+          ],
+          "training_emulation": [
+            "6585",
+            "2344",
+            "6405"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9785,
+          "training_emulation": 0.9741
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 41,
+        "top3": {
+          "recovered": [
+            "1718",
+            "6226",
+            "6409"
+          ],
+          "population_full_market": [
+            "6226",
+            "1718",
+            "6409"
+          ],
+          "training_emulation": [
+            "1718",
+            "6226",
+            "6409"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9962,
+          "training_emulation": 0.9449
+        }
+      }
+    ],
+    "quality_growth": [
+      {
+        "date": "2026-05-21",
+        "candidates": 154,
+        "top3": {
+          "recovered": [
+            "6449",
+            "3443",
+            "3090"
+          ],
+          "population_full_market": [
+            "3443",
+            "6449",
+            "4916"
+          ],
+          "training_emulation": [
+            "4916",
+            "6449",
+            "3443"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.993,
+          "training_emulation": 0.9929
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 183,
+        "top3": {
+          "recovered": [
+            "3008",
+            "8473",
+            "2344"
+          ],
+          "population_full_market": [
+            "3008",
+            "8473",
+            "2344"
+          ],
+          "training_emulation": [
+            "2344",
+            "8473",
+            "2408"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9966,
+          "training_emulation": 0.9964
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 188,
+        "top3": {
+          "recovered": [
+            "2478",
+            "1714",
+            "2344"
+          ],
+          "population_full_market": [
+            "2478",
+            "1714",
+            "2344"
+          ],
+          "training_emulation": [
+            "2478",
+            "1714",
+            "2344"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9952,
+          "training_emulation": 0.9959
+        }
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 180,
+        "top3": {
+          "recovered": [
+            "2493",
+            "2484",
+            "8261"
+          ],
+          "population_full_market": [
+            "2493",
+            "8261",
+            "2484"
+          ],
+          "training_emulation": [
+            "2493",
+            "2484",
+            "8261"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9892,
+          "training_emulation": 0.9876
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 109,
+        "top3": {
+          "recovered": [
+            "6446",
+            "6505",
+            "2493"
+          ],
+          "population_full_market": [
+            "6446",
+            "6505",
+            "2493"
+          ],
+          "training_emulation": [
+            "6446",
+            "6505",
+            "2493"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9898,
+          "training_emulation": 0.9875
+        }
+      }
+    ],
+    "quality_value_low_volatility": [
+      {
+        "date": "2026-05-21",
+        "candidates": 38,
+        "top3": {
+          "recovered": [
+            "6757",
+            "1609",
+            "2497"
+          ],
+          "population_full_market": [
+            "6757",
+            "1609",
+            "2364"
+          ],
+          "training_emulation": [
+            "6757",
+            "1609",
+            "2364"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9514,
+          "training_emulation": 0.956
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "candidates": 42,
+        "top3": {
+          "recovered": [
+            "4155",
+            "6757",
+            "2637"
+          ],
+          "population_full_market": [
+            "4155",
+            "6757",
+            "5538"
+          ],
+          "training_emulation": [
+            "4155",
+            "6757",
+            "2637"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9786,
+          "training_emulation": 0.9699
+        }
+      },
+      {
+        "date": "2026-06-18",
+        "candidates": 55,
+        "top3": {
+          "recovered": [
+            "6505",
+            "1608",
+            "1529"
+          ],
+          "population_full_market": [
+            "1608",
+            "6505",
+            "1529"
+          ],
+          "training_emulation": [
+            "1608",
+            "6505",
+            "1529"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9847,
+          "training_emulation": 0.9808
+        }
+      },
+      {
+        "date": "2026-07-03",
+        "candidates": 90,
+        "top3": {
+          "recovered": [
+            "2537",
+            "2610",
+            "2108"
+          ],
+          "population_full_market": [
+            "2537",
+            "2610",
+            "2108"
+          ],
+          "training_emulation": [
+            "2537",
+            "2610",
+            "2108"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": true,
+          "training_emulation": true
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9797,
+          "training_emulation": 0.9723
+        }
+      },
+      {
+        "date": "2026-07-20",
+        "candidates": 49,
+        "top3": {
+          "recovered": [
+            "2201",
+            "2520",
+            "2364"
+          ],
+          "population_full_market": [
+            "2201",
+            "2520",
+            "2101"
+          ],
+          "training_emulation": [
+            "2101",
+            "2201",
+            "6165"
+          ]
+        },
+        "top3_equal_to_recovered": {
+          "recovered": true,
+          "population_full_market": false,
+          "training_emulation": false
+        },
+        "spearman_vs_recovered": {
+          "population_full_market": 0.9662,
+          "training_emulation": 0.9426
+        }
+      }
+    ]
+  }
+}

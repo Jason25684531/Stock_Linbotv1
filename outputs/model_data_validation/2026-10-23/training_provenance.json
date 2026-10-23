@@ -1,0 +1,1804 @@
+{
+  "models": {
+    "defensive_low_volatility": {
+      "model": "v33_low_vol",
+      "path": "ML_Data/pkl/stock_ai_model_v33_low_vol.pkl",
+      "sha256": "c2ab124f7ea0624c2cc6dada901e8777877be6c6697b209f57dd2a814768aa45",
+      "training_date": {
+        "value": "2026-05-20 20:55:30",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v33_low_vol-TimeSeries",
+        "look_ahead_days": 10,
+        "target_return": 0.05,
+        "accuracy": 0.4799238300972376,
+        "precision": 0.6521469699708229
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.0554,
+        "bias_z": 0.0703,
+        "macd_hist_z": 0.0592,
+        "kd_k_z": 0.0284,
+        "bb_width_z": 0.5268,
+        "volume_ratio_z": 0.0264,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0341,
+        "trust_ratio_z": 0.0435,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.0299,
+        "trust_consec_days_z": 0.052,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.023,
+        "institutional_consec_buy_days_z": 0.0336,
+        "chip_score_z": 0.0173,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 253,
+          "threshold_quantiles": {
+            "0.05": -1.8472,
+            "0.5": -0.2257,
+            "0.95": 1.9694
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 459,
+          "threshold_quantiles": {
+            "0.05": -1.0213,
+            "0.5": -0.1347,
+            "0.95": 3.2004
+          }
+        },
+        "bb_width_z": {
+          "splits": 926,
+          "threshold_quantiles": {
+            "0.05": -1.2018,
+            "0.5": -0.4035,
+            "0.95": 2.2907
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-05-10",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    },
+    "growth_momentum_breakout": {
+      "model": "v34_turbo",
+      "path": "ML_Data/pkl/stock_ai_model_v34_turbo.pkl",
+      "sha256": "d117215b31c62e9da8e70455f234fb7928e6c85b677694c882d0fe90aea3aaa2",
+      "training_date": {
+        "value": "2026-05-20 20:55:41",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v34_turbo-TimeSeries",
+        "look_ahead_days": 5,
+        "target_return": 0.1,
+        "accuracy": 0.663278681146824,
+        "precision": 0.40577146430804967
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.0662,
+        "bias_z": 0.0869,
+        "macd_hist_z": 0.0599,
+        "kd_k_z": 0.0351,
+        "bb_width_z": 0.4561,
+        "volume_ratio_z": 0.0501,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0385,
+        "trust_ratio_z": 0.0389,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.0246,
+        "trust_consec_days_z": 0.0484,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.0243,
+        "institutional_consec_buy_days_z": 0.0402,
+        "chip_score_z": 0.0308,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 402,
+          "threshold_quantiles": {
+            "0.05": -1.8919,
+            "0.5": -0.2869,
+            "0.95": 1.9694
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 669,
+          "threshold_quantiles": {
+            "0.05": -1.0736,
+            "0.5": 0.0871,
+            "0.95": 3.8819
+          }
+        },
+        "bb_width_z": {
+          "splits": 944,
+          "threshold_quantiles": {
+            "0.05": -1.1596,
+            "0.5": -0.2963,
+            "0.95": 3.1277
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-05-15",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    },
+    "hybrid_trend_rank": {
+      "model": "v31_hybrid",
+      "path": "ML_Data/pkl/stock_ai_model_v31_hybrid.pkl",
+      "sha256": "b8a2325db6937cf1fc36f43ef9bea0e39ccdde77d81df0d8033febff7f05764e",
+      "training_date": {
+        "value": "2026-05-20 20:55:20",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v31_hybrid-TimeSeries",
+        "look_ahead_days": 7,
+        "target_return": 0.08,
+        "accuracy": 0.5985525468256446,
+        "precision": 0.5300563996547779
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.0624,
+        "bias_z": 0.0838,
+        "macd_hist_z": 0.0596,
+        "kd_k_z": 0.0316,
+        "bb_width_z": 0.4922,
+        "volume_ratio_z": 0.0389,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0416,
+        "trust_ratio_z": 0.0376,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.0248,
+        "trust_consec_days_z": 0.0451,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.0228,
+        "institutional_consec_buy_days_z": 0.0336,
+        "chip_score_z": 0.026,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 325,
+          "threshold_quantiles": {
+            "0.05": -1.883,
+            "0.5": -0.3396,
+            "0.95": 1.9694
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 577,
+          "threshold_quantiles": {
+            "0.05": -1.1087,
+            "0.5": 0.032,
+            "0.95": 2.9175
+          }
+        },
+        "bb_width_z": {
+          "splits": 947,
+          "threshold_quantiles": {
+            "0.05": -1.2715,
+            "0.5": -0.3383,
+            "0.95": 3.1277
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-05-13",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    },
+    "institutional_flow_confirmation": {
+      "model": "v36_chip_momentum",
+      "path": "ML_Data/pkl/stock_ai_model_v36_chip_momentum.pkl",
+      "sha256": "676dd2b91c89f882301082a3aa2f390042060fa07515704e6df5e291a678f777",
+      "training_date": {
+        "value": "2026-05-20 20:56:00",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v36_chip_momentum-TimeSeries",
+        "look_ahead_days": 10,
+        "target_return": 0.07,
+        "accuracy": 0.5406811411984103,
+        "precision": 0.5936228103708034
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.0579,
+        "bias_z": 0.0752,
+        "macd_hist_z": 0.0608,
+        "kd_k_z": 0.0298,
+        "bb_width_z": 0.5166,
+        "volume_ratio_z": 0.0295,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0342,
+        "trust_ratio_z": 0.0419,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.0284,
+        "trust_consec_days_z": 0.0488,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.0222,
+        "institutional_consec_buy_days_z": 0.0331,
+        "chip_score_z": 0.0216,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 275,
+          "threshold_quantiles": {
+            "0.05": -1.8472,
+            "0.5": -0.1179,
+            "0.95": 1.9694
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 502,
+          "threshold_quantiles": {
+            "0.05": -1.0008,
+            "0.5": -0.0782,
+            "0.95": 3.2004
+          }
+        },
+        "bb_width_z": {
+          "splits": 952,
+          "threshold_quantiles": {
+            "0.05": -1.2018,
+            "0.5": -0.3697,
+            "0.95": 2.2907
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-05-10",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    },
+    "mean_reversion": {
+      "model": "v37_mean_reversion",
+      "path": "ML_Data/pkl/stock_ai_model_v37_mean_reversion.pkl",
+      "sha256": "0e294998283492633dbb45b95427f2ba322766036e9ba71428c33d88d19ae249",
+      "training_date": {
+        "value": "2026-05-20 20:56:10",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v37_mean_reversion-TimeSeries",
+        "look_ahead_days": 8,
+        "target_return": 0.05,
+        "accuracy": 0.5024724277890757,
+        "precision": 0.6239869616664062
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.0542,
+        "bias_z": 0.0736,
+        "macd_hist_z": 0.0603,
+        "kd_k_z": 0.0317,
+        "bb_width_z": 0.5211,
+        "volume_ratio_z": 0.0297,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0373,
+        "trust_ratio_z": 0.0396,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.028,
+        "trust_consec_days_z": 0.0475,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.0241,
+        "institutional_consec_buy_days_z": 0.0326,
+        "chip_score_z": 0.0204,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 254,
+          "threshold_quantiles": {
+            "0.05": -1.8472,
+            "0.5": -0.2027,
+            "0.95": 1.9694
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 483,
+          "threshold_quantiles": {
+            "0.05": -1.0736,
+            "0.5": 0.0148,
+            "0.95": 2.9175
+          }
+        },
+        "bb_width_z": {
+          "splits": 947,
+          "threshold_quantiles": {
+            "0.05": -1.2018,
+            "0.5": -0.4252,
+            "0.95": 2.3978
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-05-12",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    },
+    "quality_growth": {
+      "model": "v35_innovation",
+      "path": "ML_Data/pkl/stock_ai_model_v35_innovation.pkl",
+      "sha256": "2a866550b81104661762f2581f0c5e5836c464edbc28e797a5d533475686a446",
+      "training_date": {
+        "value": "2026-05-20 20:55:50",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v35_innovation-TimeSeries",
+        "look_ahead_days": 20,
+        "target_return": 0.15,
+        "accuracy": 0.611315505975737,
+        "precision": 0.5227917938829075
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.07,
+        "bias_z": 0.076,
+        "macd_hist_z": 0.0551,
+        "kd_k_z": 0.0382,
+        "bb_width_z": 0.4807,
+        "volume_ratio_z": 0.0343,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0388,
+        "trust_ratio_z": 0.0425,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.0275,
+        "trust_consec_days_z": 0.0517,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.0211,
+        "institutional_consec_buy_days_z": 0.0361,
+        "chip_score_z": 0.0279,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 349,
+          "threshold_quantiles": {
+            "0.05": -1.8741,
+            "0.5": -0.2158,
+            "0.95": 1.8667
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 519,
+          "threshold_quantiles": {
+            "0.05": -1.1608,
+            "0.5": -0.2162,
+            "0.95": 2.9175
+          }
+        },
+        "bb_width_z": {
+          "splits": 1033,
+          "threshold_quantiles": {
+            "0.05": -1.2018,
+            "0.5": -0.413,
+            "0.95": 2.8343
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-04-30",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    },
+    "quality_value_low_volatility": {
+      "model": "v38_value_dividend",
+      "path": "ML_Data/pkl/stock_ai_model_v38_value_dividend.pkl",
+      "sha256": "39b44ebc5529cf60784e82cbe8cfbebd862586488678876ab23678c4d2adf140",
+      "training_date": {
+        "value": "2026-05-20 20:56:20",
+        "grade": "PROVEN",
+        "evidence": "model metadata; file mtime the same minute"
+      },
+      "training_data_end": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "not recorded in the model file"
+      },
+      "metadata": {
+        "version": "v38_value_dividend-TimeSeries",
+        "look_ahead_days": 15,
+        "target_return": 0.05,
+        "accuracy": 0.4406926735692125,
+        "precision": 0.68157340201358
+      },
+      "features": {
+        "value": [
+          "rsi_z",
+          "bias_z",
+          "macd_hist_z",
+          "kd_k_z",
+          "bb_width_z",
+          "volume_ratio_z",
+          "natr_z",
+          "std_20_z",
+          "foreign_ratio_z",
+          "trust_ratio_z",
+          "dealer_ratio_z",
+          "foreign_consec_days_z",
+          "trust_consec_days_z",
+          "dealer_consec_days_z",
+          "institutional_net_buy_z",
+          "institutional_consec_buy_days_z",
+          "chip_score_z",
+          "large_holder_ratio_z",
+          "large_holder_ratio_change_z",
+          "news_sentiment_score_z",
+          "revenue_yoy_z",
+          "rd_ratio_z",
+          "op_profit_margin_z",
+          "eps_z"
+        ],
+        "grade": "PROVEN",
+        "evidence": "booster feature_names equal: True; equal to Z_SCORE_FEATURE_COLUMNS: True"
+      },
+      "importance": {
+        "rsi_z": 0.0547,
+        "bias_z": 0.0701,
+        "macd_hist_z": 0.0595,
+        "kd_k_z": 0.0304,
+        "bb_width_z": 0.5031,
+        "volume_ratio_z": 0.024,
+        "natr_z": 0.0,
+        "std_20_z": 0.0,
+        "foreign_ratio_z": 0.0339,
+        "trust_ratio_z": 0.054,
+        "dealer_ratio_z": 0.0,
+        "foreign_consec_days_z": 0.0325,
+        "trust_consec_days_z": 0.058,
+        "dealer_consec_days_z": 0.0,
+        "institutional_net_buy_z": 0.0248,
+        "institutional_consec_buy_days_z": 0.0368,
+        "chip_score_z": 0.0182,
+        "large_holder_ratio_z": 0.0,
+        "large_holder_ratio_change_z": 0.0,
+        "news_sentiment_score_z": 0.0,
+        "revenue_yoy_z": 0.0,
+        "rd_ratio_z": 0.0,
+        "op_profit_margin_z": 0.0,
+        "eps_z": 0.0
+      },
+      "tree_splits": {
+        "chip_score_z": {
+          "splits": 236,
+          "threshold_quantiles": {
+            "0.05": -1.8029,
+            "0.5": -0.1534,
+            "0.95": 2.1145
+          }
+        },
+        "dealer_ratio_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "natr_z": {
+          "splits": 0,
+          "threshold_quantiles": null
+        },
+        "volume_ratio_z": {
+          "splits": 407,
+          "threshold_quantiles": {
+            "0.05": -1.0213,
+            "0.5": -0.1545,
+            "0.95": 2.9175
+          }
+        },
+        "bb_width_z": {
+          "splits": 932,
+          "threshold_quantiles": {
+            "0.05": -1.1786,
+            "0.5": -0.3608,
+            "0.95": 2.2907
+          }
+        }
+      },
+      "last_labelled_row_with_full_horizon": "2026-05-05",
+      "code_version": {
+        "value": "uncommitted working tree on 2026-05-20; equivalent to be448d9 (train_model.py identical be448d9..HEAD, calc_indicators differs by one comment line)",
+        "grade": "INFERRED",
+        "evidence": [
+          "4e0311a (last commit before training) has no build_multi_factor_matrix / Z_SCORE features",
+          "be448d9 (2026-05-21 21:13) first contains them; no commit in between: [\"be448d9 2026-05-21 21:13:36 +0800 feat: Enhance recommendation fallback sync specification and add scenarios for optional data handling\", \"5a61d57 2026-05-19 17:29:29 +0800 feat: Archive deprecated daily compatibility flows and establish cleanup removal specifications\", \"4e0311a 2026-05-19 17:28:58 +0800 ## Summary\"]",
+          "model features == Z_SCORE_FEATURE_COLUMNS of be448d9/HEAD"
+        ]
+      },
+      "uncommitted_code_used": {
+        "value": true,
+        "grade": "PROVEN",
+        "evidence": "24 *_z features cannot be produced by the code committed before 2026-05-20 20:55"
+      },
+      "data_source": {
+        "value": "MySQL daily_market_data, SELECT * without filtering (all markets, weekend and duplicate rows included)",
+        "grade": "INFERRED",
+        "evidence": "jobs/train_model.py:load_and_prepare_data (code version inferred)"
+      },
+      "training_log_or_snapshot": {
+        "value": null,
+        "grade": "UNKNOWN",
+        "evidence": "no log, data snapshot or tracked model in ML_Data/, logs/, outputs/, data/ for 2026-05-19..22; models are untracked"
+      },
+      "dealer_margin_columns_at_training": {
+        "value": "absent",
+        "grade": "PROVEN",
+        "evidence": "2026-10-13 backfill verification: \"- 新增 dealer_buy、margin_balance、short_balance BIGINT NULL DEFAULT NULL，保留舊欄位與歷史資料。補檔前月營收最新為 2026-09，財報最新為 2026Q2。\""
+      },
+      "chip_score_definition": {
+        "value": "calculate_chip_score with dealer_buy = 0 (train_model.py:165) and margin_change_pct = 0 (:184): dealer and margin components fixed at score 50; chip_score varies only with foreign_ratio and trust_ratio",
+        "grade": "INFERRED",
+        "evidence": [
+          "columns absent at training (PROVEN)",
+          "code version INFERRED",
+          "chip_score_z has splits in every model, so it varied in training (rules out all-NaN-then-0)",
+          "dealer_ratio_z and dealer_consec_days_z have zero splits in every model (constant, as dealer_buy = 0)"
+        ]
+      },
+      "technical_indicators_source": {
+        "value": "stored DB columns (rsi, bias, macd_hist, kd_k, bb_width, natr, std_20) read as is, not recomputed; NULL -> 0 in build_multi_factor_matrix",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:load_and_prepare_data has no indicator calculation"
+      },
+      "training_data_start": {
+        "value": "2022-01-03",
+        "grade": "INFERRED",
+        "evidence": "current DB minimum; DB state on 2026-05-20 not recorded"
+      },
+      "training_data_last_row": {
+        "value": "2026-05-20",
+        "grade": "INFERRED",
+        "evidence": "current DB rows <= training date; whether 2026-05-20 was loaded before 20:55 is not recorded"
+      },
+      "train_test_boundary": {
+        "value": {
+          "train_end": "2025-07-30",
+          "unique_dates": 1074,
+          "test_start": "2025-07-31"
+        },
+        "grade": "INFERRED",
+        "evidence": "80% of unique dates (weekend dates included) in the current DB"
+      },
+      "db_changed_after_training": {
+        "value": true,
+        "grade": "INFERRED",
+        "evidence": [
+          "natr non-zero on 38 dates up to the training date, yet natr_z has zero splits in every model",
+          "2026-10-13 backfill added columns and new rows",
+          "native7: 2026-04-07 whole-day wrong rows, weekend TPEx rows"
+        ]
+      },
+      "look_ahead_bias": {
+        "value": "features use only current and past rows; labels use future highs by design. Labels of the last look_ahead sessions before the train/test boundary read prices inside the test period, and tail rows are labelled 0 (future_max_return.fillna(0)) instead of being dropped",
+        "grade": "INFERRED",
+        "evidence": "train_model.py:calculate_future_target, time_series_split"
+      },
+      "wrong_institutional_flows": {
+        "value": {
+          "whole_day_foreign_zero_dates": 38,
+          "by_year": {
+            "2024": 1,
+            "2025": 2,
+            "2026": 35
+          },
+          "weekend_dates": 21,
+          "weekend_rows": 149875,
+          "rows_total": 1437525,
+          "rows_2026": 608334,
+          "overlap_with_official_window": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-03-07",
+            "2026-03-08",
+            "2026-03-12",
+            "2026-03-15",
+            "2026-03-21",
+            "2026-03-22",
+            "2026-03-28",
+            "2026-03-29",
+            "2026-04-03",
+            "2026-04-04",
+            "2026-04-05",
+            "2026-04-06",
+            "2026-04-11",
+            "2026-04-12",
+            "2026-04-15",
+            "2026-04-18",
+            "2026-04-19",
+            "2026-04-25",
+            "2026-04-26",
+            "2026-04-27",
+            "2026-05-01",
+            "2026-05-02",
+            "2026-05-03",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-16",
+            "2026-05-17"
+          ],
+          "overlap_confirmed_by_official": [
+            "2025-12-31",
+            "2026-01-02",
+            "2026-01-07",
+            "2026-01-08",
+            "2026-01-09",
+            "2026-01-20",
+            "2026-01-22",
+            "2026-02-10",
+            "2026-02-11",
+            "2026-04-15",
+            "2026-04-27"
+          ]
+        },
+        "grade": "PROVEN for dates confirmed against official T86, INFERRED elsewhere (> 90 % of stocks with foreign_buy = 0)",
+        "evidence": "daily_market_data per-date aggregates; data_quality_report.json (previous run)"
+      }
+    }
+  },
+  "per_date_stats_rows": 1074
+}

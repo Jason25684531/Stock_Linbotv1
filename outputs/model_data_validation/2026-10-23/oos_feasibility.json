@@ -1,0 +1,91 @@
+{
+  "minimum_sessions": 252,
+  "session_ratio_2022_2025": 0.93,
+  "read_periods_native": [
+    {
+      "from": "2022-01-03",
+      "to": "2026-05-20",
+      "what": "model training data of the seven native models (fit 2022-01-03..2025-07-30, test 2025-07-31..2026-05-20)"
+    },
+    {
+      "from": "2025-06-02",
+      "to": "2026-06-26",
+      "what": "native historical backtests (identity_matrix_final.json, family:native:*)"
+    },
+    {
+      "from": "2026-05-21",
+      "to": "2026-07-28",
+      "what": "native7 diagnostic replays (native7 reproduction_manifest window)"
+    },
+    {
+      "from": "2026-05-21",
+      "to": "2026-07-20",
+      "what": "daily_selection_recovery parity dates"
+    },
+    {
+      "from": "2026-10-13",
+      "to": "2026-10-20",
+      "what": "daily_selection_recovery shadow dates"
+    }
+  ],
+  "other_family_periods": [
+    {
+      "from": "2023-01-03",
+      "to": "2025-12-31",
+      "what": "Day3 train/validation (other family; factor_validation_20260910_v1)"
+    },
+    {
+      "from": "2026-01-01",
+      "to": "2026-07-28",
+      "what": "Day3 strict OOS reserved for Day3 (not read by Day3; partly read by native7)"
+    },
+    {
+      "from": "2026-07-29",
+      "to": "2026-10-14",
+      "what": "G2/G3 Frozen Candidate fresh OOS ledger (its own OOS)"
+    }
+  ],
+  "scenarios": {
+    "A_keep_original_models": {
+      "eligible": false,
+      "reason": "all seven models are MODEL_BLOCKED and six are RETRAIN_REQUIRED; training_data_end unknown",
+      "if_certified": {
+        "first_unread_session": "2026-07-29",
+        "read_sessions_after_start": [
+          "2026-10-13",
+          "2026-10-14",
+          "2026-10-15",
+          "2026-10-16",
+          "2026-10-19",
+          "2026-10-20"
+        ],
+        "date_252_reached": "2027-08-23",
+        "basis": "estimate: 0 known sessions + weekdays x 0.930",
+        "excluded": "2026-05-21..07-28 and 2026-10-13..20 were read; only later unread sessions count"
+      }
+    },
+    "B_retrain_latest_cutoff": {
+      "eligible": "after approval",
+      "training_data_end": "2026-10-23 or the last certified session after download stage 3",
+      "oos_start": "2026-10-26",
+      "date_252_reached": "2027-11-09",
+      "basis": "estimate: 0 known sessions + weekdays x 0.930",
+      "requires": [
+        "owner approval to retrain",
+        "certified flows (download stage 2)",
+        "pre-registered OOS start and metrics"
+      ]
+    },
+    "C_retrain_earlier_cutoff": {
+      "eligible": false,
+      "reason": "every session since 2022-01-03 is either model training data or read by native backtests/diagnostics; the largest unread-by-backtests stretch before 2025-06-02 (822 sessions from 2022-01-03) was still model training data, and the period in which the native rules and parameters were designed is not recorded",
+      "clean_sessions_before_2026_07_29": 1
+    }
+  },
+  "not_allowed": [
+    "relabel the original 20% test split as OOS (it set the reported accuracy)",
+    "count diagnostic replay or parity dates",
+    "use dates before 2022-01-03 (no DB data)",
+    "lower the 252-session minimum"
+  ]
+}

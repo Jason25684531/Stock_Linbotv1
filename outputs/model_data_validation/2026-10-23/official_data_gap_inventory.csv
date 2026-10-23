@@ -1,0 +1,9 @@
+﻿dataset,location,have_from,have_to,files,official_sessions,missing,certified,still_needed_sessions
+"TWSE MI_INDEX (prices, calendar)",artifacts/factors/d3_full_20230103_20260728/_raw/twse_rwd,2021-12-30,2026-07-28,1194,1106.0,2026-07-29..latest,"DATA_PASS (native7 snapshot uses 2025-01..2026-07; earlier files parsed, hashed here)",post-2026-07-28 only
+TWSE TWT49U (ex-rights events),artifacts/factors/d3_full_20230103_20260728/_raw/twse_rwd,2023-01-03,2026-07-28,1,,"2022-01-03..2022-12-30, 2026-07-29..latest",DATA_PASS for price-return checks (native7),2 range requests
+TWSE T86 (institutional net buy),artifacts/official_chip_cache/twse,2025-12-15,2026-10-21,165,163.0,"2022-01-03..2025-12-12, 2026-07-29..2026-09-25, 2026-10-22..latest",DATA_PASS for cached days,959
+TWSE MI_MARGN (margin balance),artifacts/official_chip_cache/twse,2025-12-15,2026-10-21,165,163.0,same as T86,DATA_PASS for cached days,959
+MOPS quarterly filings (fundamental_pit_v3),data/processed/fundamental_pit_v3,2013Q1,2025Q4,46280,,"FY2026Q1 onwards; 7,666 failed requests in the original ledger",publication dates PROVEN where present,
+MOPS monthly revenue,MySQL monthly_revenue only,,,0,,"all (no official file, no publication timestamp)",DATA_BLOCKED,
+TPEx prices / flows / margin,none,,,0,,all,DATA_BLOCKED,
+MySQL snapshots (2026-10-21),outputs/strategy_validation/2026-10-21,2022-01-03,2026-10-20,3,,n/a (not official),reconciliation input only (DATA_FAIL flows),

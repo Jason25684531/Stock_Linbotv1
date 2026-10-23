@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "models_unchanged": true,
+  "archived_outputs": {
+    "outputs/daily_selection_recovery/2026-10-22": {
+      "files": 61,
+      "changed": []
+    },
+    "outputs/native7_recovery/2026-10-22": {
+      "files": 29,
+      "changed": []
+    },
+    "outputs/native22_validation/2026-10-22": {
+      "files": 17,
+      "changed": []
+    }
+  },
+  "preservation": {
+    "status": "FAIL",
+    "historical_hashes_checked": 5463,
+    "historical_changed": [],
+    "protected_sources_checked": 74,
+    "protected_changed": [
+      "core/strategies/growth_momentum_breakout.py"
+    ],
+    "source_records": 461,
+    "inventory_identities_equal": true
+  },
+  "production_code_unchanged_since": "884ac647dc15f5eefcbe04690102f563416a2eee",
+  "DAILY_FEATURE_MODE": "legacy",
+  "official_requests": 5,
+  "models_blocked": 7,
+  "training_executed": false,
+  "mysql": "SELECT only",
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}

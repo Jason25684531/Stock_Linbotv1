@@ -1,0 +1,120 @@
+{
+  "original_estimate": {
+    "requests": 3000,
+    "basis": "about 1,000 sessions x 3 datasets, without checking the caches"
+  },
+  "calendar": {
+    "cached_official_sessions_since_2022": 1105,
+    "fit_split_sessions": 865,
+    "post_cache_weekdays_upper_bound": 63
+  },
+  "reuse": {
+    "needed_twse_files_2022_to_2026_07": 3315,
+    "already_cached": 1399,
+    "share": 0.422
+  },
+  "endpoint_capabilities": {
+    "T86": "per day only (month query rejected, probe t86_month_query); history from 2012-05-02",
+    "MI_MARGN": "per day only (probe mi_margn_month_query)",
+    "MI_INDEX": "per day only; cached 2021-12-30..2026-07-28",
+    "TWT49U": "date range in one request (cached file TWT49U_20230103_20260728.json)",
+    "TWSE OpenAPI": "MI_INDEX / MI_MARGN latest day only, no parameters, no T86 (probe twse_openapi_catalog)",
+    "TPEx OpenAPI": "quotes / 3insti / margin latest day only, no parameters (probe tpex_openapi_catalog)",
+    "MOPS monthly revenue": "one summary page per market and month, no announcement time (probe mops_monthly_revenue_summary)"
+  },
+  "plans": {
+    "A_minimal": {
+      "requests": 44,
+      "hours_at_3s": 0.04,
+      "megabytes": 8.4,
+      "by_dataset": {
+        "T86": 44
+      },
+      "purpose": "measure MySQL foreign/trust accuracy inside the fit split (decides wrong_flows_in_fit)",
+      "unblocks": [
+        "retrain criterion wrong_flows_in_fit: UNKNOWN -> measured (sample)"
+      ],
+      "not_unblocked": [
+        "training_data_end",
+        "model contract",
+        "OOS",
+        "fundamentals",
+        "TPEx"
+      ]
+    },
+    "B_staged": {
+      "stage_1": {
+        "requests": 44,
+        "hours_at_3s": 0.04,
+        "megabytes": 8.4,
+        "by_dataset": {
+          "T86": 44
+        }
+      },
+      "stage_2_training_and_research_history": {
+        "requests": 1872,
+        "hours_at_3s": 1.56,
+        "megabytes": 293.4,
+        "by_dataset": {
+          "T86": 914,
+          "MI_MARGN": 958
+        }
+      },
+      "stage_3_after_2026_07_28": {
+        "requests": 153,
+        "hours_at_3s": 0.13,
+        "megabytes": 288.1,
+        "by_dataset": {
+          "MI_INDEX": 63,
+          "T86": 45,
+          "MI_MARGN": 45
+        }
+      },
+      "stage_4_other": {
+        "TWT49U ranges (2022, after 2026-07-28)": 2,
+        "MOPS monthly revenue summary pages (2 markets x 57 months, values only)": 114,
+        "MOPS FY2026Q1-Q2 filings (pit_v3 ledger rate ~890 per quarter)": 1780,
+        "TPEx quotes + institutional + margin, per day since 2022 (endpoints to be confirmed)": 3504
+      },
+      "total_stages_1_to_3": {
+        "requests": 2069,
+        "hours_at_3s": 1.72,
+        "megabytes": 589.9,
+        "by_dataset": {
+          "T86": 45,
+          "MI_MARGN": 45,
+          "MI_INDEX": 63
+        }
+      },
+      "unblocks": [
+        "certified flows and margin 2022..2026 for retraining and research",
+        "calendar / prices / flows after 2026-07-28 for the OOS clock and live Daily checks"
+      ],
+      "not_unblocked": [
+        "monthly revenue timing",
+        "FY2026 filing dates (stage 4)",
+        "TPEx (stage 4)",
+        "OOS sample length"
+      ]
+    },
+    "C_complete": {
+      "requests": 2069,
+      "hours_at_3s": 1.72,
+      "megabytes": 589.9,
+      "by_dataset": {
+        "T86": 45,
+        "MI_MARGN": 45,
+        "MI_INDEX": 63
+      },
+      "plus_other": {
+        "TWT49U ranges (2022, after 2026-07-28)": 2,
+        "MOPS monthly revenue summary pages (2 markets x 57 months, values only)": 114,
+        "MOPS FY2026Q1-Q2 filings (pit_v3 ledger rate ~890 per quarter)": 1780,
+        "TPEx quotes + institutional + margin, per day since 2022 (endpoints to be confirmed)": 3504
+      },
+      "requests_total": 7469
+    }
+  },
+  "recommended": "B: run stage 1 and stage 3 now (on approval); stage 2 only together with an approved retraining; stage 4 per data owner",
+  "probe_requests_used": 5
+}
