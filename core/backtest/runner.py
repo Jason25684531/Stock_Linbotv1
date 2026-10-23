@@ -415,7 +415,7 @@ class BacktestEngine:
     def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
                  persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None,
                  persist_to_db: bool | None = None, execution_contract='legacy_same_close', trading_sessions=None,
-                 research_data=None):
+                 research_data=None, rules_only=False):
         """
         初始化回測引擎
 
@@ -447,6 +447,9 @@ class BacktestEngine:
                 raise ValueError('Research execution requires persist_results=False and persist_to_db=False')
             if research_data is None:
                 raise ValueError('next_session_open_v2 requires research_data (validated snapshot provider)')
+        if rules_only and research_data is None:
+            raise ValueError('rules_only is a research-contract option and needs research_data')
+        self.rules_only = rules_only  # research diagnostic: strategy rules only, no model, ordered by the strategy itself
         self.research_data = research_data
         self.required_inputs = []
         self.model_identity = None
@@ -497,6 +500,9 @@ class BacktestEngine:
                 raise ValueError('research_data requires a registered strategy')
             from core.research.native_frame import rule_inputs
             from core.research.native_models import load_model_contract
+            if self.rules_only:
+                self.required_inputs = sorted(rule_inputs(self.strategy_obj))  # only rule inputs may exclude a stock
+                return
             contract = load_model_contract(self.strategy_obj.name, self.research_data.available_inputs, self.start_date,
                                            self.research_data.unavailable_inputs(self.start_date, self.end_date or self.start_date))
             self.model, self.features, self.model_identity = contract.model, contract.features, contract.identity
@@ -959,6 +965,8 @@ class BacktestEngine:
                 if self.research_data is not None:
                     raise
                 print(f"⚠️ AI 預測失敗: {e}")
+        elif self.rules_only:
+            pass  # keep the strategy's own ordering
         else:
             if 'foreign_buy' in candidates.columns:
                 candidates = candidates.sort_values('foreign_buy', ascending=False)

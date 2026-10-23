@@ -13,8 +13,8 @@ from core.model_utils import get_model_path
 # Raw inputs behind features that build_multi_factor_matrix derives itself.
 DERIVED_FROM = {
     "institutional_net_buy": ("foreign_buy", "trust_buy", "dealer_buy"),
-    "institutional_consec_buy_days": ("foreign_consec_days", "trust_consec_days", "dealer_buy"),
-    "dealer_consec_days": ("dealer_buy",),
+    "institutional_consec_buy_days": ("foreign_consec_days", "trust_consec_days", "dealer_consec_days"),
+    "dealer_consec_days": ("dealer_consec_days",),
     "chip_score": ("foreign_ratio", "trust_ratio", "dealer_ratio", "margin_change_pct"),
 }
 
@@ -31,7 +31,7 @@ class ModelContract:
     identity: dict
 
 
-def load_model_contract(strategy_name: str, available_inputs, window_start: str, unavailable=frozenset()) -> ModelContract:
+def load_model_contract(strategy_name: str, available_inputs, window_start: str, unavailable=frozenset(), expected_spec_sha256: str | None = None) -> ModelContract:
     path = Path(get_model_path(strategy_name))  # primary model only; the generic fallback is never used
     if not path.is_file():
         raise ModelContractError(f"MODEL_MISSING: {path.name} (no fallback to another model)")
@@ -46,7 +46,11 @@ def load_model_contract(strategy_name: str, available_inputs, window_start: str,
     if names is not None and list(names) != features:
         raise ModelContractError(f"FEATURE_ORDER_MISMATCH: {path.name}")
     # Features the model never splits on cannot influence a prediction; the rest must be computable.
-    relevant = [f for f, w in zip(features, importance) if w > 0]
+    spec_sha256 = data.get("spec_sha256")
+    if spec_sha256 and expected_spec_sha256 and spec_sha256 != expected_spec_sha256:
+        raise ModelContractError(f"SPEC_HASH_MISMATCH: {path.name} was trained under {spec_sha256[:12]}, expected {expected_spec_sha256[:12]}")
+    # A model trained under the retraining specification used every listed feature in its population; older models only those they split on.
+    relevant = list(features) if spec_sha256 else [f for f, w in zip(features, importance) if w > 0]
     raw = sorted({r for f in relevant for r in DERIVED_FROM.get(f.removesuffix("_z"), (f.removesuffix("_z"),))})
     missing = [r for r in raw if r not in available_inputs]
     if missing:
@@ -55,12 +59,15 @@ def load_model_contract(strategy_name: str, available_inputs, window_start: str,
     if empty:
         raise ModelContractError(f"FEATURE_UNAVAILABLE_AT_SOURCE: {empty} are NULL in the window but feed features with importance > 0; "
                                  "training and Daily may have seen different values, so no faithful ranking exists")
+    data_end = data.get("training_data_end")
+    if data_end and pd.Timestamp(window_start) <= pd.Timestamp(data_end):
+        raise ModelContractError(f"WINDOW_NOT_AFTER_TRAINING_DATA_END: window starts {window_start}, training data ends {data_end}")
     trained = pd.Timestamp(data["training_date"])
-    if pd.Timestamp(window_start) <= trained.normalize():
+    if not data_end and pd.Timestamp(window_start) <= trained.normalize():
         raise ModelContractError(f"WINDOW_NOT_AFTER_TRAINING: window starts {window_start}, model trained {trained:%Y-%m-%d}; "
                                  "training-data cutoff is not recorded, so earlier dates may overlap training data")
     identity = {"path": path.as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "version": data.get("version"),
-                "training_date": str(data["training_date"]), "training_data_end": data.get("training_data_end"), "feature_order": features,
-                "features_ignored_by_model": [f for f, w in zip(features, importance) if w <= 0],
+                "training_date": str(data["training_date"]), "training_data_end": data_end, "spec_sha256": spec_sha256, "feature_order": features,
+                "features_ignored_by_model": [] if spec_sha256 else [f for f, w in zip(features, importance) if w <= 0],
                 "features_used": relevant, "raw_inputs_required": raw}
     return ModelContract(model, features, raw, identity)

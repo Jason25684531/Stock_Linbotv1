@@ -610,6 +610,12 @@ VOLUME_RATIO_MIN_OBSERVATIONS = 20  # owner decision OD-1: training uses min_per
 HIGH_60_SESSIONS = 60  # owner decision OD-2: V34 "60-day high" needs 60 sessions of raw high_price, including today
 
 
+def _per_stock(grouped, func, index) -> pd.Series:
+    """func applied to each stock's rows, aligned to the original index (groupby.apply returns a wide frame when there is one stock)."""
+    parts = [func(group) for _, group in grouped]
+    return pd.concat(parts).reindex(index) if parts else pd.Series(np.nan, index=index)
+
+
 def build_feature_history(df: pd.DataFrame) -> pd.DataFrame:
     """Per-stock time-series features shared by recovered Daily selection and research; nothing is filled.
 
@@ -629,10 +635,10 @@ def build_feature_history(df: pd.DataFrame) -> pd.DataFrame:
     df['bias'] = (df.close_price - df.ma20) / df.ma20.where(df.ma20 != 0) * 100
     df['rsi'] = close.transform(calculate_rsi)
     df['macd_hist'] = close.transform(calculate_macd)
-    df['kd_k'] = by_stock.apply(calculate_kd).reset_index(level=0, drop=True)
+    df['kd_k'] = _per_stock(by_stock, calculate_kd, df.index)
     df['bb_width'] = close.transform(calculate_bb_width)
-    df['atr'] = by_stock.apply(calculate_atr).reset_index(level=0, drop=True)
-    df['natr'] = by_stock.apply(calculate_natr).reset_index(level=0, drop=True)
+    df['atr'] = _per_stock(by_stock, calculate_atr, df.index)
+    df['natr'] = _per_stock(by_stock, calculate_natr, df.index)
     df['std_20'] = close.transform(calculate_std_20)
     df['high_60'] = by_stock['high_price'].transform(lambda x: x.rolling(HIGH_60_SESSIONS, min_periods=1).max()).where(
         by_stock.cumcount() >= HIGH_60_SESSIONS - 1)
@@ -643,6 +649,8 @@ def build_feature_history(df: pd.DataFrame) -> pd.DataFrame:
     # (the helpers stay as they are because legacy Daily and training call them).
     df['foreign_consec_days'] = by_stock['foreign_buy'].transform(calculate_consec_days).where(df.foreign_buy.notna())
     df['trust_consec_days'] = by_stock['trust_buy'].transform(calculate_consec_days).where(df.trust_buy.notna())
+    # Streak over the stock's own history. build_multi_factor_matrix used to derive it from the one-day cross-section (always 0 or 1).
+    df['dealer_consec_days'] = by_stock['dealer_buy'].transform(calculate_consec_days).where(df.dealer_buy.notna())
     prior_margin = by_stock['margin_balance'].shift(1)
     df['margin_change_pct'] = by_stock['margin_balance'].transform(calculate_margin_change_pct).where(
         df.margin_balance.notna() & prior_margin.notna() & prior_margin.ne(0))

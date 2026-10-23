@@ -41,7 +41,7 @@ from core.calc_indicators import (
     build_multi_factor_matrix,
 )
 from core.model_utils import load_model
-from core.research.native_frame import NativeResearchData, load_publication_dates, rule_inputs
+from core.research.native_frame import NativeResearchData, listed_universe, load_publication_dates, rule_inputs
 from core.research.native_models import ModelContractError, load_model_contract
 from config import Config
 
@@ -228,6 +228,7 @@ def load_recovered_data(date_str: str, engine) -> NativeResearchData:
         raise RuntimeError(f'No valid market history for requested date {date_str}')
     # Raw source columns only (the research snapshot's schema); legacy writes indicators and revenue_yoy back into this table.
     history = history[[c for c in RECOVERED_HISTORY_COLUMNS if c in history.columns]]
+    history = history[history.stock_id.isin(listed_universe(date_str))]  # TWSE-listed common stocks only; TPEx is not certified
     financials = pd.read_sql(text("""
         SELECT stock_id, year, quarter, revenue, rd_expense, operating_profit, eps
         FROM financial_statements WHERE year >= 1911
@@ -246,22 +247,30 @@ def resolve_feature_mode(feature_mode: str | None, dry_run: bool) -> str:
     return mode
 
 
+def recovered_model_status(identity: dict) -> str | None:
+    """None when the model passes the identity checks, otherwise why it stays MODEL_BLOCKED (scores are then diagnostic only)."""
+    reasons = [] if identity.get('training_data_end') else ['TRAINING_DATA_END_MISSING']
+    if 'chip_score_z' in identity['features_used'] and not identity.get('spec_sha256'):
+        reasons.append('CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN')  # trained with dealer/margin absent (OD-3)
+    return f"MODEL_BLOCKED: {', '.join(reasons)} (scores are diagnostic, never published)" if reasons else None
+
+
 def recovered_strategy_frame(strategy, data: NativeResearchData, date_str: str):
-    """Per-strategy frame without rows missing rule or model inputs, the strict model contract or its blocking reason."""
+    """Per-strategy frame, the strict model contract or its blocking reason.
+
+    With a model: z-scores over every stock whose model inputs are all present, then rows missing a rule input are dropped.
+    Without one: only rule inputs exclude a stock (no AI-specific feature may remove a candidate).
+    """
     contract, status = None, None
     unavailable = data.unavailable_inputs(date_str, date_str)
     try:
         contract = load_model_contract(strategy.name, data.available_inputs, date_str, unavailable)
         required = rule_inputs(strategy) | set(contract.required_raw)
-        reasons = [] if contract.identity.get('training_data_end') else ['TRAINING_DATA_END_MISSING']
-        if 'chip_score_z' in contract.identity['features_used']:
-            reasons.append('CHIP_SCORE_TRAINING_DEFINITION_UNPROVEN')  # trained with dealer/margin absent (OD-3)
-        if reasons:
-            status = f"MODEL_BLOCKED: {', '.join(reasons)} (scores are diagnostic, never published)"
+        status = recovered_model_status(contract.identity)
     except ModelContractError as exc:
         required = rule_inputs(strategy)
         status = f'MODEL_BLOCKED: {exc}'
-    frame, note = data.frame(date_str, sorted(required))
+    frame, note = data.frame(date_str, sorted(required), model_inputs=sorted(contract.required_raw) if contract else None)
     return frame, note, contract, status
 
 

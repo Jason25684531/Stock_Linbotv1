@@ -7,6 +7,7 @@ stock is excluded with a recorded reason; nothing is zero-filled.
 from __future__ import annotations
 
 import inspect
+import json
 import re
 from pathlib import Path
 
@@ -19,11 +20,11 @@ LOOKBACK_DAYS = 150  # run_daily.compute_indicators_from_history window
 QUARTER_DEADLINES = {1: (5, 15, 0), 2: (8, 14, 0), 3: (11, 14, 0), 4: (3, 31, 1)}
 FRAME_INPUTS = frozenset({
     "ma5", "ma20", "ma60", "bias", "rsi", "macd_hist", "kd_k", "bb_width", "atr", "natr", "std_20", "volume_ratio",
-    "foreign_ratio", "trust_ratio", "dealer_ratio", "foreign_consec_days", "trust_consec_days", "margin_change_pct",
+    "foreign_ratio", "trust_ratio", "dealer_ratio", "foreign_consec_days", "trust_consec_days", "dealer_consec_days", "margin_change_pct",
     "chip_score", "foreign_buy", "trust_buy", "dealer_buy", "margin_balance", "revenue_yoy", "op_profit_margin",
     "eps", "rd_ratio", "high_60"})
 PIT_RECORDS = Path(__file__).resolve().parents[2] / "data/processed/fundamental_pit_v3/fundamental_records.parquet"
-CHIP_INPUTS = frozenset({"dealer_buy", "dealer_ratio", "margin_balance", "margin_change_pct", "chip_score"})
+CHIP_INPUTS = frozenset({"dealer_buy", "dealer_ratio", "dealer_consec_days", "margin_balance", "margin_change_pct", "chip_score"})
 FLOW_INPUTS = frozenset({"foreign_buy", "trust_buy", "foreign_ratio", "trust_ratio", "foreign_consec_days", "trust_consec_days"})
 FUNDAMENTAL_INPUTS = frozenset({"revenue_yoy", "op_profit_margin", "eps", "rd_ratio"})
 
@@ -36,6 +37,25 @@ def rule_inputs(strategy) -> set[str]:
 
 def _due(year, month, day) -> pd.Series:
     return pd.to_datetime(pd.DataFrame({"year": year, "month": month, "day": day}))
+
+
+MI_INDEX_DIRS = (Path(__file__).resolve().parents[2] / "artifacts/factors/d3_full_20230103_20260728/_raw/twse_rwd",
+                 Path(__file__).resolve().parents[2] / "artifacts/official_data_recovery_cache/mi_index")
+
+
+def listed_universe(date_str: str, directories=MI_INDEX_DIRS) -> frozenset[str]:
+    """TWSE-listed four-digit common stocks of one session from the cached official MI_INDEX closing table; never guessed."""
+    from core.research.adjustment.normalization import normalize_twse_closing_table
+    from core.research.sources.twse import find_closing_table
+
+    name = f"MI_INDEX_{date_str.replace('-', '')}.json"
+    for directory in directories:
+        path = Path(directory) / name
+        if path.exists():
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("stat") == "OK":
+                return frozenset(normalize_twse_closing_table(find_closing_table(payload), pd.Timestamp(date_str), None).stock_id)
+    raise RuntimeError(f"LISTED_UNIVERSE_UNAVAILABLE: no cached official MI_INDEX trading-day response for {date_str}")
 
 
 def load_publication_dates() -> pd.DataFrame | None:
@@ -125,13 +145,20 @@ class NativeResearchData:
         if self.daily_equivalent_fill:
             return frozenset()
         window = self.snapshot[(self.snapshot.trade_date >= start) & (self.snapshot.trade_date <= end)]
-        empty = {"dealer_buy", "dealer_ratio"} if window.dealer_buy.isna().all() else set()
+        empty = {"dealer_buy", "dealer_ratio", "dealer_consec_days"} if window.dealer_buy.isna().all() else set()
         empty |= {"margin_balance", "margin_change_pct"} if window.margin_balance.isna().all() else set()
         return frozenset(empty | ({"chip_score"} if empty else set()))
 
-    def frame(self, date_str: str, required) -> tuple[pd.DataFrame, dict]:
-        """Daily-equivalent candidate frame; stocks missing any required input are excluded and counted."""
+    def frame(self, date_str: str, required, model_inputs=None) -> tuple[pd.DataFrame, dict]:
+        """Daily-equivalent candidate frame; stocks missing a required input are excluded and counted.
+
+        model_inputs=None (legacy research): the z-score population is the stocks that pass every required input.
+        model_inputs given (recovered Daily, training): the population is every stock with all model inputs present, z-scores are
+        computed on it first, and only then are stocks missing a rule input dropped, so rule inputs never change the population.
+        """
         full = self.cross_section(pd.Timestamp(date_str))
+        if model_inputs is not None:
+            return self._model_population_frame(full, date_str, sorted(required), sorted(model_inputs))
         absent = full[sorted(required)].isna()
         keep = ~absent.any(axis=1)
         dropped = absent[~keep]
@@ -143,6 +170,27 @@ class NativeResearchData:
         if kept.empty:
             return kept, note
         return build_multi_factor_matrix(kept, trade_date=date_str), note
+
+    @staticmethod
+    def _missing_rows(frame: pd.DataFrame, columns: list[str]) -> tuple[pd.Series, list[dict]]:
+        absent = frame[columns].isna()
+        bad = absent.any(axis=1)
+        rows = [{"stock_id": str(sid), "missing_columns": list(absent.columns[r]), "reason": exclusion_reason(absent.columns[r])}
+                for sid, r in zip(frame.stock_id[bad], absent[bad].to_numpy())]
+        return bad, rows
+
+    def _model_population_frame(self, full, date_str, rule_columns, model_columns):
+        incomplete, model_rows = self._missing_rows(full, model_columns)
+        population = full[~incomplete]
+        rule_only = [c for c in rule_columns if c not in model_columns]
+        rule_missing, rule_rows = self._missing_rows(population, rule_only) if rule_only and not population.empty else (pd.Series(False, index=population.index), [])
+        note = {"date": date_str, "rows": len(full), "population_rows": len(population), "excluded": int(incomplete.sum() + rule_missing.sum()),
+                "excluded_model_incomplete": model_rows, "excluded_rule_missing": rule_rows, "excluded_rows": model_rows + rule_rows,
+                "missing_input_counts": {c: int(full[c].isna().sum()) for c in model_columns + rule_only if c in full and full[c].isna().any()}}
+        if population.empty:
+            return population, note
+        matrix = build_multi_factor_matrix(population, trade_date=date_str)  # z-scores over the whole model-complete population
+        return matrix[~rule_missing.to_numpy()], note
 
     def bar(self, stock_id: str, date_str: str):
         try:
