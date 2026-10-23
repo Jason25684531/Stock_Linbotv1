@@ -1,0 +1,118 @@
+{
+  "runner_sha256": {
+    "before": "053a7be97bd49bd4f5ec0ef32f79ef8ef41c0a21c2c517ed95c0b13859d08c18",
+    "after": "82cfbdcaebadd3b01a95b7fcf6a19830852f932028826007627aeb15624e9dcb"
+  },
+  "strategies": {
+    "mean_reversion": {
+      "legacy_identical_to_before": {
+        "error": true,
+        "daily_dates": true,
+        "daily_assets": false,
+        "trades": false,
+        "execution_events": true
+      },
+      "stale_orders_and_fills_identical": {
+        "trades": false,
+        "execution_events": true,
+        "daily_dates": true
+      },
+      "stale_equity_differs_on": 58,
+      "first_differences": [
+        [
+          "2023-04-07",
+          "998621.7487280811",
+          "998537.2378383378"
+        ],
+        [
+          "2023-04-10",
+          "1003936.9853139269",
+          "1004033.2356569039"
+        ],
+        [
+          "2023-04-11",
+          "993145.9353139269",
+          "993242.1856569038"
+        ],
+        [
+          "2023-04-12",
+          "993549.3424779747",
+          "993805.7649406105"
+        ],
+        [
+          "2023-04-13",
+          "999772.6424779746",
+          "1000029.0649406104"
+        ]
+      ],
+      "before_nan_sessions": 1,
+      "stale_nan_sessions": 0,
+      "stale_error": null,
+      "stale_valuation_events": 1,
+      "stale_events_sample": [
+        {
+          "type": "STALE_VALUATION",
+          "date": "2023-05-11",
+          "stock_id": "1225",
+          "reason": "NO_VALID_CLOSE_WITH_VOLUME",
+          "close_value": "nan",
+          "price": 60.7,
+          "price_source_date": "2023-05-10",
+          "stale_days": 1,
+          "shares": 3378,
+          "value": 205044.6,
+          "equity_share": 0.2101353845736562
+        }
+      ]
+    },
+    "defensive_low_volatility": {
+      "legacy_identical_to_before": {
+        "error": true,
+        "daily_dates": true,
+        "daily_assets": false,
+        "trades": false,
+        "execution_events": true
+      },
+      "stale_orders_and_fills_identical": {
+        "trades": false,
+        "execution_events": true,
+        "daily_dates": true
+      },
+      "stale_equity_differs_on": 58,
+      "first_differences": [
+        [
+          "2023-04-07",
+          "998807.8172116545",
+          "998902.9322595698"
+        ],
+        [
+          "2023-04-10",
+          "997695.2172116544",
+          "997790.3322595698"
+        ],
+        [
+          "2023-04-11",
+          "994988.1172116545",
+          "995083.2322595697"
+        ],
+        [
+          "2023-04-12",
+          "996782.2672116545",
+          "996877.3822595697"
+        ],
+        [
+          "2023-04-13",
+          "994401.2172116544",
+          "994496.3322595698"
+        ]
+      ],
+      "before_nan_sessions": 0,
+      "stale_nan_sessions": 0,
+      "stale_error": null,
+      "stale_valuation_events": 0,
+      "stale_events_sample": []
+    }
+  },
+  "LEGACY_CHARACTERIZATION": "FAIL",
+  "ORDERS_UNCHANGED_BY_STALE_POLICY": "FAIL"
+}

@@ -1,0 +1,87 @@
+{
+  "day3_reference_formulas": {
+    "A101_003": {
+      "status": "PASS",
+      "values_compared": 4005,
+      "tolerance": "rtol=1e-09, atol=1e-12",
+      "non_finite_correlations_mapped_to_missing": 299
+    },
+    "A191_088": {
+      "status": "PASS",
+      "values_compared": 4500,
+      "tolerance": "rtol=1e-09, atol=1e-12"
+    },
+    "A191_132": {
+      "status": "PASS",
+      "values_compared": 4515,
+      "tolerance": "rtol=1e-09, atol=1e-12"
+    },
+    "RS_004_NEAR_HIGH_120D": {
+      "status": "PASS",
+      "values_compared": 3015,
+      "tolerance": "rtol=1e-09, atol=1e-12"
+    }
+  },
+  "d5_factors_and_windows": {
+    "momentum_20d": {
+      "status": "PASS",
+      "values_compared": 4650,
+      "first_valid_session": 21,
+      "required_history_sessions": 21
+    },
+    "momentum_60d": {
+      "status": "PASS",
+      "values_compared": 4050,
+      "first_valid_session": 61,
+      "required_history_sessions": 61
+    },
+    "momentum_12_1": {
+      "status": "PASS",
+      "values_compared": 1170,
+      "first_valid_session": 253,
+      "required_history_sessions": 253
+    },
+    "near_high_252d": {
+      "status": "PASS",
+      "values_compared": 1185,
+      "first_valid_session": 252,
+      "required_history_sessions": 252
+    },
+    "amihud_20d": {
+      "status": "PASS",
+      "values_compared": 4650,
+      "first_valid_session": 21,
+      "required_history_sessions": 21
+    }
+  },
+  "g2_g3_pit_checks": {
+    "path": "data/processed/fundamental_pit_v3/fundamental_records.parquet",
+    "sha256": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+    "rows": 259054,
+    "available_before_publication": 0,
+    "derived_rows": 143212,
+    "derived_recompute_mismatch": 0,
+    "recompute_tolerance": "rtol=1e-9 atol=1e-12",
+    "yoy_rows_with_prior_revision_available_later": {
+      "eps_yoy": 1,
+      "operating_income_yoy": 0
+    },
+    "yoy_rows_with_negative_prior_base": {
+      "eps_yoy": 6296,
+      "operating_income_yoy": 7581
+    },
+    "periods_with_multiple_revisions": 0,
+    "missing_policy": "preserve_null_no_fill (fundamental_factor_validation.py CandidateSpec G2/G3); zero prior base skipped, no YoY emitted",
+    "formula": "current / prior_year_same_quarter - 1 (fundamental_pit_v3.py:141-155)",
+    "formula_caveat": "Negative prior base inverts the sign of improvement; counted above, factor unchanged (owner decision)."
+  },
+  "a191_132_approximation": {
+    "dates_sampled": 47,
+    "spearman_mean": 0.999996805178811,
+    "spearman_min": 0.9999921059876488,
+    "top10_overlap_mean": 0.9978723404255319,
+    "top20pct_overlap_mean": 0.9991209973563132,
+    "reading": "A191_132 is the 20-session mean of official traded value, which equals MEAN(AMOUNT,20) when AMOUNT is the exchange traded value. It stays IMPLEMENTATION_APPROXIMATE because the source may define AMOUNT as an estimated VWAP x volume; the figures show how much the ranking would move under that alternative."
+  },
+  "day3_strict_oos": "not read: every Day3 rerun ends on 2025-12-31 (see rerun_day3.json and verification.json)"
+}

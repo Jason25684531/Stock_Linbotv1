@@ -1,0 +1,152 @@
+{
+  "fixes": [
+    {
+      "fix": "dealer_consec_days and institutional_consec_buy_days from the stock history",
+      "where": "core/calc_indicators.py build_feature_history",
+      "tests": [
+        "test_dealer_consec_days_counts_consecutive_sessions_and_stays_null_without_a_flow",
+        "test_institutional_consec_buy_days_uses_the_history_streak"
+      ]
+    },
+    {
+      "fix": "z-score population = rows with every model input, rules applied afterwards",
+      "where": "core/research/native_frame.py frame(model_inputs=...)",
+      "tests": [
+        "test_rule_inputs_never_change_the_zscore_population",
+        "test_a_row_missing_a_model_input_is_outside_the_population",
+        "test_legacy_frame_behavior_is_unchanged_without_model_inputs"
+      ]
+    },
+    {
+      "fix": "TWSE-listed common stocks only in recovered Daily",
+      "where": "core/research/native_frame.py listed_universe; jobs/run_daily.py load_recovered_data",
+      "tests": [
+        "listed_universe reads only the cached official MI_INDEX response and raises LISTED_UNIVERSE_UNAVAILABLE instead of guessing"
+      ]
+    },
+    {
+      "fix": "model contract reads training_data_end and spec_sha256",
+      "where": "core/research/native_models.py load_model_contract",
+      "tests": [
+        "test_training_data_end_bounds_the_window_and_the_spec_hash_is_checked",
+        "test_a_model_with_a_spec_hash_requires_every_feature_not_only_those_with_importance",
+        "test_an_old_model_without_the_new_fields_still_loads_as_before"
+      ]
+    },
+    {
+      "fix": "recovered status helper: no unproven-chip flag for a spec-trained model",
+      "where": "jobs/run_daily.py recovered_model_status",
+      "tests": [
+        "test_recovered_status_only_blocks_on_missing_cutoff_or_unproven_chip_definition"
+      ]
+    },
+    {
+      "fix": "training frame builder and approval-gated train()",
+      "where": "core/research/model_training.py",
+      "tests": [
+        "test_training_refuses_without_a_matching_approval_before_reading_any_data",
+        "test_training_frame_equals_the_recovered_frame_for_the_same_session",
+        "test_labels_use_only_the_next_sessions_and_rows_without_a_full_horizon_are_dropped"
+      ]
+    },
+    {
+      "fix": "rules-only research runs (no AI feature can exclude a stock)",
+      "where": "core/backtest/runner.py BacktestEngine(rules_only=True)",
+      "tests": [
+        "test_rules_only_engine_needs_no_model_and_excludes_only_on_rule_inputs"
+      ]
+    }
+  ],
+  "spec": {
+    "version": "retraining-spec-v1",
+    "status": "DRAFT_PENDING_OWNER_APPROVAL",
+    "sha256": "acfc4d76e517f88177cd9413d239bbba3845052b3530bfe983c4fc35fa512288"
+  },
+  "official_data_gates": {
+    "OFFICIAL_T86_FULL_RANGE": "DATA_PASS",
+    "OFFICIAL_MI_MARGN_FULL_RANGE": "DATA_PASS",
+    "OFFICIAL_CALENDAR_AND_PRICES": "DATA_PASS",
+    "D3_ADJUSTED_PRICES": "DATA_PASS"
+  },
+  "models": {
+    "defensive_low_volatility": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    },
+    "growth_momentum_breakout": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    },
+    "hybrid_trend_rank": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_RECOMMENDED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    },
+    "institutional_flow_confirmation": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    },
+    "mean_reversion": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    },
+    "quality_growth": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    },
+    "quality_value_low_volatility": {
+      "MODEL_STATUS": "MODEL_BLOCKED",
+      "retrain_decision": "RETRAIN_REQUIRED",
+      "ready_for_training": false,
+      "blockers": [
+        "SPEC_NOT_APPROVED (retraining-spec-v1 is DRAFT_PENDING_OWNER_APPROVAL)",
+        "OWNER_APPROVAL_FILE_MISSING",
+        "ACCEPTANCE_EVALUATION_NOT_IMPLEMENTED (train() records acceptance NOT_EVALUATED)",
+        "NO_FRESH_OOS_SAMPLE"
+      ]
+    }
+  },
+  "no_model_trained": true,
+  "old_models_unchanged": true
+}

@@ -1,0 +1,59 @@
+{
+  "evidence_series": "daily net excess return over the TAIEX total-return index; strategy returns are official-event adjusted prices after project costs",
+  "costs": {
+    "base": "fee 0.1425 %, tax 0.3 %, slippage 0.1 % (config/settings.py)",
+    "stress": "twice each"
+  },
+  "benchmark": "TAIEX total-return index (MI_INDEX 發行量加權股價報酬指數)",
+  "bootstrap": {
+    "block_length": 20,
+    "draws": 2000,
+    "seed": 20261023,
+    "confidence": 0.95,
+    "method": "moving block bootstrap, percentile interval of the annualized Sharpe"
+  },
+  "sharpe": "annualized with 252 sessions, no risk-free rate",
+  "deflated_sharpe": {
+    "reference": "Bailey and Lopez de Prado",
+    "trial_count": 743,
+    "trial_sources": {
+      "strategy_configurations_384": 384,
+      "factor_inventory_candidates": 335,
+      "fundamental_factor_scoreboard": 12,
+      "d4_factor_acceptance_scoreboard": 12
+    },
+    "trial_count_note": "known searches only: a lower bound, so the deflation is if anything too small",
+    "trial_sharpe_variance_daily": 0.0007673086125944387,
+    "variance_from": "384 configurations of this study"
+  },
+  "regimes": {
+    "definition": "previous-session TAIEX price index above its 200-session average = bull",
+    "minimum_sessions": 60
+  },
+  "gates": [
+    "g1 net and excess Sharpe > 0 at 2x costs",
+    "g2 bootstrap lower bound > 0",
+    "g3 DSR > 0.95",
+    "g4 top-5 assets and best-5%-days profit share < 50 % (literal reading)",
+    "g5 bull and bear excess not both negative and each regime has >= 60 sessions"
+  ],
+  "execution_audit": {
+    "caps": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "material": "unfillable orders > 1% of orders or value above the 5 % cap > 5% of order value",
+    "scope": "flags only; no partial or unfilled fills were simulated, so strict executability is NOT verified"
+  },
+  "counts": {
+    "configurations": 384,
+    "BACKTEST": {
+      "DIAGNOSTIC": 274,
+      "DEVELOPMENT": 110
+    },
+    "EVIDENCE": {
+      "INSUFFICIENT": 384
+    }
+  }
+}

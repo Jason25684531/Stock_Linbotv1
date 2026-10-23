@@ -1,0 +1,137 @@
+{
+  "at": "2026-10-24T01:13:34",
+  "git_head": "3cdef4a039ee30f6a3c4b5368d511ed2addcb4e9",
+  "running_processes": [
+    "68724 86356 2026-10-24T00:44:24 \"D:\\01_Project\\Stocke\\Stock_Linbotv1\\myenv\\Scripts\\python.exe\" scripts/native7_rules_only.py --start 2023-01-03 --end 2026-05-14 --tag prices2 --strategies mean_reversion,quality_value_low_volatility ",
+    "76940 86356 2026-10-24T00:44:24 \"D:\\01_Project\\Stocke\\Stock_Linbotv1\\myenv\\Scripts\\python.exe\" scripts/native7_rules_only.py --start 2023-01-03 --end 2026-05-14 --tag flows2 --strategies hybrid_trend_rank,institutional_flow_confirmation ",
+    "51956 68724 2026-10-24T00:44:24 \"C:\\Users\\Norlan\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" scripts/native7_rules_only.py --start 2023-01-03 --end 2026-05-14 --tag prices2 --strategies mean_reversion,quality_value_low_volatility ",
+    "36932 76940 2026-10-24T00:44:24 \"C:\\Users\\Norlan\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" scripts/native7_rules_only.py --start 2023-01-03 --end 2026-05-14 --tag flows2 --strategies hybrid_trend_rank,institutional_flow_confirmation ",
+    "37600 21496 2026-10-24T00:51:39 \"D:\\01_Project\\Stocke\\Stock_Linbotv1\\myenv\\Scripts\\python.exe\" scripts/native7_nan_trace.py --start 2023-01-03 --end 2026-05-14 --strategy hybrid_trend_rank ",
+    "17924 37600 2026-10-24T00:51:39 \"C:\\Users\\Norlan\\AppData\\Local\\Programs\\Python\\Python311\\python.exe\" scripts/native7_nan_trace.py --start 2023-01-03 --end 2026-05-14 --strategy hybrid_trend_rank "
+  ],
+  "files": {
+    "native7_flows.err": {
+      "bytes": 1250,
+      "sha256": "19f34108af09d2f02ddc7a20453af69e3237de2b04e57004e31ea61687739b13",
+      "modified": "2026-10-24T00:17:48.780642"
+    },
+    "native7_flows.out": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-23T22:54:35.891956"
+    },
+    "native7_flows2.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:44:24.323760"
+    },
+    "native7_flows2.out": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:44:24.322759"
+    },
+    "native7_flows2_hybrid_trend_rank.log": {
+      "bytes": 154864,
+      "sha256": "90214f78866d7bfa7fe3c02525caa73f2934d2f026e7af7a645483063f5e5f3c",
+      "modified": "2026-10-24T01:12:42.347751"
+    },
+    "native7_flows_hybrid_trend_rank.log": {
+      "bytes": 531114,
+      "sha256": "66216cfaa8156dda7ce945390e7ed2da16178f9c7412919a18f7813681649dd0",
+      "modified": "2026-10-24T00:17:48.756609"
+    },
+    "native7_monitor_state.jsonl": {
+      "bytes": 15780,
+      "sha256": "28b76747821530ed9695b8e706c31896cb9bd0e2fee8189ed6e53aa99de217c7",
+      "modified": "2026-10-24T01:13:13.185718"
+    },
+    "native7_nan_root_cause_report.md": {
+      "bytes": 5754,
+      "sha256": "4001034b8734960e71bc0c50394ca431ac25e357bd9879584c64a6490c1aecf4",
+      "modified": "2026-10-24T01:03:23.221561"
+    },
+    "native7_nan_trace_mean_reversion.json": {
+      "bytes": 5825,
+      "sha256": "988a476ef6252fb4885d52b5fbaf1de491c006c7d238db45c777e3eb1a52ec29",
+      "modified": "2026-10-24T01:01:10.994015"
+    },
+    "native7_prices.err": {
+      "bytes": 1250,
+      "sha256": "19f34108af09d2f02ddc7a20453af69e3237de2b04e57004e31ea61687739b13",
+      "modified": "2026-10-24T00:17:50.151187"
+    },
+    "native7_prices.out": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-23T22:54:35.884649"
+    },
+    "native7_prices2.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:44:24.293369"
+    },
+    "native7_prices2.out": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:44:24.292838"
+    },
+    "native7_prices2_mean_reversion.log": {
+      "bytes": 301505,
+      "sha256": "b781fba4b2a5e401d999f9c9c7e6e81176a3d15d71b65f453e257dfc1c20208d",
+      "modified": "2026-10-24T01:13:18.485157"
+    },
+    "native7_prices_defensive_low_volatility.log": {
+      "bytes": 924493,
+      "sha256": "8912b025d26eee6e4dd7efd22b01cb18f81cf6dd864aa724252ffdf6f51943c2",
+      "modified": "2026-10-24T00:17:11.362288"
+    },
+    "native7_prices_mean_reversion.log": {
+      "bytes": 908343,
+      "sha256": "c1ff40cfa056b80c0a27fc85bd24166baef17d320f12f4e03747607dbd404a18",
+      "modified": "2026-10-24T00:17:50.133151"
+    },
+    "native7_rules_only_prices.json": {
+      "bytes": 2340,
+      "sha256": "cd0b0b03d9a0e2f190bd096981bda8639bdbe228a575d98182a21ad8425faeaa",
+      "modified": "2026-10-24T00:17:11.382174"
+    },
+    "native7_trace_hybrid_trend_rank.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:51:39.452273"
+    },
+    "native7_trace_hybrid_trend_rank.log": {
+      "bytes": 105962,
+      "sha256": "e00b964f85115f0729ffb399e5460ce921bd11ded81a86b03168c02421378be4",
+      "modified": "2026-10-24T01:11:53.418346"
+    },
+    "native7_trace_hybrid_trend_rank.out": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:51:39.438493"
+    },
+    "native7_trace_mean_reversion.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "modified": "2026-10-24T00:51:39.429780"
+    },
+    "native7_trace_mean_reversion.log": {
+      "bytes": 97412,
+      "sha256": "5c6c13714325775cc2718d21f4b592431916374965876d48869abd717a58c6e8",
+      "modified": "2026-10-24T01:01:10.706488"
+    },
+    "native7_trace_mean_reversion.out": {
+      "bytes": 117,
+      "sha256": "c591818dd1ae5481193a92be590f9431d36eeb4795b47d460d7af50e9244acf6",
+      "modified": "2026-10-24T01:01:11.031672"
+    }
+  },
+  "scripts_sha256": {
+    "scripts/native7_rules_only.py": "eb1283803ce5d7c821827e1bf6e44c1823202f1d9735ee6d8a476d0b20419c74",
+    "scripts/native7_nan_trace.py": "22646c7f4f17b5e2912288914b24dc263a1408ee51642dcfc2cd10ec36367c46",
+    "scripts/dual_track_matrix.py": "fa84aa32dbf0da213752aced48b76afc44182be38bf3f825c04673b289b24474",
+    "core/backtest/runner.py": "053a7be97bd49bd4f5ec0ef32f79ef8ef41c0a21c2c517ed95c0b13859d08c18",
+    "core/backtest/metrics.py": "f54b3722a3d0e569431318cc07fe510af48e401224f501bc3637e332a410ee86"
+  },
+  "note": "running processes loaded their code at start; files still being written are hashed again when they finish"
+}

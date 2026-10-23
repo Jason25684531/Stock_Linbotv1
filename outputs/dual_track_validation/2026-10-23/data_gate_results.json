@@ -1,0 +1,188 @@
+{
+  "grades": "DATA_PASS / DATA_FAIL / DATA_BLOCKED; official sources and MySQL are graded separately",
+  "mysql_duplicate_keys": 31001,
+  "gates": [
+    {
+      "gate": "OFFICIAL_T86_FULL_RANGE",
+      "range": [
+        "2022-01-03",
+        "2026-10-22"
+      ],
+      "status": "DATA_PASS",
+      "coverage": {
+        "sessions": 1164,
+        "ok": 1164,
+        "not_ok": {},
+        "median_four_digit_rows": 999.0,
+        "low_row_sessions": []
+      }
+    },
+    {
+      "gate": "OFFICIAL_MI_MARGN_FULL_RANGE",
+      "range": [
+        "2022-01-03",
+        "2026-10-22"
+      ],
+      "status": "DATA_PASS",
+      "coverage": {
+        "sessions": 1164,
+        "ok": 1164,
+        "not_ok": {},
+        "median_four_digit_rows": 983.0,
+        "low_row_sessions": []
+      }
+    },
+    {
+      "gate": "OFFICIAL_CALENDAR_AND_PRICES",
+      "range": [
+        "2022-01-03",
+        "2026-10-22"
+      ],
+      "status": "DATA_PASS",
+      "sessions": 1164,
+      "note": "2026-10-23 answered no data at 18:29 and again at about 20:50 +08:00 (treated as a non-trading day, not counted as a session)"
+    },
+    {
+      "gate": "D3_ADJUSTED_PRICES",
+      "status": "DATA_PASS",
+      "price_match_rate": 1.0,
+      "rows": 801084,
+      "exceptions": "rows with a D3 price but no traded official bar are untradable valuation prices; see d3_nonofficial_prices.csv and the exposure check"
+    },
+    {
+      "gate": "OFFICIAL_CORPORATE_ACTIONS",
+      "status": "DATA_PASS",
+      "scope": "adjustment factors (reference price / previous close); cash dividend amounts are not separable for rights-and-dividend events",
+      "files": {
+        "D3": "14e4029ef6f066d7de3a318079c832a2727b4850e001d4c1222abc70a86467b4",
+        "2022": "a76b3eda6fcde8f496dcffa0f31f3244dd691f48437c6d4a12f138c5c5be237e",
+        "AFTER_D3": "770f546a248277b48bacfb4abe3dee576dcc67161605611cdd43e78a84586f5a"
+      }
+    },
+    {
+      "gate": "OFFICIAL_DELISTING_LIST",
+      "status": "DATA_PASS",
+      "scope": "official list and last traded session; exit prices and payouts are NOT available -> DELISTING_EXIT_UNVERIFIED if held"
+    },
+    {
+      "gate": "TOTAL_RETURN",
+      "status": "DATA_BLOCKED",
+      "reason": "rights-and-dividend events cannot be split into cash and shares; every configuration holds through such events"
+    },
+    {
+      "gate": "FUNDAMENTALS_VALUES",
+      "status": "DATA_BLOCKED",
+      "reason": "publication dates are official through FY2025; values were not independently re-verified (a sample re-parse was not performed this round)"
+    },
+    {
+      "gate": "MONTHLY_REVENUE_TIMING",
+      "status": "DATA_BLOCKED",
+      "reason": "no official announcement time"
+    },
+    {
+      "gate": "UNIVERSE_TPEX",
+      "status": "DATA_BLOCKED",
+      "reason": "no certified TPEx source; research and recovered Daily use TWSE-listed stocks only"
+    },
+    {
+      "gate": "COSTS",
+      "status": "DATA_PASS",
+      "scope": "fee 0.1425 %, tax 0.3 %, slippage 0.1 % from config/settings.py; stress at twice"
+    },
+    {
+      "gate": "EXECUTION_CONSTRAINTS",
+      "status": "DATA_PASS",
+      "scope": "official OHLC and previous close / ex-rights reference price give limit prices and locked opens; the audit is flag-only"
+    },
+    {
+      "gate": "MYSQL_FOREIGN_BUY_FULL_RANGE",
+      "status": "DATA_FAIL",
+      "stats": {
+        "shared_keys": 1018687,
+        "mismatch": 24921,
+        "match_rate": 0.975536,
+        "dates": 1234,
+        "dates_with_mismatch": 34,
+        "whole_day_error_dates": [
+          "2022-02-08",
+          "2022-02-15",
+          "2022-03-04",
+          "2024-07-18",
+          "2025-08-14",
+          "2025-12-10",
+          "2025-12-31",
+          "2026-01-02",
+          "2026-01-07",
+          "2026-01-08",
+          "2026-01-09",
+          "2026-01-20",
+          "2026-01-22",
+          "2026-02-10",
+          "2026-02-11",
+          "2026-04-15",
+          "2026-04-16",
+          "2026-04-17",
+          "2026-04-22",
+          "2026-04-27",
+          "2026-05-19",
+          "2026-05-20",
+          "2026-06-11",
+          "2026-06-17",
+          "2026-06-22"
+        ],
+        "mysql_null_official_present": 0,
+        "official_present": 1155641,
+        "mysql_zero_official_nonzero": 21917
+      },
+      "official_coverage_complete": true
+    },
+    {
+      "gate": "MYSQL_TRUST_BUY_FULL_RANGE",
+      "status": "DATA_FAIL",
+      "stats": {
+        "shared_keys": 1018687,
+        "mismatch": 7782,
+        "match_rate": 0.992361,
+        "dates": 1234,
+        "dates_with_mismatch": 90,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 0,
+        "official_present": 1155641,
+        "mysql_zero_official_nonzero": 6366
+      },
+      "official_coverage_complete": true
+    },
+    {
+      "gate": "MYSQL_DEALER_BUY_FULL_RANGE",
+      "status": "DATA_FAIL",
+      "stats": {
+        "shared_keys": 9682,
+        "mismatch": 0,
+        "match_rate": 1.0,
+        "dates": 1234,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 1009005,
+        "official_present": 1155641,
+        "mysql_zero_official_nonzero": 0
+      },
+      "official_coverage_complete": true
+    },
+    {
+      "gate": "MYSQL_MARGIN_BALANCE_FULL_RANGE",
+      "status": "DATA_FAIL",
+      "stats": {
+        "shared_keys": 9487,
+        "mismatch": 0,
+        "match_rate": 1.0,
+        "dates": 1234,
+        "dates_with_mismatch": 0,
+        "whole_day_error_dates": [],
+        "mysql_null_official_present": 998775,
+        "official_present": 1155008,
+        "mysql_zero_official_nonzero": 0
+      },
+      "official_coverage_complete": true
+    }
+  ]
+}

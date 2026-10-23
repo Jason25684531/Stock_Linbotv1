@@ -1,0 +1,85 @@
+{
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "basis": "raw prices (price return); benchmark TAIEX price index",
+  "strategies": {
+    "defensive_low_volatility": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "bb_width",
+        "bias",
+        "kd_k",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "natr",
+        "rsi",
+        "std_20",
+        "volume_ratio"
+      ],
+      "fills": 421,
+      "closed_trades": 209,
+      "unfilled": {
+        "UNFILLED": 1515
+      },
+      "final_equity": 786673.9705336527,
+      "metrics_status": "COMPUTED",
+      "metrics_method": "core.backtest.metrics.calculate_metrics on a finite equity curve",
+      "non_finite_sessions": 0,
+      "metrics": {
+        "total_return": {
+          "value": -0.21332602946634727,
+          "reason": null
+        },
+        "cagr": {
+          "value": -0.07218779722995583,
+          "reason": null
+        },
+        "annualized_volatility": {
+          "value": 0.12309164629150117,
+          "reason": null
+        },
+        "sharpe": {
+          "value": -0.5471663018745291,
+          "reason": null
+        },
+        "max_drawdown": {
+          "value": -0.31974992506093924,
+          "reason": null
+        },
+        "win_rate": {
+          "value": 0.430622009569378,
+          "reason": null
+        },
+        "trade_count": {
+          "value": 209.0,
+          "reason": null
+        }
+      },
+      "excess_sharpe_vs_price_index": -2.0093440669901192,
+      "excess_bootstrap": {
+        "lower": -3.120804823747907,
+        "upper": -0.7914064021839194,
+        "draws": 2000,
+        "sessions": 807
+      },
+      "benchmark_total_return": 1.9352782456840916,
+      "data_exclusions_total": 3151,
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone"
+      ]
+    }
+  }
+}

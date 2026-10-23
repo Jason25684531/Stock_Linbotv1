@@ -1,0 +1,142 @@
+{
+  "rule": "OD-25: run all 384 configurations only if the estimate is within 4 hours; otherwise registered and Frozen configurations first, the rest PENDING",
+  "selection": "each job's first configuration in its own grid order; no result metric was read",
+  "families": {
+    "G2G3": {
+      "family": "G2G3",
+      "configurations": 36,
+      "setup_seconds": 6.3,
+      "first_config_seconds": 1.2,
+      "estimated_total_hours": 0.01,
+      "result_shape": {
+        "GROSS": {
+          "equity": "Series[858] 2023-01-04 00:00:00..2026-07-28 00:00:00",
+          "returns": "Series[857] 2023-01-05 00:00:00..2026-07-28 00:00:00",
+          "trades": "list",
+          "execution_log": "DataFrame(0, 0) cols=[]",
+          "positions": {
+            "1309": "dict",
+            "2338": "dict",
+            "2442": "dict",
+            "2451": "dict",
+            "3167": "dict",
+            "6165": "dict",
+            "6443": "dict",
+            "6719": "dict",
+            "6994": "dict",
+            "8271": "dict"
+          },
+          "cost": {
+            "fee_rate": "float",
+            "tax_rate": "float",
+            "slippage": "float"
+          }
+        },
+        "BASE_COST": {
+          "equity": "Series[858] 2023-01-04 00:00:00..2026-07-28 00:00:00",
+          "returns": "Series[857] 2023-01-05 00:00:00..2026-07-28 00:00:00",
+          "trades": "list",
+          "execution_log": "DataFrame(0, 0) cols=[]",
+          "positions": {
+            "1309": "dict",
+            "2338": "dict",
+            "2442": "dict",
+            "2451": "dict",
+            "3167": "dict",
+            "6165": "dict",
+            "6443": "dict",
+            "6719": "dict",
+            "6994": "dict",
+            "8271": "dict"
+          },
+          "cost": {
+            "fee_rate": "float",
+            "tax_rate": "float",
+            "slippage": "float"
+          }
+        },
+        "STRESS_COST": {
+          "equity": "Series[858] 2023-01-04 00:00:00..2026-07-28 00:00:00",
+          "returns": "Series[857] 2023-01-05 00:00:00..2026-07-28 00:00:00",
+          "trades": "list",
+          "execution_log": "DataFrame(0, 0) cols=[]",
+          "positions": {
+            "1309": "dict",
+            "2338": "dict",
+            "2442": "dict",
+            "2451": "dict",
+            "3167": "dict",
+            "6165": "dict",
+            "6443": "dict",
+            "6719": "dict",
+            "6994": "dict",
+            "8271": "dict"
+          },
+          "cost": {
+            "fee_rate": "float",
+            "tax_rate": "float",
+            "slippage": "float"
+          }
+        }
+      }
+    },
+    "D5": {
+      "family": "D5",
+      "configurations": 48,
+      "setup_seconds": 34.5,
+      "first_config_seconds": 15.98,
+      "estimated_total_hours": 0.22,
+      "result_shape": {
+        "returns": "Series[859] 2023-01-04 00:00:00..2026-07-28 00:00:00",
+        "value": "Series[859] 2023-01-04 00:00:00..2026-07-28 00:00:00",
+        "orders": "DataFrame(1319, 7) cols=['Order Id', 'Column', 'Timestamp', 'Size', 'Price', 'Fees', 'Side']",
+        "stats": "Series[28] Avg Losing Trade Duration..Worst Trade [%]",
+        "instruction_matrix": "DataFrame(859, 1108) cols=[1101, 1102, 1103, 1104, 1108, 1109, 1110, 1201, 1203, 1210]",
+        "scheduled_instruction_dates": "DatetimeIndex",
+        "actual_order_dates": "DatetimeIndex",
+        "orders_on_non_rebalance_dates": "int"
+      }
+    },
+    "DAY3": {
+      "family": "DAY3",
+      "configurations": 300,
+      "setup_seconds": 209.1,
+      "first_config_seconds": 0.87,
+      "estimated_total_hours": 0.13,
+      "result_shape": {
+        "gross": {
+          "returns": "Series[723] 2023-01-04 00:00:00..2025-12-31 00:00:00",
+          "value": "Series[723] 2023-01-04 00:00:00..2025-12-31 00:00:00",
+          "orders": "DataFrame(590, 7) cols=['Order Id', 'Column', 'Timestamp', 'Size', 'Price', 'Fees', 'Side']",
+          "stats": "Series[28] Avg Losing Trade Duration..Worst Trade [%]",
+          "instruction_matrix": "DataFrame(723, 1108) cols=['1101', '1102', '1103', '1104', '1108', '1109', '1110', '1201', '1203', '1210']",
+          "scheduled_instruction_dates": "DatetimeIndex",
+          "actual_order_dates": "DatetimeIndex",
+          "orders_on_non_rebalance_dates": "int"
+        },
+        "net_base": {
+          "returns": "Series[723] 2023-01-04 00:00:00..2025-12-31 00:00:00",
+          "value": "Series[723] 2023-01-04 00:00:00..2025-12-31 00:00:00",
+          "orders": "DataFrame(590, 7) cols=['Order Id', 'Column', 'Timestamp', 'Size', 'Price', 'Fees', 'Side']",
+          "stats": "Series[28] Avg Losing Trade Duration..Worst Trade [%]",
+          "instruction_matrix": "DataFrame(723, 1108) cols=['1101', '1102', '1103', '1104', '1108', '1109', '1110', '1201', '1203', '1210']",
+          "scheduled_instruction_dates": "DatetimeIndex",
+          "actual_order_dates": "DatetimeIndex",
+          "orders_on_non_rebalance_dates": "int"
+        },
+        "net_stress": {
+          "returns": "Series[723] 2023-01-04 00:00:00..2025-12-31 00:00:00",
+          "value": "Series[723] 2023-01-04 00:00:00..2025-12-31 00:00:00",
+          "orders": "DataFrame(590, 7) cols=['Order Id', 'Column', 'Timestamp', 'Size', 'Price', 'Fees', 'Side']",
+          "stats": "Series[28] Avg Losing Trade Duration..Worst Trade [%]",
+          "instruction_matrix": "DataFrame(723, 1108) cols=['1101', '1102', '1103', '1104', '1108', '1109', '1110', '1201', '1203', '1210']",
+          "scheduled_instruction_dates": "DatetimeIndex",
+          "actual_order_dates": "DatetimeIndex",
+          "orders_on_non_rebalance_dates": "int"
+        }
+      }
+    }
+  },
+  "estimated_total_hours": 0.36,
+  "decision": "RUN_ALL_384"
+}

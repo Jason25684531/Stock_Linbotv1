@@ -1,0 +1,538 @@
+{
+  "defensive_low_volatility": {
+    "row": {
+      "strategy": "defensive_low_volatility",
+      "completed": true,
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "fills": 421,
+      "closed_trades": 209,
+      "total_return": -0.21087883669491247,
+      "sharpe": -0.540858326315574,
+      "max_drawdown": -0.31727231843788295,
+      "cagr": -0.07128747808634606,
+      "win_rate": 0.430622009569378,
+      "stale_events": 0,
+      "longest_carry_sessions": null,
+      "max_stale_equity_share": null,
+      "stale_sessions_share": null,
+      "flags": "",
+      "legacy_seeded_status": "COMPUTED",
+      "legacy_seeded_non_finite_sessions": 0,
+      "legacy_seeded_total_return": -0.21087883669491247,
+      "legacy_seeded_sharpe": -0.540858326315574,
+      "orders_identical_to_legacy": true,
+      "pre_fix_unseeded_status": "DIAGNOSTIC",
+      "pre_fix_unseeded_total_return": -0.21332602946634727,
+      "pre_fix_unseeded_sharpe": -0.5471663018745291,
+      "pre_fix_unseeded_fills": 421,
+      "delta_total_return_vs_legacy_seeded": 0.0,
+      "delta_sharpe_vs_legacy_seeded": 0.0
+    },
+    "sensitivity": null,
+    "by_reason": null,
+    "worst_runs": null,
+    "zero_volume_events": [],
+    "stale_source": "native7_rules_only_od29_defensive_low_volatility.json",
+    "run": {
+      "run_id": "od29_defensive_low_volatility-20261024T013858",
+      "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+      "inputs_sha256": {
+        "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+        "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+        "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+      },
+      "valuation_policy": "finite_positive_stale",
+      "slippage_seed": 20261023
+    },
+    "stale_file_sha256": "b6c4a27cb3681238f48af8658fbf35b2c63a6dcbec8ee44d1bcd73ede1ed5a54",
+    "legacy_file_sha256": "551f98ccfeb3a653053ca810f6173c174feb667af55f461aa6c85f1ae182b133"
+  },
+  "mean_reversion": {
+    "row": {
+      "strategy": "mean_reversion",
+      "completed": true,
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "fills": 667,
+      "closed_trades": 332,
+      "total_return": -0.33546505910960045,
+      "sharpe": -0.620316266742551,
+      "max_drawdown": -0.42223198325333466,
+      "cagr": -0.11980670572358021,
+      "win_rate": 0.4066265060240964,
+      "stale_events": 6,
+      "longest_carry_sessions": 2,
+      "max_stale_equity_share": 0.32351321467961114,
+      "stale_sessions_share": 0.007425742574257425,
+      "flags": "STALE_VALUATION_MATERIAL;PROBABLE_SUSPENSION",
+      "legacy_seeded_status": "UNDEFINED",
+      "legacy_seeded_non_finite_sessions": 6,
+      "legacy_seeded_total_return": null,
+      "legacy_seeded_sharpe": null,
+      "orders_identical_to_legacy": true,
+      "pre_fix_unseeded_status": "BLOCKED",
+      "pre_fix_unseeded_total_return": null,
+      "pre_fix_unseeded_sharpe": null,
+      "pre_fix_unseeded_fills": 667,
+      "delta_total_return_vs_legacy_seeded": null,
+      "delta_sharpe_vs_legacy_seeded": null
+    },
+    "sensitivity": {
+      "carry_last_valid_close": {
+        "total_return": -0.33546505910960045,
+        "sharpe": -0.620316266742551,
+        "max_drawdown": -0.42223198325333466
+      },
+      "down_limit_each_stale_session": {
+        "total_return": -0.33546505910960045,
+        "sharpe": -0.5778715084210875,
+        "max_drawdown": -0.4417412319963063
+      },
+      "stale_positions_at_zero": {
+        "total_return": -0.33546505910960045,
+        "sharpe": 0.114897232401369,
+        "max_drawdown": -0.6016417837231753
+      }
+    },
+    "by_reason": {
+      "NO_VALID_CLOSE_NO_VOLUME": 5,
+      "NO_VALID_CLOSE_WITH_VOLUME": 1
+    },
+    "worst_runs": [
+      {
+        "stock_id": "5906",
+        "price_source_date": "2025-11-17",
+        "start": "2025-11-18",
+        "end": "2025-11-18",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_NO_VOLUME"
+        ],
+        "max_share": 0.3235132147,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "5906",
+        "price_source_date": "2025-11-19",
+        "start": "2025-11-20",
+        "end": "2025-11-20",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_NO_VOLUME"
+        ],
+        "max_share": 0.3228366026,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "5906",
+        "price_source_date": "2025-11-21",
+        "start": "2025-11-24",
+        "end": "2025-11-25",
+        "sessions": 2,
+        "reasons": [
+          "NO_VALID_CLOSE_NO_VOLUME"
+        ],
+        "max_share": 0.3204702373,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "6955",
+        "price_source_date": "2025-09-03",
+        "start": "2025-09-04",
+        "end": "2025-09-04",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_NO_VOLUME"
+        ],
+        "max_share": 0.2646433803,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "1225",
+        "price_source_date": "2023-05-10",
+        "start": "2023-05-11",
+        "end": "2023-05-11",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_WITH_VOLUME"
+        ],
+        "max_share": 0.2050875262,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      }
+    ],
+    "zero_volume_events": [
+      {
+        "date": "2025-09-04",
+        "stock_id": "6955",
+        "equity_share": 0.2646433803171649,
+        "prior_sessions_traded": 20,
+        "prior_median_volume": 9922.5,
+        "class": "PROBABLE_SUSPENSION"
+      },
+      {
+        "date": "2025-11-18",
+        "stock_id": "5906",
+        "equity_share": 0.3235132146796111,
+        "prior_sessions_traded": 19,
+        "prior_median_volume": 3860.0,
+        "class": "PROBABLE_SUSPENSION"
+      },
+      {
+        "date": "2025-11-20",
+        "stock_id": "5906",
+        "equity_share": 0.3228366026465717,
+        "prior_sessions_traded": 18,
+        "prior_median_volume": 2668.0,
+        "class": "PROBABLE_SUSPENSION"
+      },
+      {
+        "date": "2025-11-24",
+        "stock_id": "5906",
+        "equity_share": 0.3173172907737904,
+        "prior_sessions_traded": 17,
+        "prior_median_volume": 2061.0,
+        "class": "PROBABLE_SUSPENSION"
+      },
+      {
+        "date": "2025-11-25",
+        "stock_id": "5906",
+        "equity_share": 0.3204702373420272,
+        "prior_sessions_traded": 16,
+        "prior_median_volume": 2005.0,
+        "class": "PROBABLE_SUSPENSION"
+      }
+    ],
+    "stale_source": "native7_rules_only_od29_mean_reversion.json",
+    "run": {
+      "run_id": "od29_mean_reversion-20261024T013858",
+      "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+      "inputs_sha256": {
+        "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+        "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+        "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+      },
+      "valuation_policy": "finite_positive_stale",
+      "slippage_seed": 20261023
+    },
+    "stale_file_sha256": "99fa083519feb4f31face87919be29e94a69df5b449b594aaefbf0f7b0cd32bc",
+    "legacy_file_sha256": "257c5e51addca74cdb603af9b770a253530120eadd3d8f4cdd731a26430b81c3"
+  },
+  "hybrid_trend_rank": {
+    "row": {
+      "strategy": "hybrid_trend_rank",
+      "completed": true,
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "fills": 474,
+      "closed_trades": 236,
+      "total_return": -0.6964114633147207,
+      "sharpe": -1.307606283380806,
+      "max_drawdown": -0.6965233494980188,
+      "cagr": -0.31081714535166194,
+      "win_rate": 0.3093220338983051,
+      "stale_events": 1,
+      "longest_carry_sessions": 1,
+      "max_stale_equity_share": 0.48167809318613597,
+      "stale_sessions_share": 0.0012376237623762376,
+      "flags": "STALE_VALUATION_MATERIAL;PROBABLE_SUSPENSION",
+      "legacy_seeded_status": "UNDEFINED",
+      "legacy_seeded_non_finite_sessions": 1,
+      "legacy_seeded_total_return": null,
+      "legacy_seeded_sharpe": null,
+      "orders_identical_to_legacy": true,
+      "pre_fix_unseeded_status": "BLOCKED",
+      "pre_fix_unseeded_total_return": null,
+      "pre_fix_unseeded_sharpe": null,
+      "pre_fix_unseeded_fills": 476,
+      "delta_total_return_vs_legacy_seeded": null,
+      "delta_sharpe_vs_legacy_seeded": null
+    },
+    "sensitivity": {
+      "carry_last_valid_close": {
+        "total_return": -0.6964114633147207,
+        "sharpe": -1.307606283380806,
+        "max_drawdown": -0.6965233494980188
+      },
+      "down_limit_each_stale_session": {
+        "total_return": -0.6964114633147207,
+        "sharpe": -1.289776149720113,
+        "max_drawdown": -0.6965233494980188
+      },
+      "stale_positions_at_zero": {
+        "total_return": -0.6964114633147207,
+        "sharpe": -0.3042587641048844,
+        "max_drawdown": -0.7800000339039747
+      }
+    },
+    "by_reason": {
+      "NO_VALID_CLOSE_NO_VOLUME": 1
+    },
+    "worst_runs": [
+      {
+        "stock_id": "3036",
+        "price_source_date": "2025-07-14",
+        "start": "2025-07-15",
+        "end": "2025-07-15",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_NO_VOLUME"
+        ],
+        "max_share": 0.4816780932,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      }
+    ],
+    "zero_volume_events": [
+      {
+        "date": "2025-07-15",
+        "stock_id": "3036",
+        "equity_share": 0.4816780931861359,
+        "prior_sessions_traded": 20,
+        "prior_median_volume": 6258099.0,
+        "class": "PROBABLE_SUSPENSION"
+      }
+    ],
+    "stale_source": "native7_rules_only_od29_hybrid_trend_rank.json",
+    "run": {
+      "run_id": "od29_hybrid_trend_rank-20261024T013858",
+      "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+      "inputs_sha256": {
+        "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+        "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+        "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+      },
+      "valuation_policy": "finite_positive_stale",
+      "slippage_seed": 20261023
+    },
+    "stale_file_sha256": "552d61f48fb466b16c98b9256809fdd19ccd078ab538af57b7c5f9e9ee5570f4",
+    "legacy_file_sha256": "de0567723f218474dfb60560b2d6aeca3526ee17b706c3fa1932675c8fab76bb"
+  },
+  "institutional_flow_confirmation": {
+    "row": {
+      "strategy": "institutional_flow_confirmation",
+      "completed": true,
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "fills": 411,
+      "closed_trades": 204,
+      "total_return": -0.12139583206756255,
+      "sharpe": -0.3370645609612341,
+      "max_drawdown": -0.2651149912891926,
+      "cagr": -0.039608179313783576,
+      "win_rate": 0.39215686274509803,
+      "stale_events": 2,
+      "longest_carry_sessions": 2,
+      "max_stale_equity_share": 0.1833014788129899,
+      "stale_sessions_share": 0.0024752475247524753,
+      "flags": "STALE_VALUATION_MATERIAL",
+      "legacy_seeded_status": "UNDEFINED",
+      "legacy_seeded_non_finite_sessions": 2,
+      "legacy_seeded_total_return": null,
+      "legacy_seeded_sharpe": null,
+      "orders_identical_to_legacy": true,
+      "pre_fix_unseeded_status": "BLOCKED",
+      "pre_fix_unseeded_total_return": null,
+      "pre_fix_unseeded_sharpe": null,
+      "pre_fix_unseeded_fills": 413,
+      "delta_total_return_vs_legacy_seeded": null,
+      "delta_sharpe_vs_legacy_seeded": null
+    },
+    "sensitivity": {
+      "carry_last_valid_close": {
+        "total_return": -0.12139583206756255,
+        "sharpe": -0.3370645609612341,
+        "max_drawdown": -0.2651149912891926
+      },
+      "down_limit_each_stale_session": {
+        "total_return": -0.12139583206756255,
+        "sharpe": -0.3264378128542714,
+        "max_drawdown": -0.2651149912891926
+      },
+      "stale_positions_at_zero": {
+        "total_return": -0.12139583206756255,
+        "sharpe": -0.11800052846646218,
+        "max_drawdown": -0.2651149912891926
+      }
+    },
+    "by_reason": {
+      "NO_VALID_CLOSE_WITH_VOLUME": 2
+    },
+    "worst_runs": [
+      {
+        "stock_id": "9931",
+        "price_source_date": "2023-06-30",
+        "start": "2023-07-03",
+        "end": "2023-07-04",
+        "sessions": 2,
+        "reasons": [
+          "NO_VALID_CLOSE_WITH_VOLUME"
+        ],
+        "max_share": 0.1833014788,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      }
+    ],
+    "zero_volume_events": [],
+    "stale_source": "native7_rules_only_od29_institutional_flow_confirmation.json",
+    "run": {
+      "run_id": "od29_institutional_flow_confirmation-20261024T013858",
+      "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+      "inputs_sha256": {
+        "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+        "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+        "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+      },
+      "valuation_policy": "finite_positive_stale",
+      "slippage_seed": 20261023
+    },
+    "stale_file_sha256": "782f644f99a5e3af33b9bc75d878e5f0674200de6db1693b14c1a2ddd2ec815a",
+    "legacy_file_sha256": "9b2825b91c9c641f364c41db2b5cd5a65f8676ef09ec0e88ae8ba77235206c87"
+  },
+  "quality_value_low_volatility": {
+    "row": {
+      "strategy": "quality_value_low_volatility",
+      "completed": true,
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "fills": 363,
+      "closed_trades": 180,
+      "total_return": -0.3546912249988059,
+      "sharpe": -1.0808148914468645,
+      "max_drawdown": -0.3733171846847383,
+      "cagr": -0.12783919639136287,
+      "win_rate": 0.35,
+      "stale_events": 5,
+      "longest_carry_sessions": 2,
+      "max_stale_equity_share": 0.2980347187005303,
+      "stale_sessions_share": 0.006188118811881188,
+      "flags": "STALE_VALUATION_MATERIAL;PROBABLE_SUSPENSION",
+      "legacy_seeded_status": "UNDEFINED",
+      "legacy_seeded_non_finite_sessions": 5,
+      "legacy_seeded_total_return": null,
+      "legacy_seeded_sharpe": null,
+      "orders_identical_to_legacy": true,
+      "pre_fix_unseeded_status": "BLOCKED",
+      "pre_fix_unseeded_total_return": null,
+      "pre_fix_unseeded_sharpe": null,
+      "pre_fix_unseeded_fills": 363,
+      "delta_total_return_vs_legacy_seeded": null,
+      "delta_sharpe_vs_legacy_seeded": null
+    },
+    "sensitivity": {
+      "carry_last_valid_close": {
+        "total_return": -0.3546912249988059,
+        "sharpe": -1.0808148914468645,
+        "max_drawdown": -0.3733171846847383
+      },
+      "down_limit_each_stale_session": {
+        "total_return": -0.3546912249988059,
+        "sharpe": -0.9815831529271238,
+        "max_drawdown": -0.3733171846847383
+      },
+      "stale_positions_at_zero": {
+        "total_return": -0.3546912249988059,
+        "sharpe": -0.023128524643850606,
+        "max_drawdown": -0.5359600396396607
+      }
+    },
+    "by_reason": {
+      "NO_VALID_CLOSE_WITH_VOLUME": 4,
+      "NO_VALID_CLOSE_NO_VOLUME": 1
+    },
+    "worst_runs": [
+      {
+        "stock_id": "6955",
+        "price_source_date": "2026-03-24",
+        "start": "2026-03-25",
+        "end": "2026-03-25",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_NO_VOLUME"
+        ],
+        "max_share": 0.2980347187,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "6464",
+        "price_source_date": "2025-12-23",
+        "start": "2025-12-24",
+        "end": "2025-12-26",
+        "sessions": 2,
+        "reasons": [
+          "NO_VALID_CLOSE_WITH_VOLUME"
+        ],
+        "max_share": 0.2767505438,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "6581",
+        "price_source_date": "2025-06-24",
+        "start": "2025-06-25",
+        "end": "2025-06-25",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_WITH_VOLUME"
+        ],
+        "max_share": 0.2381518577,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      },
+      {
+        "stock_id": "6464",
+        "price_source_date": "2024-12-12",
+        "start": "2024-12-13",
+        "end": "2024-12-13",
+        "sessions": 1,
+        "reasons": [
+          "NO_VALID_CLOSE_WITH_VOLUME"
+        ],
+        "max_share": 0.233917448,
+        "ex_date_in_carry": false,
+        "delisted_after_carry": false,
+        "possible_suspension": false
+      }
+    ],
+    "zero_volume_events": [
+      {
+        "date": "2026-03-25",
+        "stock_id": "6955",
+        "equity_share": 0.2980347187005303,
+        "prior_sessions_traded": 19,
+        "prior_median_volume": 10015.5,
+        "class": "PROBABLE_SUSPENSION"
+      }
+    ],
+    "stale_source": "native7_rules_only_od29_quality_value_low_volatility.json",
+    "run": {
+      "run_id": "od29_quality_value_low_volatility-20261024T013858",
+      "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+      "inputs_sha256": {
+        "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+        "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+        "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+      },
+      "valuation_policy": "finite_positive_stale",
+      "slippage_seed": 20261023
+    },
+    "stale_file_sha256": "5af5aca9e48a5e2dbc52115d1a0357223c5c58caf0e58e3e5d150ffa8bb97e89",
+    "legacy_file_sha256": "c027b515fbceb84b7ff3225165d5ed0822e07943435a683a841689fa9c4e8c3d"
+  }
+}

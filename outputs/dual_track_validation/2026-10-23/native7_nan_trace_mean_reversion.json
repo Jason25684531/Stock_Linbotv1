@@ -1,0 +1,226 @@
+{
+  "strategy": "mean_reversion",
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "first_non_finite": "2023-05-11",
+  "session_index": 78,
+  "cash": 405428.75684102136,
+  "previous_equity": 1016246.2568410214,
+  "previous_date": "2023-05-10",
+  "finite_market_value": 389500.92,
+  "positions_held": 3,
+  "positions_with_non_finite_close": [
+    "1225"
+  ],
+  "positions": [
+    {
+      "stock_id": "5531",
+      "shares": 20554,
+      "cost": 9.737754074020703,
+      "engine_last_price": 9.78,
+      "bar_on_first_bad_day": {
+        "open_price": 10.1,
+        "high_price": 10.35,
+        "low_price": 9.77,
+        "close_price": 9.78,
+        "volume": 2307135.0,
+        "amount": 23104720.0
+      },
+      "close_is_finite": true,
+      "last_6_snapshot_bars": [
+        {
+          "date": "2023-05-04",
+          "open_price": 9.96,
+          "close_price": 9.92,
+          "volume": 301601.0
+        },
+        {
+          "date": "2023-05-05",
+          "open_price": 9.98,
+          "close_price": 9.86,
+          "volume": 166657.0
+        },
+        {
+          "date": "2023-05-08",
+          "open_price": 9.95,
+          "close_price": 9.96,
+          "volume": 585041.0
+        },
+        {
+          "date": "2023-05-09",
+          "open_price": 9.98,
+          "close_price": 10.35,
+          "volume": 1950826.0
+        },
+        {
+          "date": "2023-05-10",
+          "open_price": 10.4,
+          "close_price": 10.35,
+          "volume": 799441.0
+        },
+        {
+          "date": "2023-05-11",
+          "open_price": 10.1,
+          "close_price": 9.78,
+          "volume": 2307135.0
+        }
+      ],
+      "execution_events": [
+        {
+          "signal_date": "2023-04-28",
+          "execution_date": "2023-05-02",
+          "side": "BUY",
+          "price": 9.73,
+          "status": "FILLED",
+          "reason": null
+        }
+      ],
+      "later_bars_in_snapshot": 729,
+      "later_bars_with_finite_close": 729,
+      "in_delistings_csv": false,
+      "official_events_on_day": []
+    },
+    {
+      "stock_id": "1225",
+      "shares": 3378,
+      "cost": 59.21130541011479,
+      "engine_last_price": null,
+      "bar_on_first_bad_day": {
+        "open_price": null,
+        "high_price": null,
+        "low_price": null,
+        "close_price": null,
+        "volume": 614.0,
+        "amount": 36425.0
+      },
+      "close_is_finite": false,
+      "last_6_snapshot_bars": [
+        {
+          "date": "2023-05-04",
+          "open_price": 58.9,
+          "close_price": 60.2,
+          "volume": 309060.0
+        },
+        {
+          "date": "2023-05-05",
+          "open_price": 58.3,
+          "close_price": 60.0,
+          "volume": 445123.0
+        },
+        {
+          "date": "2023-05-08",
+          "open_price": 59.3,
+          "close_price": 59.8,
+          "volume": 218166.0
+        },
+        {
+          "date": "2023-05-09",
+          "open_price": 59.6,
+          "close_price": 60.0,
+          "volume": 19283.0
+        },
+        {
+          "date": "2023-05-10",
+          "open_price": 60.5,
+          "close_price": 60.7,
+          "volume": 31640.0
+        },
+        {
+          "date": "2023-05-11",
+          "open_price": null,
+          "close_price": null,
+          "volume": 614.0
+        }
+      ],
+      "execution_events": [
+        {
+          "signal_date": "2023-04-28",
+          "execution_date": "2023-05-02",
+          "side": "BUY",
+          "price": 59.2,
+          "status": "FILLED",
+          "reason": null
+        }
+      ],
+      "later_bars_in_snapshot": 676,
+      "later_bars_with_finite_close": 663,
+      "in_delistings_csv": false,
+      "official_events_on_day": []
+    },
+    {
+      "stock_id": "8104",
+      "shares": 4796,
+      "cost": 41.71981577910318,
+      "engine_last_price": 39.3,
+      "bar_on_first_bad_day": {
+        "open_price": 40.5,
+        "high_price": 40.55,
+        "low_price": 39.15,
+        "close_price": 39.3,
+        "volume": 257990.0,
+        "amount": 10205415.0
+      },
+      "close_is_finite": true,
+      "last_6_snapshot_bars": [
+        {
+          "date": "2023-05-04",
+          "open_price": 41.2,
+          "close_price": 41.3,
+          "volume": 119592.0
+        },
+        {
+          "date": "2023-05-05",
+          "open_price": 41.3,
+          "close_price": 40.5,
+          "volume": 266590.0
+        },
+        {
+          "date": "2023-05-08",
+          "open_price": 40.65,
+          "close_price": 40.7,
+          "volume": 136301.0
+        },
+        {
+          "date": "2023-05-09",
+          "open_price": 41.0,
+          "close_price": 40.0,
+          "volume": 237286.0
+        },
+        {
+          "date": "2023-05-10",
+          "open_price": 40.0,
+          "close_price": 40.25,
+          "volume": 42425.0
+        },
+        {
+          "date": "2023-05-11",
+          "open_price": 40.5,
+          "close_price": 39.3,
+          "volume": 257990.0
+        }
+      ],
+      "execution_events": [
+        {
+          "signal_date": "2023-04-28",
+          "execution_date": "2023-05-02",
+          "side": "BUY",
+          "price": 41.7,
+          "status": "FILLED",
+          "reason": null
+        }
+      ],
+      "later_bars_in_snapshot": 729,
+      "later_bars_with_finite_close": 729,
+      "in_delistings_csv": false,
+      "official_events_on_day": []
+    }
+  ],
+  "closed_trades_before": 29,
+  "snapshot_rows_without_close_in_window": 1772,
+  "snapshot_rows_in_window": 825668,
+  "snapshot_rows_without_close_but_with_volume_in_window": 1195,
+  "result": "FIRST_NON_FINITE_FOUND"
+}

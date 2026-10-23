@@ -1,0 +1,17 @@
+{
+  "family": "G2G3",
+  "configurations_captured": 36,
+  "expected": 36,
+  "seconds": 87.8,
+  "returns_rows": 154260,
+  "orders_rows": 23940,
+  "first_date": "2023-01-05",
+  "last_date": "2026-07-28",
+  "reproduction": {
+    "canonical": "outputs/fundamental_strategy_validation/add-fundamental-strategy-robustness-and-fresh-oos-v1_20260917_v4",
+    "csv_files": 8,
+    "identical": 8,
+    "different": [],
+    "status": "IDENTICAL"
+  }
+}

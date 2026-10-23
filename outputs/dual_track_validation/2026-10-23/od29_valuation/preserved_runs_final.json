@@ -1,0 +1,122 @@
+{
+ "at": "2026-10-24T03:16:38",
+ "note": "all pre-OD29 runs and traces finished; final hashes of every native7 file in the round directory",
+ "files": {
+  "native7_flows.err": {
+   "bytes": 1250,
+   "sha256": "19f34108af09d2f02ddc7a20453af69e3237de2b04e57004e31ea61687739b13"
+  },
+  "native7_flows.out": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "native7_flows2.err": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "native7_flows2.out": {
+   "bytes": 120,
+   "sha256": "921b0b086b042feaec65a16b8e8529d415966ff2f1d6c33c9b7013f10a78d5da"
+  },
+  "native7_flows2_hybrid_trend_rank.log": {
+   "bytes": 532177,
+   "sha256": "bb2794cbeb3f03896ec0ec539b1d582d0e7d6608da20c0e7f8b9cc26196b1872"
+  },
+  "native7_flows2_institutional_flow_confirmation.log": {
+   "bytes": 755167,
+   "sha256": "2b81d43ab1d88843815b6f92031196e76f2e950d9fe7ba7cb17ff9138c4c4b52"
+  },
+  "native7_flows_hybrid_trend_rank.log": {
+   "bytes": 531114,
+   "sha256": "66216cfaa8156dda7ce945390e7ed2da16178f9c7412919a18f7813681649dd0"
+  },
+  "native7_monitor_state.jsonl": {
+   "bytes": 132999,
+   "sha256": "694f946da6c7cf607fb0a188824ebfced2ba3b16d306b60f187db7e2cc354b99"
+  },
+  "native7_nan_root_cause_report.md": {
+   "bytes": 8245,
+   "sha256": "02961202360a3d1d75903144c54b2a3bbc17364a36bd11ccefed349a59ad9d29"
+  },
+  "native7_nan_trace_hybrid_trend_rank.json": {
+   "bytes": 6774,
+   "sha256": "49b917a940065e6d0ca608a669a5b5edf9e34621afc32baacce30a809c130baa"
+  },
+  "native7_nan_trace_mean_reversion.json": {
+   "bytes": 5825,
+   "sha256": "988a476ef6252fb4885d52b5fbaf1de491c006c7d238db45c777e3eb1a52ec29"
+  },
+  "native7_prices.err": {
+   "bytes": 1250,
+   "sha256": "19f34108af09d2f02ddc7a20453af69e3237de2b04e57004e31ea61687739b13"
+  },
+  "native7_prices.out": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "native7_prices2.err": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "native7_prices2.out": {
+   "bytes": 114,
+   "sha256": "6f6edc69d8dd2610443989f1b5312090e3c94a6bea923a5287c93172b9937c18"
+  },
+  "native7_prices2_mean_reversion.log": {
+   "bytes": 950360,
+   "sha256": "f27f081620d5948be35cef9ad07c740954d270e98c283ec4e76fe56a77aba3df"
+  },
+  "native7_prices2_quality_value_low_volatility.log": {
+   "bytes": 662214,
+   "sha256": "4a4232b3c0ce7d796cacdaf9e9de4cca0a7bcf10daca19c56fcef4e86ea607e7"
+  },
+  "native7_prices_defensive_low_volatility.log": {
+   "bytes": 924493,
+   "sha256": "8912b025d26eee6e4dd7efd22b01cb18f81cf6dd864aa724252ffdf6f51943c2"
+  },
+  "native7_prices_mean_reversion.log": {
+   "bytes": 908343,
+   "sha256": "c1ff40cfa056b80c0a27fc85bd24166baef17d320f12f4e03747607dbd404a18"
+  },
+  "native7_rules_only_flows2.json": {
+   "bytes": 5293,
+   "sha256": "cd4ba90d0fc455d52eabe51919c144f54476245809ab8284bd961189127e7af0"
+  },
+  "native7_rules_only_prices.json": {
+   "bytes": 2340,
+   "sha256": "cd0b0b03d9a0e2f190bd096981bda8639bdbe228a575d98182a21ad8425faeaa"
+  },
+  "native7_rules_only_prices2.json": {
+   "bytes": 5904,
+   "sha256": "baaaa19b75c27b0dba6ec44f6fb52d3febe5233f9173cceb79b0d442eb348a73"
+  },
+  "native7_trace_hybrid_trend_rank.err": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "native7_trace_hybrid_trend_rank.log": {
+   "bytes": 380444,
+   "sha256": "331a3f5f429bc1c6517b14e598827457dbdb0a22f6004a1663c72a8dea915953"
+  },
+  "native7_trace_hybrid_trend_rank.out": {
+   "bytes": 117,
+   "sha256": "ed33fa5fb5ef95791a4cc1fdba0ed872bce191857bed17a7d8c4d11118540560"
+  },
+  "native7_trace_mean_reversion.err": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "native7_trace_mean_reversion.log": {
+   "bytes": 97412,
+   "sha256": "5c6c13714325775cc2718d21f4b592431916374965876d48869abd717a58c6e8"
+  },
+  "native7_trace_mean_reversion.out": {
+   "bytes": 117,
+   "sha256": "c591818dd1ae5481193a92be590f9431d36eeb4795b47d460d7af50e9244acf6"
+  },
+  "native7_valuation_fix_report.md": {
+   "bytes": 5322,
+   "sha256": "071c451299eedf037cd6b9c9ef7ff322562d9a2cf9624f1b59c5f8663410f82e"
+  }
+ }
+}

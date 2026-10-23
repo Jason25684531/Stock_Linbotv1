@@ -1,0 +1,74 @@
+{
+  "status": "FAIL",
+  "failed_checks": [
+    "REQUEST_SPACING"
+  ],
+  "request_spacing": {
+    "threshold_seconds": 3.1,
+    "required_seconds": 3.2,
+    "released_pairs_below_threshold": [
+      [
+        "MI_MARGN",
+        "2022-10-07",
+        "T86",
+        "2022-10-11",
+        2.934
+      ]
+    ],
+    "note": "RELEASED is wall-clock time logged after RequestGate.wait() returns; the gate itself sleeps on a monotonic clock until 3.2 s have passed. A logged gap below 3.1 s is not explained by the gate and no system clock change was recorded; it stays a failed check."
+  },
+  "models_unchanged": true,
+  "archived_outputs_unchanged": true,
+  "preservation": {
+    "status": "FAIL",
+    "historical_hashes_checked": 5463,
+    "historical_changed": [],
+    "protected_sources_checked": 74,
+    "protected_changed": [
+      "core/strategies/growth_momentum_breakout.py"
+    ],
+    "source_records": 461,
+    "inventory_identities_equal": true
+  },
+  "historical_hash_exceptions": [],
+  "protected_source_exceptions": [
+    "core/strategies/growth_momentum_breakout.py"
+  ],
+  "runtime_status_file": {
+    "sha256_at_round_start": "53e8810be60d9e415b621995086b9d4857b08cdb0d0386bcd39a3a58ac0ac81c",
+    "sha256_now": "bb561a27c5559ea248c059fa63a908bdaa4eaf76db7e524e63efa23e39b011b1",
+    "changed_during_round": true
+  },
+  "code_changed_since_baseline": [
+    "core/backtest/runner.py",
+    "core/calc_indicators.py",
+    "core/research/model_training.py",
+    "core/research/native_frame.py",
+    "core/research/native_models.py",
+    "jobs/run_daily.py"
+  ],
+  "official_requests_sent": 1876,
+  "budget": 1900,
+  "process_restarts_seen_in_ledger": 1,
+  "min_release_spacing_seconds": 2.934,
+  "max_attempts_per_session": 3,
+  "family_boundaries_respected": {
+    "DAY3": "2025-12-31",
+    "G2G3": "2026-07-28",
+    "D5": "2026-07-28"
+  },
+  "forbidden_labels_absent": [
+    "OOS_PASS",
+    "PROFITABLE_PROVEN",
+    "PRODUCTION_READY"
+  ],
+  "mysql": "SELECT only (no write statement in any script of this change)",
+  "frozen_cutoff": "2026-07-28",
+  "fresh_oos_ledger_unchanged": true,
+  "od29_legacy_characterization": "PASS",
+  "od29_orders_unchanged_by_stale_policy": "PASS",
+  "od29_runner_sha256": "82cfbdcaebadd3b01a95b7fcf6a19830852f932028826007627aeb15624e9dcb",
+  "DAILY_FEATURE_MODE": "legacy",
+  "BROKER_ORDER_SUBMISSION": "DISABLED",
+  "training_executed": false
+}

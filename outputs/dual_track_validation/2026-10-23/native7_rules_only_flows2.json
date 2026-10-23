@@ -1,0 +1,153 @@
+{
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "basis": "raw prices (price return); benchmark TAIEX price index",
+  "strategies": {
+    "hybrid_trend_rank": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "bb_width",
+        "bias",
+        "foreign_ratio",
+        "kd_k",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "rsi",
+        "trust_ratio",
+        "volume_ratio"
+      ],
+      "fills": 476,
+      "closed_trades": 237,
+      "unfilled": {
+        "UNFILLED": 893
+      },
+      "final_equity": 292332.82110783795,
+      "metrics_status": "UNDEFINED",
+      "metrics_method": "none",
+      "non_finite_sessions": 1,
+      "metrics": {
+        "total_return": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "cagr": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "annualized_volatility": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "sharpe": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "max_drawdown": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "win_rate": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "trade_count": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        }
+      },
+      "engine_run_error": "AttributeError: 'float' object has no attribute 'numerator'",
+      "data_exclusions_total": 17862,
+      "BACKTEST": "BLOCKED",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone"
+      ]
+    },
+    "institutional_flow_confirmation": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "bias",
+        "chip_score",
+        "dealer_ratio",
+        "foreign_consec_days",
+        "foreign_ratio",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "margin_change_pct",
+        "rsi",
+        "trust_consec_days",
+        "trust_ratio",
+        "volume_ratio"
+      ],
+      "fills": 413,
+      "closed_trades": 205,
+      "unfilled": {
+        "UNFILLED": 1935
+      },
+      "final_equity": 1048470.6327780972,
+      "metrics_status": "UNDEFINED",
+      "metrics_method": "none",
+      "non_finite_sessions": 2,
+      "metrics": {
+        "total_return": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        },
+        "cagr": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        },
+        "annualized_volatility": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        },
+        "sharpe": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        },
+        "max_drawdown": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        },
+        "win_rate": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        },
+        "trade_count": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 2 of 808 sessions, first 2023-07-03 (sample: 2023-07-03, 2023-07-04)"
+        }
+      },
+      "engine_run_error": "AttributeError: 'float' object has no attribute 'numerator'",
+      "data_exclusions_total": 61757,
+      "BACKTEST": "BLOCKED",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone"
+      ]
+    }
+  },
+  "blocked": {
+    "growth_momentum_breakout": "rule uses revenue_yoy and monthly revenue has no official announcement time",
+    "quality_growth": "rule uses revenue_yoy and monthly revenue has no official announcement time"
+  }
+}

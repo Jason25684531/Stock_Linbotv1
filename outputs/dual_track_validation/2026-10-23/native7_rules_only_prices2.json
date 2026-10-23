@@ -1,0 +1,154 @@
+{
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "basis": "raw prices (price return); benchmark TAIEX price index",
+  "strategies": {
+    "mean_reversion": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "atr",
+        "bb_width",
+        "bias",
+        "kd_k",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "natr",
+        "rsi",
+        "std_20",
+        "volume_ratio"
+      ],
+      "fills": 667,
+      "closed_trades": 332,
+      "unfilled": {
+        "UNFILLED": 1654
+      },
+      "final_equity": 661019.5238404702,
+      "metrics_status": "UNDEFINED",
+      "metrics_method": "none",
+      "non_finite_sessions": 6,
+      "metrics": {
+        "total_return": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        },
+        "cagr": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        },
+        "annualized_volatility": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        },
+        "sharpe": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        },
+        "max_drawdown": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        },
+        "win_rate": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        },
+        "trade_count": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 6 of 808 sessions, first 2023-05-11 (sample: 2023-05-11, 2025-09-04, 2025-11-18, 2025-11-20, 2025-11-24, 2025-11-25)"
+        }
+      },
+      "engine_run_error": "AttributeError: 'float' object has no attribute 'numerator'",
+      "data_exclusions_total": 3151,
+      "BACKTEST": "BLOCKED",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone"
+      ]
+    },
+    "quality_value_low_volatility": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "atr",
+        "bb_width",
+        "bias",
+        "eps",
+        "kd_k",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "natr",
+        "op_profit_margin",
+        "rsi",
+        "std_20",
+        "volume_ratio"
+      ],
+      "fills": 363,
+      "closed_trades": 180,
+      "unfilled": {
+        "UNFILLED": 1247
+      },
+      "final_equity": 644650.5804740824,
+      "metrics_status": "UNDEFINED",
+      "metrics_method": "none",
+      "non_finite_sessions": 5,
+      "metrics": {
+        "total_return": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        },
+        "cagr": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        },
+        "annualized_volatility": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        },
+        "sharpe": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        },
+        "max_drawdown": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        },
+        "win_rate": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        },
+        "trade_count": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 5 of 808 sessions, first 2024-12-13 (sample: 2024-12-13, 2025-06-25, 2025-12-24, 2025-12-26, 2026-03-25)"
+        }
+      },
+      "engine_run_error": "AttributeError: 'float' object has no attribute 'numerator'",
+      "data_exclusions_total": 36877,
+      "BACKTEST": "BLOCKED",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone"
+      ]
+    }
+  },
+  "blocked": {
+    "growth_momentum_breakout": "rule uses revenue_yoy and monthly revenue has no official announcement time",
+    "quality_growth": "rule uses revenue_yoy and monthly revenue has no official announcement time"
+  }
+}

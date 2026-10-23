@@ -1,0 +1,99 @@
+{
+  "run": {
+    "run_id": "od29legacy_hybrid_trend_rank-20261024T013858",
+    "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+    "inputs_sha256": {
+      "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+      "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+      "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+    },
+    "valuation_policy": "legacy",
+    "slippage_seed": 20261023
+  },
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "basis": "raw prices (price return); benchmark TAIEX price index",
+  "strategies": {
+    "hybrid_trend_rank": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "bb_width",
+        "bias",
+        "foreign_ratio",
+        "kd_k",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "rsi",
+        "trust_ratio",
+        "volume_ratio"
+      ],
+      "fills": 474,
+      "closed_trades": 236,
+      "unfilled": {
+        "UNFILLED": 894
+      },
+      "final_equity": 303588.53668527934,
+      "metrics_status": "UNDEFINED",
+      "metrics_method": "none",
+      "non_finite_sessions": 1,
+      "metrics": {
+        "total_return": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "cagr": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "annualized_volatility": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "sharpe": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "max_drawdown": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "win_rate": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        },
+        "trade_count": {
+          "value": null,
+          "reason": "NON_FINITE_EQUITY: 1 of 808 sessions, first 2025-07-15 (sample: 2025-07-15)"
+        }
+      },
+      "engine_run_error": "AttributeError: 'float' object has no attribute 'numerator'",
+      "data_exclusions_total": 17862,
+      "valuation_policy": "legacy",
+      "stale_valuation": {
+        "events": 0,
+        "flags": [],
+        "sensitivity": null
+      },
+      "BACKTEST": "BLOCKED",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone"
+      ]
+    }
+  },
+  "blocked": {
+    "growth_momentum_breakout": "rule uses revenue_yoy and monthly revenue has no official announcement time",
+    "quality_growth": "rule uses revenue_yoy and monthly revenue has no official announcement time"
+  }
+}

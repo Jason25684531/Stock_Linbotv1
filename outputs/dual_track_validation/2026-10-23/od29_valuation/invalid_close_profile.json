@@ -1,0 +1,190 @@
+{
+  "official_rows_without_close": {
+    "all cached sessions": {
+      "from": "2021-12-30",
+      "to": "2026-10-22",
+      "rows_without_close": 2646
+    },
+    "earlier scan (2022-08-01..2026-05-14)": {
+      "from": "2022-08-01",
+      "to": "2026-05-14",
+      "rows_without_close": 2041
+    },
+    "Native7 backtest window (2023-01-03..2026-05-14)": {
+      "from": "2023-01-03",
+      "to": "2026-05-14",
+      "rows_without_close": 1772
+    },
+    "Native7 snapshot incl. 160-day lookback": {
+      "from": "2022-07-27",
+      "to": "2026-05-14",
+      "rows_without_close": 2047
+    },
+    "split of the backtest window": {
+      "with_volume": 1195,
+      "zero_volume": 577,
+      "stocks": 160,
+      "sessions": 629
+    },
+    "difference 2,041 - 1,772": {
+      "rows": 269,
+      "reason": "2022-08-01..2023-01-02 is in the earlier scan (lookback period) but not in the backtest window"
+    }
+  },
+  "source_check": "MI_INDEX publishes \"--\" for open/high/low/close when the stock had no board-lot trade; volume can still be >0 from odd-lot trades",
+  "mysql_snapshot": {
+    "rows": 1898811,
+    "null_close": 0,
+    "non_positive_close": 12,
+    "non_positive_rows": [
+      {
+        "stock_id": "1435",
+        "trade_date": "2025-12-26",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 580,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 580.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "1470",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 0,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 0.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "1538",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 55,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 55.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "2321",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 644,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 644.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "2910",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 103,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 103.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "5906",
+        "trade_date": "2025-12-26",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 0,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 0.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "6464",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 871,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 871.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "6464",
+        "trade_date": "2025-12-26",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 6,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 6.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "6807",
+        "trade_date": "2025-12-26",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 0,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 0.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "8488",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 0,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 0.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "8488",
+        "trade_date": "2025-12-26",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 0,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 0.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      },
+      {
+        "stock_id": "9931",
+        "trade_date": "2025-12-24",
+        "open_price": 0.0,
+        "close_price": 0.0,
+        "volume": 61,
+        "official_open": null,
+        "official_close": null,
+        "official_volume": 61.0,
+        "official_row": true,
+        "classification": "OFFICIAL_NO_REGULAR_SESSION_PRICE_STORED_AS_ZERO_IN_MYSQL"
+      }
+    ],
+    "official_no_close_rows_present_in_mysql": 12,
+    "their_mysql_close_values": [
+      0.0
+    ]
+  }
+}

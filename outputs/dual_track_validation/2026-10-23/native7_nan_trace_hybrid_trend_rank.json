@@ -1,0 +1,258 @@
+{
+  "strategy": "hybrid_trend_rank",
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "first_non_finite": "2025-07-15",
+  "session_index": 607,
+  "cash": 3270.2067884656863,
+  "previous_equity": 434017.4067884657,
+  "previous_date": "2025-07-14",
+  "finite_market_value": 232425.0,
+  "positions_held": 3,
+  "positions_with_non_finite_close": [
+    "3036"
+  ],
+  "positions": [
+    {
+      "stock_id": "3036",
+      "shares": 1532,
+      "cost": 130.60855298917681,
+      "engine_last_price": null,
+      "bar_on_first_bad_day": {
+        "open_price": null,
+        "high_price": null,
+        "low_price": null,
+        "close_price": null,
+        "volume": 0.0,
+        "amount": 0.0
+      },
+      "close_is_finite": false,
+      "last_6_snapshot_bars": [
+        {
+          "date": "2025-07-08",
+          "open_price": 126.5,
+          "close_price": 129.0,
+          "volume": 3686002.0
+        },
+        {
+          "date": "2025-07-09",
+          "open_price": 128.5,
+          "close_price": 132.5,
+          "volume": 4059149.0
+        },
+        {
+          "date": "2025-07-10",
+          "open_price": 130.5,
+          "close_price": 133.5,
+          "volume": 3235271.0
+        },
+        {
+          "date": "2025-07-11",
+          "open_price": 132.5,
+          "close_price": 135.0,
+          "volume": 2997392.0
+        },
+        {
+          "date": "2025-07-14",
+          "open_price": 134.0,
+          "close_price": 133.5,
+          "volume": 2391485.0
+        },
+        {
+          "date": "2025-07-15",
+          "open_price": null,
+          "close_price": null,
+          "volume": 0.0
+        }
+      ],
+      "execution_events": [
+        {
+          "signal_date": "2023-10-24",
+          "execution_date": "2023-10-25",
+          "side": "BUY",
+          "price": 114.0,
+          "status": "FILLED",
+          "reason": null
+        },
+        {
+          "signal_date": "2023-11-06",
+          "execution_date": "2023-11-07",
+          "side": "SELL",
+          "price": 134.5,
+          "status": "FILLED",
+          "reason": null
+        },
+        {
+          "signal_date": "2025-07-02",
+          "execution_date": "2025-07-03",
+          "side": "BUY",
+          "price": 131.0,
+          "status": "UNFILLED",
+          "reason": "POSITION_CASH_OR_HOLDING_LIMIT"
+        },
+        {
+          "signal_date": "2025-07-03",
+          "execution_date": "2025-07-04",
+          "side": "BUY",
+          "price": 130.5,
+          "status": "UNFILLED",
+          "reason": "POSITION_CASH_OR_HOLDING_LIMIT"
+        },
+        {
+          "signal_date": "2025-07-09",
+          "execution_date": "2025-07-10",
+          "side": "BUY",
+          "price": 130.5,
+          "status": "FILLED",
+          "reason": null
+        }
+      ],
+      "later_bars_in_snapshot": 200,
+      "later_bars_with_finite_close": 200,
+      "in_delistings_csv": false,
+      "official_events_on_day": []
+    },
+    {
+      "stock_id": "6742",
+      "shares": 3669,
+      "cost": 54.548252740992154,
+      "engine_last_price": 54.6,
+      "bar_on_first_bad_day": {
+        "open_price": 53.8,
+        "high_price": 55.2,
+        "low_price": 53.8,
+        "close_price": 54.6,
+        "volume": 478872.0,
+        "amount": 26191936.0
+      },
+      "close_is_finite": true,
+      "last_6_snapshot_bars": [
+        {
+          "date": "2025-07-08",
+          "open_price": 52.9,
+          "close_price": 53.1,
+          "volume": 616318.0
+        },
+        {
+          "date": "2025-07-09",
+          "open_price": 53.4,
+          "close_price": 55.2,
+          "volume": 1154070.0
+        },
+        {
+          "date": "2025-07-10",
+          "open_price": 55.5,
+          "close_price": 55.0,
+          "volume": 3349249.0
+        },
+        {
+          "date": "2025-07-11",
+          "open_price": 54.5,
+          "close_price": 54.3,
+          "volume": 678334.0
+        },
+        {
+          "date": "2025-07-14",
+          "open_price": 54.0,
+          "close_price": 53.7,
+          "volume": 300995.0
+        },
+        {
+          "date": "2025-07-15",
+          "open_price": 53.8,
+          "close_price": 54.6,
+          "volume": 478872.0
+        }
+      ],
+      "execution_events": [
+        {
+          "signal_date": "2025-07-10",
+          "execution_date": "2025-07-11",
+          "side": "BUY",
+          "price": 54.5,
+          "status": "FILLED",
+          "reason": null
+        }
+      ],
+      "later_bars_in_snapshot": 200,
+      "later_bars_with_finite_close": 200,
+      "in_delistings_csv": false,
+      "official_events_on_day": []
+    },
+    {
+      "stock_id": "6153",
+      "shares": 2229,
+      "cost": 13.406534504635742,
+      "engine_last_price": 14.4,
+      "bar_on_first_bad_day": {
+        "open_price": 13.2,
+        "high_price": 14.4,
+        "low_price": 13.15,
+        "close_price": 14.4,
+        "volume": 15137896.0,
+        "amount": 214395293.0
+      },
+      "close_is_finite": true,
+      "last_6_snapshot_bars": [
+        {
+          "date": "2025-07-08",
+          "open_price": 13.3,
+          "close_price": 12.95,
+          "volume": 5611532.0
+        },
+        {
+          "date": "2025-07-09",
+          "open_price": 12.85,
+          "close_price": 13.3,
+          "volume": 9087441.0
+        },
+        {
+          "date": "2025-07-10",
+          "open_price": 13.4,
+          "close_price": 13.35,
+          "volume": 7252019.0
+        },
+        {
+          "date": "2025-07-11",
+          "open_price": 13.15,
+          "close_price": 13.35,
+          "volume": 4276841.0
+        },
+        {
+          "date": "2025-07-14",
+          "open_price": 13.4,
+          "close_price": 13.1,
+          "volume": 2700876.0
+        },
+        {
+          "date": "2025-07-15",
+          "open_price": 13.2,
+          "close_price": 14.4,
+          "volume": 15137896.0
+        }
+      ],
+      "execution_events": [
+        {
+          "signal_date": "2025-07-11",
+          "execution_date": "2025-07-14",
+          "side": "BUY",
+          "price": 13.4,
+          "status": "FILLED",
+          "reason": null
+        }
+      ],
+      "later_bars_in_snapshot": 200,
+      "later_bars_with_finite_close": 200,
+      "in_delistings_csv": false,
+      "official_events_on_day": []
+    }
+  ],
+  "closed_trades_before": 182,
+  "snapshot_rows_without_close_in_window": 1772,
+  "snapshot_rows_in_window": 825668,
+  "snapshot_rows_without_close_but_with_volume_in_window": 1195,
+  "result": "FIRST_NON_FINITE_FOUND"
+}

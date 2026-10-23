@@ -1,0 +1,23 @@
+{
+  "rows": 801084,
+  "priced_rows": 732850,
+  "price_match_rate": 1.0,
+  "price_mismatch_rows": 0,
+  "max_relative_difference": 5.694699070774729e-16,
+  "tolerance": 1e-06,
+  "entry_price_missing_rows": 68167,
+  "entry_price_present_without_official_bar": 67,
+  "execution_dates": 723,
+  "execution_dates_not_official_sessions": [],
+  "tradable_rows_without_traded_official_bar": 0,
+  "asset_count": 1108,
+  "events_used_by_D3": 4612,
+  "event_file_sha256": {
+    "D3": "14e4029ef6f066d7de3a318079c832a2727b4850e001d4c1222abc70a86467b4",
+    "2022": "a76b3eda6fcde8f496dcffa0f31f3244dd691f48437c6d4a12f138c5c5be237e",
+    "AFTER_D3": "770f546a248277b48bacfb4abe3dee576dcc67161605611cdd43e78a84586f5a"
+  },
+  "basis": "official-event back-adjusted prices (reference price / previous close); returns on them are dividend- and rights-adjusted",
+  "status": "DATA_PASS",
+  "exceptions": "rows with a D3 price but no traded official bar are untradable valuation prices; see d3_nonofficial_prices.csv and the exposure check"
+}

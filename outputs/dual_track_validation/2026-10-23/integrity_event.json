@@ -1,0 +1,67 @@
+{
+  "event": "historical-hash file rewritten by the production pipeline",
+  "file": "outputs/fundamental_runtime_shadow/operate-fundamental-shadow-until-oos-ready-v1/fundamental_production_status.json",
+  "recorded_sha256": "bb561a27c5559ea248c059fa63a908bdaa4eaf76db7e524e63efa23e39b011b1",
+  "current_sha256": "53e8810be60d9e415b621995086b9d4857b08cdb0d0386bcd39a3a58ac0ac81c",
+  "file_mtime_utc": "2026-10-23 10:34:02.922386169",
+  "asof_date_in_file": "2026-10-22",
+  "writer": {
+    "verdict": "PROVEN",
+    "process": "scheduler 'evening' pipeline step run_daily (container stock_ai_stock_bot)",
+    "evidence": [
+      "pipeline_runs: run_daily finished_at 2026-10-23 10:34:02 UTC, status success",
+      "file mtime 2026-10-23 10:34:02.922386169 UTC matches the step end to the second",
+      "jobs/run_daily.py run_fundamental_production -> core/runtime/fundamental_production STATUS_FILENAME",
+      "the pipeline runs every evening at 10:30 UTC (18:30 +08:00): update_database, run_daily, backtest validation, push_to_line"
+    ]
+  },
+  "pipeline_runs_that_evening": [
+    {
+      "pipeline_name": "evening",
+      "step_name": "update_database",
+      "run_date": "2026-10-23",
+      "status": "success",
+      "started_at": "2026-10-23 10:30:03",
+      "finished_at": "2026-10-23 10:32:55"
+    },
+    {
+      "pipeline_name": "evening",
+      "step_name": "run_daily",
+      "run_date": "2026-10-23",
+      "status": "success",
+      "started_at": "2026-10-23 10:32:56",
+      "finished_at": "2026-10-23 10:34:02"
+    },
+    {
+      "pipeline_name": "evening",
+      "step_name": "lightweight_backtest_validation",
+      "run_date": "2026-10-23",
+      "status": "not_configured",
+      "started_at": "2026-10-23 10:34:04",
+      "finished_at": "2026-10-23 10:34:04"
+    },
+    {
+      "pipeline_name": "evening",
+      "step_name": "push_to_line",
+      "run_date": "2026-10-23",
+      "status": "success",
+      "started_at": "2026-10-23 10:34:05",
+      "finished_at": "2026-10-23 10:34:21"
+    }
+  ],
+  "content_checks": {
+    "broker_submission_status": "DISABLED",
+    "production_enable_flag": false,
+    "production_ready": "NO",
+    "production_eligibility": "BLOCKED"
+  },
+  "container_mount": "bind /app rw=true;",
+  "implications": [
+    "The file is a dynamic runtime status file inside the historical-hash list: it will change after every evening pipeline run, so a hash list that includes it can never stay \"unchanged\".",
+    "The container mounts this working tree read-write: every edit under core/, jobs/ and config/ is live for the evening pipeline, the web app and the LINE bot.",
+    "So any code change in this round must keep the legacy path byte-for-byte equivalent in behavior and import-safe; edits must not happen around 18:25-18:40 +08:00.",
+    "The earlier rounds changed jobs/run_daily.py and core/calc_indicators.py (legacy path unchanged); the 10-23 evening run succeeded with them."
+  ],
+  "handling": "Reported as an integrity event. Not restored, not re-hashed, no new verify exception. The historical-hash result is reported as N-1 unchanged plus this file.",
+  "proposal_for_owner": "Move runtime status files out of the historical-evidence hash list (new versioned list), or snapshot them separately; the owner decides."
+}

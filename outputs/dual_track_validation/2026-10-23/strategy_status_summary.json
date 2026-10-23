@@ -1,0 +1,21 @@
+{
+  "ENGINE_PASS": 22,
+  "DATA": {
+    "DATA_PASS": 16,
+    "DATA_BLOCKED": 6
+  },
+  "BACKTEST": {
+    "DIAGNOSTIC": 13,
+    "DEVELOPMENT": 7,
+    "BLOCKED": 2
+  },
+  "EVIDENCE": {
+    "INSUFFICIENT": 22
+  },
+  "RETRAIN": {
+    "NOT_APPLICABLE": 15,
+    "RETRAIN_REQUIRED": 6,
+    "RETRAIN_RECOMMENDED": 1
+  },
+  "independent_validation_eligible": 0
+}

@@ -1,0 +1,15 @@
+{
+  "requests_sent": 4,
+  "budget": 1900,
+  "results": {
+    "MI_INDEX_2026-10-23": "NON_TRADING_DAY",
+    "TWT49U_20220103_20221230": "OK",
+    "TWT49U_20260729_20261023": "OK",
+    "DELISTED": "OK"
+  },
+  "files": {
+    "suspendListing.json": "3b0c2f8b20736229d1e71ad4d816cab47058f2fd90eb211637d57955a5d3ecfe",
+    "TWT49U_20220103_20221230.json": "a76b3eda6fcde8f496dcffa0f31f3244dd691f48437c6d4a12f138c5c5be237e",
+    "TWT49U_20260729_20261023.json": "770f546a248277b48bacfb4abe3dee576dcc67161605611cdd43e78a84586f5a"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "family": "D5",
+  "configurations_captured": 48,
+  "expected": 48,
+  "seconds": 102.8,
+  "returns_rows": 123696,
+  "orders_rows": 70122,
+  "first_date": "2023-01-04",
+  "last_date": "2026-07-28",
+  "reproduction": {
+    "canonical": "outputs/portfolio_research/d5_portfolio_research_20260817_v2",
+    "csv_files": 7,
+    "identical": 3,
+    "different": [
+      "old_vs_corrected_d5.csv",
+      "parameter_robustness.csv",
+      "portfolio_scoreboard.csv",
+      "shortlisted_configs.csv"
+    ],
+    "status": "DIFFERENT"
+  }
+}

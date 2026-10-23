@@ -1,0 +1,158 @@
+{
+  "run": {
+    "run_id": "od29_institutional_flow_confirmation-20261024T013858",
+    "script_sha256": "c2ebad24eb779f0d1a3dc088641a327b145d3f1135f8351655ac20a0b3154642",
+    "inputs_sha256": {
+      "official_bars.parquet": "b3b7a2fc57b8628225a54d0b9d48b728e167c8886e8fdbfad7328386e97e8ac4",
+      "benchmarks.csv": "688c4c1843787c9d3dec1a6aa74c74ea5c95995aa5a27860d5ee69c14ad94983",
+      "user_settings.json": "2a180e3b8fddb5412707ac08eee234a2beeeba00d8316390ac9c3bafd41bc8c2"
+    },
+    "valuation_policy": "finite_positive_stale",
+    "slippage_seed": 20261023
+  },
+  "window": [
+    "2023-01-03",
+    "2026-05-14"
+  ],
+  "sessions": 808,
+  "basis": "raw prices (price return); benchmark TAIEX price index",
+  "strategies": {
+    "institutional_flow_confirmation": {
+      "window": [
+        "2023-01-03",
+        "2026-05-14"
+      ],
+      "sessions": 808,
+      "required_inputs": [
+        "bias",
+        "chip_score",
+        "dealer_ratio",
+        "foreign_consec_days",
+        "foreign_ratio",
+        "ma20",
+        "ma60",
+        "macd_hist",
+        "margin_change_pct",
+        "rsi",
+        "trust_consec_days",
+        "trust_ratio",
+        "volume_ratio"
+      ],
+      "fills": 411,
+      "closed_trades": 204,
+      "unfilled": {
+        "UNFILLED": 1937
+      },
+      "final_equity": 878604.1679324375,
+      "metrics_status": "COMPUTED",
+      "metrics_method": "core.backtest.metrics.calculate_metrics on a finite equity curve",
+      "non_finite_sessions": 0,
+      "metrics": {
+        "total_return": {
+          "value": -0.12139583206756255,
+          "reason": null
+        },
+        "cagr": {
+          "value": -0.039608179313783576,
+          "reason": null
+        },
+        "annualized_volatility": {
+          "value": 0.10388388536937163,
+          "reason": null
+        },
+        "sharpe": {
+          "value": -0.3370645609612341,
+          "reason": null
+        },
+        "max_drawdown": {
+          "value": -0.2651149912891926,
+          "reason": null
+        },
+        "win_rate": {
+          "value": 0.39215686274509803,
+          "reason": null
+        },
+        "trade_count": {
+          "value": 204.0,
+          "reason": null
+        }
+      },
+      "excess_sharpe_vs_price_index": -1.9444804328900869,
+      "excess_bootstrap": {
+        "lower": -3.085489257572956,
+        "upper": -0.6564110522030941,
+        "draws": 2000,
+        "sessions": 807
+      },
+      "benchmark_total_return": 1.9352782456840916,
+      "engine_run_error": null,
+      "data_exclusions_total": 61757,
+      "valuation_policy": "finite_positive_stale",
+      "stale_valuation": {
+        "events": 2,
+        "stocks": 1,
+        "sessions_with_stale_marks": 2,
+        "share_of_sessions": 0.0024752475247524753,
+        "by_reason": {
+          "NO_VALID_CLOSE_WITH_VOLUME": 2
+        },
+        "longest_carry_sessions": 2,
+        "max_equity_share": 0.1833014788129899,
+        "mean_equity_share_when_stale": 0.18318195761708211,
+        "carry_runs": 1,
+        "runs_with_ex_date": 0,
+        "runs_ending_in_delisting": 0,
+        "runs_possible_suspension": 0,
+        "flags": [
+          "STALE_VALUATION_MATERIAL"
+        ],
+        "sensitivity": {
+          "carry_last_valid_close": {
+            "total_return": -0.12139583206756255,
+            "sharpe": -0.3370645609612341,
+            "max_drawdown": -0.2651149912891926
+          },
+          "down_limit_each_stale_session": {
+            "total_return": -0.12139583206756255,
+            "sharpe": -0.3264378128542714,
+            "max_drawdown": -0.2651149912891926
+          },
+          "stale_positions_at_zero": {
+            "total_return": -0.12139583206756255,
+            "sharpe": -0.11800052846646218,
+            "max_drawdown": -0.2651149912891926
+          }
+        },
+        "worst_runs": [
+          {
+            "stock_id": "9931",
+            "price_source_date": "2023-06-30",
+            "start": "2023-07-03",
+            "end": "2023-07-04",
+            "sessions": 2,
+            "reasons": [
+              "NO_VALID_CLOSE_WITH_VOLUME"
+            ],
+            "max_share": 0.1833014788,
+            "ex_date_in_carry": false,
+            "delisted_after_carry": false,
+            "possible_suspension": false
+          }
+        ]
+      },
+      "BACKTEST": "DIAGNOSTIC",
+      "EVIDENCE": "INSUFFICIENT",
+      "reasons": [
+        "rule parameters were tuned on earlier data (trial count unknown), so no selection-adjusted statistic is possible",
+        "raw-price basis: dividends are not included (total return BLOCKED)",
+        "execution audit not applied to engine events in this stage",
+        "no model: the rules were tested alone",
+        "stale valuation: STALE_VALUATION_MATERIAL"
+      ]
+    }
+  },
+  "blocked": {
+    "growth_momentum_breakout": "rule uses revenue_yoy and monthly revenue has no official announcement time",
+    "quality_growth": "rule uses revenue_yoy and monthly revenue has no official announcement time"
+  }
+}

@@ -1,0 +1,2 @@
+type,date,stock_id,reason,close_value,price,price_source_date,stale_days,shares,value,equity_share
+STALE_VALUATION,2025-07-15,3036,NO_VALID_CLOSE_NO_VOLUME,nan,133.5,2025-07-14,1,1532,204522.0,0.48167809318613597
