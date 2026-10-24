@@ -160,3 +160,12 @@ ENGINE／DATA／BACKTEST／EVIDENCE 四個維度分開評等。BACKTEST：DEVELO
 3. 月營收公告時間來源、財報全量驗證、現金股利拆分：這三項決定 6 個 DATA_BLOCKED 與全部總報酬的解除。
 4. 是否把 Native7 與 Track B 統一成同一種價格基礎，以及重新訓練規格 `retraining-spec-v1` 的簽核。
 5. g4 集中度門檻的定義（逐字解讀會讓所有設定失敗）。
+
+## 11. 封存處置（OD-30～OD-33，2026-10-24）
+
+此節取代第 10 節中已由 Owner 決定的項目。總覽與交接表：`outputs/dual_track_validation/2026-10-23/final_closure/archive_summary_and_handoff.md`。
+
+- 本報告不使用總 PASS。**ENGINEERING_WORK_COMPLETED**（22 策略 ENGINE_PASS、384 組 DONE、完整測試 1,273 passed 0 failed）；**HISTORICAL_COMPLIANCE_EXCEPTION**（`HISTORICAL_RATE_GATE_EVIDENCE_FAIL`，未解決、已接受留存，原始 `verification.json` 維持 FAIL）；**DATA_REMEDIATION_PENDING**（G2/G3 維持 DATA_BLOCKED，MOPS YoY 修正資料集 v3.1 已建但未被採用）；**INVESTMENT_VALIDATION_NOT_PROVEN**（0 個策略有資格申請獨立驗證）。
+- 正式狀態檔：`PRODUCTION_STATUS_UNTRUSTED`（內容是測試輸出）；未覆寫、未還原；排程後須人工確認，不能只看修改時間。
+- 兩個既有測試失敗都是測試前提／設計邊界問題，已用最小的測試修正處理，沒有改 production 程式；完整測試 0 失敗。
+- 第 8 節「正式狀態檔被測試改寫」已由測試隔離保護解決（完整測試前後正式資料夾不變）；第 9 節的 MOPS 抽樣結果見 `closure/closure_report.md`。

@@ -1,0 +1,29 @@
+{
+ "checked_at": "2026-10-24T16:33:24",
+ "path": "D:\\01_Project\\Stocke\\Stock_Linbotv1\\outputs\\fundamental_runtime_shadow\\operate-fundamental-shadow-until-oos-ready-v1\\fundamental_production_status.json",
+ "sha256": "bb561a27c5559ea248c059fa63a908bdaa4eaf76db7e524e63efa23e39b011b1",
+ "mtime": "2026-10-24T15:13:09.191628",
+ "size": 1303,
+ "asof_date": "2026-04-28",
+ "latest_official_session": "2026-10-22",
+ "classification": "PRODUCTION_STATUS_UNTRUSTED",
+ "reasons": [
+  "content is byte-identical to a test output: test_run_daily_persistence.py::test_run_daily_for_date_persists_every_persistence_strategy (asof 2026-04-28)",
+  "asof_date 2026-04-28 is older than the latest official session 2026-10-22"
+ ],
+ "evidence_hashes_match_current_files": {
+  "runtime_validation_manifest": true,
+  "promotion_review": true,
+  "fresh_oos_availability": true,
+  "fundamental_runtime_spec": true
+ },
+ "content_fail_closed_fields": {
+  "production_eligibility": "BLOCKED",
+  "production_enable_flag": false,
+  "production_ready": "NO",
+  "broker_submission_status": "DISABLED",
+  "recommendation_count": 0
+ },
+ "content_is_blocking": true,
+ "wrote_anything": false
+}

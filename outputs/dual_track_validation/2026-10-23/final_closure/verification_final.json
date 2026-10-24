@@ -1,0 +1,104 @@
+{
+  "at": "2026-10-24T16:52:08",
+  "statuses": {
+    "ENGINEERING_WORK_COMPLETED": "YES: 22 strategies ENGINE_PASS, 384 configurations DONE, Track A fixes, OD-29 valuation policy, test isolation, request gate, MOPS sample, YoY remediation dataset",
+    "HISTORICAL_COMPLIANCE_EXCEPTION": "HISTORICAL_RATE_GATE_EVIDENCE_FAIL (unresolved, accepted and retained by OD-30; REQUEST_COMPLIANCE_PASS not claimed)",
+    "DATA_REMEDIATION_PENDING": "G2/G3 DATA_BLOCKED; v3.1 same-basis dataset built but not adopted by any consumer; no whole-population PIT certification; MOPS financial statements for Native7 quality_* not covered",
+    "INVESTMENT_VALIDATION_NOT_PROVEN": "0 of 22 strategies eligible for independent validation; 384 of 384 configurations EVIDENCE INSUFFICIENT; all Native7 rules-only runs DIAGNOSTIC",
+    "OPERATIONAL_OPEN_ITEM": "PRODUCTION_STATUS_UNTRUSTED (see production_status_check_*.json); the production folder is not claimed healthy"
+  },
+  "original_verification": {
+    "sha256": "185e023b1c23817d2036e1f06029a7ece40d8bff576e70f6986582be43dbb94a",
+    "status": "FAIL",
+    "failed_checks": [
+      "REQUEST_SPACING"
+    ],
+    "preserved": true
+  },
+  "first_closure_verification_sha256": "d80d6522bf430825779092fbbf527565bddeb530f7a2ac8b36f159ebdfad990a",
+  "production_status": {
+    "classification": "PRODUCTION_STATUS_UNTRUSTED",
+    "sha256": "bb561a27c5559ea248c059fa63a908bdaa4eaf76db7e524e63efa23e39b011b1",
+    "mtime": "2026-10-24T15:13:09.191628",
+    "asof_date": "2026-04-28",
+    "latest_official_session": "2026-10-22",
+    "reasons": [
+      "content is byte-identical to a test output: test_run_daily_persistence.py::test_run_daily_for_date_persists_every_persistence_strategy (asof 2026-04-28)",
+      "asof_date 2026-04-28 is older than the latest official session 2026-10-22"
+    ],
+    "content_is_blocking": true,
+    "content_fail_closed_fields": {
+      "production_eligibility": "BLOCKED",
+      "production_enable_flag": false,
+      "production_ready": "NO",
+      "broker_submission_status": "DISABLED",
+      "recommendation_count": 0
+    },
+    "evidence_hashes_match_current_files": {
+      "runtime_validation_manifest": true,
+      "promotion_review": true,
+      "fresh_oos_availability": true,
+      "fundamental_runtime_spec": true
+    }
+  },
+  "full_suite": {
+    "summary": "==== 1273 passed, 4 skipped, 4 xfailed, 2725 warnings in 373.70s (0:06:13) ====",
+    "production_folder_changed_files": []
+  },
+  "final_tests": {
+    "files": [
+      "test/test_mops_yoy_remediation.py",
+      "test/test_production_status_isolation.py",
+      "test/test_request_gate.py",
+      "test/unit/research/test_package_boundaries.py",
+      "test/test_financial_supplement_characterization.py",
+      "test/test_stabilize_daily_recommendation_pipeline_contract.py",
+      "test/test_run_daily_persistence.py"
+    ],
+    "summary": "============================= 25 passed in 6.75s =============================="
+  },
+  "dataset": {
+    "v3_unchanged": true,
+    "v3_1_records_sha256": "a07cce380603dc4d9bcb4dadc28153380d986b7e281348d55d1e15a632d60e70",
+    "v3_1_matrix_sha256": "11d423145f2d0dce19299caf706a14d61f7d3a3fb7816513989e82ec4c96ad49",
+    "removed_yoy_rows": 944,
+    "operating_income_yoy_cells_changed": 8068
+  },
+  "matrix_22": {
+    "rows": 22,
+    "grades_equal_to_original": true,
+    "DATA": {
+      "DATA_PASS": 16,
+      "DATA_BLOCKED": 6
+    },
+    "BACKTEST": {
+      "DIAGNOSTIC": 13,
+      "DEVELOPMENT": 7,
+      "BLOCKED": 2
+    },
+    "EVIDENCE": {
+      "INSUFFICIENT": 22
+    }
+  },
+  "openspec_and_diff": {
+    "openspec validate 2026-10-23-validate-22-strategies-dual-track --strict": "Change '2026-10-23-validate-22-strategies-dual-track' is valid",
+    "openspec validate 2026-10-24-remediate-mops-yoy-basis --strict": "Change '2026-10-24-remediate-mops-yoy-basis' is valid",
+    "openspec validate --specs --strict": "Totals: 83 passed, 0 failed (83 items)",
+    "git diff --check": "clean"
+  },
+  "code_changed_since_baseline": [
+    "core/backtest/runner.py",
+    "core/calc_indicators.py",
+    "core/research/model_training.py",
+    "core/research/native_frame.py",
+    "core/research/native_models.py",
+    "core/research/sources/twse.py",
+    "jobs/run_daily.py"
+  ],
+  "no_strategy_rerun": true,
+  "no_model_trained": true,
+  "no_new_official_requests": true,
+  "mysql": "no write path",
+  "pushed": false,
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}

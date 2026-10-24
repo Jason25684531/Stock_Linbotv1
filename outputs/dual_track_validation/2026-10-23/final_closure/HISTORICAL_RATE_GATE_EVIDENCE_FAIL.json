@@ -1,0 +1,42 @@
+{
+ "exception_id": "HISTORICAL_RATE_GATE_EVIDENCE_FAIL",
+ "decision": "OD-30 (Owner): option C, permanent FAIL retained",
+ "status": "UNRESOLVED_ACCEPTED_RETAINED",
+ "REQUEST_COMPLIANCE": "NOT_PASS (REQUEST_COMPLIANCE_PASS is never claimed for this ledger)",
+ "what_failed": {
+  "ledger": "request_ledger.jsonl",
+  "ledger_sha256": "818a73ecd5d3ec7f28249479e93df98918edf82d60b3ea250b58719eafa74d0e",
+  "pair": "RELEASED MI_MARGN 2022-10-07 (2026-10-23T12:57:00.567504Z) -> RELEASED T86 2022-10-11 (2026-10-23T12:57:03.501412Z)",
+  "logged_gap_seconds": 2.934,
+  "required_seconds": 3.2,
+  "verification_threshold_seconds": 3.1,
+  "released_requests": 1876,
+  "next_smallest_logged_gap_seconds": 3.177
+ },
+ "kept_as_is": {
+  "ledger_timestamps": "not modified",
+  "verification.json": {
+   "sha256": "185e023b1c23817d2036e1f06029a7ece40d8bff576e70f6986582be43dbb94a",
+   "status": "FAIL",
+   "failed_checks": [
+    "REQUEST_SPACING"
+   ]
+  },
+  "threshold_3_2_seconds": "not lowered",
+  "adjacent_data": "not re-downloaded to mask the record"
+ },
+ "what_cannot_be_shown": [
+  "The ledger has no pre-request timestamp and no gate-measured interval, so the real spacing of this release cannot be proven to be >= 3.2 s or < 3.2 s after the fact.",
+  "The cause of the 0.27 s shortfall is NOT established: a log-write stall or a wall-clock adjustment is plausible, but an idle-machine measurement of append latency (max 3.6 ms) does not reproduce it. It is not claimed to be a logging error.",
+  "The source returned a normal response to all 1,876 requests (no throttling response), which is an observation, not proof of compliance."
+ ],
+ "future_requests_fixed_by": {
+  "code": [
+   "core/research/sources/twse.py RequestGate: optional state_path (exclusive file lock shared by every process), last_gap measured by the gate, last_release_wall; default behaviour unchanged",
+   "scripts/dual_track_validation.py LoggedGate: state file next to the ledger; every RELEASED row carries gate_gap_seconds and gate_release_wall"
+  ],
+  "tests": "test/test_request_gate.py: gap measured by the gate; 3 retry attempts each >= 3.2 s apart; 3 real processes sharing one state file spaced >= interval (tolerance 0.02 s = Windows time.time tick); mutation check: separate state files give a minimum gap of 0 s",
+  "not_yet_demonstrated": "The new gate has not been used for a real download: no official request was sent in this change. The first real batch must be verified from gate_gap_seconds before it is called compliant."
+ },
+ "handoff": "Carry as an accepted, unresolved historical compliance exception. Any future download change must verify gate_gap_seconds >= 3.2 s per released pair and may not cite this ledger as evidence of compliant spacing."
+}

@@ -1,0 +1,81 @@
+{
+ "dataset_version": "fundamental-pit-v3.1-yoy-same-basis",
+ "created_at": "2026-10-24T16:37:20",
+ "change": "openspec/changes/2026-10-24-remediate-mops-yoy-basis",
+ "rule": "a YoY row exists only if the current value and the prior-year value of the same quarter have the same REPORTING_BASIS; other rows are removed, never imputed; no raw-cache value fills a PIT gap",
+ "old_dataset": {
+  "path": "data\\processed\\fundamental_pit_v3",
+  "records_sha256": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+  "all_files_unchanged_by_this_run": true,
+  "files_checked": 14
+ },
+ "new_dataset": {
+  "path": "data\\processed\\fundamental_pit_v3_yoy_same_basis",
+  "records_sha256": "a07cce380603dc4d9bcb4dadc28153380d986b7e281348d55d1e15a632d60e70",
+  "correction_detail_sha256": "99b05a268792056061ceeeb245b2eb85f7882279748404e5c0032c7a0a845dad",
+  "records_old": 259054,
+  "records_new": 258110
+ },
+ "removed_rows": {
+  "total": 944,
+  "by_metric": {
+   "operating_income_yoy": 468,
+   "revenue_yoy": 466,
+   "revenue_cumulative_yoy": 5,
+   "operating_income_cumulative_yoy": 5
+  },
+  "by_reason": {
+   "PRIOR_YEAR_QUARTER_CHAIN_INCOMPLETE": 934,
+   "CURRENT_YEAR_QUARTER_CHAIN_INCOMPLETE": 10
+  },
+  "by_basis_pair": {
+   "CUMULATIVE/STANDALONE": 10,
+   "STANDALONE/CUMULATIVE": 934
+  },
+  "by_quarter": {
+   "1": 2,
+   "2": 303,
+   "3": 234,
+   "4": 405
+  },
+  "by_fiscal_year": {
+   "2014": 96,
+   "2015": 74,
+   "2016": 108,
+   "2017": 68,
+   "2018": 88,
+   "2019": 98,
+   "2020": 64,
+   "2021": 52,
+   "2022": 94,
+   "2023": 88,
+   "2024": 82,
+   "2025": 32
+  }
+ },
+ "formula_difference_rows": 0,
+ "yoy_rows_before": {
+  "revenue_yoy": 34696,
+  "operating_income_yoy": 34717,
+  "revenue_cumulative_yoy": 541,
+  "operating_income_cumulative_yoy": 556,
+  "eps_yoy": 35145
+ },
+ "yoy_rows_after": {
+  "revenue_yoy": 34230,
+  "operating_income_yoy": 34249,
+  "revenue_cumulative_yoy": 536,
+  "operating_income_cumulative_yoy": 551,
+  "eps_yoy": 35145
+ },
+ "raw_cache_check_of_base_values": {
+  "base_rows": 115842,
+  "raw_missing": 0,
+  "source_value_mismatch": 0,
+  "value_mismatch": 0,
+  "q4_standalone_rows": 18784,
+  "q4_standalone_mismatch": 0,
+  "standalone_rows_without_previous_quarter_in_raw": 0
+ },
+ "not_a_pit_certification": "G2/G3 stay DATA_BLOCKED: the dataset still has only one 2026-09-15 retrieval of values, no first-published value, and 200-filing sampling only; the matrix is not rebuilt in this step"
+}

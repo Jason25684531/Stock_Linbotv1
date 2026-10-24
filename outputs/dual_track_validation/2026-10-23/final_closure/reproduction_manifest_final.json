@@ -1,0 +1,40 @@
+{
+  "git_head": "e5637140a9b93a116f620c30d056517d72edcf3d",
+  "commands": [
+    "python scripts/production_status_check.py record",
+    "python scripts/test_isolation_record.py final_closure/full_suite_isolation_record.json",
+    "python scripts/mops_yoy_remediation.py records",
+    "python scripts/mops_yoy_remediation.py matrix",
+    "python scripts/dual_track_closure.py final_verify",
+    "python scripts/dual_track_closure.py final_manifest"
+  ],
+  "datasets": {
+    "v3_records": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+    "v3_matrix": "87f9614fecde2abc9ce02eae4015d31a3aaf1ce4b35872763d63394535e0d4cc",
+    "v3_1/correction_detail.csv": "99b05a268792056061ceeeb245b2eb85f7882279748404e5c0032c7a0a845dad",
+    "v3_1/fundamental_matrix.parquet": "11d423145f2d0dce19299caf706a14d61f7d3a3fb7816513989e82ec4c96ad49",
+    "v3_1/fundamental_records.parquet": "a07cce380603dc4d9bcb4dadc28153380d986b7e281348d55d1e15a632d60e70",
+    "v3_1/manifest.json": "3a0376a08a1518eba326a04003f4e6fa6a01f29a9cd13d62ac9728d106e16571",
+    "v3_1/matrix_manifest.json": "d5c0bed0a611644732ee8e2e32a33004be9e402ca0a6c011e51bbb61d05b6961"
+  },
+  "code": {
+    "scripts/mops_yoy_remediation.py": "1d3c231a6f0a7c913e1af6c1e5567d505e58433b023425dfa3e9aed38321fea3",
+    "scripts/production_status_check.py": "6cfaff77e6a0d5b08197d22b9e3db190b175ec4ce0501d876d70115c73647fd3",
+    "scripts/dual_track_closure.py": "aa5081370518308d557b20792a1b25c780451a1bc041ede7e314400941075010",
+    "scripts/test_isolation_record.py": "a40a43179d10e80822151e5efe9bbbed3e2ba5624b964d968e4d2111ac18df5b",
+    "test/test_mops_yoy_remediation.py": "6eeb38a60c193a52c73c298ec69bc46ea272fd1b07afba83e64ace483a96f71b",
+    "test/unit/research/test_package_boundaries.py": "3b1eb86698263cd1f1b9e3e50b1625bacc2c2b5bf537c70f6bacde8e335de2f9",
+    "test/test_financial_supplement_characterization.py": "975575287ffc8acfbcea44f3d0ef7f29b22683089695d290509935d497518ea8"
+  },
+  "outputs": {
+    "archive_summary_and_handoff.md": "401d503cc1204e12e248abf14adef806aa9a83d7bb2c69ccde8d8a904312d1b0",
+    "full_suite_isolation_record.json": "90da041ac3843f217e13c3a6773683d1b441ea11baad22e5603901285c02a3a5",
+    "HISTORICAL_RATE_GATE_EVIDENCE_FAIL.json": "3cba78acd7fd21791b7d33eb6064a762c6c78be134ca092402303a3434314fb8",
+    "production_status_check_20261024T163324.json": "f4a66178cdd29fb91af5b8b0655c831af399121f7ed66b0afbdd0a66f4e0c6c1",
+    "verification_final.json": "cca26abce673535a995583a8f9a828ec3c8d8ecf05d2275535afd4ce4789a237"
+  },
+  "environment": {
+    "python": "3.11.9"
+  },
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}
