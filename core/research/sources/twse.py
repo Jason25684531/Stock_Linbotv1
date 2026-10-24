@@ -1,14 +1,21 @@
 """TWSE official-source adapters."""
 
 import json
+import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
-from time import monotonic, sleep as real_sleep
+from time import monotonic, sleep as real_sleep, time
 from typing import Callable, Mapping
 
 import requests
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 from core.research.sources import RawResponse
 
@@ -46,19 +53,77 @@ class SchemaDriftError(ValueError):
     code = "F009_schema_drift"
 
 
+@contextmanager
+def _exclusive(path: Path):
+    """Cross-process exclusive lock on a small file (stdlib; blocks until the other process releases it)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        if os.name == "nt":
+            while True:
+                try:
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    real_sleep(0.005)
+        else:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield handle
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 @dataclass
 class RequestGate:
+    """Spacing between request releases.
+
+    Without state_path the gate only knows its own process (monotonic clock). With state_path every gate that uses the same file, in any
+    process, waits until minimum_interval has passed since the last release recorded there (wall clock, held under an exclusive lock).
+    last_gap is the spacing this gate itself measured at its last release (seconds, None for the first release); callers should log that
+    number instead of timing their own log write, whose latency is noise.
+    """
+
     minimum_interval: float
     clock: Callable[[], float] = monotonic
     sleep: Callable[[float], None] = real_sleep
+    state_path: Path | None = None
+    wall_clock: Callable[[], float] = time
     _last_request_at: float | None = field(default=None, init=False)
+    last_gap: float | None = field(default=None, init=False)
+    last_release_wall: float | None = field(default=None, init=False)
+
+    def _release(self) -> None:
+        now = self.clock()
+        self.last_gap = None if self._last_request_at is None else now - self._last_request_at
+        self._last_request_at = now
 
     def wait(self) -> None:
         if self._last_request_at is not None:
             remaining = self.minimum_interval - (self.clock() - self._last_request_at)
             if remaining > 0:
                 self.sleep(remaining)
-        self._last_request_at = self.clock()
+        if self.state_path is None:
+            self._release()
+            return
+        with _exclusive(Path(self.state_path)) as handle:
+            handle.seek(0)
+            raw = handle.read().strip()
+            last = float(raw) if raw else None
+            if last is not None:
+                remaining = self.minimum_interval - (self.wall_clock() - last)
+                if remaining > 0:
+                    self.sleep(remaining)
+            self._release()
+            self.last_release_wall = self.wall_clock()
+            handle.seek(0)
+            handle.truncate()
+            handle.write(repr(self.last_release_wall).encode("ascii"))
+            handle.flush()
 
 
 @dataclass(frozen=True)

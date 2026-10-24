@@ -6,6 +6,7 @@
 """
 
 import sys
+from pathlib import Path
 
 import pytest
 import pandas as pd
@@ -60,3 +61,39 @@ def _forbid_real_backtest_persistence(monkeypatch, request):
 
     monkeypatch.setattr('core.db_helper.save_backtest_results', _blocked)
     monkeypatch.setattr('core.backtest.runner.save_backtest_results', _blocked)
+
+
+def _production_tree_state():
+    from core.runtime import fundamental_production as production
+
+    root = production.OPERATION_ROOT
+    return {p.relative_to(root).as_posix(): (p.stat().st_size, p.stat().st_mtime_ns) for p in sorted(root.rglob('*')) if p.is_file()}
+
+
+@pytest.fixture(autouse=True)
+def _redirect_production_status_writes(monkeypatch, tmp_path):
+    """Any write of fundamental_production_status.json aimed at the real operation folder goes to the test's tmp_path.
+
+    2026-10-24: test_run_daily_persistence called run_daily_for_date('2026-04-28') without stubbing run_fundamental_production, which rewrote the
+    production status file (asof 2026-04-28) on every full regression. The writer resolves its default root at call time, so one guard covers every test.
+    """
+    from core.runtime import fundamental_production as production
+
+    real_write = production._write_status
+    real_root = production.OPERATION_ROOT.resolve()
+
+    def guarded(root, payload):
+        redirected = tmp_path / 'redirected_production_status' if Path(root).resolve() == real_root else root
+        return real_write(redirected, payload)
+
+    monkeypatch.setattr(production, '_write_status', guarded)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def _production_folder_unchanged_after_session():
+    """Fail the session if any file under the real operation folder changed (size or mtime), whatever the cause."""
+    before = _production_tree_state()
+    yield
+    after = _production_tree_state()
+    changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+    assert not changed, f'PRODUCTION_FOLDER_CHANGED_BY_TESTS: {changed}'

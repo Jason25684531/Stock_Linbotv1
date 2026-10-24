@@ -155,6 +155,28 @@ def matrix():
     print(summary)
 
 
+def matrix_closure():
+    """Closure copy of the matrix: the original strategy_status_matrix.csv stays as written; G2/G3 rows get the MOPS sample and population findings."""
+    closure = OUT / 'closure'
+    sample, scan = read(closure / 'mops_sample_summary.json'), read(closure / 'mops_population_basis_scan.json')
+    frame = pd.read_csv(OUT / 'strategy_status_matrix.csv', encoding='utf-8-sig')
+    bad = scan['metrics']['operating_income_yoy']
+    mops = (f"MOPS re-parse of {sample['sample_size']} filings (seed {sample['seed']}): {sample['status_counts'].get('PASS', 0)} PASS, {sample['status_counts'].get('FAIL', 0)} FAIL "
+            f"(yoy built on mixed standalone/cumulative bases); whole-dataset scan: {bad['basis_differs_from_prior_year']} of {bad['rows']} operating_income_yoy rows ({bad['share']:.2%}) mix bases; "
+            "the sample does not certify the other filings")
+    for index, row in frame[frame.group == 'B1_G2_G3'].iterrows():
+        affected = 'operating_income_yoy' in row.strategy or row.strategy.startswith('G2')
+        frame.loc[index, 'DATA_detail'] = f"{row.DATA_detail}; {mops}" + ('' if affected else '; G3 uses eps_yoy (eps is always cumulative): the basis defect does not apply to it')
+        frame.loc[index, 'blockers'] = f"{row.blockers} | fundamentals_yoy_basis_mismatch({bad['basis_differs_from_prior_year']} rows)" if affected else f"{row.blockers} | fundamentals_not_certified_beyond_sample({sample['sample_size']} filings)"
+        frame.loc[index, 'unblock'] = ('fix add_derived_metrics (same-basis yoy) and rebuild the PIT dataset with a new version (Owner approval), then re-verify the whole population; ' if affected else
+                                       'verify the whole population (or an Owner-approved acceptance rule), second source for the values; ') + str(row.unblock)
+    frame.to_csv(closure / 'strategy_status_matrix_closure.csv', index=False, encoding='utf-8-sig')
+    write(closure / 'strategy_status_summary_closure.json', {'ENGINE_PASS': int((frame.ENGINE == 'ENGINE_PASS').sum()), 'DATA': frame.DATA.value_counts().to_dict(), 'BACKTEST': frame.BACKTEST.value_counts().to_dict(),
+                                                           'EVIDENCE': frame.EVIDENCE.value_counts().to_dict(), 'independent_validation_eligible': int((frame.independent_validation_eligible == 'YES').sum()),
+                                                           'changed_vs_original': 'only B1_G2_G3 DATA_detail / blockers / unblock text; no grade changed'})
+    print('closure matrix written')
+
+
 def track_a_readiness():
     gates = gate_status()
     decisions = read(MODEL_VALIDATION / 'retrain_decision.json')['models']
@@ -189,4 +211,4 @@ def track_a_readiness():
 
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')
-    {'matrix': matrix, 'readiness': track_a_readiness}[sys.argv[1]]()
+    {'matrix': matrix, 'readiness': track_a_readiness, 'closure': matrix_closure}[sys.argv[1]]()

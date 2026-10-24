@@ -124,14 +124,18 @@ def configure(budget=BUDGET):
 
 
 class LoggedGate:
-    """RequestGate that records the instant each request is released (what the >= 3.2 s rule is about)."""
+    """RequestGate that records every release with the spacing the gate itself measured (gate_gap_seconds).
+
+    The gate keeps its state in a file next to the ledger, so a second process (or a restart) is throttled against the same last release.
+    The logged wall-clock `ts` is only a log time: it includes file-write latency, which once made two releases look 2.934 s apart (see closure report).
+    """
 
     def __init__(self, ledger, interval=MIN_INTERVAL):
-        self.gate, self.ledger, self.context = RequestGate(minimum_interval=interval), ledger, {}
+        self.gate, self.ledger, self.context = RequestGate(minimum_interval=interval, state_path=Path(ledger).with_suffix('.gate')), ledger, {}
 
     def wait(self):
         self.gate.wait()
-        odr.log(self.ledger, event='RELEASED', **self.context)
+        odr.log(self.ledger, event='RELEASED', gate_gap_seconds=self.gate.last_gap, gate_release_wall=self.gate.last_release_wall, **self.context)
 
 
 def acquire_with_retries(dataset, day, gate, ledger, trusted):
