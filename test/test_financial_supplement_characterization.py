@@ -126,6 +126,7 @@ def test_backtest_supplement_adds_eps_when_op_margin_already_exists(monkeypatch)
     engine.engine = _NoopEngine()
     engine._revenue_cache = None
     engine._financial_cache = None
+    engine.research_data, engine.rules_only = None, False  # set by BacktestEngine.__init__ since the Native7 / Track A research options; this hand-built engine is the legacy MySQL path
     engine.strategy_obj = CapturingStrategy()
     engine.model = None
     engine.features = []
