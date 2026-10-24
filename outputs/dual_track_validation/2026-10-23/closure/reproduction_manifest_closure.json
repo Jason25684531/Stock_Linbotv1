@@ -1,0 +1,48 @@
+{
+  "change": "openspec/changes/2026-10-23-validate-22-strategies-dual-track",
+  "git_head": "1f7d428008bd27c7460939c13dd925b8a9eced16",
+  "original_manifest_sha256": "35d9308e7bfb7c004d03bf836f60bcb576f2c05e463b2e329687248fafa70b3d",
+  "commands": [
+    "python scripts/test_isolation_record.py   # full suite with before/after state of the production folder",
+    "python scripts/mops_sample_check.py sample",
+    "python scripts/mops_sample_check.py scan",
+    "python scripts/dual_track_matrix.py closure",
+    "python scripts/dual_track_closure.py verify",
+    "python scripts/dual_track_closure.py manifest"
+  ],
+  "seed": {
+    "mops_sample": 20261024
+  },
+  "code": {
+    "core/research/sources/twse.py": "45a84566d6476c4b5675713c1ddf3a759a52e44b4292d9b1c6da97787d119ff7",
+    "scripts/dual_track_validation.py": "defa35f3106453ff499ef08ad779d313d34994126941f338fbceb90969faf060",
+    "scripts/mops_sample_check.py": "e341af2d45258b4eb743ed5ff61d2bdf9307007a20732bfba0e17e30d6e089b0",
+    "scripts/test_isolation_record.py": "6421c306dba708cf96bc1fca864c10a693f34669eaf79d565ad885aaeb703f79",
+    "scripts/dual_track_matrix.py": "3fa35b652c9f430fa92d47d7638395b73d86c10cec69cd2b7c51c4ce5babd709",
+    "scripts/dual_track_closure.py": "8302f4d4a6ae939ce0efb6fa954a39b5239f06187969c3239c0632747a347c95",
+    "test/conftest.py": "4b7efbabd5123827232081f4246fcfd23a8e14cde33254a7cb9b42ece5fc6dd6",
+    "test/test_request_gate.py": "3410bbef6f20976623fe1bd5ee95afd184dc12f6dbc7b811dde60787dc51b425",
+    "test/test_production_status_isolation.py": "34a0c5b8e2d700fbe6a90d1705310cdb729ed56b84254fc2e1f454cf0e432b5c"
+  },
+  "inputs": {
+    "fundamental_records.parquet": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+    "publication_records_full.csv": "6d31e63825898019289e0c1a8b5b80f1ebe4040f70cca5f221bd573c698af933"
+  },
+  "outputs": {
+    "mops_sample_200.csv": "7016b533d92fc44d8d0a26c5b6f3d44b927803b872e649a2cd8598e9d76a6c38",
+    "mops_sample_summary.json": "90b19972b12e0febf254e2e505ff1c1364b864c6b21c03fb5caa5b18332730b2",
+    "mops_population_basis_scan.json": "22d118aeaf65583eabd70134531e3b1632a7f6949d0e7cee9e9d0d345251fffb",
+    "test_isolation_record.json": "daa4dc20f376687fa3869b2b0d8676b04859277e4dad973ca806dcf24d46577f",
+    "request_spacing_exception_report.md": "36b731bc24447d70ee4d72df48ddc7edb34ec89d4be71a709446e64add3ad979",
+    "openspec_count_reconciliation.json": "13519cb4b895bff5fdc935366b69d12d038fedc4f493a7b98c792905b207d9d1",
+    "strategy_status_matrix_closure.csv": "1dcd79944d3270a71572501d186f84c30d526aa54a8cf723e83589e3f1e3ed22",
+    "strategy_status_summary_closure.json": "cd6e2bae739aeae8ba16a7bffa883fb762cc96c95c4b7f8ad5234b09844effa9",
+    "full_suite_run2.log": "edf9bd1421b41458ba38e462c1743dd33bc6ca87a4441d86b80fd74cc9598bbb",
+    "closure_report.md": "27d4389a3cdbf92565ae40e7e514481d1840d8fd6daaa12fa2c99f20d07d5465",
+    "verification_closure.json": "d80d6522bf430825779092fbbf527565bddeb530f7a2ac8b36f159ebdfad990a"
+  },
+  "environment": {
+    "python": "3.11.9"
+  },
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}

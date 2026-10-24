@@ -1,0 +1,16 @@
+{
+ "listing_command": "ls openspec/specs | wc -l",
+ "entries_in_openspec_specs": 85,
+ "spec_folders": 83,
+ "plain_files_not_specs": [
+  "frontend-design.md",
+  "webapp-testing.md"
+ ],
+ "validated_by_strict": 83,
+ "validated_all_valid": true,
+ "folders_without_validation": [],
+ "validated_without_folder": [],
+ "folders_without_spec_md": [],
+ "conclusion": "The earlier 85/83 (and 84/82) came from counting directory entries: 83 spec folders plus 2 plain markdown files. No spec is missing from validation, nothing was deleted.",
+ "earlier_wording_correction": "The previous status report called the 85 entries \"folders\"; 83 are folders, 2 are files."
+}

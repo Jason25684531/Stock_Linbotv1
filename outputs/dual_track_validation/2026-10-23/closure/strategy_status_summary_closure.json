@@ -1,0 +1,17 @@
+{
+  "ENGINE_PASS": 22,
+  "DATA": {
+    "DATA_PASS": 16,
+    "DATA_BLOCKED": 6
+  },
+  "BACKTEST": {
+    "DIAGNOSTIC": 13,
+    "DEVELOPMENT": 7,
+    "BLOCKED": 2
+  },
+  "EVIDENCE": {
+    "INSUFFICIENT": 22
+  },
+  "independent_validation_eligible": 0,
+  "changed_vs_original": "only B1_G2_G3 DATA_detail / blockers / unblock text; no grade changed"
+}

@@ -1,0 +1,100 @@
+{
+  "defect": "add_derived_metrics divides the current value by the prior-year value of the same quarter without requiring the same REPORTING_BASIS; when the prior year chain of quarters is incomplete the prior value stays cumulative while the current one is standalone",
+  "strategies_reading_these_metrics": "G2 uses operating_income_yoy; revenue_yoy is read by Day3/D5 research inputs where listed; G3 uses eps_yoy (eps is always cumulative: not affected)",
+  "metrics": {
+    "revenue_yoy": {
+      "rows": 34696,
+      "basis_differs_from_prior_year": 466,
+      "share": 0.01343,
+      "pairs_current_prior": {
+        "STANDALONE/CUMULATIVE": 466
+      },
+      "by_fiscal_year": {
+        "2014": 47,
+        "2015": 37,
+        "2016": 54,
+        "2017": 33,
+        "2018": 44,
+        "2019": 49,
+        "2020": 32,
+        "2021": 26,
+        "2022": 44,
+        "2023": 44,
+        "2024": 40,
+        "2025": 16
+      },
+      "by_quarter": {
+        "1": 1,
+        "2": 150,
+        "3": 115,
+        "4": 200
+      }
+    },
+    "operating_income_yoy": {
+      "rows": 34717,
+      "basis_differs_from_prior_year": 468,
+      "share": 0.01348,
+      "pairs_current_prior": {
+        "STANDALONE/CUMULATIVE": 468
+      },
+      "by_fiscal_year": {
+        "2014": 47,
+        "2015": 37,
+        "2016": 54,
+        "2017": 35,
+        "2018": 44,
+        "2019": 49,
+        "2020": 32,
+        "2021": 26,
+        "2022": 44,
+        "2023": 44,
+        "2024": 40,
+        "2025": 16
+      },
+      "by_quarter": {
+        "1": 1,
+        "2": 151,
+        "3": 115,
+        "4": 201
+      }
+    },
+    "revenue_cumulative_yoy": {
+      "rows": 541,
+      "basis_differs_from_prior_year": 5,
+      "share": 0.00924,
+      "pairs_current_prior": {
+        "CUMULATIVE/STANDALONE": 5
+      },
+      "by_fiscal_year": {
+        "2014": 1,
+        "2022": 3,
+        "2024": 1
+      },
+      "by_quarter": {
+        "2": 1,
+        "3": 2,
+        "4": 2
+      }
+    },
+    "operating_income_cumulative_yoy": {
+      "rows": 556,
+      "basis_differs_from_prior_year": 5,
+      "share": 0.00899,
+      "pairs_current_prior": {
+        "CUMULATIVE/STANDALONE": 5
+      },
+      "by_fiscal_year": {
+        "2014": 1,
+        "2022": 3,
+        "2024": 1
+      },
+      "by_quarter": {
+        "2": 1,
+        "3": 2,
+        "4": 2
+      }
+    }
+  },
+  "records_sha256": "8f37a17d8d4a47ed9018b4da9eda2d0f266f9c3774630741795ab36cbf29087c",
+  "not_modified": "the dataset was not rewritten; the fix (require equal basis or recompute the prior standalone value) needs Owner approval and a dataset version bump"
+}

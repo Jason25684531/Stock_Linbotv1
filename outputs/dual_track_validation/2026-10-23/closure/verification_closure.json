@@ -1,0 +1,89 @@
+{
+  "status": "CLOSURE_CHECKS_PASS_WITH_OPEN_EXCEPTIONS",
+  "at": "2026-10-24T16:14:50",
+  "original_verification": {
+    "path": "verification.json",
+    "sha256": "185e023b1c23817d2036e1f06029a7ece40d8bff576e70f6986582be43dbb94a",
+    "status": "FAIL",
+    "failed_checks": [
+      "REQUEST_SPACING"
+    ],
+    "preserved": true
+  },
+  "models_unchanged": true,
+  "archived_outputs_unchanged": true,
+  "protected_source_exceptions": [
+    "core/strategies/growth_momentum_breakout.py"
+  ],
+  "historical_hash_exceptions": [],
+  "code_changed_since_baseline": [
+    "core/backtest/runner.py",
+    "core/calc_indicators.py",
+    "core/research/model_training.py",
+    "core/research/native_frame.py",
+    "core/research/native_models.py",
+    "core/research/sources/twse.py",
+    "jobs/run_daily.py"
+  ],
+  "allowed_code_changes": [
+    "core/backtest/runner.py",
+    "core/calc_indicators.py",
+    "core/research/model_training.py",
+    "core/research/native_frame.py",
+    "core/research/native_models.py",
+    "core/research/sources/twse.py",
+    "jobs/run_daily.py"
+  ],
+  "fresh_oos_ledger_unchanged": true,
+  "runner_unchanged_since_od29_characterization": true,
+  "production_folder": {
+    "path": "D:\\01_Project\\Stocke\\Stock_Linbotv1\\outputs\\fundamental_runtime_shadow\\operate-fundamental-shadow-until-oos-ready-v1",
+    "unchanged_since_full_suite_isolation_record": true,
+    "status_file_sha256": "bb561a27c5559ea248c059fa63a908bdaa4eaf76db7e524e63efa23e39b011b1",
+    "status_file_content": "byte-identical to the output of test_run_daily_persistence redirected to a temp folder (test data, asof 2026-04-28)"
+  },
+  "targeted_tests": {
+    "files": [
+      "test/test_request_gate.py",
+      "test/unit/research/test_twse_adapter.py",
+      "test/test_production_status_isolation.py",
+      "test/test_run_daily_persistence.py",
+      "test/test_valuation_policy.py",
+      "test/test_native7_rules_only.py",
+      "test/test_dual_track_validation.py",
+      "test/test_official_data_recovery.py",
+      "test/test_stabilize_daily_recommendation_pipeline_contract.py",
+      "test/unit/runtime"
+    ],
+    "returncode": 0,
+    "summary": "======================= 182 passed in 109.88s (0:01:49) ======================="
+  },
+  "mops_sample": {
+    "size": 200,
+    "status_counts": {
+      "PASS": 197,
+      "FAIL": 3
+    },
+    "seed": 20261024
+  },
+  "openspec_counts": {
+    "entries": 85,
+    "spec_folders": 83,
+    "validated": 83,
+    "plain_files": [
+      "frontend-design.md",
+      "webapp-testing.md"
+    ]
+  },
+  "open_exceptions_for_owner": [
+    "OWNER_DECISION_REQUEST_SPACING_EXCEPTION (options A/B/C; original verification.json stays FAIL)",
+    "MOPS_POPULATION_NOT_CERTIFIED (sample 200 only; 468 operating_income_yoy rows mix standalone/cumulative bases; dataset fix needs Owner approval)",
+    "PRODUCTION_STATUS_FILE_CONTENT_IS_TEST_DATA (asof 2026-04-28; not restored without Owner approval; the 18:30 +08 evening pipeline rewrites it)",
+    "TWO_PREEXISTING_TEST_FAILURES (BacktestEngine without research_data; core.research imports core.calc_indicators) need Owner decision on core edits"
+  ],
+  "ARCHIVE_ELIGIBLE": false,
+  "no_new_official_requests": true,
+  "no_model_trained": true,
+  "mysql": "no write path",
+  "BROKER_ORDER_SUBMISSION": "DISABLED"
+}
