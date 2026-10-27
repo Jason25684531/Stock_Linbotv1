@@ -190,3 +190,20 @@ def test_recovered_scoring_never_fills_features():
     with pytest.raises(ValueError, match="MODEL_FEATURE_MISSING_VALUE"):
         run_daily.run_strategy(strategy, frame.assign(rsi_z=[np.nan, 1.0]), "2026-10-15", None, dry_run=True, recovered=True,
                                contract=contract, model_status="MODEL_BLOCKED: X")
+
+
+def test_recovered_daily_keeps_only_the_official_listed_universe(monkeypatch):
+    from jobs import run_daily
+
+    snap = chips(snapshot())
+    fake_db(monkeypatch, run_daily, snap)
+    day = LAST.strftime("%Y-%m-%d")
+    keep = frozenset(sorted(snap.stock_id.unique())[:1])  # the fixture has two stocks; dropping one proves the filter runs
+    monkeypatch.setattr(run_daily, "listed_universe", lambda d: keep if d == day else frozenset())
+    assert set(run_daily.load_recovered_data(day, engine=None).cross_section(LAST).stock_id) == keep
+
+    def unavailable(d):
+        raise RuntimeError("LISTED_UNIVERSE_UNAVAILABLE")
+    monkeypatch.setattr(run_daily, "listed_universe", unavailable)  # no cached official response -> fail closed, never all codes
+    with pytest.raises(RuntimeError, match="LISTED_UNIVERSE_UNAVAILABLE"):
+        run_daily.load_recovered_data(day, engine=None)

@@ -780,22 +780,54 @@ class BacktestEngine:
             data = self.get_data(order['stock_id'], session)
             price = data.get('open_price') if data is not None else None
             valid = price is not None and math.isfinite(float(price)) and float(price) > 0
+            rejection, prior_amount, checked = self._open_fill_rejection(order, session, data) if valid else (None, None, True)
             event = {**order, 'execution_date': session, 'price': float(price) if valid else None,
-                     'status': 'UNFILLED', 'reason': 'MISSING_OR_INVALID_NEXT_OPEN'}
-            if valid:
+                     'status': 'UNFILLED', 'reason': rejection or 'MISSING_OR_INVALID_NEXT_OPEN'}
+            if not checked:  # counted, not stamped on the event: legacy event dicts stay identical to the characterization
+                self.unchecked_fill_orders = getattr(self, 'unchecked_fill_orders', 0) + 1
+            if valid and rejection is None:
                 sid = order['stock_id']
                 before = sid in self.positions
-                self._execution_asof = order['signal_date']
+                held = self.positions[sid]['shares'] if before else 0
+                fill = {'checked': checked, 'prior_amount': prior_amount}
+                self._execution_asof, self._fill = order['signal_date'], fill
                 try:
                     if order['side'] == 'SELL' and before:
                         self.sell(sid, float(price), session, order['reason'])
                     elif order['side'] == 'BUY' and not before:
                         self.buy(sid, float(price), session)
                 finally:
-                    self._execution_asof = None
-                event['status'] = 'FILLED' if before != (sid in self.positions) else 'UNFILLED'
-                event['reason'] = None if event['status'] == 'FILLED' else 'POSITION_CASH_OR_HOLDING_LIMIT'
+                    self._execution_asof, self._fill = None, None
+                traded = before != (sid in self.positions) or (before and self.positions[sid]['shares'] < held)
+                if traded:
+                    event['status'], event['reason'] = ('PARTIAL', 'PARTICIPATION_CAP') if fill.get('capped_to') else ('FILLED', None)
+                    if checked:
+                        from core.backtest.execution import same_day_amount_share
+                        event['same_day_amount_share'] = same_day_amount_share(fill['value'], data['amount'])  # post-trade diagnostic only
+                else:
+                    event['reason'] = 'REJECTED_PARTICIPATION_CAP' if fill.get('capped_to') == 0 else 'POSITION_CASH_OR_HOLDING_LIMIT'
             self.execution_events.append(event)
+
+    def _open_fill_rejection(self, order, session, data):
+        """(rejection, prior_amount, checked): the shared fill rule (core.backtest.execution.fill_check) on the next-session open.
+
+        Needs the full bar and the previous validated session's official close (limit band) and traded value (participation cap, known
+        before the open). A bar without high/low/volume/amount (legacy fixtures) is not checked: checked=False, and the run then reports
+        fill_rule DIAGNOSTIC_ONLY, never CORRECTED_FILL_RULE.
+        """
+        if self.research_data is None or not {'high_price', 'low_price', 'volume', 'amount'} <= set(data):
+            return None, None, False
+        import numpy as np
+        from core.backtest.execution import fill_check, limit_prices
+        index = self.trading_sessions.index(session)
+        previous = self.research_data.bar(order['stock_id'], self.trading_sessions[index - 1]) if index else None
+        reference = previous.get('close_price') if previous else None
+        if reference is None or not math.isfinite(float(reference)) or float(reference) <= 0:
+            return 'REJECTED_NO_BAR', None, True  # no official close on the previous session: the limit band is unknown, never assumed (no stale carry)
+        up, down = limit_prices(np.array([float(reference)]))
+        bar = {'open': data['open_price'], 'high': data['high_price'], 'low': data['low_price'], 'volume': data['volume'], 'amount': data['amount'],
+               'limit_up': float(up[0]), 'limit_down': float(down[0])}
+        return fill_check(order['side'].lower(), bar), previous.get('amount'), True
 
     def process_close_signals(self, session, trend):
         """Shared single/portfolio signal scheduling; legacy replay retains its ordering."""
@@ -1040,6 +1072,25 @@ class BacktestEngine:
             pass
         return MAX_HOLDINGS
 
+    @property
+    def fill_rule(self):
+        """CORRECTED_FILL_RULE only when there is at least one order and every one went through the full fill rule; else DIAGNOSTIC_ONLY."""
+        checked = self.execution_events and not getattr(self, 'unchecked_fill_orders', 0)
+        return 'CORRECTED_FILL_RULE' if checked else 'DIAGNOSTIC_ONLY'
+
+    def _capped(self, shares, price):
+        """Under next_session_open_v2 with a checked bar: at most 5% of the previous session's traded value (execution.cap_shares).
+        legacy_same_close and unchecked legacy bars are not capped; such a run is never reported as CORRECTED_FILL_RULE."""
+        fill = getattr(self, '_fill', None)
+        if not fill or not fill['checked']:
+            return shares
+        from core.backtest.execution import cap_shares
+        capped = cap_shares(shares, price, fill['prior_amount'])
+        if capped < shares:
+            fill['capped_to'] = capped
+        fill['value'] = capped * price
+        return capped
+
     def buy(self, stock_id, price, date_str):
         """買入"""
         if len(self.positions) >= self._get_max_holdings(getattr(self, '_execution_asof', None) or date_str):
@@ -1055,7 +1106,9 @@ class BacktestEngine:
             return
         
         actual_buy_price = self._apply_execution_slippage(price, 'buy')
-        shares = int(budget / price)
+        shares = self._capped(int(budget / price), actual_buy_price)
+        if shares <= 0:
+            return
 
         cost = shares * actual_buy_price
         fee = self.costs.buy_cost(cost)
@@ -1086,14 +1139,25 @@ class BacktestEngine:
         info = self.positions[stock_id]
         
         actual_sell_price = self._apply_execution_slippage(price, 'sell')
-        revenue = info['shares'] * actual_sell_price
+        shares = self._capped(info['shares'], actual_sell_price)
+        if shares <= 0:
+            return  # the position stays; the exit is signalled again at the next close
+        basis = info['total_cost'] * shares / info['shares']
+        revenue = shares * actual_sell_price
         net = revenue - self.costs.sell_cost(revenue)
         
-        profit = net - info['total_cost']
-        profit_pct = profit / info['total_cost'] * 100
-        
         self.portfolio.credit(net)
-        
+        if shares < info['shares']:  # partial exit under the participation cap: a fill, not a trade; the remainder keeps its pro-rata cost
+            info['shares'] -= shares
+            info['total_cost'] -= basis
+            info['partial_net'] = info.get('partial_net', 0.0) + net
+            info['partial_basis'] = info.get('partial_basis', 0.0) + basis
+            return
+        net += info.get('partial_net', 0.0)
+        basis += info.get('partial_basis', 0.0)
+        profit = net - basis
+        profit_pct = profit / basis * 100
+
         # 記錄交易
         strategy_key = 'v31_hybrid' if self.mode == 'v31' else self.mode
         self.trades.append({
@@ -1109,7 +1173,7 @@ class BacktestEngine:
         })
         
         self.portfolio.close_position(stock_id)
-        
+
         self.trade_count += 1
         if profit_pct > 0:
             self.win_count += 1
@@ -1346,6 +1410,7 @@ class BacktestEngine:
         if self.execution_contract == 'next_session_open_v2':
             if return_metrics:
                 return {'execution_contract': self.execution_contract,
+                        'fill_rule': self.fill_rule,
                         'risk_metrics': metrics['risk_metrics'],
                         'execution_events': self.execution_events,
                         'data_exclusions': getattr(self, 'data_exclusions', []),

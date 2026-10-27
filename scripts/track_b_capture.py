@@ -131,8 +131,10 @@ def compare_outputs(canonical, rerun_dir):
             'different': [n for n in names if n not in same], 'status': 'IDENTICAL' if len(same) == len(names) else 'DIFFERENT'}
 
 
-def rerun(family):
-    run_dir = OUT / 'track_b_runs' / family.lower()
+def rerun(family, fundamental_matrix=None, out=None):
+    # ponytail: fundamental_matrix/out only for G2G3 diagnostics on another dataset version; defaults keep the archived layout
+    run_dir = Path(out) / 'run' if out else OUT / 'track_b_runs' / family.lower()
+    sink = Path(out) if out else OUT
     if run_dir.exists():
         raise FileExistsError(run_dir)
     collector, started = Collector(), time.perf_counter()
@@ -143,7 +145,7 @@ def rerun(family):
             job.run(day2_dir=job.DEFAULT_DAY2_DIR, d3_root=job.DEFAULT_D3_ROOT, master_path=job.DEFAULT_MASTER_PATH, output_dir=run_dir)
         elif family == 'G2G3':
             import jobs.run_fundamental_strategy_validation as job
-            job.run_pipeline(output_dir=run_dir)
+            job.run_pipeline(output_dir=run_dir, **({'fundamental_matrix': Path(fundamental_matrix)} if fundamental_matrix else {}))
         else:
             import jobs.run_portfolio_research as job
             job.run(handoff_path=Path('artifacts/d5_handoff/d4_acceptance_20260811_v8_with_scoreboard'),
@@ -151,12 +153,12 @@ def rerun(family):
     finally:
         restore()
     returns, orders = pd.concat(collector.returns, ignore_index=True), pd.concat(collector.orders, ignore_index=True)
-    returns.to_parquet(OUT / f'returns_{family.lower()}.parquet', index=False)
-    orders.to_parquet(OUT / f'orders_{family.lower()}.parquet', index=False)
+    returns.to_parquet(sink / f'returns_{family.lower()}.parquet', index=False)
+    orders.to_parquet(sink / f'orders_{family.lower()}.parquet', index=False)
     summary = {'family': family, 'configurations_captured': len(collector.ids), 'expected': FAMILY_SIZE[family], 'seconds': round(time.perf_counter() - started, 1),
                'returns_rows': len(returns), 'orders_rows': len(orders), 'first_date': str(returns.date.min().date()), 'last_date': str(returns.date.max().date()),
                'reproduction': compare_outputs(CANONICAL[family], run_dir)}
-    write(OUT / f'rerun_{family.lower()}.json', summary)
+    write(sink / f'rerun_{family.lower()}.json', summary)
     print(summary)
 
 

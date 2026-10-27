@@ -365,6 +365,10 @@ def validate_targets(targets: pd.DataFrame, legal_rebalance_dates: Iterable[pd.T
 
 
 def _cost_for(notional: float, side: str, cost: Mapping[str, float]) -> float:
+    if "minimum_fee" in cost:  # opt-in: the project CostModel (integer NT$ fees, minimum fee), the same model the paper broker charges
+        from core.backtest.costs import CostModel
+        model = CostModel(float(cost.get("fee_rate", 0.0)), float(cost.get("tax_rate", 0.0)), float(cost["minimum_fee"]))
+        return float(model.buy_cost(abs(notional)) if side == "buy" else model.sell_cost(abs(notional)))
     fee = abs(notional) * float(cost.get("fee_rate", 0.0))
     tax = abs(notional) * float(cost.get("tax_rate", 0.0)) if side == "sell" else 0.0
     return fee + tax
@@ -376,8 +380,22 @@ def simulate_target_weights(
     *,
     initial_capital: float = DEFAULT_POLICY.initial_capital,
     cost: Mapping[str, float] | None = None,
+    bars: Mapping[object, Mapping[str, Mapping[str, float]]] | None = None,
 ) -> dict[str, object]:
-    """Replay sparse instructions without ever filling a missing execution price."""
+    """Replay sparse instructions without ever filling a missing execution price.
+
+    bars (execution_date -> asset -> {open, high, low, close, volume, amount, prior_amount, limit_up, limit_down}): when given, every
+    order goes through the shared ``core.backtest.execution.fill_check`` and the participation cap on prior_amount (the previous
+    session's traded value, known before the open; the same-day amount is only reported); a rejected buy opens nothing, a rejected
+    sell keeps the position and is retried on the next execution date. bars=None reproduces the pre-2026-10-26 behaviour exactly.
+    """
+    from core.backtest.execution import cap_shares, fill_check, same_day_amount_share
+
+    def gate(side, asset, current):
+        if bars is None:
+            return None, None
+        bar = (bars.get(current) or bars.get(pd.Timestamp(current)) or {}).get(asset)
+        return fill_check(side, bar), bar
 
     validate_targets(targets)
     cost = dict(cost or {"fee_rate": 0.0, "tax_rate": 0.0, "slippage": 0.0})
@@ -411,12 +429,26 @@ def simulate_target_weights(
                 if execution_price is None:
                     execution_log.append({"execution_date": current, "asset_id": asset, "side": "sell", "status": "DEFERRED", "reason": "MISSING_EXECUTION_PRICE"})
                     continue
-                item = positions.pop(asset)
+                reason, bar = gate("sell", asset, current)
+                if reason:
+                    execution_log.append({"execution_date": current, "asset_id": asset, "side": "sell", "status": "DEFERRED", "reason": reason})
+                    continue  # the position stays; it is retried on the next execution date
                 slipped = execution_price * (1.0 - float(cost.get("slippage", 0.0)))
-                notional = item["shares"] * slipped
+                shares = cap_shares(int(positions[asset]["shares"]), slipped, bar.get("prior_amount")) if bar else positions[asset]["shares"]
+                if shares <= 0:
+                    execution_log.append({"execution_date": current, "asset_id": asset, "side": "sell", "status": "DEFERRED", "reason": "REJECTED_CAP"})
+                    continue
+                item = positions[asset]
+                if shares < item["shares"]:
+                    item["shares"] -= shares  # partial: the remainder is still held
+                    execution_log.append({"execution_date": current, "asset_id": asset, "side": "sell", "status": "PARTIAL", "reason": "PARTICIPATION_CAP"})
+                else:
+                    positions.pop(asset)
+                notional = shares * slipped
                 fee = _cost_for(notional, "sell", cost)
                 cash += notional - fee
-                trades.append({"execution_date": current, "asset_id": asset, "side": "sell", "shares": item["shares"], "price": slipped, "notional": notional, "cost": fee})
+                trades.append({"execution_date": current, "asset_id": asset, "side": "sell", "shares": float(shares), "price": slipped, "notional": notional, "cost": fee,
+                               **({"same_day_amount_share": same_day_amount_share(shares * slipped, bar.get("amount"))} if bar else {})})
             for asset in sorted(desired):
                 weight = desired[asset]
                 if weight <= 0 or asset in positions:
@@ -425,9 +457,15 @@ def simulate_target_weights(
                 if execution_price is None:
                     execution_log.append({"execution_date": current, "asset_id": asset, "side": "buy", "status": "DEFERRED", "reason": "MISSING_EXECUTION_PRICE"})
                     continue
+                reason, bar = gate("buy", asset, current)
+                if reason:
+                    execution_log.append({"execution_date": current, "asset_id": asset, "side": "buy", "status": "REJECTED", "reason": reason})
+                    continue  # nothing is bought, cash is kept
                 slipped = execution_price * (1.0 + float(cost.get("slippage", 0.0)))
                 notional = max(0.0, equity_before * weight)
-                shares = int(notional // slipped)
+                shares = wanted = int(notional // slipped)
+                if bar:
+                    shares = cap_shares(shares, slipped, bar.get("prior_amount"))
                 while shares > 0:
                     gross = shares * slipped
                     fee = _cost_for(gross, "buy", cost)
@@ -435,18 +473,25 @@ def simulate_target_weights(
                         break
                     shares -= 1
                 if shares <= 0:
+                    if bar:
+                        execution_log.append({"execution_date": current, "asset_id": asset, "side": "buy", "status": "REJECTED", "reason": "REJECTED_CAP_OR_CASH"})
                     continue
+                if bar and shares < wanted:
+                    execution_log.append({"execution_date": current, "asset_id": asset, "side": "buy", "status": "PARTIAL", "reason": "PARTICIPATION_CAP_OR_CASH"})
                 gross = shares * slipped
                 fee = _cost_for(gross, "buy", cost)
                 cash -= gross + fee
                 positions[asset] = {"shares": float(shares), "price": slipped}
-                trades.append({"execution_date": current, "asset_id": asset, "side": "buy", "shares": float(shares), "price": slipped, "notional": gross, "cost": fee})
+                trades.append({"execution_date": current, "asset_id": asset, "side": "buy", "shares": float(shares), "price": slipped, "notional": gross, "cost": fee,
+                               **({"same_day_amount_share": same_day_amount_share(shares * slipped, bar.get("amount"))} if bar else {})})
         value = cash + sum(item["shares"] * last_marks.get(asset, item["price"]) for asset, item in positions.items())
         equities.append(float(value))
         equity_dates.append(pd.Timestamp(current))
     equity = pd.Series(equities, index=pd.DatetimeIndex(equity_dates), name="equity")
     returns = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna().rename("daily_return")
-    return {"equity": equity, "returns": returns, "trades": trades, "execution_log": pd.DataFrame(execution_log), "positions": positions, "cost": cost}
+    return {"equity": equity, "returns": returns, "trades": trades, "execution_log": pd.DataFrame(execution_log), "positions": positions, "cost": cost,
+            "fill_rule": "OLD_FILL_RULE" if bars is None else (
+                "CORRECTED_FILL_RULE" if all(b.get("prior_amount") is not None for day in bars.values() for b in day.values()) else "DIAGNOSTIC_ONLY")}
 
 
 def performance_metrics(result: Mapping[str, object], periods_per_year: int = 252) -> dict[str, object]:

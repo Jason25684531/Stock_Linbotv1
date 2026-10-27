@@ -27,16 +27,7 @@ NATIVE_GROSS = {'DAY3': 'gross', 'G2G3': 'GROSS', 'D5': None}
 STRESS_TRACK, BASE_TRACK = 'PROJECT_STRESS2X', 'PROJECT_BASE'
 
 
-def tick(price):
-    return np.select([price < 10, price < 50, price < 100, price < 500, price < 1000], [0.01, 0.05, 0.1, 0.5, 1.0], 5.0)
-
-
-def limit_prices(reference):
-    """TWSE daily limits: +-10 % of the reference price, rounded inside the band to the tick of the limit price."""
-    up, down = reference * 1.10, reference * 0.90
-    up = np.round(np.floor(up / tick(up) + 1e-9) * tick(up), 2)
-    down = np.round(np.ceil(down / tick(down) - 1e-9) * tick(down), 2)
-    return up, down
+from core.backtest.execution import limit_prices, tick  # noqa: E402,F401  (single source; re-exported for existing callers)
 
 
 def official_reference(bars, events):

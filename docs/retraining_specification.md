@@ -1,5 +1,11 @@
 # 7 個原生策略模型：重新訓練規格（草案，待 Owner 簽核）
 
+> **2026-10-24 更新（`retraining-spec-v2` 草案）**：狀態仍是 **DRAFT_PENDING_OWNER_APPROVAL**，沒有簽核檔。機器可讀版本：`outputs/post_archive_readiness/2026-10-24/retraining_spec_v2_draft.json`，SHA-256 `bdb8e8cd9b139e464023d6ba3f815c4d066a0f8fce31026c5a644af84c1b6f5b`。相對 v1：補上 `model_inputs`（v1 缺少，`train()` 會 KeyError）；標籤要求個股在預測期每個交易日都有 bar；除權息處理列為待決（下方第 2 節與第 11 節 OD-T1）；第 10 節依測試證據改寫。實測統計：`outputs/post_archive_readiness/2026-10-24/native7_audit/model_stats.json`。以下 v1 內容未改，除第 2、10 節的更新註記外。
+>
+> **2026-10-24 r4**（Owner 決策 OD-T1～T5 後）：`retraining_spec_v2_draft_r4.json`，SHA-256 `7cd62c3d7b913a2f3bb85fc37f58370e6938541af8d7fb15d38508c171c86f6b`。標籤政策 `OFFICIAL_FACTORS_VERIFIED_ONLY`（只調整官方可證明的事件，其餘與無法解釋的跳動排除，不推算）；`data_manifest_sha256` 已填入（重新雜湊一致）；Fresh OOS 起點依 OD-T3；門檻沿用、OD-24 不變；護欄 2 在擬合前強制（`FutureLeakageError`）。分割／減資完整性 UNKNOWN，不視為 PASS（DATA_BLOCKED）。狀態仍是 **DRAFT_PENDING_OWNER_APPROVAL**。
+>
+> **2026-10-24 r3**（獨立審查後）：機器可讀版本改為 `retraining_spec_v2_draft_r3.json`，SHA-256 `ec2a6ba7ad2939a653448d52eef0789d59d67b48bd99ae189a333779b4a15295`（r1、r2 保留）。驗收不是 PASS 的模型寫成 `*_rejected.pkl`（載入端不讀）；Test 段以（規格 SHA-256、策略）為 key 只評估一次（`outputs/model_training/test_evaluation_ledger.jsonl`）；護欄 6 在 manifest 雜湊登記前為 None；護欄 2 仍在 `train()` 之外。第 10 節修改 3、6 由 PARTIAL 改為 VERIFIED_BY_TESTS：`train()` 依第 9.1 節評估 Validation／Test 各一次（`evaluate_segment`，無法計算的指標記 `value=None` 與原因），同一輸出位置已有模型時拒絕重訓。狀態仍是 **DRAFT_PENDING_OWNER_APPROVAL**。新發現（需 Owner 核准，未修改）：正式 legacy `run_daily` 沒有使用 `listed_universe`，2026-10-22 對 2,305 檔評分，其中 1,224 檔不是上市普通股（OD-T6）。
+
 - 日期：2026-10-23
 - 規格版本：`retraining-spec-v1`，狀態 **DRAFT_PENDING_OWNER_APPROVAL**
 - 機器可讀版本：`outputs/official_data_recovery/2026-10-23/retraining_spec.json`
@@ -24,6 +30,8 @@
 
 - 股票池：上市（TWSE）四位數普通股，來自 MI_INDEX 收盤行情表。**上櫃不納入**：沒有經認證的上櫃官方來源。這表示 recovered 每日選股必須在推論時只保留上市代號（目前會讀到 MySQL 的上櫃列，見第 10 節）。
 - 價格：原始價（價格報酬）。除權息日只旗標，不還原。標籤的預測期若包含除權息日，原始價會讓標籤偏保守（只可能少標成 1），報告時列出受影響的比例。
+
+> **v2 實測（2026-10-24，官方 TWT49U 調整因子，gate OFFICIAL_CORPORATE_ACTIONS DATA_PASS）**：訓練區段中預測期跨過除息／除權／權息的列佔 2.1%～8.6%（依模型），以官方因子調整後標籤翻轉 399～3,738 列，幾乎都是 0→1（原始價偏保守，與上述推論一致）。分割與減資沒有官方調整資料，翻轉數 UNKNOWN。特徵（rsi、bias、macd 等）同樣用原始價，約 12.7% 的訓練列在前 30 個交易日內有事件。處理方式（排除、調整標籤、連特徵一併調整、或維持原樣）由 Owner 決定（OD-T1），在此之前受影響模型維持 SPEC_BLOCKED。
 - 交易日：官方 MI_INDEX 判定的交易日；沒有官方回應的日期不使用。
 
 ## 3. 24 個特徵（17 個進入模型，7 個排除）
@@ -174,7 +182,11 @@
 - 分數 = `predict_proba[:, 1]`。
 - 模型閘門：必須有 `training_data_end` 與規格雜湊，而且視窗起點在 `training_data_end` 之後。
 
-**這些在現有程式中尚未成立，本輪不得修改 `core/`，所以列為訓練前的必要修改：**
+> **r3（2026-10-24）**：3、6 已補測試，改為 VERIFIED_BY_TESTS（見 r3 JSON `code_changes_status`）；下段為 r1 當時的紀錄。
+>
+> **v2 更新（2026-10-24）：六項修改的實際證據**——1、2、4、5 有可執行測試（VERIFIED）；3（只含上市代號）原本只有文字描述，現已為 `listed_universe()` 補測試，但 `jobs/run_daily.py` 的呼叫端讀 MySQL、沒有測試（PARTIAL）；6（訓練函式）以合成資料測過擬合與模型檔欄位，但驗收評估（第 9.1 節）尚未實作，`train()` 只記錄 NOT_EVALUATED（PARTIAL）。逐項測試名稱見 v2 草案 JSON 的 `code_changes_status`。以下為 v1 原表：
+
+**（v1 原文）這些在現有程式中尚未成立，本輪不得修改 `core/`，所以列為訓練前的必要修改：**
 
 | # | 位置 | 問題 | 修改 |
 |---|---|---|---|
@@ -197,6 +209,16 @@
 | OD-19 | 核准第 10 節 6 項程式修改（下一輪，在訓練之前） | 同意，並要求每項有測試 |
 | OD-20 | 核准 Stage 2 下載（1,872 次，約 1.7 小時） | 同意（見報告第 5 節） |
 | OD-21 | 資料終點：以 Stage 2 完成當時最後一個已認證交易日為準，並在訓練前登記 | 同意 |
+
+### v2 新增待決事項
+
+| ID | 問題 | 建議 |
+|---|---|---|
+| OD-T1 | 除權息標籤處理：A 排除跨事件列／B 以官方因子調整標籤／C 標籤與特徵都調整／D 維持原始價並報告比例 | 依 Owner 決定；建議 B 或 A，並在規格中固定 |
+| OD-T2 | 簽核 v2 規格與資料終點，登記資料 manifest（提案：`native7_data_manifest_proposal.json`） | 決定後才能產生簽核檔 |
+| OD-T3 | Fresh OOS 起點（凍結時間之後、從未被研究讀取的交易日）與讀取紀錄機制 | 訓練前定義，實作可在凍結前完成 |
+| OD-T4 | 第 9.1 節驗收門檻與驗收評估程式 | 簽核前確認 |
+| OD-T5 | 財報／營收規則輸入（growth_momentum_breakout、quality_growth、quality_value_low_volatility）不在 17 個特徵內 | 接受或另開版本 |
 
 ## 12. 資料與版本記錄
 

@@ -122,6 +122,17 @@ class NativeResearchData:
         self._fin, self._rev = prepare_fundamentals(financials, revenue, publications)
         self._cache: dict[pd.Timestamp, pd.DataFrame] = {}
 
+    def truncated(self, day) -> "NativeResearchData":
+        """The same data with every bar after `day` removed (spec 9.1 guard 2: features must not depend on later data)."""
+        import copy
+
+        clone = copy.copy(self)
+        clone.snapshot = self.snapshot[self.snapshot.trade_date <= pd.Timestamp(day)].reset_index(drop=True)
+        clone._bars = clone.snapshot.set_index(["stock_id", "trade_date"])
+        clone._closes = {sid: g.set_index("trade_date").close_price for sid, g in clone.snapshot.groupby("stock_id")}
+        clone._cache = {}
+        return clone
+
     def _published(self, table: pd.DataFrame, date: pd.Timestamp) -> pd.DataFrame:
         return table[table.due < date].drop_duplicates("stock_id", keep="last").drop(columns="due")
 

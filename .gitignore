@@ -63,7 +63,7 @@ Thumbs.db
 # Keep generated OpenSpec material local, expose all active changes for review,
 # and keep completed archives local.
 
-openspec/changes/archive/
+openspec/  changes/archive/
 outputs/*
 openspec/*
 docs/*
