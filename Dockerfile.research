@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.mcp.txt /tmp/requirements.mcp.txt
+# Reuse the existing requests pin; this standalone Research CLI does not need the Production application stack.
+RUN python -c "from pathlib import Path; import subprocess,sys; rows=[r for r in Path('/tmp/requirements.mcp.txt').read_text().splitlines() if r.startswith('requests==')]; assert len(rows)==1; subprocess.check_call([sys.executable,'-m','pip','install','--no-cache-dir',*rows])"
+RUN useradd --uid 10001 --create-home research && mkdir -p /app/core/runtime /app/core/research/sources /app/scripts /app/outputs/research_budget && chown -R 10001:10001 /app/outputs
+COPY core/runtime/operation_policy.py core/runtime/research_budget.py core/runtime/public_data.py core/runtime/public_data_scope.json /app/core/runtime/
+COPY core/research/sources/__init__.py core/research/sources/twse.py /app/core/research/sources/
+COPY scripts/research_public_data.py scripts/task_controller.py /app/scripts/
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 STOCK_LINBOT_MODE=research
+USER 10001:10001
+ENTRYPOINT ["python", "scripts/research_public_data.py"]
+CMD ["status"]

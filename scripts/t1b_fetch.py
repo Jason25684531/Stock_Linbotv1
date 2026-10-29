@@ -14,6 +14,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.research.sources.twse import RequestGate  # noqa: E402
+from core.runtime import public_data  # noqa: E402
 from scripts import official_data_recovery as odr  # noqa: E402
 
 OUT = ROOT / 'outputs/finlab_recovery/2026-10-24/t1b_official'
@@ -28,11 +29,11 @@ START_PARAM = {'TWTAUU': 'startDate', 'TWTB8U': 'startDate'}  # TWTB8U with strD
 
 def fetch(gate, name, start, end):
     url = ENDPOINTS[name]
-    odr.reserve(LEDGER, name, f'{start}-{end}', url, budget=BUDGET)
-    gate.wait()
-    odr.log(LEDGER, event='RELEASED', dataset=name, gate_gap_seconds=gate.last_gap, gate_release_wall=gate.last_release_wall)
     start_key = START_PARAM.get(name, 'strDate')
-    response = requests.get(url, params={start_key: start, 'endDate': end, 'response': 'json'}, timeout=30)
+    response = public_data.request('GET', url, params={start_key: start, 'endDate': end, 'response': 'json'}, purpose='t1b', timeout=30)
+    if response.research_cache_hit:
+        payload = response.json()
+        return payload.get('stat'), payload
     retrieved = datetime.now(timezone.utc).isoformat(timespec='seconds')
     OUT.mkdir(parents=True, exist_ok=True)
     raw = OUT / f"{name}_{start}_{end}_{retrieved.replace(':', '')}.bin"

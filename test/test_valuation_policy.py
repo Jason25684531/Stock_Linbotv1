@@ -57,7 +57,7 @@ def engine(rows, monkeypatch, policy=None):
     e = BacktestEngine.__new__(BacktestEngine)
     # research_data stub: the end-of-window mark reads the last stored close (NaN included), like NativeResearchData.last_close
     last_close = lambda sid, day: next((r['close_price'] for d, r in sorted(rows.items(), reverse=True) if d <= day and r is not None), None)
-    e.execution_contract, e.research_data, e.trading_sessions = 'next_session_open_v2', SimpleNamespace(last_close=last_close), list(DAYS)
+    e.execution_contract, e.research_data, e.trading_sessions = 'next_session_open_v2', SimpleNamespace(last_close=last_close, bar=lambda sid, day: rows.get(day)), list(DAYS)
     e.pending_orders, e.execution_events, e._execution_asof = [], [], None
     e.initial_capital = 1_000_000
     e.portfolio, e.costs = Portfolio(e.initial_capital), CostModel(0.001425, 0.003, 20)
@@ -150,6 +150,61 @@ def test_policy_is_validated_and_research_only():
         BacktestEngine(valuation_policy='carry_anything', persist_results=False)
     with pytest.raises(ValueError, match='research'):
         BacktestEngine(valuation_policy='finite_positive_stale', persist_results=False)
+
+
+# ----- OD-P5 (Owner rule 2026-10-27): last valid official close while unquoted, dated and flagged stale; no fill; no future price -----
+
+def test_no_order_fills_while_the_stock_is_unquoted(monkeypatch):
+    e = engine(SCENARIOS['three_sessions_invalid'], monkeypatch, 'finite_positive_stale')
+    outcome(e)
+    held, cash = e.positions['2330']['shares'], e.capital
+    for day, prev in ((DAYS[3], DAYS[2]), (DAYS[4], DAYS[3]), (DAYS[5], DAYS[4])):  # NaN open, no row, NaN open
+        e.pending_orders.append({'side': 'SELL', 'stock_id': '2330', 'signal_date': prev, 'reason': 'EXIT'})
+        e.pending_orders.append({'side': 'BUY', 'stock_id': '2330', 'signal_date': prev, 'reason': 'ENTRY'})
+        e.execute_pending_open(day)
+    unquoted = [x for x in e.execution_events if x['execution_date'] in DAYS[3:6]]
+    assert len(unquoted) == 6 and all(x['status'] == 'UNFILLED' and x['price'] is None for x in unquoted)
+    assert e.positions['2330']['shares'] == held and e.capital == cash
+
+
+def test_result_exports_dated_stale_marks_and_never_the_future_resumption_close(monkeypatch):
+    rows = SCENARIOS['three_sessions_invalid']
+    e = engine(rows, monkeypatch, 'finite_positive_stale')
+    result = e.run(return_metrics=True)
+    assert result['valuation_policy'] == 'finite_positive_stale' and result['valuation_events'] == e.valuation_events
+    assert result['valuation_events'] is not e.valuation_events  # a copy: consumers never mutate engine state
+    resumption = rows[DAYS[6]]['close_price']
+    for event in result['valuation_events']:
+        assert event['price_source_date'] == DAYS[2] < event['date'] and event['stale_days'] >= 1
+        assert event['price'] == rows[DAYS[2]]['close_price'] != resumption  # the carried mark is the last official close, never a later one
+    assert result['valuation'] == {'status': 'VALUATION_BLOCKED_ACTIONS_UNKNOWN', 'stale_events': 3, 'max_stale_days': 3, 'blocked': ['2330']}
+
+
+def test_checked_bar_without_a_valid_close_is_stale_marked_and_never_fills(monkeypatch):
+    """Reviewer round 2 MAJOR 1: a full bar (traded open, volume, amount) whose close is NaN goes through fill_check and is rejected."""
+    full = lambda i, close: {'open_price': 100.0 + i, 'high_price': 101.0 + i, 'low_price': 99.0 + i, 'close_price': close, 'volume': 50_000.0, 'amount': 5e6}
+    rows = {**bars(), DAYS[2]: full(2, 102.5), DAYS[3]: full(3, NAN)}
+    e = engine(rows, monkeypatch, 'finite_positive_stale')
+    outcome(e)
+    held = e.positions['2330']['shares']
+    e.pending_orders.append({'side': 'SELL', 'stock_id': '2330', 'signal_date': DAYS[2], 'reason': 'EXIT'})
+    e.execute_pending_open(DAYS[3])
+    event = e.execution_events[-1]
+    assert (event['status'], event['reason'], event['price']) == ('UNFILLED', 'REJECTED_NO_TRADE', 103.0) and e.positions['2330']['shares'] == held
+    assert [(x['date'], x['reason']) for x in e.valuation_events] == [(DAYS[3], 'NO_VALID_CLOSE_WITH_VOLUME')]
+
+
+def test_stale_window_with_a_corporate_action_stays_blocked(monkeypatch):
+    from core.backtest.execution import stale_valuation_verdict
+    e = engine(SCENARIOS['three_sessions_invalid'], monkeypatch, 'finite_positive_stale')
+    outcome(e)
+    events = e.valuation_events
+    assert stale_valuation_verdict([]) == {'status': 'NO_STALE_VALUATION', 'stale_events': 0, 'max_stale_days': 0, 'blocked': []}
+    assert stale_valuation_verdict(events, None)['status'] == 'VALUATION_BLOCKED_ACTIONS_UNKNOWN'
+    assert stale_valuation_verdict(events, {'2330': [DAYS[2]], '2317': [DAYS[4]]}) == \
+        {'status': 'STALE_LAST_OFFICIAL_CLOSE', 'stale_events': 3, 'max_stale_days': 3, 'blocked': []}  # on the source date: already in the mark
+    assert stale_valuation_verdict(events, {'2330': [DAYS[4]]}) == \
+        {'status': 'VALUATION_BLOCKED_CORPORATE_ACTION', 'stale_events': 3, 'max_stale_days': 3, 'blocked': ['2330']}
 
 
 if __name__ == '__main__':

@@ -53,6 +53,25 @@ app/ ── Flask :1688（Web 頁面、JSON API、LINE webhook /callback）
 | `execution/*.bat` | Windows 包裝：排程、手動選單、重啟 |
 | `templates/`、`static/` | Web 前端（規範見 `openspec/specs/frontend-design.md`） |
 
+## 執行模式：Research 與 Production
+
+預設為 `RESEARCH`。入口啟動時會在 stderr 顯示 `MODE: ... | GATES: ...`。
+
+| Operation | Research | Production |
+|---|---|---|
+| 歷史回測、參數掃描、本機分析、報告 | ALLOW（不需 grant，次數不限） | ALLOW（不需 grant） |
+| 已登記實驗（固定參數、開發區間） | ALLOW，經 `admit_experiment` 記錄試驗 | ALLOW |
+| 新策略研究 | ALLOW | ALLOW |
+| 核准公開研究資料 | 免 grant；白名單＋固定預算＋限速＋稽核；未分配預算拒絕 | 保留適用可信 grant、scope／quota |
+| 正式 DB 寫入、LINE 推播、排程建立 | DENY（強制後） | REQUIRE GRANT |
+| live order、修改授權、改 Production 額度或策略範圍 | DENY | DENY（`forbidden`，無 grant 可開） |
+| 未知 operation | DENY | DENY |
+
+- `PRODUCTION` 需要同時具備 `STOCK_LINBOT_MODE=production`、repo 外且 Owner 控制的可信授權檔、未過期的 `production_mode` grant；環境變數單獨無效。設定方式見 [`docs/research/production_grant_setup.md`](docs/research/production_grant_setup.md)，驗證用 `python scripts/verify_production_grant.py`（唯讀）。
+- DB 寫入、LINE 推播保留既有 Audit-only／STOCK_LINBOT_ENFORCE 階段。**Research 外部 HTTP 永遠強制**，不需要另設 enforcement env。
+- 公開 Research 固定預算：OD-P6 385、T1b 10、2026 日曆1；SQLite 持久化，環境變數不能提額。無預算的 MOPS／Daily 拒絕新請求，既有快取可用。見 [操作說明](docs/research/public_data_access.md)。
+- 試驗管理：`scripts/research_workflow.py` 的 `admit_experiment` 對每次已登記實驗寫入 `outputs/research_workflow/trial_ledger.jsonl`；相同實驗重跑為 `REPLAY`（不限次數、不增加試驗數），新設定為 `TRIAL`（受登記的 `trial_budget` 限制並計入 DSR 試驗數 743 之上）。
+
 ## 快速開始
 
 從 `.env.example` 複製出 `.env`，所有機密只放在環境變數或 `.env`。Compose 至少需要 `MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、`FLASK_SECRET_KEY`；`LINE_TOKEN`、`LINE_SECRET`、`GEMINI_KEY`、`GEMINI_MODEL` 為選填。應用程式一律以 MySQL 的 trader user 連線，不用 root。主機上執行 jobs 時的連線範例：

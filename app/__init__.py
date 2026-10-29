@@ -654,6 +654,8 @@ def create_app():
 
 
 def main() -> int:
+    from core.runtime.operation_policy import announce
+    announce('web+linebot')
     print('=' * 60)
     print('[START] Line Bot V3.0 啟動中 (Facade -> app package)')
     print('[MODEL] 模型：按策略動態載入')

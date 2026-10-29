@@ -34,9 +34,9 @@ def fill_check(side: str, bar) -> str | None:
     """Rejection reason, or None when the order can trade at the open."""
     if bar is None or any(bar.get(k) is None or not math.isfinite(bar[k]) for k in ('limit_up', 'limit_down')):
         return 'REJECTED_NO_BAR'  # no bar, or no limit band: the market state is unknown
-    fields = [bar.get(k) for k in ('open', 'high', 'low', 'volume', 'amount')]
-    if any(v is None or not math.isfinite(v) for v in fields) or bar['volume'] <= 0 or bar['amount'] <= 0:
-        return 'REJECTED_NO_TRADE'
+    fields = [bar.get(k) for k in ('open', 'high', 'low', 'close', 'volume', 'amount')]
+    if any(v is None or not math.isfinite(v) for v in fields) or bar['volume'] <= 0 or bar['amount'] <= 0 or bar['close'] <= 0:
+        return 'REJECTED_NO_TRADE'  # a session without a finite positive close is valued at a stale mark (OD-P5): it never fills either
     locked = bar['high'] == bar['low'] == bar['open']
     if locked and side == 'buy' and bar['open'] >= bar['limit_up']:
         return 'REJECTED_LOCKED_LIMIT_UP'
@@ -57,3 +57,20 @@ def cap_shares(shares: int, price: float, prior_amount, cap: float = CAP) -> int
 def same_day_amount_share(value, amount) -> float | None:
     """Post-trade liquidity diagnostic: filled value over the session's full traded value (known only after the close)."""
     return value / amount if value and amount and math.isfinite(amount) and amount > 0 else None
+
+
+def stale_valuation_verdict(events, action_dates=None) -> dict:
+    """OD-P5 (Owner rule 2026-10-27): a position without an official quote is marked at its last valid official close, dated
+    (price_source_date) and flagged stale (stale_days); no order can fill while unquoted (fill_check rejects NO_BAR / NO_TRADE).
+    events: the run's STALE_VALUATION records. action_dates: {stock_id: [ex_date 'YYYY-MM-DD', ...]} of corporate actions, or None
+    when unknown. Fail-closed: a stale window that contains a corporate action, or stale marks with unknown actions, is BLOCKED."""
+    events = list(events or [])
+    if not events:
+        return {'status': 'NO_STALE_VALUATION', 'stale_events': 0, 'max_stale_days': 0, 'blocked': []}
+    if action_dates is None:
+        return {'status': 'VALUATION_BLOCKED_ACTIONS_UNKNOWN', 'stale_events': len(events), 'max_stale_days': max(e['stale_days'] for e in events),
+                'blocked': sorted({e['stock_id'] for e in events})}
+    blocked = sorted({e['stock_id'] for e in events
+                      if any(e['price_source_date'] < d <= e['date'] for d in action_dates.get(e['stock_id'], ()))})
+    return {'status': 'VALUATION_BLOCKED_CORPORATE_ACTION' if blocked else 'STALE_LAST_OFFICIAL_CLOSE', 'stale_events': len(events),
+            'max_stale_days': max(e['stale_days'] for e in events), 'blocked': blocked}

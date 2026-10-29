@@ -130,3 +130,13 @@ def test_rerun_without_the_corrected_fill_rule_is_never_credible():
     for rule in ('DIAGNOSTIC_ONLY', 'OLD_FILL_RULE', None):
         row, _ = run(reruns={'S': {**RERUN_OK['S'], 'fill_rule': rule}})
         assert row.BACKTEST_STATUS == 'DIAGNOSTIC_ONLY'
+
+
+def test_matrix_out_dir_writes_beside_the_2026_10_26_evidence(tmp_path):
+    """matrix --out: a later round regenerates from the same archived inputs into its own folder; the earlier files are untouched."""
+    before = {p.name: p.read_bytes() for p in gv.MATRIX_OUT.glob('*') if p.is_file()}
+    gv.matrix(tmp_path)
+    assert {p.name for p in tmp_path.iterdir()} >= {'strategy_qualification_matrix.csv', 'data_blockers.csv', 'qualification_conflicts.md'}
+    assert {p.name: p.read_bytes() for p in gv.MATRIX_OUT.glob('*') if p.is_file()} == before
+    frame = pd.read_csv(tmp_path / 'strategy_qualification_matrix.csv', encoding='utf-8-sig')
+    assert len(frame) == 22 and set(frame.FINAL_QUALIFICATION) == {'NOT_QUALIFIED'}

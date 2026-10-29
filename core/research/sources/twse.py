@@ -18,6 +18,7 @@ else:
     import fcntl
 
 from core.research.sources import RawResponse
+from core.runtime import public_data
 
 
 MI_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
@@ -54,20 +55,23 @@ class SchemaDriftError(ValueError):
 
 
 @contextmanager
-def _exclusive(path: Path):
+def _exclusive(path: Path, timeout: float = 5.0):
     """Cross-process exclusive lock on a small file (stdlib; blocks until the other process releases it)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
-        if os.name == "nt":
-            while True:
-                try:
+        started = monotonic()
+        while True:
+            try:
+                if os.name == "nt":
                     handle.seek(0)
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                    break
-                except OSError:
-                    real_sleep(0.005)
-        else:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+                else:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if monotonic() - started >= timeout:
+                    raise TimeoutError('Research state lock timeout; nothing transmitted')
+                real_sleep(0.005)
         try:
             yield handle
         finally:
@@ -93,6 +97,7 @@ class RequestGate:
     sleep: Callable[[float], None] = real_sleep
     state_path: Path | None = None
     wall_clock: Callable[[], float] = time
+    delay_first_request: bool = False
     _last_request_at: float | None = field(default=None, init=False)
     last_gap: float | None = field(default=None, init=False)
     last_release_wall: float | None = field(default=None, init=False)
@@ -103,6 +108,8 @@ class RequestGate:
         self._last_request_at = now
 
     def wait(self) -> None:
+        if self._last_request_at is None and self.delay_first_request:
+            self._last_request_at = self.clock()
         if self._last_request_at is not None:
             remaining = self.minimum_interval - (self.clock() - self._last_request_at)
             if remaining > 0:
@@ -237,8 +244,8 @@ def fetch_delisted() -> RawResponse:
     return _fetch_openapi("company/suspendListingCsvAndHtml")
 
 
-def fetch_holidays() -> RawResponse:
-    return _fetch_openapi("holidaySchedule/holidaySchedule")
+def fetch_holidays(year: int = 2026) -> RawResponse:
+    return _fetch_openapi("holidaySchedule/holidaySchedule", parameters={"year": str(year)})
 
 
 def fetch_company_profile(cache_dir: Path | None = None) -> RawResponse:
@@ -258,8 +265,8 @@ def fetch_company_profile(cache_dir: Path | None = None) -> RawResponse:
     return RawResponse("twse_openapi", "opendata/t187ap03_L", {}, datetime.now(), None, payload, None, {"cache_used": cache_used})
 
 
-def _fetch_openapi(endpoint: str) -> RawResponse:
-    response = requests.get(f"{OPENAPI_URL}/{endpoint}", timeout=30)
+def _fetch_openapi(endpoint: str, parameters=None) -> RawResponse:
+    response = public_data.request('GET', f"{OPENAPI_URL}/{endpoint}", params=parameters, timeout=30)
     response.raise_for_status()
     return RawResponse("twse_openapi", endpoint, {}, datetime.now(), None, response.json(), None)
 
@@ -273,7 +280,7 @@ def fetch_corporate_actions(start: date, end: date, cache_dir: Path) -> RawRespo
     if cache_path.exists():
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
     else:
-        response = requests.get(TWT49U_URL, params=parameters, timeout=30)
+        response = public_data.request('GET', TWT49U_URL, params=parameters, timeout=30)
         response.raise_for_status()
         payload = response.json()
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -317,7 +324,7 @@ def fetch_daily_quotes(
         for _ in range(max_attempts):
             try:
                 gate.wait()
-                response = requests.get(MI_INDEX_URL, params=parameters, timeout=30)
+                response = public_data.request('GET', MI_INDEX_URL, params=parameters, timeout=30)
                 response.raise_for_status()
                 payload = response.json()
                 break

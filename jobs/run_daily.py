@@ -29,6 +29,7 @@ from core.db_helper import (
     record_pipeline_step_finish,
     record_pipeline_step_start,
 )
+from core.runtime.operation_policy import db_write_gate
 from core.strategy_manager import StrategyManager
 from core.strategy import StrategyContext
 from core.calc_indicators import (
@@ -632,6 +633,7 @@ def _persist_strategy_recommendations(
         )
         return len(rows_to_insert), wrote_heartbeat
 
+    db_write_gate(dataset='daily_recommendations', strategy=strategy_name)
     with engine.connect() as conn:
         conn.execute(text("""
             DELETE FROM daily_recommendations

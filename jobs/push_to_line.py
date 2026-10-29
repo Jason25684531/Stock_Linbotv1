@@ -46,6 +46,7 @@ from core.db_helper import (
     record_pipeline_step_start,
 )
 from core.line_message_builder import build_news_summary_bubble
+from core.runtime.operation_policy import Operation, announce, gate  # audit-only phase for LINE publishing; enforcement is STOCK_LINBOT_ENFORCE=publish_external
 from core.strategy_manager import StrategyManager
 
 # ==========================================
@@ -784,6 +785,7 @@ def _broadcast_text(msg: str, dry_run: bool = False):
     if dry_run:
         print("[DRY-RUN] LINE push skipped")
         return
+    gate(Operation.PUBLISH_EXTERNAL, dataset='line_text')  # before the try: a denial is not swallowed by the failure print
     """推播純文字訊息"""
     try:
         configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
@@ -802,6 +804,7 @@ def _broadcast_flex(flex_msg: FlexMessage, dry_run: bool = False):
         print("[DRY-RUN] LINE push skipped")
         return
     """推播 Flex Message"""
+    gate(Operation.PUBLISH_EXTERNAL, dataset='line_flex')
     try:
         configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
         with ApiClient(configuration) as api_client:
@@ -829,6 +832,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None):
+    announce('push_to_line')
     parser = build_parser()
     args = parser.parse_args(argv)
     pipeline_name, step_name, run_date = _resolve_pipeline_run_context('push_to_line')

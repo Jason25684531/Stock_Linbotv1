@@ -111,13 +111,14 @@ def chip_dates():
 def fetch_raw(dataset, day, gate):
     """Cached official response; downloads once at a polite rate and never overwrites a cached file."""
     import requests
+    from core.runtime import public_data
     from datetime import datetime, timezone
 
     path = CHIP_CACHE / f'{dataset}_{day.replace("-", "")}.json'
     if not path.exists():
         gate.wait()
         url = CHIP_URLS[dataset].format(d=day.replace('-', ''))
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30)
+        res = public_data.request('GET', url, headers={'User-Agent': 'StockLinbot-Research/1.0'}, timeout=30)
         res.raise_for_status()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(res.content)

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.research.adjustment.normalization import parse_number  # noqa: E402
 from core.research.sources.twse import RequestGate  # noqa: E402
+from core.runtime import public_data  # noqa: E402
 from scripts import official_data_recovery as odr  # noqa: E402
 from scripts.p0_p4_research import TWT49U, split_event  # noqa: E402
 
@@ -40,14 +41,12 @@ def targets() -> list[tuple[str, str]]:
 
 def fetch(gate, url, stock, day):
     path = CACHE / f'{stock}_{day}.json'
-    if path.exists():
-        return 'CACHED'
-    odr.reserve(LEDGER, 'TWT49U_DETAIL', day, f'{url}?STK_NO={stock}&T={day}', budget=BUDGET)
-    gate.wait()
-    odr.log(LEDGER, event='RELEASED', dataset='TWT49U_DETAIL', stock_id=stock, date=day, gate_gap_seconds=gate.last_gap, gate_release_wall=gate.last_release_wall)
+    # The common boundary owns reservation, alias identity, persistent pacing and verified cache.
     response = None
     try:
-        response = requests.get(url, params={'STK_NO': stock, 'T': day, 'response': 'json'}, timeout=30)
+        response = public_data.request('GET', url, params={'STK_NO': stock, 'T': day, 'response': 'json'}, purpose='od_p6', timeout=30)
+        if response.research_cache_hit:
+            return 'CACHED'
         (CACHE / '_responses').mkdir(parents=True, exist_ok=True)
         raw = CACHE / '_responses' / f"{stock}_{day}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}.bin"
         raw.write_bytes(response.content)  # every response is kept, success or not
@@ -98,6 +97,8 @@ if __name__ == '__main__':
     parser.add_argument('command', choices=('targets', 'probe', 'reprobe', 'run'))
     parser.add_argument('--url')
     args = parser.parse_args()
+    if args.command == 'run' and args.url not in ENDPOINTS:
+        parser.error('--url must be one of the registered TWT49UDetail endpoints')
     if args.command == 'targets':
         t = targets()
         print(len(t), t[:3])

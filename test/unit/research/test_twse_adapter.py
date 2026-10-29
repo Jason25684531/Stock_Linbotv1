@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures('mock_public_transport')
+
 from core.research.artifacts import write_source_coverage
 from core.research.sources import RawResponse
 from core.research.sources import twse

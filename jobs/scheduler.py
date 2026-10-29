@@ -240,6 +240,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from core.runtime.operation_policy import announce
+    announce('scheduler')
     parser = build_parser()
     args = parser.parse_args(argv)
 

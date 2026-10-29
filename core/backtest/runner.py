@@ -52,7 +52,7 @@ from core.strategy_manager import StrategyManager
 from core.strategy import StrategyContext
 from core.backtest.metrics import calculate_metrics
 from core.backtest.costs import CostModel
-from core.backtest.execution import apply_slippage
+from core.backtest.execution import apply_slippage, stale_valuation_verdict
 from core.backtest.portfolio import Portfolio
 
 
@@ -825,8 +825,8 @@ class BacktestEngine:
         if reference is None or not math.isfinite(float(reference)) or float(reference) <= 0:
             return 'REJECTED_NO_BAR', None, True  # no official close on the previous session: the limit band is unknown, never assumed (no stale carry)
         up, down = limit_prices(np.array([float(reference)]))
-        bar = {'open': data['open_price'], 'high': data['high_price'], 'low': data['low_price'], 'volume': data['volume'], 'amount': data['amount'],
-               'limit_up': float(up[0]), 'limit_down': float(down[0])}
+        bar = {'open': data['open_price'], 'high': data['high_price'], 'low': data['low_price'], 'close': data.get('close_price'), 'volume': data['volume'],
+               'amount': data['amount'], 'limit_up': float(up[0]), 'limit_down': float(down[0])}
         return fill_check(order['side'].lower(), bar), previous.get('amount'), True
 
     def process_close_signals(self, session, trend):
@@ -1074,7 +1074,9 @@ class BacktestEngine:
 
     @property
     def fill_rule(self):
-        """CORRECTED_FILL_RULE only when there is at least one order and every one went through the full fill rule; else DIAGNOSTIC_ONLY."""
+        """CORRECTED_FILL_RULE only when there is at least one order and every one went through the full fill rule; else DIAGNOSTIC_ONLY.
+        An order whose next open is missing or invalid expires unfilled (MISSING_OR_INVALID_NEXT_OPEN): that is a complete outcome of the
+        rule, so it counts as checked."""
         checked = self.execution_events and not getattr(self, 'unchecked_fill_orders', 0)
         return 'CORRECTED_FILL_RULE' if checked else 'DIAGNOSTIC_ONLY'
 
@@ -1414,7 +1416,10 @@ class BacktestEngine:
                         'risk_metrics': metrics['risk_metrics'],
                         'execution_events': self.execution_events,
                         'data_exclusions': getattr(self, 'data_exclusions', []),
-                        'unexecuted_end_of_window_signals': self.pending_orders}
+                        'unexecuted_end_of_window_signals': self.pending_orders,
+                        'valuation_policy': getattr(self, 'valuation_policy', 'legacy'),
+                        'valuation_events': list(getattr(self, 'valuation_events', [])),  # dated, stale-flagged marks (OD-P5); never fills
+                        'valuation': stale_valuation_verdict(getattr(self, 'valuation_events', []), getattr(self.research_data, 'action_dates', None))}
 
         return metrics if return_metrics else roi
 

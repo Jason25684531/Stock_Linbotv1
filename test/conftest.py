@@ -14,6 +14,55 @@ from core.strategy_manager import StrategyManager
 
 
 @pytest.fixture(autouse=True)
+def _isolate_authorization_records(monkeypatch, tmp_path):
+    """Audit-only gates write decision records; tests must not append to the real outputs/authorization or outputs/research_budget."""
+    from core.runtime import operation_policy, research_budget
+    from scripts import task_controller
+    monkeypatch.setattr(operation_policy, 'LOG', tmp_path / 'authorization/decisions.jsonl')
+    monkeypatch.setattr(research_budget, 'LEDGER', tmp_path / 'research_budget/usage.jsonl')
+    monkeypatch.setattr(research_budget, 'STATE', tmp_path / 'research_budget')
+    monkeypatch.setattr(task_controller, 'STATE', tmp_path / 'task_state')
+    monkeypatch.setattr(task_controller, 'GRANTS', tmp_path / 'absent-owner-grants.json')
+
+
+@pytest.fixture
+def public_budget(monkeypatch, tmp_path):
+    """Explicit test plan initialization; never debit the real public HTTP allowance."""
+    import json
+    from core.runtime import research_budget as rb
+    sources = {}
+    for job, count in (('od_p6', 3), ('t1b', 4)):
+        path = tmp_path / f'{job}.jsonl'
+        path.write_text(''.join(json.dumps({'event': 'SENT', 'ts': '2026-10-24T00:00:00+00:00',
+                                           'dataset': job, 'date': '20261024', 'url': 'https://www.twse.com.tw/'}) + '\n' for _ in range(count)), encoding='utf-8')
+        sources[job] = (path, count)
+    monkeypatch.setattr(rb, 'LEGACY', sources)
+    rb.initialize()
+    return rb
+
+
+@pytest.fixture
+def mock_public_transport(monkeypatch):
+    """Offline parser tests inject responses at the HTTP boundary, separately from real policy/ledger integration tests.
+
+    This fixture refuses to call an unmocked requests sender. It does not grant any live test network access.
+    """
+    import requests
+    from core.runtime import public_data
+    original = {method: getattr(requests, method) for method in ('get', 'post')}
+
+    def offline(method, url, **kwargs):
+        sender = getattr(requests, method.lower())
+        assert sender is not original[method.lower()], 'offline parser test must inject a fake HTTP sender'
+        kwargs.pop('purpose', None)
+        kwargs.pop('session', None)
+        return sender(url, **{key: value for key, value in kwargs.items() if value is not None})
+
+    monkeypatch.setattr(public_data, 'request', offline)
+    monkeypatch.setattr(public_data, 'restricted_http', lambda source, method, url, **kw: offline(method, url, **kw))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_strategy_settings(monkeypatch, tmp_path):
     """Keep default and collection-time managers away from operator settings."""
     source = StrategyManager.SETTINGS_FILE

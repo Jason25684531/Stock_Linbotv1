@@ -30,6 +30,13 @@ def _patch_gemini_client(monkeypatch, news_agent, client_cls):
     )
 
 
+@pytest.fixture(autouse=True)
+def offline_restricted_sources(monkeypatch):
+    from core import news_agent
+    monkeypatch.setattr(news_agent.public_data, 'restricted_sdk', lambda source: None)
+    monkeypatch.setattr(news_agent, '_rss_bytes', lambda url, source: b'offline RSS fixture')
+
+
 def test_news_agent_defaults_to_supported_gemini_model():
     from config import Config
     from core import news_agent
@@ -124,7 +131,8 @@ def test_fetch_anue_news_uses_cnyes_api_before_google_rss(monkeypatch):
 
             return json.dumps(payload).encode("utf-8")
 
-    monkeypatch.setattr(news_agent, "urlopen", lambda *args, **kwargs: FakeResponse(), raising=False)
+    import json
+    monkeypatch.setattr(news_agent.public_data, 'restricted_http', lambda *args, **kwargs: SimpleNamespace(content=json.dumps(payload).encode('utf-8')))
     monkeypatch.setattr(news_agent.feedparser, "parse", lambda url: SimpleNamespace(entries=[]))
 
     news_text, priority_titles = news_agent.fetch_anue_news(max_per_source=2)

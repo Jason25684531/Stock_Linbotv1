@@ -232,19 +232,24 @@ def test_investment_screening_http_500_returns_none() -> None:
 
 def test_market_statistics_http_504_uses_longer_backoff_and_returns_none() -> None:
     client = TWSEMCPClient(
-        base_url='http://localhost:8000',
+        base_url='http://localhost:8080',
         max_retries=3,
         backoff_base_seconds=1.0,
         max_backoff_seconds=8.0,
     )
     response = httpx.Response(
         504,
-        request=httpx.Request('POST', 'http://localhost:8000/v1/tools/get_market_statistics'),
+        request=httpx.Request('POST', 'http://localhost:8080/v1/tools/get_market_statistics'),
         json={'message': 'gateway timeout'},
     )
 
     class FakeAsyncClient:
-        async def post(self, endpoint, json):
+        async def get(self, endpoint, **kwargs):
+            from core.runtime import public_data
+            return httpx.Response(200, request=httpx.Request('GET', 'http://localhost:8080/health'),
+                                  json={'research_public_policy': public_data.POLICY_VERSION, 'execution_mode': 'RESEARCH'})
+
+        async def post(self, endpoint, json, **kwargs):
             return response
 
         async def aclose(self):

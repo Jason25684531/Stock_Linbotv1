@@ -19,6 +19,7 @@ from linebot.v3.messaging import (
 )
 
 from config import Config
+from core.runtime.operation_policy import Operation, gate
 
 
 RICH_MENU_WIDTH = 2500
@@ -175,6 +176,7 @@ def upload_rich_menu_image(
 ) -> None:
     """Upload rich menu image via direct HTTP to avoid SDK binary upload bug."""
     upload_file, content_type = prepare_rich_menu_upload_image(image_path)
+    gate(Operation.PUBLISH_EXTERNAL, dataset='line_richmenu_image')
     with upload_file.open("rb") as fp:
         response = requests.post(
             f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",

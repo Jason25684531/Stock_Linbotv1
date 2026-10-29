@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from core.runtime import public_data
+
 import json
 import logging
 import os
@@ -906,7 +908,7 @@ def _validate_source_date(payload: dict[str, Any], trade_date: str) -> None:
 
 def _fetch_twse_snapshot(trade_date: str) -> pd.DataFrame:
     clean_date = trade_date.replace('-', '')
-    response = requests.get(
+    response = public_data.request('GET',
         (
             'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX'
             f'?date={clean_date}&type=ALL&response=json'
@@ -952,7 +954,7 @@ def _fetch_twse_snapshot(trade_date: str) -> pd.DataFrame:
 
 def _fetch_twse_flow(trade_date: str) -> pd.DataFrame:
     clean_date = trade_date.replace('-', '')
-    response = requests.get(
+    response = public_data.request('GET',
         (
             'https://www.twse.com.tw/rwd/zh/fund/T86'
             f'?date={clean_date}&selectType=ALL&response=json'
@@ -1007,7 +1009,7 @@ def _fetch_twse_flow(trade_date: str) -> pd.DataFrame:
 
 
 def _fetch_tpex_snapshot(trade_date: str) -> pd.DataFrame:
-    response = requests.get(
+    response = public_data.restricted_http('tpex', 'GET',
         'https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes',
         params={'date': trade_date.replace('-', '/'), 'response': 'json'},
         headers=HEADERS,
@@ -1037,7 +1039,7 @@ def _fetch_tpex_flow(trade_date: str) -> pd.DataFrame:
         ),
         'Origin': 'https://www.tpex.org.tw',
     })
-    response = requests.get(
+    response = public_data.restricted_http('tpex', 'GET',
         (
             'https://www.tpex.org.tw/web/stock/3insti/daily_trade/'
             '3itrade_hedge_result.php'
@@ -1146,12 +1148,41 @@ def fetch_historical_financial_statements(
     ]
 
 
+@app.before_request
+def research_request_boundary():
+    from flask import g
+    from core.runtime.operation_policy import ExecutionMode, current_mode, research_request_scope
+    marker = request.headers.get(public_data.RESEARCH_HEADER)
+    if marker is None:
+        return None
+    if marker != public_data.POLICY_VERSION or current_mode() is not ExecutionMode.RESEARCH:
+        return jsonify({'error': 'RESEARCH_SERVICE_POLICY_REQUIRED'}), 403
+    scope = research_request_scope()
+    try:
+        scope.__enter__()
+    except PermissionError:
+        return jsonify({'error': 'RESEARCH_SERVICE_POLICY_REQUIRED'}), 403
+    g.research_policy_scope = scope
+    return None
+
+
+@app.teardown_request
+def release_research_request_scope(error=None):
+    from flask import g
+    scope = g.pop('research_policy_scope', None)
+    if scope is not None:
+        scope.__exit__(None, None, None)
+
+
 @app.get('/health')
 def health() -> tuple[Any, int]:
+    from core.runtime.operation_policy import current_mode
     return jsonify({
         'status': 'ok',
         'service': 'twse_mcp_server',
         'version': '0.1.0',
+        'research_public_policy': public_data.POLICY_VERSION,
+        'execution_mode': current_mode().value,
         'checks': [
             {'component': 'http', 'status': 'ok'},
             {'component': 'transport', 'status': 'ok'},

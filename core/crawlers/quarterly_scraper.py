@@ -4,6 +4,8 @@ MOPS 季報爬蟲模組 (mopsov 版本)
 功能：從 MOPS 舊版網站抓取綜合損益表 (含營業費用)
 資料來源：mopsov.twse.com.tw (ajax_t163sb04) - 備援站以提升穩定性
 """
+
+from core.runtime import public_data
 import time
 import random
 import requests
@@ -60,7 +62,7 @@ class QuarterlyScraper:
         }
         
         try:
-            res = self.session.post(self.MOPS_URL, headers=self.headers, data=payload, timeout=45)
+            res = public_data.request('POST', self.MOPS_URL, headers=self.headers, data=payload, timeout=45)
             res.encoding = 'utf-8' # mopsov 使用 UTF-8 編碼
             
             if "查詢過於頻繁" in res.text:

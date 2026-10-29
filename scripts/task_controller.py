@@ -185,6 +185,48 @@ def block(task_id, blocker_type, detail, reopen_when, owner=False, alternative='
     return set_status(task_id, status, root, blockers=task['blockers'] + [blocker], next_action=f'reopen when: {reopen_when}')
 
 
+def clear_obsolete_blocker(task_id, operation='registered_experiment', root=STATE) -> dict:
+    """registered_experiment is Research trial management (research_workflow.admit_experiment), not an Owner grant: an AUTHORIZATION blocker
+    that names only that operation no longer applies. Only those blockers are dropped; any other blocker keeps the task WAITING_OWNER/BLOCKED,
+    and only a WAITING_OWNER task with no blocker left goes back to PENDING. This never touches require_grant or any other operation."""
+    def change(task):
+        import re
+        # the grant operations a blocker names ("grant for X", "trusted X grant"); obsolete only when that set is exactly {operation}
+        named = lambda b: set(re.findall(r'(?:grant for|trusted) (\w+)', ' '.join(str(b.get(k, '')) for k in ('detail', 'reopen_when', 'alternative'))))
+        obsolete = [b for b in task['blockers'] if b['type'] == 'AUTHORIZATION' and named(b) == {operation}]
+        task['blockers'] = [b for b in task['blockers'] if b not in obsolete]
+        task.setdefault('cleared_blockers', []).extend({**b, 'cleared_at': now(), 'cleared_because': f'{operation} is Research trial management'} for b in obsolete)
+        if task['status'] == 'WAITING_OWNER' and not task['blockers']:
+            task.update(status='PENDING', next_action='run through research_workflow.admit_experiment (Research mode, no Owner grant)')
+    if load(task_id, root)['status'] in TERMINAL:
+        raise ValueError(f'{task_id} is terminal; nothing to clear')
+    return _update(task_id, root, change)
+
+
+def refresh_public_fetch_blocker(task_id, root=STATE):
+    """Convert only obsolete Daily MI_INDEX grant waits to the real unassigned Research-budget blocker. Never clears other blockers."""
+    task = load(task_id, root)
+    if task.get('handler') != 'daily_shadow' or task['status'] in TERMINAL:
+        return task
+    day = task.get('params', {}).get('date')
+    import re
+    expected = re.compile(rf'MI_INDEX {re.escape(str(day))} not cached: (?:grant file .+ is not OS-protected \(writable by this account or inside the repo\)|no unexpired official_fetch grant|official_fetch grant does not cover MI_INDEX {re.escape(str(day))})')
+
+    def change(current):
+        obsolete = [b for b in current['blockers'] if b['type'] == 'AUTHORIZATION'
+                    and expected.fullmatch(str(b.get('detail', '')))]
+        if not obsolete:
+            return
+        current.setdefault('cleared_blockers', []).extend({**b, 'cleared_at': now(), 'cleared_because': 'public Research no longer needs official_fetch'} for b in obsolete)
+        current['blockers'] = [b for b in current['blockers'] if b not in obsolete]
+        current['blockers'].append({'blocker_id': f'{task_id}:PUBLIC-BUDGET', 'type': 'DATA', 'detail': f'MI_INDEX {day}: BUDGET_UNASSIGNED',
+                                    'requires_owner_approval': False, 'reopen_when': 'approved fixed budget or verified cache', 'at': now()})
+        if current['status'] == 'WAITING_OWNER' and not any(b.get('requires_owner_approval') for b in current['blockers']):
+            current['status'] = 'BLOCKED'
+            current['next_action'] = 'approved fixed Research budget or verified cache; no official_fetch grant needed'
+    return _update(task_id, root, change)
+
+
 def grant_for(operation, grants_path=GRANTS, at=None) -> dict | None:
     """Fail closed: unreadable file, unknown operation, expired or exhausted grant -> None."""
     try:
@@ -247,13 +289,76 @@ def usable_grant(operation, dataset, day, grants_path=GRANTS, at=None) -> tuple[
     return grant, ''
 
 
-def require_grant(task_id, operation, root=STATE, grants_path=GRANTS):
-    """Level 1 gate: without a valid Owner grant the task waits; nothing runs."""
-    grant = grant_for(operation, grants_path)
-    if grant is None:
-        block(task_id, 'AUTHORIZATION', f'no valid Owner grant for {operation}', f'Owner adds a grant for {operation} to .claude/owner_grants.json', owner=True, root=root)
-        raise PermissionError(f'{operation}: no valid Owner grant')
-    return grant
+LEVEL3 = ('broker_enable', 'live_order', 'real_money', 'broker_permission')  # never granted by a research grant (Level 3: separate Owner act)
+USAGE = 'grant_usage.jsonl'  # append-only use log under the task-state root; max_uses is counted here (the grant file is read-only to us)
+
+
+def grant_id(grant) -> str:
+    import hashlib
+    return hashlib.sha256(json.dumps(grant, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+def grant_uses(grant, root=STATE) -> int:
+    """Logged uses of this exact grant. A malformed log raises ValueError (callers refuse; never read as zero).
+    Editing a grant (e.g. a new expiry) changes its id and starts a new count: only the Owner can edit the grant file."""
+    path, gid = Path(root) / USAGE, grant_id(grant)
+    try:
+        rows = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()] if path.is_file() else []
+        mine = [int(r['uses']) for r in rows if r['grant_id'] == gid]
+        if any(u < 1 for u in mine):
+            raise ValueError('a stored row has uses < 1')
+        return sum(mine)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f'{USAGE} is malformed: {exc}') from None
+
+
+def require_grant(task_id, operation, root=STATE, grants_path=GRANTS, scope=None, uses=1, trusted=None):
+    """Level 1 gate, checked on every sensitive call with no human prompt: the grant file must be trusted (grant_trusted: outside the
+    repo, Owner-owned, not writable by this account), the grant unexpired, every scope key named by the caller listed in the grant
+    (scope={'strategy': 'A191_132'} needs 'A191_132' in grant['strategies']; 'source' -> grant['sources']), and uses + logged uses
+    <= max_uses. On success the uses are appended to grant_usage.jsonl. Level 3 operations are never granted. Anything else: the task
+    waits for the Owner and nothing runs.
+    ponytail: the use log lives in task_state, writable only through this program per the guard; an OS ACL on it if that ever matters."""
+    trusted = grant_trusted(grants_path) if trusted is None else trusted
+    grant = None if operation in LEVEL3 else grant_for(operation, grants_path)
+    reason = ('Level 3 operation: needs a separate Owner act, never a research grant' if operation in LEVEL3 else
+              f'grant file {grants_path} is not trusted (inside the repo, owned by or writable by this account)' if not trusted else
+              f'no valid Owner grant for {operation}' if grant is None else None)
+    if reason is None:
+        for key, value in (scope or {}).items():
+            if value not in (grant.get({'strategy': 'strategies', 'source': 'sources'}.get(key, key)) or []):  # unknown key: never covered
+                reason = f'{operation} grant does not cover {key}={value}'
+                break
+    if reason is None and not (isinstance(uses, int) and not isinstance(uses, bool) and uses >= 1):
+        reason = f'uses must be a positive integer, got {uses!r}'  # zero or negative rows would refund the quota
+    if reason is None:
+        for attempt in range(50):  # the check and the append happen under one cross-process lock: two runners cannot both take the last use
+            try:
+                with Lock('_grant_usage', root):  # reserved name: task ids never start with '_'
+                    try:
+                        logged = grant_uses(grant, root)
+                    except (ValueError, OSError) as exc:
+                        reason = str(exc)
+                        break
+                    if logged + uses > int(grant.get('max_uses', 1)):
+                        reason = f'{operation} grant exhausted: {logged} of {grant.get("max_uses", 1)} uses logged'
+                        break
+                    try:
+                        handle = (Path(root) / USAGE).open('a', encoding='utf-8')
+                    except OSError as exc:
+                        reason = f'{USAGE} not writable: {exc}'
+                        break
+                    with handle:
+                        handle.write(json.dumps({'grant_id': grant_id(grant), 'operation': operation, 'task_id': task_id, 'uses': uses,
+                                                 'scope': scope or {}, 'at': now()}) + '\n')
+                    return grant
+            except RuntimeError:
+                time.sleep(0.1)
+        else:
+            reason = f'{USAGE} lock held for 5 s; nothing consumed'
+    block(task_id, 'AUTHORIZATION', reason, f'Owner provides a trusted {operation} grant covering it (outputs/research_workflow/2026-10-27/OWNER_ACTION_REQUIRED.md)',
+          owner=True, root=root)
+    raise PermissionError(f'{operation}: {reason}')
 
 
 def complete(task_id, tests_passed: bool, review: dict, evidence_paths, root=STATE) -> dict:

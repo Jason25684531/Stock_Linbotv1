@@ -29,6 +29,7 @@ def research_engine(bar_on_19):
     (full(110.0, 110.0, 110.0), 'REJECTED_LOCKED_LIMIT_UP'),
     (full(100.0, volume=0), 'REJECTED_NO_TRADE'),
     (full(100.0, amount=float('nan')), 'REJECTED_NO_TRADE'),
+    ({**full(100.0), 'close_price': float('nan')}, 'REJECTED_NO_TRADE'),  # OD-P5: traded open but no valid close -> stale-marked session, no fill
 ])
 def test_rejected_buy_never_opens_a_position(bar, reason):
     e = research_engine(bar)

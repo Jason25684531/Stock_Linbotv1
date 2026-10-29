@@ -97,6 +97,66 @@ def test_missing_expired_or_malformed_grant_fails_closed(tmp_path):
     assert tc.grant_for('official_fetch', grants) and tc.grant_for('git_commit_local', grants) is None
 
 
+def test_one_trusted_grant_runs_many_tasks_within_scope_and_quota(tmp_path):
+    """Level 1: one Owner grant serves several tasks with no prompt; trust, scope, quota and Level 3 are checked on every call."""
+    grants = tmp_path / 'grants.json'
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    grants.write_text(json.dumps({'grants': [
+        {'operation': 'registered_experiment', 'expires_at': future, 'max_uses': 3, 'strategies': ['A191_132']},
+        {'operation': 'broker_enable', 'expires_at': future, 'max_uses': 99}]}))
+    for task in ('T1', 'T2', 'T3', 'T4', 'T5', 'T6'):
+        new(tmp_path, task)
+    for task in ('T1', 'T2'):  # repeated authorized work, no human step
+        assert tc.require_grant(task, 'registered_experiment', tmp_path, grants, scope={'strategy': 'A191_132'}, trusted=True)
+    with pytest.raises(PermissionError, match='does not cover strategy=D5'):
+        tc.require_grant('T3', 'registered_experiment', tmp_path, grants, scope={'strategy': 'D5'}, trusted=True)
+    with pytest.raises(PermissionError, match='not trusted'):  # an agent-writable grant file never authorizes
+        tc.require_grant('T4', 'registered_experiment', tmp_path, grants, trusted=False)
+    with pytest.raises(PermissionError, match='Level 3'):  # a research grant file can never enable the broker
+        tc.require_grant('T5', 'broker_enable', tmp_path, grants, trusted=True)
+    with pytest.raises(PermissionError, match='exhausted: 2 of 3'):
+        tc.require_grant('T6', 'registered_experiment', tmp_path, grants, scope={'strategy': 'A191_132'}, uses=2, trusted=True)
+    assert tc.grant_uses(tc.grant_for('registered_experiment', grants), tmp_path) == 2  # refusals consume nothing
+    assert {tc.load(t, tmp_path)['status'] for t in ('T3', 'T4', 'T5', 'T6')} == {'WAITING_OWNER'}
+
+
+def test_grant_edge_cases_fail_closed(tmp_path, monkeypatch):
+    grants = tmp_path / 'grants.json'
+    future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    grants.write_text(json.dumps({'grants': [{'operation': 'registered_experiment', 'expires_at': future, 'max_uses': 2, 'strategies': ['A191_132']},
+                                             {'operation': 'official_fetch', 'expires_at': future, 'max_uses': 5}]}))
+    for task in ('D', 'K', 'N', 'U0', 'UN', 'E', 'L'):
+        new(tmp_path, task)
+    called = []
+    monkeypatch.setattr(tc, 'grant_trusted', lambda path: called.append(path) or False)
+    with pytest.raises(PermissionError, match='not trusted'):  # default trusted=None really asks grant_trusted
+        tc.require_grant('D', 'registered_experiment', tmp_path, grants)
+    assert called == [grants]
+    with pytest.raises(PermissionError, match='does not cover period=x'):  # unknown scope key: never covered
+        tc.require_grant('K', 'registered_experiment', tmp_path, grants, scope={'period': 'x'}, trusted=True)
+    with pytest.raises(PermissionError, match='does not cover strategy=A191_132'):  # grant without a strategies list
+        tc.require_grant('N', 'official_fetch', tmp_path, grants, scope={'strategy': 'A191_132'}, trusted=True)
+    for task, uses in (('U0', 0), ('UN', -3)):
+        with pytest.raises(PermissionError, match='positive integer'):
+            tc.require_grant(task, 'registered_experiment', tmp_path, grants, uses=uses, trusted=True)
+    assert tc.require_grant('E', 'registered_experiment', tmp_path, grants, uses=2, trusted=True)  # logged + uses == max_uses is allowed
+    (tmp_path / tc.USAGE).write_text('{"no_grant_id": 1}\n')
+    with pytest.raises(PermissionError, match='malformed'):
+        tc.require_grant('L', 'official_fetch', tmp_path, grants, trusted=True)
+    assert (tmp_path / tc.USAGE).read_text() == '{"no_grant_id": 1}\n'  # a refusal writes nothing
+
+
+def test_usage_lock_held_refuses_without_consuming(tmp_path, monkeypatch):
+    grants = tmp_path / 'grants.json'
+    grants.write_text(json.dumps({'grants': [{'operation': 'official_fetch', 'expires_at': (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(), 'max_uses': 5}]}))
+    new(tmp_path, 'T1')
+    monkeypatch.setattr(tc.time, 'sleep', lambda s: None)
+    with tc.Lock('_grant_usage', tmp_path):  # another runner holds the quota lock
+        with pytest.raises(PermissionError, match='lock held'):
+            tc.require_grant('T1', 'official_fetch', tmp_path, grants, trusted=True)
+    assert not (tmp_path / tc.USAGE).exists()
+
+
 def test_review_failure_keeps_task_out_of_done(tmp_path):
     new(tmp_path)
     tc.set_status('T1', 'VERIFYING', tmp_path)
@@ -155,7 +215,9 @@ def test_guard_denies_level2_even_with_grants(command):
 
 @pytest.mark.parametrize('command,operation', [('git commit -m x', 'git_commit_local'), ('git -C . commit -m x', 'git_commit_local'), ('python scripts/t1b_fetch.py', 'official_fetch'),
                                                ('schtasks /create /tn x', 'schedule_create')])
-def test_guard_level1_needs_grant(command, operation):
+def test_guard_level1_needs_grant(command, operation, monkeypatch):
+    from core.runtime import operation_policy as policy
+    monkeypatch.setattr(policy, 'current_mode', lambda: policy.ExecutionMode.PRODUCTION)
     event = {'tool_name': 'Bash', 'tool_input': {'command': command}}
     assert guard.check(event, NO_GRANT) and guard.check(event, GRANT) is None
 

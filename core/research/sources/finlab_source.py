@@ -3,6 +3,8 @@ every download in its own ledger (never the TWSE request ledger). Quota or permi
 """
 from __future__ import annotations
 
+from core.runtime import public_data
+
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -27,6 +29,7 @@ def fetch(key: str, raw_dir: Path, ledger: Path):
     path = Path(raw_dir) / (key.replace(":", "__").replace("/", "_") + ".parquet")
     if path.exists():
         return pd.read_parquet(path)
+    public_data.restricted_sdk('finlab')
     import os
     if not os.environ.get("FINLAB_API_TOKEN"):  # finlab 1.5.3 reads only this variable; without it, it opens an interactive login and hangs
         from dotenv import load_dotenv

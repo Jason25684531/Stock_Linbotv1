@@ -75,7 +75,6 @@ def acquire_chip(dataset, day, gate, ledger, trusted, trading=True):
     fresh = not path.exists()
     if fresh:
         url = CHIP_URLS[dataset].format(d=day.replace('-', ''))
-        reserve(ledger, dataset, day, url)
         try:
             fetch_raw(dataset, day, gate)
         except Exception as exc:  # network / HTTP errors: the day stays missing, nothing is invented
@@ -101,8 +100,7 @@ def acquire_index(day, gate, ledger, cache=INDEX_CACHE):
     """MI_INDEX for one date -> response kind (TRADING_DAY / NON_TRADING_DAY / SOURCE_ERROR ...)."""
     path = Path(cache) / f'MI_INDEX_{day.replace("-", "")}.json'
     fresh = not path.exists()
-    if fresh:
-        reserve(ledger, 'MI_INDEX', day, INDEX_URL.format(d=day.replace('-', '')))
+    # Only the canonical HTTP boundary reserves quota; this ledger retains reporting outcomes.
     response = fetch_daily_quotes(pd.Timestamp(day).date(), cache, max_attempts=1, gate=gate)
     kind = classify(response).kind
     if kind == ResponseKind.TRADING_DAY and str(response.payload.get('date')) != day.replace('-', ''):

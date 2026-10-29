@@ -29,6 +29,8 @@ from typing import (
 from uuid import uuid4
 
 import httpx
+
+from core.runtime import public_data
 import pandas as pd
 
 from config import Config
@@ -1123,7 +1125,27 @@ class MCPClient:
                 details={"cached_unsupported": True},
             )
 
+        try:
+            public_data.internal_service(self.base_url, endpoint)
+        except PermissionError as exc:
+            raise MCPConfigurationError(str(exc), endpoint=endpoint, correlation_id=correlation_id) from exc
+
         client = await self._ensure_client()
+        from core.runtime import operation_policy as policy
+        research_request = policy.current_mode() is policy.ExecutionMode.RESEARCH
+        research_headers = {public_data.RESEARCH_HEADER: public_data.POLICY_VERSION}
+        if research_request:
+            # A legacy or Production proxy must not spend external permission on behalf of Research.
+            try:
+                health = await client.get('/health', headers=research_headers)
+                health.raise_for_status()
+                capability = health.json()
+                if capability.get('research_public_policy') != public_data.POLICY_VERSION or capability.get('execution_mode') != 'RESEARCH':
+                    raise ValueError('service is legacy, Production, or lacks enforced Research upstream policy')
+            except Exception as exc:
+                raise MCPConfigurationError('RESEARCH_SERVICE_POLICY_REQUIRED', endpoint=endpoint, correlation_id=correlation_id) from exc
+            policy._append({'operation': 'internal_research_rpc', 'mode': 'RESEARCH', 'result': 'ALLOW', 'source': self.base_url,
+                            'endpoint': endpoint, 'correlation_id': correlation_id, 'policy': public_data.POLICY_VERSION}, strict=True)
         last_error: MCPClientError | None = None
 
         for attempt in range(1, self.max_retries + 1):
@@ -1136,7 +1158,10 @@ class MCPClient:
             )
 
             try:
-                response = await client.post(endpoint, json=dict(payload))
+                kwargs = {'json': dict(payload)}
+                if research_request:
+                    kwargs['headers'] = research_headers
+                response = await client.post(endpoint, **kwargs)
             except httpx.RequestError as exc:
                 last_error = MCPTransportError(
                     f"MCP request transport failure: {exc}",
@@ -1232,6 +1257,7 @@ class MCPClient:
                 base_url=self.base_url,
                 timeout=self.timeout,
                 follow_redirects=False,
+                trust_env=False,
                 headers={
                     "Accept": "application/json",
                     "Content-Type": "application/json",

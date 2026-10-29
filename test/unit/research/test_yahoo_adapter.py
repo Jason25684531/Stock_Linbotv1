@@ -1,6 +1,13 @@
 from datetime import date
+import pytest
 
 from core.research.sources import yahoo
+
+
+@pytest.fixture(autouse=True)
+def offline_vendor_boundary(monkeypatch):
+    # This file tests an injected vendor's parameter/metadata contract, not independent external authorization.
+    monkeypatch.setattr(yahoo.public_data, 'restricted_sdk', lambda source: None)
 
 
 def test_fetch_history_uses_only_explicit_vendor_parameters(monkeypatch):

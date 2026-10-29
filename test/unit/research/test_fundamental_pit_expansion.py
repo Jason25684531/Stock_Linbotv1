@@ -79,7 +79,7 @@ def test_request_space_is_dynamic_and_deterministic():
     assert publication_request_parameters(requests[0]) == {"co_id": "2317", "year": "102", "season": "1"}
 
 
-def test_default_publication_fetcher_uses_parameterized_endpoint(monkeypatch):
+def test_default_publication_fetcher_uses_parameterized_endpoint(monkeypatch, mock_public_transport):
     seen = {}
 
     class Response:

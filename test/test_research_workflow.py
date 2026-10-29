@@ -224,3 +224,15 @@ def test_an_earlier_blocked_line_never_occupies_the_signal_key(tmp_path):
     rw.record_blocked('2026-10-27', 'A191_132', 'test pollution', root=tmp_path)
     record = rw.record_research_day('2026-10-27', [], {'strategy': 'A191_132', 'label': 'RESEARCH_ONLY', **HASHES}, root=tmp_path)
     assert record['kind'] == 'SIGNAL' and verify(tmp_path) == {'status': 'PASS', 'records': 2}
+
+
+def test_annotate_cli_refuses_an_unknown_record_before_writing():
+    """The `annotate` subcommand is wired; an unknown sha raises inside annotate() before _append, so the real ledger head is unchanged."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    head = (rw.SHADOW / 'head.json').read_bytes()
+    proc = subprocess.run([sys.executable, str(Path(rw.__file__)), 'annotate', '--sha', '0' * 64, '--status', 'INVALID_TEST_ARTIFACT', '--reason', 'cli wiring test'],
+                          capture_output=True, text=True, cwd=rw.ROOT)
+    assert proc.returncode != 0 and 'no record' in proc.stderr
+    assert (rw.SHADOW / 'head.json').read_bytes() == head

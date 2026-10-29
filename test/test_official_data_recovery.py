@@ -40,10 +40,11 @@ def test_cached_file_is_not_requested_again_and_a_changed_hash_is_flagged(sandbo
     assert state == 'HASH_MISMATCH' and not calls  # flagged, never silently re-downloaded
 
 
-def test_new_session_costs_exactly_one_request(sandbox):
+def test_acquisition_wrapper_does_not_double_charge_the_canonical_http_transport(sandbox):
     ledger, calls = sandbox
     state, frame = odr.acquire_chip('T86', '2026-07-30', gate=None, ledger=ledger, trusted={})
-    assert state == 'OK' and calls == [('T86', '2026-07-30')] and odr.sent_count(ledger) == 1
+    assert state == 'OK' and calls == [('T86', '2026-07-30')] and odr.sent_count(ledger) == 0
+    assert [r['event'] for r in odr.ledger_rows(ledger)] == ['RESULT']  # deterministic fake fetch is not a real HTTP debit
     assert list(frame.stock_id) == ['2330']
 
 
@@ -63,7 +64,8 @@ def test_failed_request_invents_nothing_and_unpublished_trading_day_is_not_a_hol
     ledger, _ = sandbox
     monkeypatch.setattr(odr, 'fetch_raw', lambda *a: (_ for _ in ()).throw(ConnectionError('down')))
     assert odr.acquire_chip('T86', '2026-08-03', None, ledger, {})[0] == 'FAILED:ConnectionError'
-    assert odr.sent_count(ledger) == 1 and not list(odr.CHIP_CACHE.glob('*.json'))
+    assert odr.sent_count(ledger) == 0 and not list(odr.CHIP_CACHE.glob('*.json'))
+    assert [r['outcome'] for r in odr.ledger_rows(ledger)] == ['FAILED:ConnectionError']
 
     def no_data(dataset, day, gate):
         (odr.CHIP_CACHE / f'{dataset}_{day.replace("-", "")}.json').write_text(json.dumps({'stat': '很抱歉，沒有符合條件的資料!'}), encoding='utf-8')

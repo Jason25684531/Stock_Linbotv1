@@ -15,6 +15,8 @@
   df = fetch_margin_balance('2026-02-13')
 """
 
+
+from core.runtime import public_data
 import requests
 import pandas as pd
 import time
@@ -131,7 +133,7 @@ def fetch_margin_balance_twse(
     for attempt in range(max_retries):
         try:
             time.sleep(random.uniform(1.0, 2.5))
-            res = requests.get(url, headers=HEADERS, timeout=15)
+            res = public_data.request('GET', url, headers=HEADERS, timeout=15)
             data = res.json()
 
             if data.get('stat') != 'OK':
@@ -246,7 +248,7 @@ def fetch_margin_balance_tpex(
     for attempt in range(max_retries):
         try:
             time.sleep(random.uniform(1.5, 3.0))
-            res = requests.get(url, headers=headers, timeout=20)
+            res = public_data.restricted_http('tpex', 'GET', url, headers=headers, timeout=20)
 
             if res.status_code != 200:
                 if attempt < max_retries - 1:

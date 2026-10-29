@@ -6,8 +6,7 @@ Per session (Asia/Taipei):
   closed day                         -> DONE (SKIPPED_CLOSED), nothing recorded
   deadline passed, no signal         -> BLOCKED record in the research ledger, DONE (BLOCKED_DEADLINE)
   MI_INDEX not cached, before 15:00  -> WAITING_DATA until 15:00 (publication is not assumed before the close)
-  MI_INDEX not cached, after 15:00   -> fetch once only with a trusted, scoped official_fetch grant (RequestGate + request ledger);
-                                        without one -> WAITING_OWNER for this task only
+  MI_INDEX not cached, after 15:00   -> public policy + assigned fixed budget (no Owner grant); unassigned budget -> BLOCKED
   fetched but not a trading day while the calendar expected one -> BLOCKED (maybe unpublished; the one-request budget is spent)
   cached                             -> audit, ready, shadow, verify chain -> DONE
 """
@@ -34,8 +33,9 @@ def task_id(day: str) -> str:
 
 
 def ensure_task(day: str, root=tc.STATE) -> dict:
-    return tc.create(task_id(day), f'RESEARCH_ONLY A191_132 shadow signal for session {day}', ['signal recorded before the deadline, or BLOCKED / SKIPPED with reason'],
-                     'forward-tracker', GOAL, root=root, handler='daily_shadow', priority='P1', params={'date': day})
+    tc.create(task_id(day), f'RESEARCH_ONLY A191_132 shadow signal for session {day}', ['signal recorded before the deadline, or BLOCKED / SKIPPED with reason'],
+              'forward-tracker', GOAL, root=root, handler='daily_shadow', priority='P1', params={'date': day})
+    return tc.refresh_public_fetch_blocker(task_id(day), root)
 
 
 def fetch_index(day: str):
@@ -43,6 +43,20 @@ def fetch_index(day: str):
     from core.research.sources.twse import RequestGate
     from scripts.official_data_recovery import acquire_index
     return acquire_index(day, RequestGate(minimum_interval=3.2), REQUEST_LEDGER, rw.MI_INDEX)
+
+
+def index_permission(day):
+    from core.runtime import public_data, operation_policy as policy
+    from core.research.sources.twse import MI_INDEX_URL
+    context = public_data.context(MI_INDEX_URL, params={'date': day.replace('-', ''), 'type': 'ALL', 'response': 'json'})
+    hit = public_data.cached(context)
+    if hit is not None:
+        return hit  # local verified data needs neither a new HTTP budget nor an Owner grant
+    if policy.current_mode() is policy.ExecutionMode.PRODUCTION:
+        grant, reason = tc.usable_grant('official_fetch', 'MI_INDEX', day, tc.GRANTS)
+        if grant is None:
+            raise policy.AuthorizationDenied(reason)
+    return policy.enforce(policy.Operation.DOWNLOAD_MARKET_DATA, dataset='MI_INDEX', request_context=context)
 
 
 def daily_shadow(task: dict, root, now=None, fetch=fetch_index, grants=None):
@@ -65,12 +79,13 @@ def daily_shadow(task: dict, root, now=None, fetch=fetch_index, grants=None):
         if local.date().isoformat() < day or local.time() < PUBLISH_AFTER and local.date().isoformat() == day:
             check = datetime.combine(pd.Timestamp(day).date(), PUBLISH_AFTER, TPE).astimezone(timezone.utc)
             return tc.wait_data(tid, day, check.isoformat(timespec='seconds'), 'session not closed yet', root)
-        grant, why = tc.usable_grant('official_fetch', 'MI_INDEX', day, grants or tc.GRANTS)
-        if grant is None:
-            return tc.block(tid, 'AUTHORIZATION', f'MI_INDEX {day} not cached: {why}', 'Owner adds a trusted grant or caches the file', owner=True, root=root)
         attempt = f'fetch-attempt|MI_INDEX|{day}'
         if attempt in tc.load(tid, root)['done_steps'] and f'fetch|MI_INDEX|{day}' not in tc.load(tid, root)['done_steps']:
             return tc.block(tid, 'DATA', f'MI_INDEX {day}: an earlier request did not complete; one request per date', 'Owner checks the request ledger', owner=True, root=root)
+        try:
+            index_permission(day)  # precheck consumes nothing; the actual HTTP function enforces again at transmission
+        except PermissionError as exc:
+            return tc.block(tid, 'DATA', f'MI_INDEX {day}: {exc}', 'approved fixed Research budget or verified cached data; no official_fetch grant needed', root=root)
         tc.step(tid, attempt, lambda: datetime.now(timezone.utc).isoformat(timespec='seconds'), root)  # recorded BEFORE the request: never two requests
         try:
             kind = tc.step(tid, f'fetch|MI_INDEX|{day}', lambda: fetch(day), root)

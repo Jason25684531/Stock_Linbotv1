@@ -332,6 +332,140 @@ def cmd_seed_registry():
     print(REGISTRY)
 
 
+# ---------------------------------------------------------------- Research trial management (replaces the registered_experiment Owner grant)
+
+TRIAL_LEDGER = ROOT / 'outputs/research_workflow/trial_ledger.jsonl'
+MAX_TRIAL_BUDGET = 12  # a registration may not ask for a bigger search than the archived 12-configuration grid; more is an Owner decision (code change)
+# Configurations already inside the 743 archived DSR trials: identified only by this pinned file (a changed file counts nothing as archived).
+ARCHIVED_MANIFESTS = {ROOT / 'outputs/strategy_research/strategy_search_20260914_v2/strategy_search_manifest.csv':
+                      '0db6a8a98906dc9312ce1ba8fc2378c9c6e6e51475a03fbe6148e9eb1ae31b63'}
+
+
+ARCHIVED_PARAMETERS = ('factor_set', 'factor_weighting', 'top_n', 'rebalance_days', 'portfolio_weighting', 'config_hash')  # what makes a config the archived one
+
+
+def _archived_rows() -> tuple[dict, dict]:
+    """strategy_id -> its archived manifest row, from files whose hash is pinned; and which files were used."""
+    rows, used = {}, {}
+    for path, pinned in ARCHIVED_MANIFESTS.items():
+        if path.is_file() and sha256(path) == pinned:
+            rows.update({r['strategy_id']: r for r in csv.DictReader(path.open(encoding='utf-8-sig'))})
+            used[path.name] = pinned
+    return rows, used
+
+
+def _is_archived(config: dict, rows: dict) -> bool:
+    """A label is not enough: the config must carry the archived row's own parameters (same factor set, weighting, Top N, rebalance, config hash)."""
+    row = rows.get(config.get('config_id'))
+    return row is not None and all(str(config.get(k)) == str(row[k]) for k in ARCHIVED_PARAMETERS)
+
+
+def _tree_sha(path) -> str:
+    """A file's hash, or for a directory the hash of every (relative path, file hash) pair."""
+    path = Path(path)
+    if path.is_file():
+        return sha256(path)
+    if not path.is_dir():
+        raise ValueError(f'input {path} does not exist')
+    return hashlib.sha256(_canonical([[p.relative_to(path).as_posix(), sha256(p)] for p in sorted(path.rglob('*')) if p.is_file()]).encode('utf-8')).hexdigest()
+
+
+def _canonical(obj) -> str:
+    return json.dumps(obj, sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _trial_rows(ledger=TRIAL_LEDGER) -> list:
+    path = Path(ledger)
+    return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()] if path.is_file() else []
+
+
+def _trial_head(ledger) -> Path:
+    return Path(ledger).with_suffix('.head.json')
+
+
+def verify_trials(ledger=TRIAL_LEDGER) -> str:
+    """PASS / EMPTY / FAIL / NO_HEAD. Every row carries the hash of its body and of the row before it (an edited or removed middle row fails), and
+    a head file (last hash + row count, rewritten on every append) anchors the end: truncated rows, a deleted ledger or a missing head fail too."""
+    rows, head, prev = _trial_rows(ledger), _trial_head(ledger), ''
+    for row in rows:
+        body = {k: v for k, v in row.items() if k != 'sha256'}
+        if row.get('prev') != prev or row.get('sha256') != hashlib.sha256(_canonical(body).encode('utf-8')).hexdigest():
+            return 'FAIL'
+        prev = row['sha256']
+    if not head.is_file():
+        return 'NO_HEAD' if rows else 'EMPTY'
+    try:
+        anchor = json.loads(head.read_text(encoding='utf-8'))
+        return 'PASS' if rows and anchor == {'sha256': prev, 'rows': len(rows)} else 'FAIL'
+    except (ValueError, TypeError):
+        return 'FAIL'
+
+
+def effective_trials(ledger=TRIAL_LEDGER) -> int:
+    """The archived DSR trial count (743, unchanged) plus ledger TRIALs that are new searches. A rerun of archived configurations adds none.
+    A ledger that does not verify is an error, never a smaller count."""
+    if verify_trials(ledger) not in ('PASS', 'EMPTY'):
+        raise ValueError(f'{Path(ledger).name} does not verify ({verify_trials(ledger)}); the trial count is not trustworthy')
+    return TRIALS + sum(1 for r in _trial_rows(ledger) if r['kind'] == 'TRIAL' and r['counts_toward_dsr'])
+
+
+def admit_experiment(hypothesis_id: str, config: dict, code_paths, input_paths: dict, data_end: str, registry=REGISTRY,
+                     ledger=TRIAL_LEDGER, now=None) -> dict:
+    """Research-mode admission for a registered historical experiment: no Owner grant, no run limit, full trial record. Call it at the start of
+    the run, with the files that run executes and reads; code and inputs are hashed here (input_paths maps a name to a file or directory).
+    Refused: a registry or ledger that does not verify, an unregistered hypothesis, a trial_budget above MAX_TRIAL_BUDGET, a malformed or late
+    data_end (after DEV_END: strict OOS and the frozen / fresh OOS data are not reachable here), a new configuration beyond the registered
+    trial_budget, and a new configuration for a hypothesis that already has a recorded result (one result per registration, as require_registered).
+    The same hypothesis + code + config + inputs + data_end again is a REPLAY (unlimited, no new trial); anything different is a TRIAL. A TRIAL
+    counts toward DSR unless the config is an archived one: its config_id AND its parameters (ARCHIVED_PARAMETERS) equal a row of an archived
+    manifest whose hash is pinned here (never a caller-supplied list, never the label alone).
+    ponytail: one writer at a time (no file lock); add task_controller.Lock if two experiments ever admit in parallel."""
+    import re
+    if verify_registry(registry) != 'PASS':
+        raise ValueError(f'registry does not verify ({verify_registry(registry)}); no run')
+    rows = {r['hypothesis_id']: r for r in csv.DictReader(Path(registry).open(encoding='utf-8-sig'))}
+    if hypothesis_id not in rows:
+        raise ValueError(f'{hypothesis_id} is not registered; register it before any run')
+    try:
+        end = _date.fromisoformat(str(data_end))
+    except ValueError:
+        raise ValueError(f'data_end {data_end!r} is not an ISO date (YYYY-MM-DD)') from None
+    if end > _date.fromisoformat(DEV_END):
+        raise ValueError(f'data_end {data_end} is after the development window {DEV_END}: strict OOS and the frozen / fresh OOS data are not part of this path')
+    if verify_trials(ledger) not in ('PASS', 'EMPTY'):
+        raise ValueError(f'{Path(ledger).name} does not verify ({verify_trials(ledger)}); nothing is admitted')
+    budget = re.match(r'\s*(\d+)', str(rows[hypothesis_id]['trial_budget']))
+    if not budget or not 1 <= int(budget.group(1)) <= MAX_TRIAL_BUDGET:
+        raise ValueError(f'{hypothesis_id}: trial_budget {rows[hypothesis_id]["trial_budget"]!r} must start with an integer from 1 to {MAX_TRIAL_BUDGET} (a larger search is an Owner decision)')
+    if not list(code_paths) or not input_paths:
+        raise ValueError('an experiment names the code it runs and the inputs it reads')
+    identity = {'hypothesis_id': hypothesis_id, 'data_end': end.isoformat(), 'config_sha256': hashlib.sha256(_canonical(config).encode('utf-8')).hexdigest(),
+                'code_sha256': {Path(p).as_posix(): sha256(p) for p in sorted(code_paths, key=str)},
+                'inputs_sha256': {name: _tree_sha(p) for name, p in sorted(input_paths.items())}}
+    experiment_id = hashlib.sha256(_canonical(identity).encode('utf-8')).hexdigest()[:16]
+    existing = _trial_rows(ledger)
+    if any(r['experiment_id'] == experiment_id for r in existing):
+        kind = 'REPLAY'
+    else:
+        done = results_path(registry)
+        if done.is_file() and any(r['hypothesis_id'] == hypothesis_id for r in csv.DictReader(done.open(encoding='utf-8-sig'))):
+            raise ValueError(f'{hypothesis_id} already has a recorded result; a new configuration needs a new registration')
+        if sum(1 for r in existing if r['hypothesis_id'] == hypothesis_id and r['kind'] == 'TRIAL') >= int(budget.group(1)):
+            raise ValueError(f"{hypothesis_id} already used its {budget.group(1)} registered trial(s); a different configuration needs a new registration")
+        kind = 'TRIAL'
+    archive_rows, archive_used = _archived_rows()
+    archived = _is_archived(config, archive_rows)
+    body = {**identity, 'experiment_id': experiment_id, 'kind': kind, 'config': config, 'counts_toward_dsr': kind == 'TRIAL' and not archived,
+            'archived_config': archived, 'archived_manifests_sha256': archive_used if archived else None,
+            'at': (now or datetime.now(timezone.utc)).isoformat(timespec='seconds'), 'prev': existing[-1]['sha256'] if existing else ''}
+    row = {**body, 'sha256': hashlib.sha256(_canonical(body).encode('utf-8')).hexdigest()}
+    Path(ledger).parent.mkdir(parents=True, exist_ok=True)
+    with Path(ledger).open('a', encoding='utf-8') as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, default=str) + '\n')
+    _trial_head(ledger).write_text(json.dumps({'sha256': row['sha256'], 'rows': len(existing) + 1}), encoding='utf-8')
+    return row
+
+
 # ---------------------------------------------------------------- research shadow
 
 LISTING = ROOT / 'artifacts/factors/d3_full_20230103_20260728/_raw/twse_rwd/t187ap03_L.json'
@@ -642,9 +776,11 @@ if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('diagnose', 'compare', 'seed-registry', 'factors', 'shadow', 'verify-shadow', 'timing', 'annotate-init', 'audit',
-                                                'ready', 'blocked', 'import-holidays'))
+                                                'ready', 'blocked', 'import-holidays', 'annotate'))
     parser.add_argument('--backfill', action='store_true')
     parser.add_argument('--reason')
+    parser.add_argument('--sha', help='annotate: sha256 of the record to mark (never rewritten)')
+    parser.add_argument('--status', help='annotate: e.g. INVALID_TEST_ARTIFACT')
     parser.add_argument('--file')
     parser.add_argument('--strategy', action='append')
     parser.add_argument('--date')
@@ -657,6 +793,8 @@ if __name__ == '__main__':
         cmd_ready(args.date)
     elif args.command == 'blocked':
         print(record_blocked(args.date, 'A191_132', args.reason))
+    elif args.command == 'annotate':  # Owner-decided marks only (e.g. T-INCIDENT-TEST-LEDGER-WRITE: annotate, never restore)
+        print(annotate(args.sha, args.status, args.reason))
     elif args.command == 'import-holidays':
         print(import_holidays(args.file), 'closures added')
     elif args.command == 'verify-shadow':

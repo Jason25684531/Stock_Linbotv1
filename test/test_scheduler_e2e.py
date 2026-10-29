@@ -153,6 +153,19 @@ def calendar(monkeypatch, tmp_path):
     monkeypatch.setattr(rw, 'load_sessions', lambda: days)
     monkeypatch.setattr(rw, 'load_closures', lambda: (closures, frozenset()))
     monkeypatch.setattr(rw, 'SHADOW', tmp_path / 'research_shadow')
+    closure_file = tmp_path / 'twse_closures.json'
+    closure_file.write_text('{"closures": [], "annual_schedule_years": []}', encoding='utf-8')
+    monkeypatch.setattr(rw, 'CLOSURES', closure_file)
+    monkeypatch.setattr(rw, 'REGISTRY', tmp_path / 'hypotheses.csv')
+
+    class SignalClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            # cmd_shadow records its own clock; Daily Runner's injected `now` does not reach it.
+            instant = datetime(2026, 10, 27, 9, 0, tzinfo=timezone.utc)
+            return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+    monkeypatch.setattr(rw, 'datetime', SignalClock)
     return days
 
 
@@ -166,7 +179,7 @@ def test_daily_closed_day_is_skipped(calendar, tmp_path):
     assert tc.load('T-DAILY-SHADOW-2026-10-26', tmp_path)['outcome'] == 'SKIPPED_CLOSED'
 
 
-def test_daily_waits_for_the_close_then_needs_a_trusted_grant(calendar, tmp_path):
+def test_daily_waits_for_the_close_then_reports_unassigned_budget_without_a_grant(calendar, tmp_path):
     run('2026-10-27', tmp_path, T0)  # 10:00 Taipei
     t = tc.load('T-DAILY-SHADOW-2026-10-27', tmp_path)
     assert t['status'] == 'WAITING_DATA' and t['check_after'] == '2026-10-27T07:00:00+00:00'
@@ -175,7 +188,8 @@ def test_daily_waits_for_the_close_then_needs_a_trusted_grant(calendar, tmp_path
     fetched = []
     run('2026-10-27', tmp_path, T0 + timedelta(hours=6), grants=untrusted, fetch=lambda d: fetched.append(d))
     t = tc.load('T-DAILY-SHADOW-2026-10-27', tmp_path)
-    assert t['status'] == 'WAITING_OWNER' and 'not OS-protected' in t['blockers'][-1]['detail'] and fetched == []
+    assert t['status'] == 'BLOCKED' and 'BUDGET_UNASSIGNED' in t['blockers'][-1]['detail'] and fetched == []
+    assert not t['blockers'][-1]['requires_owner_approval']
 
 
 def test_daily_missed_deadline_records_blocked_never_prospective(calendar, tmp_path):
@@ -237,7 +251,7 @@ def test_read_only_attribute_or_own_file_is_never_trusted(tmp_path):
 
 
 def test_a_failed_request_is_never_repeated(calendar, monkeypatch, tmp_path):
-    monkeypatch.setattr(tc, 'usable_grant', lambda *a, **k: ({'operation': 'official_fetch'}, ''))
+    monkeypatch.setattr(dr, 'index_permission', lambda day: None)  # injected approved plan; real MI_INDEX is intentionally unassigned
     calls = []
 
     def flaky(day):

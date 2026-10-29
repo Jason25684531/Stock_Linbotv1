@@ -232,7 +232,7 @@ def test_publication_evidence_key_is_deterministic():
     assert left == right
 
 
-def test_legacy_json_adapter_accepts_a_real_html_page(monkeypatch):
+def test_legacy_json_adapter_accepts_a_real_html_page(monkeypatch, mock_public_transport):
     class Response:
         status_code = 200
         content = publication_html().encode("big5")

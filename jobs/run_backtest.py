@@ -14,6 +14,8 @@ from core.backtest.runner import _seed_backtest_rng
 def main(argv=None):
     """Delegate while keeping this historical module monkeypatch-compatible."""
     import core.backtest.runner as runner
+    from core.runtime.operation_policy import announce
+    announce('run_backtest')
 
     names = ('BacktestEngine', 'PortfolioBacktestEngine', 'resolve_backtest_plan', 'save_backtest_results')
     original = {name: getattr(runner, name) for name in names}

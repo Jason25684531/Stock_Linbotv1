@@ -1,5 +1,7 @@
 import pandas as pd
 import pytest
+
+pytestmark = pytest.mark.usefixtures('mock_public_transport')
 from sqlalchemy import create_engine, text
 
 from core import db_helper

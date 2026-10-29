@@ -22,6 +22,7 @@ from core.db_helper import (  # noqa: E402
     normalize_date_str,
 )
 from core.mcp_client import TWSEMCPClient as MCPClient  # noqa: E402
+from core.runtime import public_data  # noqa: E402
 from core.strategy_manager import StrategyManager  # noqa: E402
 from jobs.run_daily import run_daily_for_date  # noqa: E402
 from jobs.update_database import prewarm_dashboard_aggregation_cache, update_market_date  # noqa: E402
@@ -46,6 +47,7 @@ class _YFinanceProxy:
         return module
 
     def download(self, *args, **kwargs):
+        public_data.restricted_sdk('yahoo')
         return self._load().download(*args, **kwargs)
 
 

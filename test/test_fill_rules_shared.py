@@ -26,6 +26,8 @@ def bar(open_=100.0, high=101.0, low=99.0, volume=1000, amount=1e6, up=110.0, do
     ('buy', bar(), None),
     ('buy', {**bar(), 'limit_up': None}, 'REJECTED_NO_BAR'),  # unknown limit band
     ('buy', bar(amount=0), 'REJECTED_NO_TRADE'),
+    ('buy', {**bar(), 'close': math.nan}, 'REJECTED_NO_TRADE'),  # OD-P5: a session valued at a stale mark never fills
+    ('sell', {**bar(), 'close': 0.0}, 'REJECTED_NO_TRADE'),
 ])
 def test_fill_check(side, b, expected):
     assert fill_check(side, b) == expected

@@ -14,6 +14,7 @@ import time
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Connection
 from config import Config
+from core.runtime.operation_policy import db_write_gate  # audit-only phase: records mode, operation and caller; enforcement is STOCK_LINBOT_ENFORCE
 
 
 # 🔥 Singleton 引擎 + 連線池（避免 Too many connections）
@@ -141,6 +142,7 @@ def record_pipeline_step_start(
     engine=None,
 ) -> bool:
     """Persist start state for a pipeline step."""
+    db_write_gate(dataset=PIPELINE_RUNS_TABLE)
     if engine is None:
         engine = get_db_engine()
     ensure_pipeline_run_state_schema(engine)
@@ -242,6 +244,7 @@ def record_pipeline_step_finish(
     engine=None,
 ) -> bool:
     """Persist finish state for a pipeline step."""
+    db_write_gate(dataset=PIPELINE_RUNS_TABLE)
     if engine is None:
         engine = get_db_engine()
     ensure_pipeline_run_state_schema(engine)
@@ -509,6 +512,7 @@ def save_dashboard_aggregation_cache(
     engine=None,
 ) -> bool:
     """寫入 dashboard 聚合快取。"""
+    db_write_gate(dataset=DASHBOARD_AGGREGATION_CACHE_TABLE)
     if not isinstance(payload, dict) or not payload:
         return False
     if engine is None:
@@ -855,6 +859,7 @@ def update_setting(key, value):
     Returns:
         是否成功
     """
+    db_write_gate(dataset='user_settings')
     try:
         engine = get_db_engine()
         with engine.connect() as conn:
@@ -1309,6 +1314,7 @@ def upsert_stock_data(df, table_name='daily_market_data'):
     Returns:
         成功插入/更新的筆數
     """
+    db_write_gate(dataset=table_name)
     if df is None or df.empty:
         return 0
     
@@ -1429,6 +1435,7 @@ def create_user_simulation_trade(user_id, stock_id, buy_price, buy_date, status=
     Returns:
         bool: 是否成功
     """
+    db_write_gate(dataset='user_simulation_trades')
     try:
         engine = get_db_engine()
         with engine.connect() as conn:
@@ -1750,6 +1757,7 @@ def save_backtest_results(
     為 False 時（例如整個回測期間查詢皆失敗、非合法的零交易日）拒絕覆寫既有資料，
     避免無效結果（空資料、dummy equity curve）覆寫正式回測歷史。
     """
+    db_write_gate(dataset='backtest_trades,backtest_equity_curve')
     if trades_df is None and equity_df is None:
         return True
 
@@ -2012,6 +2020,7 @@ def upsert_financial_statements(
     Returns:
         int: 寫入筆數
     """
+    db_write_gate(dataset='financial_statements')
     # 先清除該季舊資料
     result = conn.execute(text(
         "DELETE FROM financial_statements WHERE year = :year AND quarter = :quarter"
@@ -2176,6 +2185,7 @@ def save_news_sentiment(date_str: str, sentiment: str,
         bear_theme_map: 利空族群對應主題
     """
     import json
+    db_write_gate(dataset='daily_news_sentiment')
     engine = get_db_engine()
     ensure_news_schema(engine)
     try:

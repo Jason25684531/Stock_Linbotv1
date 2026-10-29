@@ -461,6 +461,7 @@ def inventory():
 def probe():
     """At most PROBE_LIMIT official requests in the whole change, each recorded; answers endpoint capability questions."""
     import requests
+    from core.runtime import public_data
     from datetime import datetime, timezone
 
     from core.research.sources.twse import RequestGate
@@ -475,7 +476,7 @@ def probe():
             continue
         gate.wait()
         try:
-            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=30)
+            res = public_data.request('GET', url, headers={'User-Agent': 'StockLinbot-Research/1.0'}, timeout=30)
             body = res.content
             path = PROBE_CACHE / f'{question}.bin'
             path.write_bytes(body)

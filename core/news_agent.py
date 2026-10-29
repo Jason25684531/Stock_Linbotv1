@@ -42,6 +42,7 @@ from pydantic import BaseModel, Field
 
 from config import Config
 from core.mcp_client import TWSEMCPClient as MCPClient
+from core.runtime import public_data
 
 
 # ==========================================
@@ -67,6 +68,10 @@ RSS_SOURCES = {
         '(S&P500 OR 道瓊 OR 納指 OR 費半 OR NVIDIA OR 輝達)'
     ),
 }
+
+
+def _rss_bytes(url, source):
+    return public_data.restricted_http(source, 'GET', url, timeout=10).content
 
 CNYES_API_SOURCES = {
     '台股': 'tw_stock',
@@ -679,7 +684,7 @@ def fetch_anue_news(max_per_source: int = 8) -> tuple[str, list[str]]:
         if priority_articles or other_articles:
             break
         try:
-            feed = feedparser.parse(url)
+            feed = feedparser.parse(_rss_bytes(url, 'news_google'))
             count = 0
             for entry in feed.entries:
                 if count >= max_per_source:
@@ -752,8 +757,8 @@ def _fetch_cnyes_api_articles(
         },
     )
 
-    with urlopen(request, timeout=10) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+    response = public_data.restricted_http('news_cnyes', 'GET', url, headers=dict(request.headers), timeout=10)
+    payload = json.loads(response.content.decode('utf-8'))
 
     rows = payload.get('items', {}).get('data', [])
     articles: list[dict[str, str]] = []
@@ -866,6 +871,7 @@ def _summarize_with_gemini(news_text: str) -> str:
 
     try:
         client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        public_data.restricted_sdk('gemini')
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
@@ -1007,6 +1013,7 @@ def get_news_sector_boost() -> dict:
 - 只回傳 JSON，不要其他文字"""
 
         client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        public_data.restricted_sdk('gemini')
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
@@ -1137,7 +1144,7 @@ def get_stock_news_mentions(stock_ids: list, deadline_monotonic: float | None = 
             rss_url = f"https://tw.stock.yahoo.com/rss?s={sid}"
             headlines = []
             try:
-                feed = feedparser.parse(rss_url)
+                feed = feedparser.parse(_rss_bytes(rss_url, 'news_yahoo'))
                 for entry in feed.entries[:5]:
                     title = _clean_html(entry.get('title', ''))
                     if title and len(title) > 5:
@@ -1167,6 +1174,7 @@ def get_stock_news_mentions(stock_ids: list, deadline_monotonic: float | None = 
 - 只回傳 JSON，不要其他文字"""
 
             client = _build_stock_news_client(call_timeout_seconds)
+            public_data.restricted_sdk('gemini')
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=prompt,

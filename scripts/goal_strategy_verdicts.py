@@ -116,7 +116,8 @@ BLOCKERS = (
     ('OD-P6', re.compile(r'TOTAL_RETURN_BLOCKED|mixed|rights', re.I), 'cash/stock dividend split, rights-offering terms (adjusted close, shares)',
      'Owner grants official_fetch: TWT49U detail, 385 requests, through RequestGate', 'YES (Level 1 official_fetch)'),
     ('OD-P5', re.compile(r'NONOFFICIAL|STALE_VALUATION', re.I), 'valuation price on sessions without an official quote',
-     'Owner chooses the valuation rule (last official close, no trading while unquoted)', 'YES (Owner decision)'),
+     'Owner rule chosen 2026-10-27 (last valid official close, dated and flagged stale; no fill while unquoted; execution.stale_valuation_verdict): '
+     'rerun under valuation_policy=finite_positive_stale and no corporate action inside any stale window (OD-P6 / T1b)', 'YES (rerun needs registered_experiment)'),
     ('T1b', re.compile(r'SPLIT_CAPITAL_REDUCTION'), 'capital reduction / par change reference price and share count',
      'Owner grants official_fetch: resumption reference prices, at most 10 requests', 'YES (Level 1 official_fetch)'),
     ('OD-P4', PIT_TEXT, 'financial-statement values and versions, monthly revenue announcement time',
@@ -273,8 +274,11 @@ def paper_account_states(root=PAPER_ROOT) -> dict:
     return out
 
 
-def matrix():
+def matrix(out_dir=None, reruns=None):
     import pandas as pd
+    MATRIX_OUT = Path(out_dir) if out_dir else globals()['MATRIX_OUT']  # --out: a later round writes beside, never over, the 2026-10-26 evidence
+    import json
+    corrected = json.loads(Path(reruns).read_text(encoding='utf-8')) if reruns else None  # --reruns: {strategy: {execution_audit_pass, configurations_passing_all_od24, fill_rule}}
     MATRIX_OUT.mkdir(parents=True, exist_ok=True)
     read = lambda p: pd.read_csv(p, encoding='utf-8-sig') if Path(p).is_file() else pd.DataFrame()
     status, data_r2, native = read(DT / 'strategy_status_matrix.csv'), read(DATA_R2), read(NATIVE7)
@@ -286,7 +290,7 @@ def matrix():
             evidence.setdefault(r[key], []).extend((f'{name}:{c}', r[c]) for c in columns if isinstance(r.get(c), str) and r[c])
     frame, conflicts, blockers = build_matrix(status, data_r2, read(OUT / 'strategy_verdicts_r2.csv'), read(OUT / 'strategy_verdicts.csv'),
                                               read(P1_R2), read(OUT / 'forward_evidence_status_r2.csv'), shadow_prospective_counts(), paper_account_states(),
-                                              evidence=evidence, certifications={})  # no certification record exists yet (OD-P6 / T1b open)
+                                              corrected_reruns=corrected, evidence=evidence, certifications={})  # no certification record exists yet (OD-P6 / T1b open)
     pd.DataFrame(blockers).to_csv(MATRIX_OUT / 'data_blockers.csv', index=False, encoding='utf-8-sig', lineterminator='\n')
     frame.to_csv(MATRIX_OUT / 'strategy_qualification_matrix.csv', index=False, encoding='utf-8-sig', lineterminator='\n')
     (MATRIX_OUT / 'qualification_conflicts.md').write_text('# Source conflicts (fail-closed: the conservative value was used; originals untouched)\n\n'
@@ -300,11 +304,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('verdicts', 'verdicts-r2', 'shadow', 'forward', 'verify-shadow', 'matrix'))
     parser.add_argument('--date')
+    parser.add_argument('--out', help='matrix: output directory (default outputs/research_workflow/2026-10-26)')
+    parser.add_argument('--reruns', help='matrix: JSON file of corrected-rerun evidence per strategy')
     args = parser.parse_args()
     if args.command == 'shadow':
         shadow(args.date)
     elif args.command == 'verify-shadow':
         from core.research.shadow_selection import verify
         print(verify(SHADOW))
+    elif args.command == 'matrix':
+        matrix(args.out, args.reruns)
     else:
-        {'verdicts': verdicts, 'verdicts-r2': lambda: verdicts('strategy_verdicts_r2.csv', data_r2=True), 'forward': forward, 'matrix': matrix}[args.command]()
+        {'verdicts': verdicts, 'verdicts-r2': lambda: verdicts('strategy_verdicts_r2.csv', data_r2=True), 'forward': forward}[args.command]()

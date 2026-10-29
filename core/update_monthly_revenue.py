@@ -17,6 +17,8 @@ from datetime import datetime
 # 將專案根目錄加入路徑
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.db_helper import get_db_engine
+from core.runtime.operation_policy import db_write_gate
+from core.runtime import public_data
 
 def fetch_mops_static_revenue(year, month):
     """
@@ -53,7 +55,7 @@ def fetch_mops_static_revenue(year, month):
         for url in urls:
             try:
                 time.sleep(random.uniform(2, 4)) # 保護伺服器延遲
-                resp = requests.get(url, headers=headers, timeout=20)
+                resp = public_data.request('GET', url, headers=headers, timeout=20)
                 resp.encoding = 'big5' # 重要：MOPS 靜態檔通常是 Big5
                 
                 if resp.status_code != 200:
@@ -135,6 +137,7 @@ def process_and_save(df):
         year_val = int(clean_df.iloc[0]['year'])
         month_val = int(clean_df.iloc[0]['month'])
         
+        db_write_gate(dataset='monthly_revenue')
         with engine.begin() as conn:
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS monthly_revenue (

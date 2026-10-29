@@ -7,6 +7,8 @@ offline fixtures can exercise the full contract without contacting TWSE.
 
 from __future__ import annotations
 
+from core.runtime import public_data
+
 import csv
 import hashlib
 import json
@@ -457,11 +459,13 @@ def fetch_mops_publication_response(
     else:
         import requests
 
-        client = session or requests.Session()
+        if session is not None:
+            from core.runtime.operation_policy import AuthorizationDenied
+            raise AuthorizationDenied('PUBLIC_SESSION_RESTRICTED: caller sessions are not a metered public transport')
         if bootstrap_session:
-            client.get(PUBLICATION_ENDPOINT, timeout=timeout_seconds)
-        response = client.post(
-            PUBLICATION_ENDPOINT,
+            public_data.request('GET', PUBLICATION_ENDPOINT, timeout=timeout_seconds)
+        response = public_data.request(
+            'POST', PUBLICATION_ENDPOINT,
             data=mops_publication_form(request),
             timeout=timeout_seconds,
         )
@@ -614,7 +618,7 @@ def fetch_publication_request(request: PublicationRequest, *, timeout_seconds: f
 
     import requests
 
-    response = requests.get(PUBLICATION_ENDPOINT, params=publication_request_parameters(request), timeout=timeout_seconds)
+    response = public_data.request('GET', PUBLICATION_ENDPOINT, params=publication_request_parameters(request), timeout=timeout_seconds)
     response.raise_for_status()
     try:
         payload = response.json()
