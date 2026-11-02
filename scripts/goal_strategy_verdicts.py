@@ -276,6 +276,7 @@ def paper_account_states(root=PAPER_ROOT) -> dict:
 
 def matrix(out_dir=None, reruns=None):
     import pandas as pd
+    from core.research.strategy_status import derive
     MATRIX_OUT = Path(out_dir) if out_dir else globals()['MATRIX_OUT']  # --out: a later round writes beside, never over, the 2026-10-26 evidence
     import json
     corrected = json.loads(Path(reruns).read_text(encoding='utf-8')) if reruns else None  # --reruns: {strategy: {execution_audit_pass, configurations_passing_all_od24, fill_rule}}
@@ -291,6 +292,22 @@ def matrix(out_dir=None, reruns=None):
     frame, conflicts, blockers = build_matrix(status, data_r2, read(OUT / 'strategy_verdicts_r2.csv'), read(OUT / 'strategy_verdicts.csv'),
                                               read(P1_R2), read(OUT / 'forward_evidence_status_r2.csv'), shadow_prospective_counts(), paper_account_states(),
                                               corrected_reruns=corrected, evidence=evidence, certifications={})  # no certification record exists yet (OD-P6 / T1b open)
+    # Research state evidence: corrected-rerun gates (--reruns), ledger freeze/OOS rows via the registry, paper states.
+    import csv
+    from core.research.strategy_status import collect_evidence
+    from scripts import research_workflow as workflow
+    registry_ok = Path(workflow.REGISTRY).is_file() and workflow.verify_registry(workflow.REGISTRY) == 'PASS'
+    ledger_ok = Path(workflow.TRIAL_LEDGER).is_file() and workflow.verify_trials() == 'PASS'
+    if registry_ok and ledger_ok:
+        with Path(workflow.REGISTRY).open(encoding='utf-8-sig', newline='') as stream:
+            registry_rows = list(csv.DictReader(stream))
+        paper = paper_account_states()
+        derived = [derive(row, collect_evidence(row['strategy'], registry_rows=registry_rows, trial_rows=workflow._trial_rows(),
+                                                paper_states=paper, reruns=corrected)) for row in frame.to_dict('records')]
+    else:  # an unverified ledger or registry could hide a recorded OOS failure: block every row, never fall back to "no evidence"
+        derived = [('DATA_BLOCKED', f'trial ledger or hypothesis registry unverified (registry_ok={registry_ok}, ledger_ok={ledger_ok})')] * len(frame)
+    frame['RESEARCH_STATUS'] = [state for state, _ in derived]
+    frame['RESEARCH_REASON'] = [reason for _, reason in derived]
     pd.DataFrame(blockers).to_csv(MATRIX_OUT / 'data_blockers.csv', index=False, encoding='utf-8-sig', lineterminator='\n')
     frame.to_csv(MATRIX_OUT / 'strategy_qualification_matrix.csv', index=False, encoding='utf-8-sig', lineterminator='\n')
     (MATRIX_OUT / 'qualification_conflicts.md').write_text('# Source conflicts (fail-closed: the conservative value was used; originals untouched)\n\n'

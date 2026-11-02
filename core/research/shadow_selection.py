@@ -66,6 +66,6 @@ def verify(root) -> dict:
         prev = record["sha256"]
     head_path = Path(root) / HEAD
     head = json.loads(head_path.read_text(encoding="utf-8")) if head_path.is_file() else {"records": 0, "sha256": None}
-    if head != {"records": len(lines), "sha256": prev}:  # ponytail: the anchor sits next to the ledger; an off-host copy guards against deleting both
+    if head != {"records": len(lines), "sha256": prev}:  # ponytail: the anchor sits next to the ledger; an off-host copy guards against deleting both; upgrade when the shadow ledger leaves this single host
         return {"status": "FAIL", "records": len(lines), "first_bad_line": min(len(lines), head["records"]) + 1, "reason": "head anchor mismatch (tail removed or ledger replaced)"}
     return {"status": "PASS", "records": len(lines)}

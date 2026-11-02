@@ -8,7 +8,12 @@ import csv
 import hashlib
 import json
 import math
+import os
 import sys
+import tempfile
+import threading
+import uuid
+from contextlib import ExitStack, contextmanager
 from datetime import date as _date, datetime, timezone
 from pathlib import Path
 
@@ -292,6 +297,39 @@ def register(row: dict, path=REGISTRY, today=None) -> dict:
     return record
 
 
+def cmd_register_repair_candidates():
+    """Register the fixed Research candidate hypothesis before its first experiment."""
+    from core.research.repair_candidates import registration
+    from core.runtime.operation_policy import current_mode, ExecutionMode
+    if current_mode() is not ExecutionMode.RESEARCH:
+        raise PermissionError('RESEARCH_MODE_REQUIRED')
+    record = register(registration())
+    print(json.dumps(record, ensure_ascii=False, indent=1))
+    return record
+
+
+def cmd_register_research_screen():
+    """Seal research screening criteria before any diagnostic batch."""
+    from core.research.research_mode import screen_registration
+    from core.runtime.operation_policy import current_mode, ExecutionMode
+    if current_mode() is not ExecutionMode.RESEARCH:
+        raise PermissionError('RESEARCH_MODE_REQUIRED')
+    record = register(screen_registration())
+    print(json.dumps(record, ensure_ascii=False, indent=1))
+    return record
+
+
+def cmd_register_repair_a191():
+    """Register the fixed, distinct A191 repair hypothesis before any changed-model experiment."""
+    from core.research.repair_accounting import registration
+    from core.runtime.operation_policy import current_mode, ExecutionMode
+    if current_mode() is not ExecutionMode.RESEARCH:
+        raise PermissionError('RESEARCH_MODE_REQUIRED')
+    record = register(registration())
+    print(json.dumps(record, ensure_ascii=False, indent=1))
+    return record
+
+
 def results_path(path=REGISTRY) -> Path:
     return Path(path).with_name('hypothesis_results.csv')
 
@@ -336,6 +374,33 @@ def cmd_seed_registry():
 
 TRIAL_LEDGER = ROOT / 'outputs/research_workflow/trial_ledger.jsonl'
 MAX_TRIAL_BUDGET = 12  # a registration may not ask for a bigger search than the archived 12-configuration grid; more is an Owner decision (code change)
+PIT_RAW_HYPOTHESIS = 'A191_132:PIT-RAW-ACTION-12CFG-V1'
+PIT_RAW_CODE = tuple(ROOT / path for path in (
+    'core/research/repair_runner.py', 'core/research/repair_targets.py', 'core/research/repair_accounting.py',
+    'core/research/evidence_ledger.py',
+    'core/backtest/execution.py', 'core/backtest/costs.py', 'core/backtest/metrics.py', 'core/backtest/result.py',
+    'core/research/adjustment/normalization.py', 'core/research/oos_gate.py',
+    'core/research/sources/__init__.py', 'core/research/sources/twse.py',
+    'core/runtime/operation_policy.py', 'core/runtime/public_data.py', 'core/runtime/research_budget.py',
+    'scripts/research_workflow.py', 'scripts/task_controller.py',
+    'scripts/research_import_evidence.py', 'scripts/research_inventory_evidence.py',
+    'scripts/research_a191_synthetic.py', 'scripts/research_a191_blockers.py'))
+PIT_RAW_INPUTS = frozenset(('bars', 'actions', 'evidence', 'scores', 'universe'))
+
+
+def _loaded_local_code():
+    """Conservatively include already-loaded project modules, including package initializers."""
+    root = ROOT.resolve()
+    paths = set()
+    for name, module in tuple(sys.modules.items()):
+        if name.split('.', 1)[0] not in ('core', 'scripts', 'jobs', 'config'):
+            continue
+        filename = getattr(module, '__file__', None)
+        if filename:
+            path = Path(filename).resolve()
+            if path.suffix == '.py' and path.is_relative_to(root):
+                paths.add(path)
+    return paths
 # Configurations already inside the 743 archived DSR trials: identified only by this pinned file (a changed file counts nothing as archived).
 ARCHIVED_MANIFESTS = {ROOT / 'outputs/strategy_research/strategy_search_20260914_v2/strategy_search_manifest.csv':
                       '0db6a8a98906dc9312ce1ba8fc2378c9c6e6e51475a03fbe6148e9eb1ae31b63'}
@@ -376,16 +441,52 @@ def _canonical(obj) -> str:
 
 def _trial_rows(ledger=TRIAL_LEDGER) -> list:
     path = Path(ledger)
-    return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()] if path.is_file() else []
+    with _ledger_lock(ledger):  # every reader goes through here: never read a row the head does not cover yet
+        return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()] if path.is_file() else []
 
 
 def _trial_head(ledger) -> Path:
     return Path(ledger).with_suffix('.head.json')
 
 
+_LOCKS_HELD = threading.local()
+LOCK_ATTEMPTS = 3  # each attempt waits up to the 5 s _exclusive timeout
+
+
+@contextmanager
+def _ledger_lock(ledger):
+    """The per-ledger append lock, shared by every read, verify and append. An append writes the row and then replaces the head, so an
+    unlocked reader can see a row without its head (FAIL) or block os.replace on Windows. Re-entrant within a thread: msvcrt refuses a
+    second lock on the same region from the same process, so a nested read would otherwise time out. Only lock timeouts are retried."""
+    from core.research.sources.twse import _exclusive
+    path = _trial_lock(ledger)
+    held = _LOCKS_HELD.__dict__.setdefault('paths', set())
+    if path in held:
+        yield
+        return
+    with ExitStack() as stack:
+        for attempt in range(LOCK_ATTEMPTS):
+            try:
+                stack.enter_context(_exclusive(path))
+                break
+            except TimeoutError:
+                if attempt == LOCK_ATTEMPTS - 1:
+                    raise
+        held.add(path)
+        try:
+            yield
+        finally:
+            held.discard(path)
+
+
 def verify_trials(ledger=TRIAL_LEDGER) -> str:
     """PASS / EMPTY / FAIL / NO_HEAD. Every row carries the hash of its body and of the row before it (an edited or removed middle row fails), and
     a head file (last hash + row count, rewritten on every append) anchors the end: truncated rows, a deleted ledger or a missing head fail too."""
+    with _ledger_lock(ledger):
+        return _verify_trials(ledger)
+
+
+def _verify_trials(ledger):
     rows, head, prev = _trial_rows(ledger), _trial_head(ledger), ''
     for row in rows:
         body = {k: v for k, v in row.items() if k != 'sha256'}
@@ -404,13 +505,108 @@ def verify_trials(ledger=TRIAL_LEDGER) -> str:
 def effective_trials(ledger=TRIAL_LEDGER) -> int:
     """The archived DSR trial count (743, unchanged) plus ledger TRIALs that are new searches. A rerun of archived configurations adds none.
     A ledger that does not verify is an error, never a smaller count."""
-    if verify_trials(ledger) not in ('PASS', 'EMPTY'):
-        raise ValueError(f'{Path(ledger).name} does not verify ({verify_trials(ledger)}); the trial count is not trustworthy')
-    return TRIALS + sum(1 for r in _trial_rows(ledger) if r['kind'] == 'TRIAL' and r['counts_toward_dsr'])
+    with _ledger_lock(ledger):  # verify and count the same rows
+        status = _verify_trials(ledger)
+        if status not in ('PASS', 'EMPTY'):
+            raise ValueError(f'{Path(ledger).name} does not verify ({status}); the trial count is not trustworthy')
+        return TRIALS + sum(1 for r in _trial_rows(ledger) if r['kind'] == 'TRIAL' and r['counts_toward_dsr'])
+
+
+def _append_trial_locked(ledger, body, existing):
+    """Append under the ledger lock. Interrupted writes leave verification failing closed."""
+    row = {**body, 'sha256': hashlib.sha256(_canonical(body).encode('utf-8')).hexdigest()}
+    ledger = Path(ledger)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    with ledger.open('a', encoding='utf-8') as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, default=str) + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    head = _trial_head(ledger)
+    temp = head.with_name(head.name + '.' + uuid.uuid4().hex + '.tmp')
+    with temp.open('x', encoding='utf-8') as handle:
+        json.dump({'sha256': row['sha256'], 'rows': len(existing) + 1}, handle)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temp, head)
+    return row
+
+
+def _trial_lock(ledger):
+    key = hashlib.sha256(os.path.normcase(str(Path(ledger).resolve())).encode('utf-8')).hexdigest()
+    return Path(tempfile.gettempdir()) / 'stocklinbot-trial-locks' / (key + '.lock')
+
+
+RESEARCH_MODE_LEDGER = OUT / 'research_mode_ledger.jsonl'
+
+
+def research_trials(ledger=RESEARCH_MODE_LEDGER):
+    if Path(ledger).resolve() == Path(TRIAL_LEDGER).resolve():
+        raise ValueError('RESEARCH_LEDGER_MUST_BE_SEPARATE')
+    with _ledger_lock(ledger):
+        if _verify_trials(ledger) not in ('PASS', 'EMPTY'):
+            raise ValueError('RESEARCH_LEDGER_UNVERIFIED')
+        return sum(row['kind'] == 'RESEARCH_DIAGNOSTIC' for row in _trial_rows(ledger))
+
+
+def admit_research_run(strategy, config, assumptions, code_paths, input_paths, data_end, *, registry=REGISTRY,
+                       ledger=RESEARCH_MODE_LEDGER):
+    """Admit each diagnostic configuration before execution in an independent chain."""
+    from core.research.research_mode import (D5_RESEARCH_STRATEGY, RUNNABLE_VERSIONS, assumptions_registration,
+                                             assumptions_sha, registered_version, screen_registration)
+    from core.runtime.operation_policy import current_mode, ExecutionMode
+    if current_mode() is not ExecutionMode.RESEARCH:
+        raise PermissionError('RESEARCH_MODE_REQUIRED')
+    if Path(ledger).resolve() == Path(TRIAL_LEDGER).resolve():
+        raise ValueError('RESEARCH_LEDGER_MUST_BE_SEPARATE')
+    if isinstance(strategy, str) and strategy.upper().startswith('D5') and strategy != D5_RESEARCH_STRATEGY:
+        raise ValueError('BLOCKED_OOS_LEAKAGE')
+    is_d5 = strategy == D5_RESEARCH_STRATEGY
+    version = registered_version(assumptions_sha(assumptions)) if isinstance(assumptions, dict) else None
+    if version not in RUNNABLE_VERSIONS['D5' if is_d5 else 'DAY3']:
+        raise ValueError('UNREGISTERED_RESEARCH_ASSUMPTIONS')
+    if not strategy or not code_paths or not input_paths:
+        raise ValueError('RESEARCH_IDENTITY_INCOMPLETE')
+    try:
+        end = _date.fromisoformat(data_end)
+    except (TypeError, ValueError):
+        raise ValueError('INVALID_DATA_END') from None
+    if end > _date.fromisoformat(DEV_END):
+        raise ValueError('OOS_OR_INPUT_WINDOW_BLOCKED')
+    # Research admissions hash code and inputs before taking the lock: large inputs would otherwise hold readers past their timeout.
+    identity = {'strategy': strategy, 'config': config, 'assumptions_sha256': assumptions_sha(assumptions),
+                'data_end': end.isoformat(), 'code_sha256': {Path(p).as_posix(): sha256(p) for p in sorted(code_paths, key=str)},
+                'inputs_sha256': {name: sha256(path) for name, path in sorted(input_paths.items())}}
+    experiment_id = hashlib.sha256(_canonical(identity).encode('utf-8')).hexdigest()
+    with _ledger_lock(ledger):
+        if verify_registry(registry) != 'PASS':
+            raise ValueError('REGISTRY_UNVERIFIED')
+        with Path(registry).open(encoding='utf-8-sig', newline='') as handle:
+            rows = list(csv.DictReader(handle))
+        for expected in (screen_registration(), assumptions_registration(version)):
+            matches = [row for row in rows if row['hypothesis_id'] == expected['hypothesis_id']]
+            if len(matches) != 1 or any(matches[0][key] != value for key, value in expected.items()):
+                raise ValueError('REGISTRY_UNVERIFIED')
+        research_trials(ledger)
+        existing = _trial_rows(ledger)
+        previous = next((row for row in existing if row['experiment_id'] == experiment_id), None)
+        if previous is not None:
+            return {**previous, 'replay': True}
+        body = {**identity, 'experiment_id': experiment_id, 'kind': 'RESEARCH_DIAGNOSTIC',
+                'at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                'prev': existing[-1]['sha256'] if existing else ''}
+        return _append_trial_locked(ledger, body, existing)
 
 
 def admit_experiment(hypothesis_id: str, config: dict, code_paths, input_paths: dict, data_end: str, registry=REGISTRY,
                      ledger=TRIAL_LEDGER, now=None) -> dict:
+    # ponytail: formal admission (and oos_gate.freeze) still hash inputs under the lock so the check is atomic with the ledger state;
+    # a reader of the same ledger waits up to LOCK_ATTEMPTS x 5 s and then raises TimeoutError (fail closed). Hash outside if that bites.
+    with _ledger_lock(ledger):
+        return _admit_experiment_locked(hypothesis_id, config, code_paths, input_paths, data_end, registry, ledger, now)
+
+
+def _admit_experiment_locked(hypothesis_id: str, config: dict, code_paths, input_paths: dict, data_end: str, registry=REGISTRY,
+                             ledger=TRIAL_LEDGER, now=None) -> dict:
     """Research-mode admission for a registered historical experiment: no Owner grant, no run limit, full trial record. Call it at the start of
     the run, with the files that run executes and reads; code and inputs are hashed here (input_paths maps a name to a file or directory).
     Refused: a registry or ledger that does not verify, an unregistered hypothesis, a trial_budget above MAX_TRIAL_BUDGET, a malformed or late
@@ -419,7 +615,7 @@ def admit_experiment(hypothesis_id: str, config: dict, code_paths, input_paths: 
     The same hypothesis + code + config + inputs + data_end again is a REPLAY (unlimited, no new trial); anything different is a TRIAL. A TRIAL
     counts toward DSR unless the config is an archived one: its config_id AND its parameters (ARCHIVED_PARAMETERS) equal a row of an archived
     manifest whose hash is pinned here (never a caller-supplied list, never the label alone).
-    ponytail: one writer at a time (no file lock); add task_controller.Lock if two experiments ever admit in parallel."""
+    The caller holds the shared trial ledger lock."""
     import re
     if verify_registry(registry) != 'PASS':
         raise ValueError(f'registry does not verify ({verify_registry(registry)}); no run')
@@ -437,15 +633,21 @@ def admit_experiment(hypothesis_id: str, config: dict, code_paths, input_paths: 
     budget = re.match(r'\s*(\d+)', str(rows[hypothesis_id]['trial_budget']))
     if not budget or not 1 <= int(budget.group(1)) <= MAX_TRIAL_BUDGET:
         raise ValueError(f'{hypothesis_id}: trial_budget {rows[hypothesis_id]["trial_budget"]!r} must start with an integer from 1 to {MAX_TRIAL_BUDGET} (a larger search is an Owner decision)')
-    if not list(code_paths) or not input_paths:
+    code_paths = list(code_paths)
+    if not code_paths or not input_paths:
         raise ValueError('an experiment names the code it runs and the inputs it reads')
+    if hypothesis_id == PIT_RAW_HYPOTHESIS:
+        if not ({p.resolve() for p in PIT_RAW_CODE} | _loaded_local_code()) <= {Path(p).resolve() for p in code_paths}:
+            raise ValueError('PIT_RAW_CODE_INCOMPLETE')
+        if not PIT_RAW_INPUTS <= set(input_paths):
+            raise ValueError('PIT_RAW_INPUTS_INCOMPLETE')
     identity = {'hypothesis_id': hypothesis_id, 'data_end': end.isoformat(), 'config_sha256': hashlib.sha256(_canonical(config).encode('utf-8')).hexdigest(),
                 'code_sha256': {Path(p).as_posix(): sha256(p) for p in sorted(code_paths, key=str)},
                 'inputs_sha256': {name: _tree_sha(p) for name, p in sorted(input_paths.items())}}
     experiment_id = hashlib.sha256(_canonical(identity).encode('utf-8')).hexdigest()[:16]
     existing = _trial_rows(ledger)
     if any(r['experiment_id'] == experiment_id for r in existing):
-        kind = 'REPLAY'
+        kind = 'PIT_RAW_REPLAY' if hypothesis_id == PIT_RAW_HYPOTHESIS else 'REPLAY'
     else:
         done = results_path(registry)
         if done.is_file() and any(r['hypothesis_id'] == hypothesis_id for r in csv.DictReader(done.open(encoding='utf-8-sig'))):
@@ -455,15 +657,11 @@ def admit_experiment(hypothesis_id: str, config: dict, code_paths, input_paths: 
         kind = 'TRIAL'
     archive_rows, archive_used = _archived_rows()
     archived = _is_archived(config, archive_rows)
-    body = {**identity, 'experiment_id': experiment_id, 'kind': kind, 'config': config, 'counts_toward_dsr': kind == 'TRIAL' and not archived,
+    body = {**identity, 'experiment_id': experiment_id, 'kind': kind, 'config': config,
+            'counts_toward_dsr': kind == 'TRIAL' and (hypothesis_id == PIT_RAW_HYPOTHESIS or not archived),
             'archived_config': archived, 'archived_manifests_sha256': archive_used if archived else None,
             'at': (now or datetime.now(timezone.utc)).isoformat(timespec='seconds'), 'prev': existing[-1]['sha256'] if existing else ''}
-    row = {**body, 'sha256': hashlib.sha256(_canonical(body).encode('utf-8')).hexdigest()}
-    Path(ledger).parent.mkdir(parents=True, exist_ok=True)
-    with Path(ledger).open('a', encoding='utf-8') as handle:
-        handle.write(json.dumps(row, ensure_ascii=False, default=str) + '\n')
-    _trial_head(ledger).write_text(json.dumps({'sha256': row['sha256'], 'rows': len(existing) + 1}), encoding='utf-8')
-    return row
+    return _append_trial_locked(ledger, body, existing)
 
 
 # ---------------------------------------------------------------- research shadow
@@ -699,6 +897,60 @@ def import_holidays(source, path=CLOSURES) -> int:
     return added
 
 
+HOLIDAY_URL = 'https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule'
+
+
+def fetch_holidays(out_dir, year='2026', path=CLOSURES) -> dict:
+    """One attempt through the public research boundary (budget, pacing, audit); never retries or touches budget state.
+    A denial (e.g. BUDGET_HISTORY_UNKNOWN) is reported as BLOCKED and leaves the closures file unchanged; whether an HTTP
+    attempt happened is read from the budget audit, never assumed. An import that conflicts with cached sessions is undone."""
+    import shutil
+    from core.runtime import public_data, research_budget
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=False)  # a new evidence folder per attempt
+    def attempts():
+        try:
+            return sum(1 for row in research_budget.audit_rows() if row['job'] == 'calendar_2026')
+        except research_budget.BudgetDenied:
+            return None
+    before, original = attempts(), sha256(path) if Path(path).is_file() else None
+    try:
+        response = public_data.request('GET', HOLIDAY_URL, params={'year': year}, purpose='calendar_2026')
+    except Exception as exc:  # recorded either way; budget denial and post-send failures differ only in the audit count
+        after = attempts()
+        result = {'status': 'BLOCKED', 'http_attempted': None if None in (before, after) else after > before,
+                  'reason': f'{type(exc).__name__}: {exc}', 'closures_sha256': original}
+    else:
+        after = attempts()
+        raw = out_dir / f'holidaySchedule_{year}.json'
+        raw.write_bytes(response.content)
+        backup = Path(path).with_name(Path(path).name + '.bak_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
+        if original is not None:
+            shutil.copy2(path, backup)
+        def undo():  # restore the previous file, or remove one this import created
+            if original is not None:
+                shutil.copy2(backup, path)
+            else:
+                Path(path).unlink(missing_ok=True)
+        result = {'http_attempted': None if None in (before, after) else after > before, 'raw': str(raw), 'raw_sha256': sha256(raw),
+                  'backup': str(backup) if original is not None else None}
+        try:
+            added = import_holidays(raw, path)
+            days, (closures, years) = load_sessions(), load_closures(path)
+            conflicts = [d.date().isoformat() for d in days if session_status(d, days, closures, years) == 'CONFLICT']
+        except Exception as exc:
+            undo()
+            result.update(status='BLOCKED', reason=f'IMPORT_FAILED: {type(exc).__name__}: {exc}', closures_added=0)
+        else:
+            if conflicts:
+                undo()  # a scheduled holiday with trading data: keep the previous state, report, never pick a side
+            result.update(status='CONFLICT' if conflicts else 'IMPORTED', closures_added=0 if conflicts else added, conflicts=conflicts)
+    result['closures_sha256_after'] = sha256(path) if Path(path).is_file() else None
+    result['at'] = datetime.now(timezone.utc).isoformat()
+    (out_dir / 'holiday_fetch.json').write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding='utf-8')
+    return result
+
+
 def readiness(date: str, days, closures, years, now=None) -> dict:
     """Can a PROSPECTIVE signal still be produced for `date`? Read-only; never fetches."""
     import pandas as pd
@@ -775,17 +1027,32 @@ def cmd_audit():
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('diagnose', 'compare', 'seed-registry', 'factors', 'shadow', 'verify-shadow', 'timing', 'annotate-init', 'audit',
-                                                'ready', 'blocked', 'import-holidays', 'annotate'))
+    parser.add_argument('command', choices=('diagnose', 'compare', 'seed-registry', 'register-repair-candidates', 'register-repair-a191', 'register-research-screen', 'run-repair', 'factors', 'shadow', 'verify-shadow', 'timing', 'annotate-init', 'audit',
+                                                'ready', 'blocked', 'import-holidays', 'fetch-holidays', 'annotate'))
     parser.add_argument('--backfill', action='store_true')
     parser.add_argument('--reason')
     parser.add_argument('--sha', help='annotate: sha256 of the record to mark (never rewritten)')
     parser.add_argument('--status', help='annotate: e.g. INVALID_TEST_ARTIFACT')
     parser.add_argument('--file')
+    parser.add_argument('--config', help='run-repair: JSON configuration and development-only input paths')
+    parser.add_argument('--hypothesis', help='run-repair: registered hypothesis identity')
     parser.add_argument('--strategy', action='append')
     parser.add_argument('--date')
     args = parser.parse_args()
-    if args.command == 'diagnose':
+    if args.command == 'register-research-screen':
+        cmd_register_research_screen()
+    elif args.command == 'register-repair-candidates':
+        cmd_register_repair_candidates()
+    elif args.command == 'register-repair-a191':
+        cmd_register_repair_a191()
+    elif args.command == 'run-repair':
+        if args.hypothesis != PIT_RAW_HYPOTHESIS or not args.config:
+            print(json.dumps({'status': 'BLOCKED_MISSING_RUN_CONFIG', 'reason': 'registered hypothesis and development-only config are required'}))
+            sys.exit(2)
+        from core.research.repair_runner import run
+        result = run(json.loads(Path(args.config).read_text(encoding='utf-8')))
+        print(json.dumps(result['manifest'] if 'manifest' in result else result, ensure_ascii=False, indent=2))
+    elif args.command == 'diagnose':
         cmd_diagnose(args.strategy or ['D5_PORTFOLIO_5_FACTORS', 'A191_132'])
     elif args.command == 'shadow':
         cmd_shadow(args.date, backfill=args.backfill)
@@ -797,6 +1064,10 @@ if __name__ == '__main__':
         print(annotate(args.sha, args.status, args.reason))
     elif args.command == 'import-holidays':
         print(import_holidays(args.file), 'closures added')
+    elif args.command == 'fetch-holidays':  # --file: output directory for the raw response and result
+        if not args.file:
+            parser.error('fetch-holidays needs --file <new output directory>')  # never write into an earlier evidence folder
+        print(json.dumps(fetch_holidays(args.file), ensure_ascii=False))
     elif args.command == 'verify-shadow':
         from core.research.shadow_selection import verify
         print(verify(SHADOW))

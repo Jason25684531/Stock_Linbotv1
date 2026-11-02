@@ -9,6 +9,7 @@ import re
 import time
 import traceback
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
@@ -18,6 +19,9 @@ from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
 from core.runtime import fundamental_production
 from . import app, services
+
+RESEARCH_SNAPSHOT_DIR = Path(os.environ.get('STOCK_LINBOT_RESEARCH_SNAPSHOT',
+    str(Path(__file__).resolve().parents[1] / 'outputs/research_workflow/research_status_snapshot')))
 
 
 _MARKET_DATE_CACHE: tuple[str | None, float] = (None, 0.0)
@@ -305,6 +309,12 @@ def update_mode():
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
+
+
+@app.route('/api/research/strategy-status', methods=['GET'])
+def api_research_strategy_status():
+    from .dashboard_payloads import build_research_status_payload
+    return _dashboard_json_response(build_research_status_payload(RESEARCH_SNAPSHOT_DIR))
 
 
 @app.route('/api/performance')

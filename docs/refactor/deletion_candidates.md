@@ -1,5 +1,39 @@
 # Deletion Candidates
 
+## 2026-11-02 zero-reference symbols and one-off scripts
+
+Change: `openspec/changes/2026-11-02-architecture-hygiene-dead-code-audit`. Baseline `cd5b044`.
+Working-tree snapshot (`outputs/refactor/hygiene_20261102/baseline_status.txt`): 6 modified and
+69 untracked paths owned by the in-flight `dual-track-research-mode` change. Every path in that
+snapshot is out of scope.
+
+Search: `rg -n --hidden --no-ignore` over the whole repository, excluding `.git`, `myenv`, `data`,
+`ML_Data`, `outputs`, `artifacts`, `__pycache__`, `.env*` and this change's own directory. The
+search covers source, tests, templates, `execution/*.bat`, docker-compose files, notebooks,
+README, docs, `specs/`, and active plus archived OpenSpec. Dynamic checks covered `getattr`,
+`importlib`, string dispatch, `__all__` and the scheduler `JobSpec` table.
+
+| Candidate | Evidence | Decision |
+|---|---|---|
+| `core/strategy_manager.py::get_strategy_manager` (7 lines) | Definition is the only hit. The module has no `__all__`. No string or `getattr` lookup. Sibling helpers `get_active_strategy` and `get_active_strategies` stay. | SAFE_TO_REMOVE. Replacement: `StrategyManager()`. |
+| `core/db_helper.py::is_recommendation_heartbeat` (3 lines) | Definition is the only hit. Heartbeat filtering uses `include_heartbeats` and `RECOMMENDATION_HEARTBEAT_STOCK_ID`. | SAFE_TO_REMOVE. Replacement: the existing constant comparison. |
+| `core/calc_indicators.py::add_all_indicators` (31 lines) | Definition is the only hit. Every indicator it calls has another importer: `calculate_bias` is imported by `jobs/run_daily.py`, and the rest have 3 to 5 call sites each. | SAFE_TO_REMOVE. Replacement: nothing. |
+| `scripts/dual_track_closure.py` (181 lines) | The only hits are the file's own strings. Not wired into the scheduler, `execution/`, tests or docs. The closure outputs it produced remain on disk. | Owner decision 2026-11-02: REMOVE. Rollback: `git checkout cd5b044 -- scripts/dual_track_closure.py`. |
+| `scripts/inspect_tquant_notebooks.py` (41 lines) | Zero hits outside the file. It was a one-off print tool for the 2026-10-19 TQuant field audit. | Owner decision 2026-11-02: REMOVE. Rollback: `git checkout cd5b044 -- scripts/inspect_tquant_notebooks.py`. |
+| `core/validation/rolling.py::rolling_metrics`, `core/validation/param_scan.py::parameter_scan` | No callers. Hits named `rolling_metrics` in the research scripts are a dictionary key, not this function. Both are required by the `stability-validation` spec. | KEEP+TEST. Owner agreed 2026-11-02. |
+| `scripts/research_mode_charts.py::write_factor_charts`, the three uncalled functions in `core/research/d5_research_variant.py` | Untracked files owned by `dual-track-research-mode`. `write_factor_charts` gained a caller between the two scans. | OUT_OF_SCOPE. |
+
+Historical evidence still names the two scripts. The 2026-10-23 dual-track
+`reproduction_manifest_closure.json` and `reproduction_manifest_final.json` list
+`python scripts/dual_track_closure.py ...` as reproduction commands. Three research baselines
+record both scripts in `tracked_sha256.json` or `preflight.json`. No source or test reads those
+code hashes back. The manifest readers check only their `outputs` digests. Those records stay
+unchanged as history. Reproducing the 2026-10-23 closure requires restoring the script from
+`cd5b044` first.
+
+No dependency, compatibility launcher, strategy alias, facade import or research evidence is
+removed. Rollback: revert the single Phase 2 commit.
+
 ## 2026-10-19 unreachable login cleanup
 
 Baseline: e22d1a4, initially clean working tree. These entries authorize only

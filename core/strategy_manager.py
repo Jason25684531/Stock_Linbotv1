@@ -633,12 +633,3 @@ def get_active_strategies():
     """
     manager = StrategyManager()
     return manager.get_active_strategies()
-
-
-def get_strategy_manager() -> StrategyManager:
-    """全域便捷函數：取得管理器實例
-    
-    Returns:
-        StrategyManager: 管理器實例
-    """
-    return StrategyManager()

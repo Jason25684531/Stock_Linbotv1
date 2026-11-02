@@ -924,11 +924,6 @@ def _is_business_weekday(date_value) -> bool:
         return False
 
 
-def is_recommendation_heartbeat(stock_id) -> bool:
-    """判斷推薦資料列是否為零候選心跳。"""
-    return str(stock_id or '').strip().upper() == RECOMMENDATION_HEARTBEAT_STOCK_ID
-
-
 def get_valid_market_dates(
     start_date: str | None = None,
     end_date: str | None = None,

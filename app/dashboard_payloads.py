@@ -3,7 +3,13 @@
 # -*- coding: utf-8 -*-
 import threading
 import time
+import csv
+import hashlib
+import json
+from copy import deepcopy
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -61,6 +67,83 @@ class _PostbackCache:
 
 
 _postback_cache = _PostbackCache()
+
+
+@lru_cache(maxsize=8)
+def _research_snapshot(directory: str, signature: tuple) -> dict:
+    root = Path(directory)
+    manifest = json.loads((root / 'snapshot_manifest.json').read_text(encoding='utf-8'))
+    required = ('strategy_qualification_matrix.csv', 'research_status.json', 'evidence_summary.json', 'candidates.json')
+    if manifest.get('label') != 'RESEARCH_ONLY' or any(
+            hashlib.sha256((root / name).read_bytes()).hexdigest() != manifest['files'][name] for name in required):
+        raise ValueError('research snapshot hash mismatch')
+    track_name = 'research_track.json'
+    if (root / track_name).exists() or track_name in manifest['files']:
+        if hashlib.sha256((root / track_name).read_bytes()).hexdigest() != manifest['files'][track_name]:
+            raise ValueError('research track hash mismatch')
+    with (root / 'strategy_qualification_matrix.csv').open(encoding='utf-8-sig', newline='') as stream:
+        matrix = list(csv.DictReader(stream))
+    def load(name):
+        return json.loads((root / name).read_text(encoding='utf-8'),
+                          parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f'invalid number: {value}')))
+    status = load('research_status.json')
+    completeness = load('evidence_summary.json')
+    candidate_data = load('candidates.json')
+    research_track = load(track_name) if track_name in manifest['files'] else {'status': 'UNAVAILABLE', 'reason': 'Research track not assembled.'}
+    if track_name in manifest['files'] and (research_track.get('label') != 'DIAGNOSTIC_ONLY'
+            or research_track.get('data_label') != 'RESEARCH_UNCERTIFIED' or research_track.get('research_only') is not True
+            or research_track.get('terms_status') != 'RESEARCH_ASSUMPTIONS' or not isinstance(research_track.get('strategies'), list)):
+        raise ValueError('invalid research track')
+    strategies = status['strategies']
+    candidates = candidate_data['candidates']
+    if not isinstance(strategies, list) or not isinstance(candidates, list) or not isinstance(completeness, dict):
+        raise ValueError('invalid research snapshot shape')
+    if (candidate_data.get('status') not in ('AVAILABLE', 'BLOCKED', 'UNAVAILABLE')
+            or (candidate_data['status'] != 'AVAILABLE' and not candidate_data.get('reason'))
+            or (candidate_data['status'] != 'AVAILABLE' and candidates)):
+        raise ValueError('candidate availability or reason missing')
+    names = [row['strategy'] for row in matrix]
+    by_name = {row['strategy']: row for row in strategies}
+    if not names or len(set(names)) != len(names) or len(by_name) != len(strategies) or set(names) != set(by_name):
+        raise ValueError('matrix and strategy snapshot disagree')
+    result = []
+    for row in matrix:
+        entry = by_name[row['strategy']]
+        if not entry.get('status') or not entry.get('reason') or not isinstance(entry.get('metrics'), dict):
+            raise ValueError('strategy state or metrics missing')
+        if not {'net_return', 'cost_stress', 'max_drawdown'} <= entry['metrics'].keys():
+            raise ValueError('required performance metrics missing')
+        for metric in entry['metrics'].values():
+            if not isinstance(metric, dict) or 'value' not in metric or (metric['value'] is None and not metric.get('reason')):
+                raise ValueError('metric value or unavailable reason missing')
+        result.append({'strategy': row['strategy'], 'version': entry.get('version'), 'status': entry['status'],
+                       'reason': entry['reason'], 'metrics': entry['metrics'], 'oos': entry.get('oos')})
+    if any(not isinstance(item, dict) or not item.get('stock_id') or not (item.get('reason') or item.get('selection_reason')) for item in candidates):
+        raise ValueError('candidate identity or selection reason missing')
+    tagged = [{**item, 'research_only': True} for item in candidates]
+    return {'status': 'OK', 'research_only': True, 'strategies': result, 'candidates': tagged,
+            'candidate_status': candidate_data['status'], 'candidate_reason': candidate_data.get('reason'),
+            'data_completeness': completeness, 'certification_track': {'strategies': result}, 'research_track': research_track,
+            'snapshot_updated_at': datetime.fromtimestamp(max(item[0] for item in signature) / 1e9, ZoneInfo('UTC')).isoformat()}
+
+
+def build_research_status_payload(snapshot_dir) -> dict:
+    """Read fixed snapshot files only; never access DB, network or production paths."""
+    root = Path(snapshot_dir).resolve()
+    try:
+        def signature():
+            names = ['strategy_qualification_matrix.csv', 'research_status.json', 'evidence_summary.json', 'candidates.json', 'snapshot_manifest.json']
+            manifest = json.loads((root / 'snapshot_manifest.json').read_text(encoding='utf-8'))
+            if 'research_track.json' in manifest.get('files', {}) or (root / 'research_track.json').exists():
+                names.append('research_track.json')
+            return tuple((stat.st_mtime_ns, stat.st_size) for stat in ((root / name).stat() for name in names))
+        before = signature()
+        payload = _research_snapshot(str(root), before)
+        if before != signature():
+            raise ValueError('snapshot changed while reading')
+        return deepcopy(payload)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        return {'status': 'UNAVAILABLE', 'reason': f'research snapshot unavailable: {type(exc).__name__}', 'research_only': True}
 
 
 def _summarize_market_snapshot(rising: int, falling: int, flat: int) -> str:

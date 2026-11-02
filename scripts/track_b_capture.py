@@ -132,7 +132,7 @@ def compare_outputs(canonical, rerun_dir):
 
 
 def rerun(family, fundamental_matrix=None, out=None):
-    # ponytail: fundamental_matrix/out only for G2G3 diagnostics on another dataset version; defaults keep the archived layout
+    # ponytail: fundamental_matrix/out only for G2G3 diagnostics on another dataset version; defaults keep the archived layout; upgrade when a second dataset version enters a formal comparison
     run_dir = Path(out) / 'run' if out else OUT / 'track_b_runs' / family.lower()
     sink = Path(out) if out else OUT
     if run_dir.exists():

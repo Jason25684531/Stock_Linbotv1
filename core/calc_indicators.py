@@ -661,39 +661,6 @@ def build_feature_history(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    一次性計算所有技術指標 (便捷函數，用於單一股票)
-    
-    Args:
-        df: 需包含 'close_price', 'high_price', 'low_price' 欄位
-        
-    Returns:
-        加入所有指標欄位的 DataFrame
-    """
-    df = df.copy()
-    
-    # 移動平均
-    df['ma5'] = df['close_price'].rolling(5).mean()
-    df['ma20'] = df['close_price'].rolling(20).mean()
-    df['ma60'] = df['close_price'].rolling(60).mean()
-    
-    # 技術指標
-    df['bias'] = calculate_bias(df['close_price'], df['ma20'])
-    df['rsi'] = calculate_rsi(df['close_price'])
-    df['macd_hist'] = calculate_macd(df['close_price'])
-    df['kd_k'] = calculate_kd(df)
-    df['bb_width'] = calculate_bb_width(df['close_price'])
-    df['atr'] = calculate_atr(df)  # 🆕 V33 Phase 1+: ATR 動態停損
-    df['natr'] = calculate_natr(df)  # 🆕 V33 Phase 1: 標準化波動度
-    df['std_20'] = calculate_std_20(df['close_price'])  # 🆕 V33 Phase 1: 20日標準差
-    
-    # 🆕 Phase 2: 籌碼面指標
-    df['dealer_ratio'] = calculate_dealer_ratio(df)
-    
-    return df
-
-
 # ============================================
 # 🗄️ 資料庫批次更新功能
 # ============================================

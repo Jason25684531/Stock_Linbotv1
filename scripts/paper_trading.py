@@ -167,7 +167,7 @@ def session_bars(day: str, days) -> tuple[dict, dict]:
     stamp = datetime.now(timezone.utc)
     today, prev = (normalize_twse_closing_table(find_closing_table(days[d][2]), d, stamp).set_index('stock_id') for d in sessions[-1:] + sessions[-2:-1])
     reference = prev.raw_close.reindex(today.index)
-    # ponytail: previous close as the reference; on an ex-rights date TWSE uses its ex-reference price, so the limit can be off that day
+    # ponytail: previous close as the reference; on an ex-rights date TWSE uses its ex-reference price, so the limit can be off that day; upgrade when an ex-reference price source (TWT49U) is wired into paper trading
     up, down = limit_prices(reference.to_numpy(dtype=float))
     bars = {s: {'open': r.raw_open, 'high': r.raw_high, 'low': r.raw_low, 'close': r.raw_close, 'volume': r.volume, 'amount': r.amount, 'prior_amount': p,
                 'limit_up': u, 'limit_down': dn} for (s, r), u, dn, p in zip(today.iterrows(), up, down, prev.amount.reindex(today.index))}

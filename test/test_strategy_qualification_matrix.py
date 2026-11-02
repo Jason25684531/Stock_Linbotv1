@@ -140,3 +140,4 @@ def test_matrix_out_dir_writes_beside_the_2026_10_26_evidence(tmp_path):
     assert {p.name: p.read_bytes() for p in gv.MATRIX_OUT.glob('*') if p.is_file()} == before
     frame = pd.read_csv(tmp_path / 'strategy_qualification_matrix.csv', encoding='utf-8-sig')
     assert len(frame) == 22 and set(frame.FINAL_QUALIFICATION) == {'NOT_QUALIFIED'}
+    assert set(frame.RESEARCH_STATUS) == {'DATA_BLOCKED'} and frame.RESEARCH_REASON.str.startswith('DATA_STATUS=').all()

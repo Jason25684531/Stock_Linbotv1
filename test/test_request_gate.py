@@ -74,7 +74,7 @@ def test_processes_sharing_a_state_file_are_spaced_apart_together(tmp_path):
     stamps = sorted(float(line) for p in procs for line in p.communicate(timeout=60)[0].split())
     assert len(stamps) == workers * per_process
     gaps = [b - a for a, b in zip(stamps, stamps[1:])]
-    # ponytail: 0.02 s tolerance = the Windows time.time() tick (15.6 ms); the gate compares on the same clock, so no gap is below interval by more than one tick
+    # ponytail: 0.02 s tolerance = the Windows time.time() tick (15.6 ms); the gate compares on the same clock, so no gap is below interval by more than one tick; tighten when the gate moves to time.monotonic_ns
     assert min(gaps) >= interval - 0.02, gaps
 
 
