@@ -8,7 +8,7 @@ from core.research.repair_accounting import TAIPEI, _timestamp
 
 
 def build_targets(scores: pd.DataFrame, universe: pd.DataFrame, *, config_id: str, top_n: int, stock_weighting: str,
-                  execution_calendar_mode='PREKNOWN') -> pd.DataFrame:
+                  execution_calendar_mode='PREKNOWN', rank_buffer_multiple=None) -> pd.DataFrame:
     """Select from information available at signal time; actual fills remain a later event.
 
     Source hashes are caller-provided provenance, not independent certification. This pure helper
@@ -17,6 +17,8 @@ def build_targets(scores: pd.DataFrame, universe: pd.DataFrame, *, config_id: st
     scores, universe = scores.copy(), universe.copy()
     if execution_calendar_mode not in ('PREKNOWN', 'NEXT_SESSION_EVENT'):
         raise ValueError('INVALID_EXECUTION_CALENDAR_MODE')
+    if rank_buffer_multiple is not None and (isinstance(rank_buffer_multiple, bool) or not isinstance(rank_buffer_multiple, int) or rank_buffer_multiple < 1):
+        raise ValueError('INVALID_RANK_BUFFER_MULTIPLE')
     score_columns = ['asof_date', 'asset_id', 'composite_score', 'signal_at', 'score_available_at', 'score_source_sha256']
     universe_columns = ['asof_date', 'asset_id', 'member', 'execution_date', 'membership_available_at', 'membership_source_sha256',
                         'calendar_available_at', 'calendar_source_sha256']
@@ -78,7 +80,7 @@ def build_targets(scores: pd.DataFrame, universe: pd.DataFrame, *, config_id: st
     if frame.empty:
         raise ValueError('PIT_NO_ELIGIBLE_UNIVERSE')
     # ponytail: preserve the frozen legacy helper; consolidate this small weighting rule after a new experiment identity is versioned.
-    selected = frame.sort_values(['asof_date', 'composite_score', 'asset_id'], ascending=[True, False, True], kind='stable').groupby('asof_date', group_keys=False).head(top_n).copy()
+    selected = frame.sort_values(['asof_date', 'composite_score', 'asset_id'], ascending=[True, False, True], kind='stable').groupby('asof_date', group_keys=False).head(top_n if rank_buffer_multiple is None else top_n * rank_buffer_multiple).copy()
     if stock_weighting == 'equal':
         selected['target_weight'] = 1 / selected.groupby('asof_date')['asset_id'].transform('size')
     else:
@@ -94,6 +96,7 @@ def build_targets(scores: pd.DataFrame, universe: pd.DataFrame, *, config_id: st
         raise ValueError('INVALID_TARGET_WEIGHTS')
     selected['config_id'], selected['top_n'], selected['stock_weighting'] = config_id, top_n, stock_weighting
     selected['point_in_time_status'] = 'BLOCKED_UNVERIFIED_SOURCES'
-    return selected[['asof_date', 'execution_date', 'asset_id', 'config_id', 'target_weight', 'top_n', 'stock_weighting',
+    columns = ['asof_date', 'execution_date', 'asset_id', 'config_id', 'target_weight', 'top_n', 'stock_weighting',
                      'signal_at', 'score_available_at', 'membership_available_at', 'calendar_available_at',
-                     'score_source_sha256', 'membership_source_sha256', 'calendar_source_sha256', 'point_in_time_status']]
+                     'score_source_sha256', 'membership_source_sha256', 'calendar_source_sha256', 'point_in_time_status']
+    return selected[columns if rank_buffer_multiple is None else columns + ['composite_score']]

@@ -123,20 +123,45 @@ def _read_inputs(paths, admission):
     return data
 
 
-def _hook(targets, bars, *, execution_calendar_mode='PREKNOWN'):
+def _hook(targets, bars, *, execution_calendar_mode='PREKNOWN', rank_buffer_multiple=None, decisions=None, empty_days=None):
     groups = {str(day.date()): group.to_dict('records') for day, group in targets.groupby('asof_date')}
+    empty_days = empty_days or {}
     calendar = sorted(bars)
     next_session = dict(zip(calendar, calendar[1:]))
-    for day, rows in groups.items():
-        if str(rows[0]['execution_date'])[:10] != next_session.get(day):
+    for day, row in [(day, rows[0]) for day, rows in groups.items()] + list(empty_days.items()):
+        if str(row['execution_date'])[:10] != next_session.get(day):
             raise DataBlocked('TARGET_EXECUTION_NOT_NEXT_SESSION')
 
     def after_close(state, pending):
         day = state['date']
-        if day not in groups:
+        if day not in groups and day not in empty_days:
             return None
-        rows = groups[day]
-        signal = _timestamp(rows[0]['signal_at'])
+        rows = groups.get(day, [])
+        evidence = rows[0] if rows else empty_days[day]
+        if not rows and decisions is not None:
+            decisions.append({**evidence, 'asof_date': day, 'asset_id': '', 'target_weight': 0.0,
+                              'empty_target_day': True})
+        if rank_buffer_multiple is not None and rows:
+            held = {asset for asset, shares in state['positions'].items() if shares > 0}
+            held.update(claim['stock_id'] for claim in state['stock_receivable'] if claim['shares'] > 0)
+            count = int(rows[0]['top_n'])
+            retained = [row for row in rows if row['asset_id'] in held]
+            if len(retained) > count:
+                raise DataBlocked('BUFFER_HELD_COUNT_EXCEEDS_TOP_N')
+            chosen = retained + [row for row in rows if row['asset_id'] not in held][:count - len(retained)]
+            chosen_ids = {row['asset_id'] for row in chosen}
+            rows = [dict(row) for row in rows if row['asset_id'] in chosen_ids]
+            clipped = [max(0.0, float(row['composite_score'])) for row in rows]
+            maximum = max(clipped)
+            scaled = [score / maximum if maximum > 0 else 0 for score in clipped]
+            total = sum(scaled)
+            weights = ([score / total for score in scaled] if total > 0 and rows[0]['stock_weighting'] == 'score_weighted'
+                       else [1 / len(rows)] * len(rows))
+            for row, weight in zip(rows, weights):
+                row['target_weight'] = weight
+            if decisions is not None:
+                decisions.extend(rows)
+        signal = _timestamp(evidence['signal_at'])
         if any(_timestamp(row['signal_at']) != signal for row in rows):
             raise DataBlocked('SIGNAL_TIME_MISMATCH')
         weights = {row['asset_id']: float(row['target_weight']) for row in rows}
@@ -145,7 +170,7 @@ def _hook(targets, bars, *, execution_calendar_mode='PREKNOWN'):
             shares_due[claim['stock_id']] = shares_due.get(claim['stock_id'], 0) + claim['shares']
         assets = set(weights) | set(state['positions']) | set(shares_due)
         time_columns = ('score_available_at', 'membership_available_at', 'calendar_available_at') if execution_calendar_mode == 'PREKNOWN' else ('score_available_at', 'membership_available_at')
-        times = [_timestamp(row[column]) for row in rows for column in time_columns]
+        times = [_timestamp(row[column]) for row in (rows or [evidence]) for column in time_columns]
         orders = []
         for asset in sorted(assets):
             price_day = state['stale_marks'].get(asset, day)
@@ -166,7 +191,7 @@ def _hook(targets, bars, *, execution_calendar_mode='PREKNOWN'):
             if delta < 0:
                 delta = -min(-delta, current)  # uncredited shares cannot be sold
             if delta:
-                orders.append({'id': f'{day}:{asset}', 'date': str(rows[0]['execution_date'])[:10],
+                orders.append({'id': f'{day}:{asset}', 'date': str(evidence['execution_date'])[:10],
                                'stock_id': asset, 'side': 'buy' if delta > 0 else 'sell', 'shares': abs(delta),
                                'signal_at': signal.isoformat(), 'latest_input_available_at': None})
         latest = max(times).isoformat()
@@ -185,14 +210,31 @@ def _research_tracks(*, bars, scores, universe, actions, coverage, unresolved_ev
     policy = held_event_policy(assumptions)
     overlap = overlap_policy(assumptions)
 
+    original_scores = scores
     score_keys = {(row['asof_date'], row['asset_id']) for row in scores}
     if len(score_keys) != len(scores):
         raise DataBlocked('DUPLICATE_SCORE_IDENTITY')
+    if parameters.get('rank_buffer_multiple') is not None:
+        for row in scores:
+            signal = _timestamp(row['signal_at'])
+            digest = str(row.get('score_source_sha256', ''))
+            if (signal.astimezone(TAIPEI).date().isoformat() != row['asof_date']
+                    or _timestamp(row['score_available_at']) > signal or len(digest) != 64
+                    or any(c not in '0123456789abcdefABCDEF' for c in digest)):
+                raise DataBlocked('PIT_LOOKAHEAD_OR_EVIDENCE_INVALID')
+        scores = [row for row in scores if not isinstance(row.get('composite_score'), bool)
+                  and isinstance(row.get('composite_score'), (int, float))
+                  and math.isfinite(row['composite_score'])]
+        score_keys = {(row['asof_date'], row['asset_id']) for row in scores}
     day_signals = {}
-    for row in scores:
+    for row in original_scores:
         if row['asof_date'] in day_signals and day_signals[row['asof_date']] != row['signal_at']:
             raise DataBlocked('PIT_SIGNAL_TIME_MISMATCH')
         day_signals[row['asof_date']] = row['signal_at']
+    missing_signal_days = set(row['asof_date'] for row in universe) - set(day_signals)
+    if (parameters.get('rank_buffer_multiple') is not None and day_signals
+            and any(day > min(day_signals) for day in missing_signal_days)):
+        raise DataBlocked('BUFFER_EMPTY_DAY_EVIDENCE_MISSING')
     usable_universe = [row for row in universe if row['asof_date'] in day_signals]
     signals = {(row['asof_date'], row['asset_id']): day_signals[row['asof_date']] for row in usable_universe}
     labels = {'data_label': 'RESEARCH_UNCERTIFIED', 'label': 'DIAGNOSTIC_ONLY', 'research_only': True,
@@ -211,14 +253,50 @@ def _research_tracks(*, bars, scores, universe, actions, coverage, unresolved_ev
                                                           for row in filtered.itertuples()], index=filtered.index)
     valid_days = set(filtered.loc[filtered['member'], 'asof_date'])
     skipped = sorted({row['asof_date'] for row in universe} - valid_days)
-    if not valid_days:
+    empty_days = {}
+    if parameters.get('rank_buffer_multiple') is not None:
+        for day in sorted(set(day_signals) - valid_days):
+            day_scores = [row for row in original_scores if row['asof_date'] == day]
+            day_universe = [row for row in usable_universe if row['asof_date'] == day]
+            if not day_scores or not day_universe:
+                raise DataBlocked('BUFFER_EMPTY_DAY_EVIDENCE_MISSING')
+            signal = _timestamp(day_signals[day])
+            if signal.astimezone(TAIPEI).date().isoformat() != day:
+                raise DataBlocked('PIT_LOOKAHEAD_OR_EVIDENCE_INVALID')
+            for row in day_scores:
+                digest = str(row.get('score_source_sha256', ''))
+                if _timestamp(row['score_available_at']) > signal or len(digest) != 64 or any(c not in '0123456789abcdefABCDEF' for c in digest):
+                    raise DataBlocked('PIT_LOOKAHEAD_OR_EVIDENCE_INVALID')
+            for row in day_universe:
+                digest = str(row.get('membership_source_sha256', ''))
+                if (_timestamp(row['membership_available_at']) > signal or len(digest) != 64
+                        or any(c not in '0123456789abcdefABCDEF' for c in digest)
+                        or row.get('calendar_available_at') is not None or row.get('calendar_source_sha256') is not None):
+                    raise DataBlocked('PIT_LOOKAHEAD_OR_EVIDENCE_INVALID')
+            execution_dates = {str(row['execution_date'])[:10] for row in day_universe}
+            if len(execution_dates) != 1 or not day < next(iter(execution_dates)) <= '2025-12-31':
+                raise DataBlocked('PIT_EXECUTION_CALENDAR_MISMATCH')
+            empty_days[day] = {'signal_at': signal.isoformat(), 'execution_date': next(iter(execution_dates)),
+                               'score_available_at': max(_timestamp(row['score_available_at']) for row in day_scores).isoformat(),
+                               'membership_available_at': max(_timestamp(row['membership_available_at']) for row in day_universe).isoformat(),
+                               'score_source_sha256': day_scores[0]['score_source_sha256'],
+                               'membership_source_sha256': day_universe[0]['membership_source_sha256'],
+                               'config_id': parameters['config_id'], 'top_n': parameters['top_n'],
+                               'stock_weighting': parameters['stock_weighting'],
+                               'point_in_time_status': 'BLOCKED_UNVERIFIED_SOURCES'}
+        skipped = [day for day in skipped if day not in empty_days]
+    if not valid_days and not empty_days:
         return {**labels, 'status': 'NOT_COMPUTABLE', 'reason': 'NO_ELIGIBLE_REBALANCE', 'skipped_rebalance_dates': skipped}
     universe_keys = set(zip(filtered['asof_date'], filtered['asset_id']))
     valid_scores = [row for row in scores if row['asof_date'] in valid_days and (row['asof_date'], row['asset_id']) in universe_keys]
-    targets = build_targets(pd.DataFrame(valid_scores), filtered[filtered['asof_date'].isin(valid_days)],
-                            config_id=parameters['config_id'], top_n=parameters['top_n'],
-                            stock_weighting=parameters['stock_weighting'], execution_calendar_mode='NEXT_SESSION_EVENT')
+    rank_buffer_multiple = parameters.get('rank_buffer_multiple')
+    targets = (build_targets(pd.DataFrame(valid_scores), filtered[filtered['asof_date'].isin(valid_days)],
+                             config_id=parameters['config_id'], top_n=parameters['top_n'],
+                             stock_weighting=parameters['stock_weighting'], execution_calendar_mode='NEXT_SESSION_EVENT',
+                             rank_buffer_multiple=rank_buffer_multiple) if valid_days
+               else pd.DataFrame(columns=['asof_date']))
     tracks = {}
+    track_targets = {}
     for multiple, name in ((1, 'base'), (2, 'stress')):
         cost = CostModel(parameters['fee_rate'] * multiple, parameters['tax_rate'] * multiple,
                          parameters['minimum_fee'] * multiple)
@@ -226,7 +304,9 @@ def _research_tracks(*, bars, scores, universe, actions, coverage, unresolved_ev
                 'initial_cash': parameters['initial_cash'], 'cost': cost, 'slippage': parameters['slippage'] * multiple,
                 'fractional_policy': 'DROP'}
         try:
-            result = simulate(**args, close_hook=_hook(targets, bars, execution_calendar_mode='NEXT_SESSION_EVENT'),
+            decisions = []
+            result = simulate(**args, close_hook=_hook(targets, bars, execution_calendar_mode='NEXT_SESSION_EVENT',
+                                                       rank_buffer_multiple=rank_buffer_multiple, decisions=decisions, empty_days=empty_days),
                               unresolved_events=unresolved_events, max_stale_sessions=5, unresolved_policy=policy, overlap_policy=overlap)
         except UnresolvedCorporateAction as exc:
             return {**labels, **exc.details, 'cost_track': name, 'skipped_rebalance_dates': skipped}
@@ -248,7 +328,11 @@ def _research_tracks(*, bars, scores, universe, actions, coverage, unresolved_ev
                                      'forced_exits': len(exits), 'forced_exit_stocks': sorted({row['stock_id'] for row in exits}),
                                      'forced_exit_notional_share_of_final_nav': float(sum(row['notional'] for row in exits) / final_nav) if final_nav > 0 else None,
                                      'bias_direction': 'returns understated by forfeits; forced exits forgo post-resumption moves'}}
-    return {**labels, 'status': 'COMPUTABLE', 'skipped_rebalance_dates': skipped, 'targets': targets, 'tracks': tracks,
+        if rank_buffer_multiple is not None:
+            track_targets[name] = pd.DataFrame(decisions)
+    return {**labels, 'status': 'COMPUTABLE', 'skipped_rebalance_dates': skipped,
+            'targets': track_targets['stress'] if rank_buffer_multiple is not None else targets, 'tracks': tracks,
+            **({'track_targets': track_targets} if rank_buffer_multiple is not None else {}),
             'forfeits': {name: track['forfeits'] for name, track in tracks.items()}}
 
 
@@ -368,7 +452,7 @@ def _verify_research_provenance(evidence, paths, parameters):
             raise DataBlocked('SCORES_NOT_FROM_RAW_CONVERSION')
         grid_path = workflow.ROOT / 'outputs/strategy_research/strategy_search_20260914_v2/strategy_search_manifest.csv'
         grid = pd.read_csv(grid_path)
-        row = grid.loc[grid['strategy_id'] == parameters['config_id']]
+        row = grid.loc[grid['strategy_id'] == parameters.get('source_config_id', parameters['config_id'])]
         if (len(row) != 1 or row.iloc[0]['factor_set'] != parameters['strategy']
                 or row.iloc[0]['composite_id'] != parameters['composite_id']
                 or int(row.iloc[0]['top_n']) != parameters['top_n']
@@ -398,6 +482,21 @@ def _run_research(config, *, registry, research_ledger):
     evidence = json.loads(paths['evidence'].read_text(encoding='utf-8'))
     source = workflow.ROOT / 'scripts/research_mode_inputs.py'
     parameters = {key: value for key, value in config.items() if key not in ('inputs', 'output', 'data_end')}
+    if parameters.get('rank_buffer_multiple') is not None:
+        allowed = {
+            'RS_004_NEAR_HIGH_120D': ('RS_004_NEAR_HIGH_120D__EQUAL__TOP10__REB20__SCORE_WEIGHTED',
+                                      'RS_004_NEAR_HIGH_120D__TOP10__REB20__SCORE_WEIGHTED__BUF2'),
+            'A191_088': ('A191_088__EQUAL__TOP30__REB20__SCORE_WEIGHTED',
+                         'A191_088__TOP30__REB20__SCORE_WEIGHTED__BUF2'),
+        }
+        identity = allowed.get(parameters.get('strategy'))
+        if (parameters['rank_buffer_multiple'] != 2 or identity is None
+                or (parameters.get('source_config_id'), parameters.get('config_id')) != identity):
+            raise DataBlocked('UNREGISTERED_BUFFER_CONFIGURATION')
+        for name in ('RS_004_NEAR_HIGH_120D', 'A191_088'):
+            workflow.require_registered(name + ':HYP-COST', registry)
+    elif 'source_config_id' in parameters:
+        raise DataBlocked('UNREGISTERED_BUFFER_CONFIGURATION')
     family = 'D5' if parameters.get('strategy') == D5_RESEARCH_STRATEGY else 'DAY3'
     version = registered_version(parameters.get('assumptions_sha256'))
     if version not in RUNNABLE_VERSIONS[family]:
@@ -424,10 +523,14 @@ def _run_research(config, *, registry, research_ledger):
                 or saved.get('label') != 'DIAGNOSTIC_ONLY' or saved.get('research_only') is not True
                 or workflow.verify_trials(research_ledger) != 'PASS'
                 or not any(row['experiment_id'] == saved.get('experiment_id') for row in workflow._trial_rows(research_ledger))
-                or any(workflow.sha256(candidate / name) != digest for name, digest in saved.get('output_sha256', {}).items())):
+                or any(workflow.sha256(candidate / name) != digest for name, digest in saved.get('output_sha256', {}).items())
+                or any(workflow.sha256(candidate / f'targets_{name}.csv') != digest
+                       for name, digest in saved.get('track_targets_sha256', {}).items())):
             raise DataBlocked('RESEARCH_CHECKPOINT_UNVERIFIED')
         if saved.get('status') == 'COMPUTABLE':
             if set(saved.get('output_sha256', {})) != {'targets.csv', 'base.json', 'stress.json'}:
+                raise DataBlocked('RESEARCH_CHECKPOINT_UNVERIFIED')
+            if parameters.get('rank_buffer_multiple') is not None and set(saved.get('track_targets_sha256', {})) != {'base', 'stress'}:
                 raise DataBlocked('RESEARCH_CHECKPOINT_UNVERIFIED')
             tracks = {name: json.loads((candidate / f'{name}.json').read_text(encoding='utf-8')) for name in ('base', 'stress')}
             if any(track.get('reconciliation', {}).get('status') != 'PASS' for track in tracks.values()):
@@ -464,7 +567,7 @@ def _run_research(config, *, registry, research_ledger):
                                   parameters=parameters, assumptions=assumptions)
     except DataBlocked as exc:
         if not str(exc).startswith(('ACTION_COVERAGE_UNKNOWN', 'OFFICIAL_MARK_MISSING', 'OVERLAPPING_STOCK_ENTITLEMENT',
-                                    'FRACTIONAL_CLOSE_UNAVAILABLE', 'UNSUPPORTED_OR_INCOMPLETE_ACTION')):
+                                    'FRACTIONAL_CLOSE_UNAVAILABLE', 'UNSUPPORTED_OR_INCOMPLETE_ACTION', 'BUFFER_EMPTY_DAY_EVIDENCE_MISSING')):
             raise
         result = {'status': 'NOT_COMPUTABLE', 'reason': str(exc), 'data_label': 'RESEARCH_UNCERTIFIED',
                   'label': 'DIAGNOSTIC_ONLY', 'research_only': True, 'terms_status': 'RESEARCH_ASSUMPTIONS',
@@ -473,7 +576,7 @@ def _run_research(config, *, registry, research_ledger):
         raise DataBlocked('CODE_CHANGED_DURING_RUN')
     if {name: workflow.sha256(path) for name, path in paths.items()} != admitted['inputs_sha256']:
         raise DataBlocked('INPUT_CHANGED_DURING_RUN')
-    manifest = {key: value for key, value in result.items() if key not in ('targets', 'tracks')}
+    manifest = {key: value for key, value in result.items() if key not in ('targets', 'tracks', 'track_targets')}
     manifest.update(experiment_id=admitted['experiment_id'], config=parameters, data_end=config['data_end'],
                     inputs_sha256=admitted['inputs_sha256'], code_sha256=admitted['code_sha256'],
                     research_trials=workflow.research_trials(research_ledger), assumptions_version=version,
@@ -481,10 +584,15 @@ def _run_research(config, *, registry, research_ledger):
                     parameter_fit_scope='PER_DECISION_POINT_IN_TIME' if family == 'D5' else 'IN_SAMPLE_DEVELOPMENT_WINDOW')
     if result['status'] == 'COMPUTABLE':
         result['targets'].to_csv(output / 'targets.csv', index=False, encoding='utf-8-sig', mode='x')
+        if 'track_targets' in result:
+            for name, frame in result['track_targets'].items():
+                frame.to_csv(output / f'targets_{name}.csv', index=False, encoding='utf-8-sig', mode='x')
         for name, track in result['tracks'].items():
             with (output / f'{name}.json').open('x', encoding='utf-8') as stream:
                 json.dump(track, stream, ensure_ascii=False, indent=2, allow_nan=False)
         manifest['output_sha256'] = {name: workflow.sha256(output / name) for name in ('targets.csv', 'base.json', 'stress.json')}
+        if 'track_targets' in result:
+            manifest['track_targets_sha256'] = {name: workflow.sha256(output / f'targets_{name}.csv') for name in ('base', 'stress')}
     else:
         manifest['output_sha256'] = {}
     with (output / 'manifest.json').open('x', encoding='utf-8') as stream:
