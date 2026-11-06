@@ -33,6 +33,14 @@ OPENAPI_PATHS = {
     '/v1/opendata/t187ap03_L': 'company_profile',
     '/v1/company/suspendListingCsvAndHtml': 'delisted',
 }
+# Owner-approved fixed plan 2026-11-04 (change h4-historical-data-unlock-v1, job h4_hist): exact historical queries only.
+HIST_QUOTES = ('20150101', '20211229')  # MI_INDEX type=ALL, weekdays only
+HIST_ACTIONS = {('20150101', '20221231')} | {(f'{y}0101', f'{y}1231') for y in range(2015, 2023)}  # TWT49U
+HIST_REFERENCE = {'startDate': '20150101', 'endDate': '20211231', 'response': 'json'}  # TWTAUU, TWTB8U
+# Owner-approved 2026-11-05 (change h4-fundamental-recovery-v1, job h4_fund_recovery): filings of these 15 companies only.
+FUND_TICKERS = frozenset({'2456', '5264', '2448', '6452', '3454', '3698', '1507', '5305', '1262', '1704', '3519', '2455', '2499', '6251', '6288'})
+FUND_T164 = {'encodeURIComponent': '1', 'step': '1', 'firstin': '1', 'off': '1', 'queryName': 'co_id', 'inpuType': 'co_id',
+             'TYPEK': 'all', 'isnew': 'false'}
 POLICY_VERSION = 'research-public-data-v1'
 RESEARCH_HEADER = 'X-Stock-Research-Policy'
 
@@ -98,9 +106,12 @@ def context(url, *, method='GET', params=None, data=None, purpose=None):
                     raise ValueError('event outside registered research scope')
                 dataset, job, expected = 'TWT49U_DETAIL', 'od_p6', 'od_p6'
             elif path in T1B_PATHS:
-                if values != {'startDate': '20220101', 'endDate': '20261023', 'response': 'json'}:
+                if values == HIST_REFERENCE:
+                    dataset, job, expected = path.rsplit('/', 1)[-1], 'h4_hist', 'market_research'
+                elif values != {'startDate': '20220101', 'endDate': '20261023', 'response': 'json'}:
                     raise ValueError('reference-price window')
-                dataset, job, expected = path.rsplit('/', 1)[-1], 't1b', 't1b'
+                else:
+                    dataset, job, expected = path.rsplit('/', 1)[-1], 't1b', 't1b'
             elif path in TWSE_PATHS:
                 allowed = {'date', 'type', 'selectType', 'response'} if path != '/rwd/zh/exRight/TWT49U' else {'startDate', 'endDate', 'response'}
                 if not set(values) <= allowed or values.get('response') != 'json':
@@ -111,6 +122,11 @@ def context(url, *, method='GET', params=None, data=None, purpose=None):
                 if any(values.get(k, 'ALL') != 'ALL' for k in ('type', 'selectType')):
                     raise ValueError('unsupported market selector')
                 dataset, expected = TWSE_PATHS[path], 'market_research'
+                if dataset == 'MI_INDEX' and values.get('type') == 'ALL' and set(values) == {'date', 'type', 'response'} \
+                        and HIST_QUOTES[0] <= values['date'] <= HIST_QUOTES[1] and datetime.strptime(values['date'], '%Y%m%d').weekday() < 5:
+                    job = 'h4_hist'
+                elif dataset == 'TWT49U' and (values.get('startDate'), values.get('endDate')) in HIST_ACTIONS:
+                    job = 'h4_hist'
         elif host == 'openapi.twse.com.tw' and method == 'GET' and path in OPENAPI_PATHS:
             dataset = OPENAPI_PATHS[path]
             if dataset == 'holidaySchedule':
@@ -135,6 +151,19 @@ def context(url, *, method='GET', params=None, data=None, purpose=None):
             elif values and (set(values) != {'co_id', 'year', 'season'} or values['season'] not in ('1', '2', '3', '4') or not re.fullmatch(r'\d{2,3}', values['year'])):
                 raise ValueError('publication query')
             source, group, dataset, expected = 'mops', 'mops', 't57sb01', 'mops_research'
+            if method == 'POST' and values['co_id'] in FUND_TICKERS:
+                job = 'h4_fund_recovery'
+        elif host == 'mopsov.twse.com.tw' and path == '/mops/web/ajax_t164sb04' and method == 'POST':
+            if (set(values) != set(FUND_T164) | {'co_id', 'year', 'season'} or any(values[k] != v for k, v in FUND_T164.items())
+                    or values['co_id'] not in FUND_TICKERS or not 103 <= int(values['year']) <= 111 or values['season'] not in ('01', '02', '03', '04')):
+                raise ValueError('unapproved single-company statement form')
+            source, group, dataset, job, expected = 'mops', 'mops', 't164sb04', 'h4_fund_recovery', 'mops_research'
+        elif host == 'mopsov.twse.com.tw' and path == '/server-java/t164sb01' and method == 'GET':
+            # 2026-11-05 h4-final-resolution-v1 ROUTE A: stored XBRL statement viewer, same 15 companies, FY2014..FY2022
+            if (set(values) != {'step', 'CO_ID', 'SYEAR', 'SSEASON', 'REPORT_ID'} or values['step'] != '1' or values['CO_ID'] not in FUND_TICKERS
+                    or not 2014 <= int(values['SYEAR']) <= 2022 or values['SSEASON'] not in ('1', '2', '3', '4') or values['REPORT_ID'] not in ('C', 'A')):
+                raise ValueError('unapproved XBRL statement query')
+            source, group, dataset, job, expected = 'mops', 'mops', 't164sb01', 'h4_fund_recovery', 'mops_research'
         elif host == 'mopsov.twse.com.tw' and path == '/mops/web/ajax_t163sb04' and method == 'POST':
             if set(values) != {'encodeURIComponent', 'step', 'firstin', 'off', 'TYPEK', 'year', 'season'} or values.get('TYPEK') not in ('sii', 'otc') or any(values[k] != '1' for k in ('encodeURIComponent', 'step', 'firstin', 'off')) or not re.fullmatch(r'\d{2,3}', values['year']) or values['season'] not in ('01', '02', '03', '04'):
                 raise ValueError('unapproved quarterly form')
@@ -197,7 +226,7 @@ def verify_response(ctx, response):
             text = response.content.decode('big5', errors='replace')
         if any(word in text.lower() for word in ('captcha', 'access denied', 'login', '查詢過量', '驗證碼')):
             raise AuthorizationDenied('SOURCE_BLOCKED: no login or rate-limit circumvention')
-        expected = ('證券代號', '資料年度', '上傳日期', '電子檔案') if ctx.dataset == 't57sb01' else ('公司代號', '營業收入')
+        expected = {'t57sb01': ('證券代號', '資料年度', '上傳日期', '電子檔案'), 't164sb04': ('營業利益', '每股盈餘'), 't164sb01': ('營業利益', '每股盈餘')}.get(ctx.dataset, ('公司代號', '營業收入'))
         if '<table' not in text.lower() or not all(field in text for field in expected):
             raise ValueError('MOPS response lacks the expected public data table')
         return
@@ -216,6 +245,8 @@ def verify_response(ctx, response):
             raise ValueError('official data tables missing')
         valid_fields = []
         for table in tables:
+            if ctx.dataset == 'MI_INDEX' and table == {}:
+                continue  # pre-2017 responses carry empty placeholder objects for index series not yet published; no fields, no rows
             if not isinstance(table, dict):
                 raise ValueError('invalid table shape')
             fields, rows = table.get('fields'), table.get('data')

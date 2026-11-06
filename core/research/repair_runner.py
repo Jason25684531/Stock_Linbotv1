@@ -354,6 +354,14 @@ def _reproduce_day3_checkpoints(prepared_dir, signals_dir, input_manifest_sha, s
     signal_version = registered_version(manifest.get('assumptions_sha256'))
     if input_version is None or signal_version is None:
         raise DataBlocked('UNREGISTERED_RESEARCH_ASSUMPTIONS')
+    if manifest.get('kind') == 'H4_HIST_GRID':  # historical inputs are rebuilt from their own raw files, never from prepared_v6
+        from scripts.research_h4_hist_run import prepare_inputs as hist_inputs, prepare_signals as hist_signals
+        hist_inputs(prepared)
+        hist_signals(prepared, signals)
+        if (workflow.sha256(prepared / 'input_manifest.json') != input_manifest_sha
+                or workflow.sha256(signals / 'signals_manifest.json') != signals_manifest_sha):
+            raise DataBlocked('CHECKPOINT_CHANGED_DURING_VALIDATION')
+        return True
     t1b = workflow.ROOT / 'outputs/finlab_recovery/2026-10-24/t1b_official'
     references = {}
     for pattern, kind in (('TWTAUU_*+0000.bin', 'CAPITAL_REDUCTION'), ('TWTB8U_*+0000.bin', 'PAR_VALUE_CHANGE')):
@@ -369,6 +377,12 @@ def _reproduce_day3_checkpoints(prepared_dir, signals_dir, input_manifest_sha, s
                    assumptions=REGISTERED_ASSUMPTIONS[input_version])
     if manifest.get('kind') == 'D5_RESEARCH_PIT_V1':
         prepare_d5(prepared, signals, assumptions=REGISTERED_ASSUMPTIONS[signal_version])
+    elif manifest.get('kind') == 'H1_SINGLE_FACTOR_GRID':
+        from scripts.prepare_h1_signals import prepare as prepare_h1
+        prepare_h1(prepared, signals, assumptions=REGISTERED_ASSUMPTIONS[signal_version])
+    elif manifest.get('kind') == 'H4_GROWTH_MOMENTUM_GRID':
+        from scripts.prepare_h4_signals import prepare as prepare_h4
+        prepare_h4(prepared, signals, assumptions=REGISTERED_ASSUMPTIONS[signal_version])
     else:
         prepare_signals(prepared, signals, assumptions=REGISTERED_ASSUMPTIONS[signal_version])
     if (workflow.sha256(prepared / 'input_manifest.json') != input_manifest_sha
@@ -424,10 +438,25 @@ def _verify_d5_provenance(evidence, paths, parameters):
         raise DataBlocked('SCORES_NOT_FROM_RAW_CONVERSION') from exc
 
 
+EVIDENCE_GRIDS = {  # runner evidence kind -> (signals manifest kind, fixed grid file, hypothesis that must be registered without a result)
+    'DAY3_RAW_REPRODUCIBLE_V1': ('DAY3_ARCHIVED_GRID', 'outputs/strategy_research/strategy_search_20260914_v2/strategy_search_manifest.csv', None),
+    'H1_RAW_REPRODUCIBLE_V1': ('H1_SINGLE_FACTOR_GRID', 'outputs/strategy_research/h1_near_high_252d_v1/strategy_grid.csv', 'near_high_252d:H1'),
+    'H4_RAW_REPRODUCIBLE_V1': ('H4_GROWTH_MOMENTUM_GRID', 'outputs/strategy_research/h4_growth_momentum_v1/strategy_grid.csv', 'H4:GROWTH-MOMENTUM-V2'),
+    'H4_HIST_RAW_REPRODUCIBLE_V1': ('H4_HIST_GRID', 'outputs/strategy_research/h4_growth_momentum_v1/strategy_grid.csv', 'H4:HIST-2016-2022-V1'),
+}
+BAR_START = {'H4_HIST_RAW_REPRODUCIBLE_V1': '2016-01-04'}  # registered historical window; every other kind keeps 2023-01-03
+
+
 def _verify_research_provenance(evidence, paths, parameters):
-    """Verify registered inputs and reproduce the full Day3 conversion."""
-    if evidence.get('kind') != 'DAY3_RAW_REPRODUCIBLE_V1':
+    """Verify registered inputs and reproduce the full Day3 (or registered H1) conversion."""
+    if evidence.get('kind') not in EVIDENCE_GRIDS:
         raise DataBlocked('SCORES_NOT_FROM_RAW_CONVERSION')
+    signal_kind, grid_file, hypothesis = EVIDENCE_GRIDS[evidence['kind']]
+    if hypothesis:
+        try:
+            workflow.require_registered(hypothesis)
+        except ValueError as exc:
+            raise DataBlocked('NOT_REGISTERED_OR_ALREADY_JUDGED') from exc
     prepared = Path(paths['bars']).resolve().parent
     signals = Path(paths['scores']).resolve().parent
     if (not prepared.is_relative_to(Path(RESEARCH_OUTPUT_ROOT).resolve())
@@ -441,7 +470,10 @@ def _verify_research_provenance(evidence, paths, parameters):
         cadence = int(parameters['rebalance_days'])
         index = manifest['composites'].index(parameters['composite_id'])
         score_name, universe_name = f'scores_{index:02d}_{cadence}.json', f'universe_{cadence}.json'
+        grid_path = workflow.ROOT / grid_file
         if (cadence not in (20, 60) or Path(paths['scores']).resolve() != signals / score_name
+                or manifest.get('kind') != signal_kind
+                or (hypothesis and manifest.get('grid_sha256') != workflow.sha256(grid_path))
                 or Path(paths['universe']).resolve() != signals / universe_name
                 or inputs['assumptions_sha256'] != parameters['assumptions_sha256']
                 or manifest['assumptions_sha256'] != parameters['assumptions_sha256']
@@ -450,7 +482,6 @@ def _verify_research_provenance(evidence, paths, parameters):
                 or any(workflow.sha256(prepared / name) != value for name, value in inputs['files'].items())
                 or any(workflow.sha256(signals / name) != manifest['files'][name] for name in (score_name, universe_name))):
             raise DataBlocked('SCORES_NOT_FROM_RAW_CONVERSION')
-        grid_path = workflow.ROOT / 'outputs/strategy_research/strategy_search_20260914_v2/strategy_search_manifest.csv'
         grid = pd.read_csv(grid_path)
         row = grid.loc[grid['strategy_id'] == parameters.get('source_config_id', parameters['config_id'])]
         if (len(row) != 1 or row.iloc[0]['factor_set'] != parameters['strategy']
@@ -550,7 +581,8 @@ def _run_research(config, *, registry, research_ledger):
     all_bars = inputs['bars']['bars']
     if not all_bars or max(all_bars) > config['data_end']:
         raise DataBlocked('OOS_OR_INPUT_WINDOW_BLOCKED')
-    bars = {day: rows for day, rows in all_bars.items() if day >= '2023-01-03'}
+    start = BAR_START.get(evidence.get('kind'), '2023-01-03')
+    bars = {day: rows for day, rows in all_bars.items() if day >= start}
     if not bars:
         raise DataBlocked('NO_DEVELOPMENT_BARS')
     for row in inputs['scores'] + inputs['universe']:

@@ -31,6 +31,7 @@
                             {% if item.aliases %}<span class="mt-1 block text-xs text-muted">{{ item.aliases|join(', ') }}</span>{% endif %}
                             {{ ui.status_badge('available' if item.available_for_backtest else 'unavailable') }}
                             {% if not item.available_for_backtest %}<span class="mt-2 block text-xs text-amber-300">{{ item.backtest_reason }}</span>{% endif %}
+                            {% if item.research %}<span class="mt-2 block text-xs text-amber-200">研究策略 · {{ item.eligibility }} · 只能單獨選取，僅查看 2023～2025 封存回測結果，不重新執行引擎</span>{% endif %}
                         </span>
                     </div>
                 </label>
@@ -38,26 +39,35 @@
             </div>
             <p id="strategies-error" role="alert" class="mt-3 text-sm text-amber-300" x-show="errors.strategies" x-text="errors.strategies"></p>
         </section>
-        <section class="quant-card p-5">
+        <section class="quant-card p-5" x-show="research" x-cloak data-testid="research-backtest-settings">
+            <h2 class="text-base font-semibold text-white">研究策略封存回測</h2>
+            <p class="mt-1 text-xs text-amber-200">H4 為未認證研究策略。此處讀取 2x 成本的封存回測結果，不重新執行回測、不寫入資料庫；2016～2022 為 DATA_BLOCKED，2026 為 SEALED。</p>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+                <label class="text-sm text-ink">封存期間<select name="research_period" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink">{% for key, label in (research_periods|default({})).items() %}<option value="{{ key }}" {% if key == default_research_period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+                <label class="text-sm text-ink">初始資金（元）<input type="number" name="initial_capital" min="10000" max="1000000000" step="10000" value="{{ default_initial_capital }}" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span class="mt-2 block text-xs text-muted">封存回測以 1,000,000 元執行；其他金額為線性示意換算（ILLUSTRATIVE_LINEAR）。</span></label>
+            </div>
+        </section>
+        <section class="quant-card p-5" x-show="!research">
             <h2 class="text-base font-semibold text-white">期間與執行設定</h2>
             <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <label class="text-sm text-ink">開始日期<input type="date" name="start_date" value="{{ default_start_date }}" x-ref="start_date" :aria-invalid="Boolean(errors.start_date)" aria-describedby="start-error" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="start-error" role="alert" class="mt-2 block text-xs text-amber-300" x-show="errors.start_date" x-text="errors.start_date"></span></label>
                 <label class="text-sm text-ink">結束日期<input type="date" name="end_date" value="{{ default_end_date }}" x-ref="end_date" :aria-invalid="Boolean(errors.end_date)" aria-describedby="end-error" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="end-error" role="alert" class="mt-2 block text-xs text-amber-300" x-show="errors.end_date" x-text="errors.end_date"></span></label>
                 <label class="text-sm text-ink">策略權重（可選）<input type="text" name="weights" value="{{ default_weights|default('') }}" x-ref="weights" :aria-invalid="Boolean(errors.weights)" :aria-describedby="errors.weights ? 'weights-help weights-error' : 'weights-help'" aria-describedby="weights-help" placeholder="0.5,0.5" class="mt-2 w-full rounded-md border border-strong bg-primary px-3 py-2 text-ink"><span id="weights-help" class="mt-2 block text-xs text-muted">依上方所選策略順序，以逗號分隔，例如 0.5,0.5；數量須與策略數相同。留空使用預設權重。</span><span id="weights-error" role="alert" class="mt-2 block text-xs text-amber-300" x-show="errors.weights" x-text="errors.weights"></span></label>
-                <label class="flex items-end gap-2 pb-2 text-sm text-ink"><input type="checkbox" name="persist" value="1" {% if default_persist %}checked{% endif %} class="h-4 w-4 rounded border-strong bg-primary text-blue-500">儲存結果到資料庫</label>
+                <label class="flex items-end gap-2 pb-2 text-sm text-ink"><input type="checkbox" name="persist" value="1" :disabled="research" {% if default_persist %}checked{% endif %} class="h-4 w-4 rounded border-strong bg-primary text-blue-500">儲存結果到資料庫</label>
             </div>
         </section>
-        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" :disabled="submitting" x-text="submitting ? '回測中…' : '執行回測'" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-strong px-5 py-3 text-center text-sm text-ink hover:border-strong">回到策略中心</a></div>
+        <div class="flex flex-col gap-3 sm:flex-row"><button type="submit" :disabled="submitting" x-text="submitting ? (research ? '載入中…' : '回測中…') : (research ? '查看封存回測' : '執行回測')" class="rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">執行回測</button><a href="{{ url_for('strategy_center') }}" class="rounded-md border border-strong px-5 py-3 text-center text-sm text-ink hover:border-strong">回到策略中心</a></div>
         <div x-show="submitting" x-cloak role="status"><progress class="w-full" aria-label="回測執行中"></progress><p class="mt-2 text-sm text-muted">執行中，已經過 <span class="num" x-text="elapsed"></span> 秒</p></div>
-</div><aside class="backtest-summary quant-card space-y-4 p-5"><h2 class="font-semibold">執行摘要</h2><dl class="space-y-4 text-sm"><div><dt class="text-muted">策略</dt><dd class="mt-1 break-all num" x-text="summary.strategies || '尚未選擇'"></dd></div><div><dt class="text-muted">期間</dt><dd class="mt-1 num" x-text="summary.start + ' → ' + summary.end"></dd></div><div><dt class="text-muted">權重</dt><dd class="mt-1 break-all num" x-text="summary.weights || '使用預設權重'"></dd></div><div><dt class="text-muted">結果儲存</dt><dd class="mt-1" x-text="summary.persist ? '寫入資料庫' : '不寫入資料庫'"></dd></div></dl></aside>
+</div><aside class="backtest-summary quant-card space-y-4 p-5"><h2 class="font-semibold">執行摘要</h2><dl class="space-y-4 text-sm"><div><dt class="text-muted">策略</dt><dd class="mt-1 break-all num" x-text="summary.strategies || '尚未選擇'"></dd></div><div><dt class="text-muted">期間</dt><dd class="mt-1 num" x-text="research ? summary.period : summary.start + ' → ' + summary.end"></dd></div><div><dt class="text-muted">權重</dt><dd class="mt-1 break-all num" x-text="summary.weights || '使用預設權重'"></dd></div><div><dt class="text-muted">結果儲存</dt><dd class="mt-1" x-text="summary.persist ? '寫入資料庫' : '不寫入資料庫'"></dd></div></dl></aside>
     </form>
 </div>
 <script>
 function backtestForm() {
     return {
-        submitting:false, elapsed:0, timer:null, errors:{}, summary:{},
+        submitting:false, elapsed:0, timer:null, errors:{}, summary:{}, research:false,
+        researchIds: {{ strategy_catalog|selectattr('research')|map(attribute='strategy_id')|list|tojson }},
         init() { this.$nextTick(() => this.updateSummary()); },
-        updateSummary() { const data = new FormData(this.$el); this.summary = {strategies:data.getAll('strategies').join('、'), start:data.get('start_date'), end:data.get('end_date'), weights:data.get('weights'), persist:data.has('persist')}; },
+        updateSummary() { const data = new FormData(this.$el); this.research = data.getAll('strategies').some(id => this.researchIds.includes(id)); this.summary = {strategies:data.getAll('strategies').join('、'), start:data.get('start_date'), end:data.get('end_date'), period:(this.$el.querySelector('[name=research_period] option:checked') || {}).textContent, weights:data.get('weights'), persist:data.has('persist')}; },
         validate(event) {
             if (this.submitting) { event.preventDefault(); return; }
             const data = new FormData(event.target);
@@ -66,6 +76,12 @@ function backtestForm() {
             const raw = data.get('weights').trim();
             const weights = raw.split(',');
             this.errors = {};
+            if (this.research && count !== 1) this.errors.strategies = '研究策略只能單獨查看封存回測，請取消其他策略';
+            if (this.research) {
+                if (this.errors.strategies) { event.preventDefault(); this.$nextTick(() => this.$refs.strategies.focus()); return; }
+                this.submitting = true;
+                return;
+            }
             if (!count) this.errors.strategies = '請至少選擇一個策略';
             if (!start) this.errors.start_date = '請填寫開始日期';
             if (!end || (start && end < start)) this.errors.end_date = '請填寫不早於開始日期的結束日期';

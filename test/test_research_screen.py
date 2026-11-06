@@ -27,3 +27,25 @@ def test_dsr_uses_larger_of_formal_baseline_and_admitted_trials(tmp_path, monkey
     assert screen(result, trial_sharpe_variance=.01, registry=registry)['dsr_trials'] == 743
     monkeypatch.setattr(workflow, 'research_trials', lambda ledger: 800)
     assert screen(result, trial_sharpe_variance=.01, registry=registry)['dsr_trials'] == 800
+
+
+def test_v2_registration_keeps_v1_criteria_and_binds_benchmark_code(tmp_path):
+    import hashlib
+    from pathlib import Path
+    import core.research.research_mode as mode
+    v1, v2 = screen_registration(), screen_registration('V2')
+    assert v2['hypothesis_id'] == 'RESEARCH-SCREEN:V2' and v2['falsification_test'] == v1['falsification_test']
+    assert {k for k in v1 if v1[k] != v2[k]} == {'hypothesis_id', 'hypothesis', 'source'}
+    module = Path(mode.__file__).with_name('benchmark_v2.py')
+    assert hashlib.sha256(module.read_bytes()).hexdigest() in v2['hypothesis']
+    registry = tmp_path / 'registry.csv'
+    workflow.register(v1, path=registry)
+    with pytest.raises(ValueError, match='REGISTRY_UNVERIFIED'):
+        screen({'status': 'COMPUTABLE'}, trial_sharpe_variance=1, registry=registry, version='V2')
+    workflow.register(v2, path=registry)
+    assert screen({'status': 'NOT_COMPUTABLE'}, trial_sharpe_variance=1, registry=registry, version='V2')['status'] == 'NOT_COMPUTABLE'
+    stale = tmp_path / 'stale.csv'
+    workflow.register({**v2, 'hypothesis': v2['hypothesis'].replace(hashlib.sha256(module.read_bytes()).hexdigest(), '0' * 64)},
+                      path=stale)
+    with pytest.raises(ValueError, match='REGISTRY_UNVERIFIED'):
+        screen({'status': 'COMPUTABLE'}, trial_sharpe_variance=1, registry=stale, version='V2')

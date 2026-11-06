@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}研究策略詳情 - Stock Linbot{% endblock %}
+{% block page_kicker %}策略中心{% endblock %}
+{% block page_heading %}{{ info.display_name if info else '研究策略' }}{% endblock %}
+
+{% block content %}
+{% if not info %}
+<div class="quant-card p-6 text-sm text-muted" data-testid="research-not-found">找不到這個研究策略。<a class="text-blue-300" href="{{ url_for('strategy_center') }}">回到策略中心</a></div>
+{% else %}{% set v = info.validation %}
+<div class="space-y-5" data-testid="research-strategy" x-data='researchSignals({{ info.strategy_id|tojson }}, {{ info.signal_dates|tojson }})'>
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100" data-testid="research-status-banner">
+        <p class="font-semibold"><span class="num text-blue-300">{{ info.strategy_id }}</span> · {{ v.certification if v else 'RESEARCH_UNCERTIFIED' }} · lifecycle {{ info.lifecycle }}</p>
+        <p class="mt-1">未認證研究策略，僅供研究展示；不進入每日推薦、LINE 推播或交易。{{ info.disclaimer }}</p>
+        {% if not info.available %}<p class="mt-1 text-amber-300">DATA_NOT_AVAILABLE：{{ info.unavailable_reason }}</p>{% endif %}
+    </section>
+
+    <div class="grid gap-5 lg:grid-cols-2">
+        <section class="quant-card p-5" data-testid="research-configuration">
+            <h2 class="text-base font-semibold text-white">策略設定（固定，不可調整）</h2>
+            <table class="mt-3 w-full text-sm"><tbody class="divide-y divide-line">
+                {% for f in info.configuration.factors %}<tr><td class="py-2">{{ f.name }}</td><td class="num py-2 text-right">{{ (f.weight * 100)|round|int }}%</td></tr>{% endfor %}
+                <tr><td class="py-2">持股</td><td class="num py-2 text-right">Top {{ info.configuration.top_n }}</td></tr>
+                <tr><td class="py-2">配置</td><td class="num py-2 text-right">等權，各約 {{ (info.configuration.max_weight * 100)|round|int }}%</td></tr>
+                <tr><td class="py-2">再平衡</td><td class="num py-2 text-right">每 {{ info.configuration.rebalance_days }} 個交易日</td></tr>
+                <tr><td class="py-2">回測成本</td><td class="py-2 text-right">{{ info.configuration.cost }}</td></tr>
+                <tr><td class="py-2">發布</td><td class="py-2 text-right">{{ info.configuration.publish }}</td></tr>
+            </tbody></table>
+            <p class="mt-3 text-xs text-muted">選股規則：成長分數為營業利益 YoY 與 EPS YoY 橫斷面百分位的平均，動能分數為 near_high_252d 百分位；綜合分數 = 0.5 × 成長 + 0.5 × 動能，取前 10 名等權持有。</p>
+        </section>
+        <section class="quant-card p-5" data-testid="research-validation">
+            <h2 class="text-base font-semibold text-white">驗證狀態</h2>
+            {% if v %}
+            <div class="mt-3 flex flex-wrap gap-2">{% for gate, state in v.gates.items() %}<span class="status-badge {{ 'status-ok' if state == 'PASS' else 'status-error' }}">{{ gate }} {{ state }}</span>{% endfor %}</div>
+            <p class="mt-3 text-sm">研究建議 <strong>{{ v.research_advice }}</strong> · 原始登記 {{ v.registration_decision }}（研究判定，不是策略認證）</p>
+            <table class="mt-3 w-full text-sm"><tbody class="divide-y divide-line">
+                {% for p in v.periods %}<tr><td class="py-2 num">{{ p.range }}</td><td class="py-2"><span class="status-badge {{ 'status-ok' if p.status == 'ARCHIVED' else 'status-disabled' }}">{{ p.status }}</span></td><td class="py-2 text-xs text-muted">{{ p.reason }}</td></tr>{% endfor %}
+            </tbody></table>
+            {% else %}<p class="mt-3 text-sm text-muted">驗證狀態不可用。</p>{% endif %}
+        </section>
+    </div>
+
+    {% if info.available %}{% set m = info.metrics %}
+    <section class="quant-card p-5" data-testid="research-performance">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><h2 class="text-base font-semibold text-white">2023～2025 封存回測（2x 成本）</h2><p class="mt-1 text-xs text-muted">讀取封存結果，不重新執行回測。Benchmark V2 = 研究股票池等權含息報酬。</p></div>
+            <form method="post" action="{{ url_for('backtest') }}" class="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="strategies" value="{{ info.strategy_id }}">
+                <label class="text-xs text-muted">期間<select name="research_period" class="mt-1 block rounded-md border border-strong bg-primary px-3 py-2 text-sm text-ink">{% for key, label in periods.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
+                <button type="submit" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">查看封存回測報告</button>
+            </form>
+        </div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="metric-card"><div class="metric-label">累積報酬</div><div class="mt-2 num text-2xl font-semibold text-up">{{ (m.total_return_2x * 100)|round(1) }}%</div></div>
+            <div class="metric-card"><div class="metric-label">Benchmark V2</div><div class="mt-2 num text-2xl font-semibold text-white">{{ (m.benchmark_v2_total_return * 100)|round(1) }}%</div></div>
+            <div class="metric-card"><div class="metric-label">最大回撤</div><div class="mt-2 num text-2xl font-semibold text-down">{{ (m.max_drawdown_2x * 100)|round(1) }}%</div></div>
+            <div class="metric-card"><div class="metric-label">Sharpe</div><div class="mt-2 num text-2xl font-semibold text-white">{{ m.sharpe_2x|round(2) }}</div></div>
+        </div>
+    </section>
+
+    <section class="quant-card p-5" data-testid="research-signals">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><h2 class="text-base font-semibold text-white">歷史選股訊號</h2><p class="mt-1 text-xs text-amber-200">歷史研究訊號（60 日再平衡日），不是今日推薦。</p></div>
+            <label class="text-xs text-muted">訊號日<select x-model="day" @change="load()" class="mt-1 block rounded-md border border-strong bg-primary px-3 py-2 text-sm text-ink" data-testid="signal-date-select"><template x-for="d in dates" :key="d"><option :value="d" x-text="d" :selected="d === day"></option></template></select></label>
+        </div>
+        <p class="mt-3 text-sm text-muted" x-show="loading" role="status">載入中…</p>
+        <p class="mt-3 text-sm text-amber-300" x-show="error" x-text="error" role="alert"></p>
+        <template x-if="data">
+            <div class="mt-4 space-y-5">
+                <p class="text-xs text-muted" x-text="`訊號日 ${data.signal_date} · 上一期 ${data.previous_signal_date || '無（首期）'} · ` + Object.entries(data.status_counts).map(([k, n]) => `${k} ${n}`).join('、')"></p>
+                <div class="overflow-x-auto">
+                    <table class="min-w-[860px] w-full text-sm" data-testid="signal-top10"><thead class="border-b border-line text-xs text-muted"><tr><th class="px-2 py-2 text-left">排名</th><th class="px-2 py-2 text-left">股票</th><th class="px-2 py-2 text-right">G2</th><th class="px-2 py-2 text-right">G3</th><th class="px-2 py-2 text-right">動能</th><th class="px-2 py-2 text-right">綜合</th><th class="px-2 py-2 text-right">權重</th><th class="px-2 py-2 text-left">入選理由</th></tr></thead>
+                    <tbody class="divide-y divide-line"><template x-for="row in data.top" :key="row.ticker"><tr>
+                        <td class="num px-2 py-2" x-text="row.rank"></td>
+                        <td class="px-2 py-2"><a class="text-blue-300 hover:text-blue-200" :href="'/stock-analysis?id=' + encodeURIComponent(row.ticker)" x-text="row.ticker"></a></td>
+                        <td class="num px-2 py-2 text-right" x-text="fmt(row.g2_score)"></td><td class="num px-2 py-2 text-right" x-text="fmt(row.g3_score)"></td>
+                        <td class="num px-2 py-2 text-right" x-text="fmt(row.momentum_score)"></td><td class="num px-2 py-2 text-right" x-text="fmt(row.final_score, 4)"></td>
+                        <td class="num px-2 py-2 text-right" x-text="(row.target_weight * 100).toFixed(1) + '%'"></td><td class="px-2 py-2 text-xs text-muted" x-text="row.reason"></td>
+                    </tr></template></tbody></table>
+                </div>
+                <div><h3 class="text-sm font-semibold text-white">與上一期持股差異</h3>
+                    <div class="mt-2 flex flex-wrap gap-2" data-testid="signal-changes"><template x-for="c in data.changes" :key="c.ticker"><span class="rounded px-2 py-1 num text-xs" :class="c.action === 'BUY' ? 'bg-emerald-500/15 text-emerald-300' : c.action === 'SELL' ? 'bg-rose-500/15 text-rose-300' : 'bg-secondary text-ink'" x-text="`${c.action} ${c.ticker}`"></span></template></div>
+                </div>
+                <details class="rounded border border-line p-3"><summary class="cursor-pointer text-sm text-ink">全部股票分數與資格（<span x-text="data.rows.length"></span> 列）</summary>
+                    <div class="mt-3 max-h-[480px] overflow-auto"><table class="min-w-[960px] w-full text-xs" data-testid="signal-all-rows"><thead class="sticky top-0 bg-primary text-muted"><tr><th class="px-2 py-1 text-left">股票</th><th class="px-2 py-1 text-left">資格</th><th class="px-2 py-1 text-right">G2</th><th class="px-2 py-1 text-right">G3</th><th class="px-2 py-1 text-right">動能</th><th class="px-2 py-1 text-right">綜合</th><th class="px-2 py-1 text-right">排名</th><th class="px-2 py-1 text-right">權重</th><th class="px-2 py-1 text-left">資料版本</th><th class="px-2 py-1 text-left">來源雜湊</th></tr></thead>
+                    <tbody class="divide-y divide-line"><template x-for="row in data.rows" :key="row.ticker"><tr>
+                        <td class="num px-2 py-1" x-text="row.ticker"></td><td class="px-2 py-1" x-text="row.eligibility_status"></td>
+                        <td class="num px-2 py-1 text-right" x-text="fmt(row.g2_score)"></td><td class="num px-2 py-1 text-right" x-text="fmt(row.g3_score)"></td>
+                        <td class="num px-2 py-1 text-right" x-text="fmt(row.momentum_score)"></td><td class="num px-2 py-1 text-right" x-text="fmt(row.final_score, 4)"></td>
+                        <td class="num px-2 py-1 text-right" x-text="row.rank ?? '–'"></td><td class="num px-2 py-1 text-right" x-text="row.target_weight"></td>
+                        <td class="px-2 py-1" x-text="row.data_version"></td><td class="num px-2 py-1" :title="row.source_hash" x-text="row.source_hash.slice(0, 12)"></td>
+                    </tr></template></tbody></table></div>
+                </details>
+            </div>
+        </template>
+    </section>
+    {% endif %}
+
+    <section class="quant-card p-5" data-testid="research-latest">
+        <h2 class="text-base font-semibold text-white">最新資料選股</h2>
+        <p class="mt-2"><span class="status-badge status-disabled">{{ info.latest.status }}</span> <span class="text-xs text-muted">{{ info.latest.reason }}</span></p>
+        {% if info.latest.missing %}<ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">{% for item in info.latest.missing %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    </section>
+</div>
+<script>
+function researchSignals(id, dates) {
+    return {
+        dates, day: dates[dates.length - 1] || null, data: null, error: '', loading: false,
+        init() { if (this.day) this.load(); },
+        fmt(value, digits = 2) { return value === null || value === undefined ? '–' : Number(value).toFixed(digits); },
+        async load() {
+            this.loading = true; this.error = '';
+            try {
+                const response = await fetch(`/api/research/strategies/${encodeURIComponent(id)}/signals/${encodeURIComponent(this.day)}`);
+                const body = await response.json();
+                if (!response.ok) throw new Error(`${body.code}：${body.reason}`);
+                this.data = body;
+            } catch (error) { this.data = null; this.error = error.message || '訊號資料無法載入'; }
+            finally { this.loading = false; }
+        },
+    };
+}
+</script>
+{% endif %}
+{% endblock %}

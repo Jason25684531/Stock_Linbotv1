@@ -18,7 +18,7 @@ from sqlalchemy import text
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
 from core.runtime import fundamental_production
-from . import app, services
+from . import app, research_payloads, services
 
 RESEARCH_SNAPSHOT_DIR = Path(os.environ.get('STOCK_LINBOT_RESEARCH_SNAPSHOT',
     str(Path(__file__).resolve().parents[1] / 'outputs/research_workflow/research_status_snapshot')))
@@ -229,7 +229,59 @@ def stock_analysis():
 @app.route('/strategies')
 def strategy_center():
     """Render the unified strategy catalog."""
-    return render_template('strategy_center.html', strategy_catalog=_build_strategy_catalog())
+    # research entries are display-only and appended after the runtime catalog, which other callers keep unchanged
+    return render_template('strategy_center.html', strategy_catalog=_build_strategy_catalog() + research_payloads.catalog_entries())
+
+
+@app.route('/strategies/research')
+def research_strategy():
+    """Read-only research strategy detail: configuration, validation status and archived signals."""
+    sid = str(request.args.get('id') or '').strip().upper()
+    if not research_payloads.is_research(sid):
+        return render_template('research_strategy.html', info=None, active_nav='strategy_center'), 404
+    return render_template('research_strategy.html', info=research_payloads.overview(sid), active_nav='strategy_center',
+                           periods=research_payloads.PERIOD_LABELS)
+
+
+def _research_response(build, *args, **kwargs):
+    try:
+        return _dashboard_json_response(build(*args, **kwargs))
+    except research_payloads.ResearchError as exc:
+        return _dashboard_json_response(exc.payload(), exc.status)
+
+
+@app.route('/api/research/strategies')
+def api_research_strategies():
+    return _research_response(lambda: {'strategies': [research_payloads.overview(sid) for sid in research_payloads.research_ids()],
+                                       'research_only': True})
+
+
+@app.route('/api/research/strategies/<sid>/backtest')
+def api_research_backtest(sid):
+    def build():
+        payload = research_payloads.backtest(sid, request.args.get('period'), request.args.get('initial_capital'),
+                                             request.args.get('start_date'), request.args.get('end_date'))
+        return {key: payload[key] for key in ('metrics', 'start_date', 'end_date', 'research', 'trades')}
+    return _research_response(build)
+
+
+@app.route('/api/research/strategies/<sid>/signals')
+def api_research_signal_dates(sid):
+    return _research_response(research_payloads.signal_dates, sid)
+
+
+@app.route('/api/research/strategies/<sid>/signals/<day>')
+def api_research_signals(sid, day):
+    return _research_response(research_payloads.signals, sid, day)
+
+
+@app.route('/api/research/strategies/<sid>/latest')
+def api_research_latest(sid):
+    try:
+        status, payload = research_payloads.latest(sid)
+    except research_payloads.ResearchError as exc:
+        status, payload = exc.status, exc.payload()
+    return _dashboard_json_response(payload, status)
 
 
 @app.context_processor
@@ -255,6 +307,10 @@ def update_strategy():
         selected_strategies = request.form.getlist('strategies')
         if not selected_strategies:
             flash('請至少選擇一個策略', 'error')
+            return redirect(url_for('strategy_center'))
+        research = [s for s in selected_strategies if research_payloads.is_research(s)]
+        if research:
+            flash(f"研究策略僅供展示，不可加入每日篩選：{', '.join(research)}", 'error')
             return redirect(url_for('strategy_center'))
 
         success = services.strategy_manager.set_active_strategies(selected_strategies)
@@ -1375,10 +1431,13 @@ def system_status_page():
 def backtest():
     """回測頁面。"""
     if request.method == 'GET':
-        catalog = _build_strategy_catalog()
+        catalog = _build_strategy_catalog() + research_payloads.catalog_entries()
         available = [item for item in catalog if item.get('available_for_backtest')]
         requested = []
         for key in _parse_csv_query_values('strategies') or []:
+            if research_payloads.is_research(key):
+                requested.append(key.upper())
+                continue
             try:
                 requested.append(services.strategy_manager.resolve(key, warn_legacy=False))
             except KeyError:
@@ -1396,13 +1455,33 @@ def backtest():
             default_end_date=request.args.get('end_date', today.isoformat()),
             default_weights=request.args.get('weights', ''),
             default_persist=request.args.get('persist', '').lower() in ('1', 'true', 'on'),
+            research_periods=research_payloads.PERIOD_LABELS,
+            default_research_period=request.args.get('research_period', 'FULL'),
+            default_initial_capital=request.args.get('initial_capital', '1000000'),
         )
 
     preserved = {
         'strategies': ','.join(request.form.getlist('strategies')),
-        **{key: request.form.get(key, '') for key in ('start_date', 'end_date', 'weights', 'persist')},
+        **{key: request.form.get(key, '') for key in ('start_date', 'end_date', 'weights', 'persist', 'research_period', 'initial_capital')},
         'preserved': '1',
     }
+    requested = request.form.getlist('strategies')
+    research = [key.strip().upper() for key in requested if research_payloads.is_research(key)]
+    if research:
+        # archived result view only: no engine run, no persistence, no mixing with engine-backed strategies
+        if len(requested) != 1:
+            flash('研究策略只能單獨查看封存回測，請勿與其他策略混選', 'error')
+            return redirect(url_for('backtest', **preserved))
+        if (request.form.get('persist') or '').strip().lower() in ('1', 'true', 'on'):
+            flash('研究策略的封存回測結果不可寫入資料庫', 'error')
+            return redirect(url_for('backtest', **preserved))
+        try:
+            payload = research_payloads.backtest(research[0], request.form.get('research_period'), request.form.get('initial_capital'))
+        except research_payloads.ResearchError as exc:
+            flash(f'{exc.code}：{exc.reason}', 'error')
+            return redirect(url_for('backtest', **preserved))
+        charts = {key: json.dumps(payload.pop(key), ensure_ascii=False) for key in ('equity_chart', 'drawdown_chart', 'monthly_chart')}
+        return render_template('backtest_result.html', **payload, **charts)
     try:
         from core.viz_helper import generate_report_from_csv
 

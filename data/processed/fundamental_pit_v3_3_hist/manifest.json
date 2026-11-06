@@ -1,0 +1,42 @@
+{
+ "dataset_version": "fundamental-pit-v3.3-hist",
+ "created_from": "fundamental-pit-v3.1-yoy-same-basis (files unchanged)",
+ "rules": [
+  "v3.2 rules (YoY availability = later of current and prior-year filing; both filings VERIFIED)",
+  "available_date re-derived with fundamentals.pit.available_date_for_publication on the 2015-2022 TWSE calendar",
+  "rule reproduces every stored 2023+ available_date (67219 rows, 0 mismatches)"
+ ],
+ "survivorship": "ticker list is the v3 target of 890 companies; no 2016-2022 delisted company has any record",
+ "source_records_sha256": "a07cce380603dc4d9bcb4dadc28153380d986b7e281348d55d1e15a632d60e70",
+ "records_sha256": "079ef557d706b9a4715b5ca1f5f39d4fec5e582efeed3ddd48a2c41d13611ebd",
+ "audit_sha256": "c79e1e9a4e0b2708002011342d3daecea73b5a2e2c1f1d3b8d1c53ec885d980e",
+ "matrix_sha256": "583db5d0360e955080629a27c46bf61597ccacead6d5bd17e5b5fa2fe66fa5ed",
+ "matrix_rows": 1518340,
+ "audit_status_counts": {
+  "VERIFIED": 23576,
+  "EXCLUDED": 1948
+ },
+ "yoy_rows_by_status": [
+  {
+   "metric": "eps_yoy",
+   "verification_status": "EXCLUDED",
+   "rows": 2744
+  },
+  {
+   "metric": "eps_yoy",
+   "verification_status": "VERIFIED",
+   "rows": 19495
+  },
+  {
+   "metric": "operating_income_yoy",
+   "verification_status": "EXCLUDED",
+   "rows": 2536
+  },
+  {
+   "metric": "operating_income_yoy",
+   "verification_status": "VERIFIED",
+   "rows": 19045
+  }
+ ],
+ "external_requests": 0
+}

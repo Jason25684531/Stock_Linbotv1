@@ -1,0 +1,71 @@
+{
+ "dataset_version": "fundamental-pit-v3.2-verified",
+ "created_from": "fundamental-pit-v3.1-yoy-same-basis (files unchanged)",
+ "source_records_sha256": "a07cce380603dc4d9bcb4dadc28153380d986b7e281348d55d1e15a632d60e70",
+ "records_sha256": "30d592b1ee171210c7cb12f9e1a66899136ec4e6d52e9c040b8cb7e53f5adee9",
+ "audit_sha256": "1998df6f0b11e1686782baa11706c508506e2be9622ebe37a525f52816d59cc1",
+ "rules": [
+  "YoY available_date and publication_date = later of current and prior-year base filing",
+  "keep a YoY row only when both base filings are VERIFIED in the official listing audit"
+ ],
+ "audit_status_counts": {
+  "VERIFIED": 15130,
+  "EXCLUDED": 855
+ },
+ "correction_values": {
+  "無": 15130,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5285&YEAR_SEASON=202201&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=4994&YEAR_SEASON=202104&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5215&YEAR_SEASON=202204&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5215&YEAR_SEASON=202304&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5225&YEAR_SEASON=202102&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5225&YEAR_SEASON=202201&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5225&YEAR_SEASON=202204&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5243&YEAR_SEASON=202202&RID=4&DTYPE=I1&SKEY=2&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5243&YEAR_SEASON=202502&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5244&YEAR_SEASON=202302&RID=4&DTYPE=I1&SKEY=2&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5269&YEAR_SEASON=202502&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5284&YEAR_SEASON=202203&RID=4&DTYPE=I1&SKEY=2&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5285&YEAR_SEASON=202202&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5531&YEAR_SEASON=202301&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5292&YEAR_SEASON=202401&RID=4&DTYPE=I1&SKEY=2&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5484&YEAR_SEASON=202103&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5521&YEAR_SEASON=202102&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5521&YEAR_SEASON=202103&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1,
+  "CORRECTION_RECORD http://mopsov.twse.com.tw/mops/web/t56sb31_q1?step=2&colorchg=1&TYPEK=sii&kind=&CID=5521&YEAR_SEASON=202401&RID=4&DTYPE=I1&SKEY=1&firstin=1": 1
+ },
+ "late_uploads": 169,
+ "prior_year_available_later_rows_all_years": 1,
+ "yoy_rows_by_status": [
+  {
+   "metric": "eps_yoy",
+   "verification_status": "EXCLUDED",
+   "rows": 1216
+  },
+  {
+   "metric": "eps_yoy",
+   "verification_status": "VERIFIED",
+   "rows": 11442
+  },
+  {
+   "metric": "operating_income_yoy",
+   "verification_status": "EXCLUDED",
+   "rows": 1179
+  },
+  {
+   "metric": "operating_income_yoy",
+   "verification_status": "VERIFIED",
+   "rows": 11292
+  }
+ ],
+ "yoy_rows_kept": 22734,
+ "external_requests": 0,
+ "evidence": "cached official doc.twse.com.tw t57sb01 listings retrieved 2026-09-15; SHA-256 per row in the audit",
+ "matrix_sha256": "cc8473a4a4f98572550ab6acdc6e19254de0d12b90a27691be43d265a4cd6156",
+ "matrix_rows": 644360,
+ "matrix_dates": [
+  "2023-01-03",
+  "2025-12-31",
+  724
+ ]
+}

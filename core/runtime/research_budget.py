@@ -19,7 +19,9 @@ MAX_REQUESTS_ENV = 'STOCK_LINBOT_RESEARCH_MAX_REQUESTS'
 MAX_COST_ENV = 'STOCK_LINBOT_RESEARCH_MAX_COST'
 STATE = ROOT / 'outputs/research_budget'
 ROUND = '2026-10-28-public-research'
-CAPS = {'od_p6': 385, 't1b': 10, 'calendar_2026': 1}
+ROUND_CAPS = {'od_p6': 385, 't1b': 10, 'calendar_2026': 1}  # round 2026-10-28: combined ceiling 396
+# 2026-11-04 Owner-approved fixed plan (change h4-historical-data-unlock-v1): its own ceiling, outside the 396.
+CAPS = {**ROUND_CAPS, 'h4_hist': 1870, 'h4_fund_recovery': 460}  # 2026-11-05 Owner: 15 listed companies' filings, own ceiling
 LEGACY = {
     'od_p6': (ROOT / 'outputs/p0_p4/2026-10-24/od_p6_request_ledger.jsonl', 3),
     't1b': (ROOT / 'outputs/finlab_recovery/2026-10-24/t1b_official/t1b_request_ledger.jsonl', 4),
@@ -121,7 +123,7 @@ def _counts(conn):
 def status():
     with connection() as conn:
         counts = _counts(conn)
-        return {'round': ROUND, 'total_limit': 396, 'used': sum(counts.values()), 'used_is_lower_bound': True, 'unknown_budget_reserved': 1,
+        return {'round': ROUND, 'total_limit': 396, 'used': sum(counts[job] for job in ROUND_CAPS), 'used_is_lower_bound': True, 'unknown_budget_reserved': 1,
                 'jobs': {job: {'limit': cap, 'used': None if job == 'calendar_2026' else counts[job],
                                'remaining': None if job == 'calendar_2026' else max(0, cap - counts[job]),
                                'status': 'BUDGET_HISTORY_UNKNOWN' if job == 'calendar_2026' else 'READY'} for job, cap in CAPS.items()}}
@@ -149,7 +151,8 @@ def _check(conn, job, rate_group=None):
         if configured < 0:
             raise ValueError('negative request cap')
         cap = min(cap, configured)
-    if counts[job] >= cap or sum(counts.values()) + 1 >= 396:  # reserve the entire unknown calendar allowance, never count it as zero capacity
+    round_used = sum(counts[name] for name in ROUND_CAPS)
+    if counts[job] >= cap or (job in ROUND_CAPS and round_used + 1 >= 396):  # reserve the entire unknown calendar allowance, never count it as zero capacity
         raise BudgetDenied(f'BUDGET_EXHAUSTED: {job} {counts[job]}/{cap}')
 
 
@@ -202,7 +205,7 @@ def finish(attempt, *, outcome, released_at=None, response=None, error=None):
 
 def response_cooldown(response):
     text = (response.content.decode('utf-8', errors='replace') + response.content.decode('big5', errors='replace')).lower()
-    if response.status_code != 429 and not response.headers.get('Retry-After') and not any(word in text for word in ('captcha', 'too many requests', 'access denied', '查詢過量', '驗證碼', '系統忙碌')):
+    if response.status_code != 429 and not response.headers.get('Retry-After') and not any(word in text for word in ('captcha', 'too many requests', 'access denied', '查詢過量', '驗證碼', '系統忙碌', '安全性考量')):
         return None
     raw = response.headers.get('Retry-After', '')
     now = time.time()

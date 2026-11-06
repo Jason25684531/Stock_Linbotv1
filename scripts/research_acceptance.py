@@ -15,9 +15,9 @@ sys.path.insert(0, str(ROOT))
 from scripts import research_verify_synthetic, research_workflow
 
 # Active changes only: archived ones live in openspec/changes/archive/ and their specs are checked by `openspec validate --specs`.
-CHANGES = ('2026-11-02-hypcost-rank-buffer',)
+CHANGES = ('2026-11-05-h4-web-integration-v1',)
 OUTPUT_ROOT = ROOT / 'outputs/research_repair'
-SYNTHETIC = OUTPUT_ROOT / 'a191_synthetic_20261102_v11'  # v10 code hashes predate the HYP-COST rank-buffer edits to repair_runner/repair_targets
+SYNTHETIC = OUTPUT_ROOT / 'a191_synthetic_20261105_v16'  # v15 code hashes predate the t164sb01 XBRL-viewer allowlist (h4-final-resolution-v1)
 SNAPSHOT_ROOT = ROOT / 'outputs/research_workflow'
 RESEARCH_REPORT = ROOT / 'outputs/research_mode/report_v6/research_track.json'
 OD_P6_FREEZE = '2026-10-30'  # design decision 11: no TWSE Detail probe after this date; one attempt already recorded that day

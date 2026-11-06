@@ -68,7 +68,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body x-data="{}">
-    {% set active = request.endpoint or '' %}
+    {% set active = active_nav or request.endpoint or '' %}
     <div class="min-h-screen">
         <aside id="main-sidebar" class="desktop-sidebar fixed inset-y-0 left-0 z-50 flex flex-col border-r border-line bg-secondary" aria-label="主要導覽">
             <a href="{{ url_for('dashboard') }}" class="flex h-20 items-center gap-3 border-b border-line px-4"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</span><span class="brand-copy text-sm font-bold">STOCK LINBOT<span class="block text-xs text-muted">量化策略平台</span></span></a>

@@ -17,6 +17,23 @@
         <div><p class="mt-1 text-sm text-muted">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="num text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
         <a href="{{ url_for('backtest') }}" class="rounded-md border border-strong px-4 py-2 text-sm text-ink hover:border-strong">重新設定</a>
     </div>
+    {% if research %}{% set r = research %}
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100" data-testid="research-banner">
+        <p class="font-semibold">{{ r.display_name }} · 封存回測結果（未認證研究策略） · {{ r.period_label }}</p>
+        <p class="mt-1">{{ r.disclaimer }}</p>
+        {% if r.slice_note %}<p class="mt-1 text-amber-200">{{ r.slice_note }}</p>{% endif %}
+        <dl class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+            <div><dt class="text-muted">模式</dt><dd>{{ r.mode }}：讀取封存結果，未重新執行回測、未寫入資料庫（{{ r.config_id }}）</dd></div>
+            <div><dt class="text-muted">交易成本</dt><dd>{{ r.cost.basis }}；手續費 {{ r.cost.fee_rate }}、證交稅 {{ r.cost.tax_rate }}、最低手續費 {{ r.cost.minimum_fee }}、滑價 {{ r.cost.slippage }}（stress 軌）</dd></div>
+            <div><dt class="text-muted">Benchmark</dt><dd>{{ r.benchmark.name }}：{{ r.benchmark.definition }}</dd></div>
+            <div><dt class="text-muted">資料來源</dt><dd>{{ r.data_source }}</dd></div>
+            <div><dt class="text-muted">初始資金</dt><dd class="num">{{ '{:,.0f}'.format(r.initial_capital) }} 元（封存 {{ '{:,.0f}'.format(r.archived_capital) }}）· 期末 {{ '{:,.0f}'.format(r.end_value) }} 元{% for label in r.labels %} · <span class="text-amber-300">{{ label }}</span>{% endfor %}</dd></div>
+            <div><dt class="text-muted">封存完整性</dt><dd>{{ r.integrity.status }}：{{ r.integrity.files }} 個檔案 SHA256 與快照 manifest 相符（快照 {{ r.integrity.snapshot_created_at }}）</dd></div>
+        </dl>
+        {% if 'ILLUSTRATIVE_LINEAR' in r.labels %}<p class="mt-2 text-xs text-amber-300">ILLUSTRATIVE_LINEAR：金額由 1,000,000 元封存結果線性換算；整股捨入、最低手續費、滑價與成交量限制不隨資金線性變化。</p>{% endif %}
+        {% if 'CAPACITY_WARNING' in r.labels %}<p class="mt-1 text-xs text-amber-300">CAPACITY_WARNING：資金超過封存流動性分析的 {{ r.capacity_multiple|round(2) }} 倍（p90 成交量 5% ADV），實際成交可能明顯不同。</p>{% endif %}
+    </section>
+    {% endif %}
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="metric-card">{% set total_return = metrics.total_return.value if metrics.total_return.value is defined else metrics.total_return %}<div class="metric-label">總報酬</div><div class="mt-2 num text-2xl font-semibold {{ 'text-up' if total_return is number and total_return > 0 else 'text-down' if total_return is number and total_return < 0 else 'text-ink' }}">{{ metric(metrics.total_return, '%') }}</div></div>
             <div class="metric-card"><div class="metric-label">MDD</div><div class="mt-2 num text-2xl font-semibold text-white">{{ metric(metrics.max_drawdown, '%') }}</div></div>
@@ -25,6 +42,7 @@
         </div>
     <nav role="tablist" @keydown.arrow-right.prevent="moveTab($event, 1)" @keydown.arrow-left.prevent="moveTab($event, -1)" class="flex flex-wrap gap-2 border-b border-line pb-3" aria-label="回測結果分頁">
         {% for key, label in [('overview', '總覽'), ('equity', '資產曲線'), ('drawdown', '回撤'), ('monthly', '月報酬') ] %}<button type="button" role="tab" :aria-selected="tab === '{{ key }}'" :tabindex="tab === '{{ key }}' ? 0 : -1" id="tab-{{ key }}" aria-controls="panel-{{ key }}" class="min-h-[44px] rounded-md px-3 py-2 text-xs" :class="tab === '{{ key }}' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='{{ key }}'">{{ label }}</button>{% endfor %}
+        {% if research %}<button type="button" role="tab" :aria-selected="tab === 'research'" :tabindex="tab === 'research' ? 0 : -1" id="tab-research" aria-controls="panel-research" class="min-h-[44px] rounded-md px-3 py-2 text-xs" :class="tab === 'research' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='research'">研究驗證</button>{% endif %}
         {% if trades %}<button type="button" role="tab" :aria-selected="tab === 'trades'" :tabindex="tab === 'trades' ? 0 : -1" id="tab-trades" aria-controls="panel-trades" class="min-h-[44px] rounded-md px-3 py-2 text-xs" :class="tab === 'trades' ? 'bg-blue-500/15 text-blue-300' : 'text-muted hover:bg-secondary'" @click="tab='trades'">交易筆數</button>{% endif %}
     </nav>
     <section role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" x-show="tab === 'overview'" x-cloak data-testid="backtest-overview">
@@ -37,7 +55,48 @@
     <section role="tabpanel" id="panel-equity" aria-labelledby="tab-equity" x-show="tab === 'equity'" x-cloak class="quant-card p-4" data-testid="equity-section"><div id="equity-chart" class="min-h-[360px]"></div></section>
     <section role="tabpanel" id="panel-drawdown" aria-labelledby="tab-drawdown" x-show="tab === 'drawdown'" x-cloak class="quant-card p-4" data-testid="drawdown-section"><div id="drawdown-chart" class="min-h-[360px]"></div></section>
     <section role="tabpanel" id="panel-monthly" aria-labelledby="tab-monthly" x-show="tab === 'monthly'" x-cloak class="quant-card p-4" data-testid="monthly-section"><div id="monthly-chart" class="min-h-[360px]"></div></section>
-    {% if trades %}<section role="tabpanel" id="panel-trades" aria-labelledby="tab-trades" x-show="tab === 'trades'" x-cloak class="quant-card overflow-x-auto p-4" data-testid="trades-section"><h2 class="mb-3 text-base font-semibold text-white">本次交易紀錄</h2><table class="min-w-[760px] w-full text-sm"><thead class="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th class="px-3 py-2 text-left">日期</th><th class="px-3 py-2 text-left">股票</th><th class="px-3 py-2 text-left">方向</th><th class="px-3 py-2 text-right">價格</th><th class="px-3 py-2 text-right">數量</th></tr></thead><tbody class="divide-y divide-line">{% for trade in trades %}<tr><td class="px-3 py-2">{{ trade.get('date', trade.get('trade_date', '資料不可用')) }}</td><td class="px-3 py-2">{{ trade.get('stock_id', '資料不可用') }}</td><td class="px-3 py-2">{{ trade.get('action', trade.get('side', '資料不可用')) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('price', trade.get('entry_price'))) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('shares', trade.get('quantity'))) }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+    {% if research %}{% set r = research %}{% set am = r.archived_metrics %}{% set gv = r.gate_values %}
+    <section role="tabpanel" id="panel-research" aria-labelledby="tab-research" x-show="tab === 'research'" x-cloak class="grid gap-4 lg:grid-cols-2" style="overflow-wrap:anywhere" data-testid="research-section">
+        <div class="quant-card overflow-x-auto p-4"><h2 class="mb-3 text-base font-semibold text-white">市場比較 · {{ r.period_label }}</h2>
+            <table class="w-full text-sm"><tbody class="divide-y divide-line">
+                <tr><td class="py-2">H4（2x 成本）</td><td class="num py-2 text-right">{{ metric(metrics.total_return, '%') }}</td></tr>
+                <tr><td class="py-2">Benchmark V2（等權含息）</td><td class="num py-2 text-right">{{ metric(r.benchmark_return, '%') }}</td></tr>
+                <tr><td class="py-2">市值加權含息大盤</td><td class="num py-2 text-right">{{ metric(r.market_cap_weighted) }}</td></tr>
+            </tbody></table></div>
+        <div class="quant-card overflow-x-auto p-4"><h2 class="mb-3 text-base font-semibold text-white">全期風險指標（2023～2025 封存）</h2>
+            <table class="w-full text-sm"><tbody class="divide-y divide-line">
+                <tr><td class="py-2">CAGR</td><td class="num py-2 text-right">{{ (am.cagr_2x * 100)|round(2) }}%</td></tr>
+                <tr><td class="py-2">Sharpe</td><td class="num py-2 text-right">{{ am.sharpe_2x|round(3) }}</td></tr>
+                <tr><td class="py-2">最大回撤</td><td class="num py-2 text-right">{{ (am.max_drawdown_2x * 100)|round(2) }}%</td></tr>
+                <tr><td class="py-2">年化換手率</td><td class="num py-2 text-right">{{ am.turnover_2x|round(2) }}</td></tr>
+                <tr><td class="py-2">1x 成本總報酬（敏感度）</td><td class="num py-2 text-right">{{ (am.total_return_1x * 100)|round(2) }}%</td></tr>
+                <tr><td class="py-2">年化 alpha · beta</td><td class="num py-2 text-right">{{ (am.alpha_annual * 100)|round(2) }}% · {{ am.beta|round(3) }}</td></tr>
+            </tbody></table></div>
+        <div class="quant-card overflow-x-auto p-4"><h2 class="mb-3 text-base font-semibold text-white">年度績效</h2>
+            <table class="w-full text-sm"><thead class="text-xs text-muted"><tr><th class="py-2 text-left">年度</th><th class="py-2 text-right">H4</th><th class="py-2 text-right">Benchmark V2</th></tr></thead><tbody class="divide-y divide-line">
+                {% for year, row in r.yearly.items() %}<tr><td class="py-2">{{ year }}</td><td class="num py-2 text-right">{{ (row.strategy * 100)|round(2) }}%</td><td class="num py-2 text-right">{{ (row.benchmark_v2 * 100)|round(2) }}%</td></tr>{% endfor %}
+            </tbody></table></div>
+        <div class="quant-card overflow-x-auto p-4"><h2 class="mb-3 text-base font-semibold text-white">策略驗證 r1～r5（{{ r.validation.certification }}）</h2>
+            <table class="w-full text-sm"><tbody class="divide-y divide-line">
+                <tr><td class="py-2">r1 淨 Sharpe／超額 Sharpe</td><td class="py-2 text-right">{{ r.validation.gates.r1 }} · {{ gv.net_sharpe_2x|round(3) }}／{{ gv.excess_sharpe_2x|round(3) }}</td></tr>
+                <tr><td class="py-2">r2 Bootstrap 下界</td><td class="py-2 text-right">{{ r.validation.gates.r2 }} · {{ gv.bootstrap_lower|round(3) }}</td></tr>
+                <tr><td class="py-2">r3 DSR（{{ r.dsr_trials }} 次試驗）</td><td class="py-2 text-right">{{ r.validation.gates.r3 }} · {{ gv.deflated_sharpe|round(4) }}</td></tr>
+                <tr><td class="py-2">r4 前 5 檔淨利占比／最佳 5% 交易日占比</td><td class="py-2 text-right">{{ r.validation.gates.r4 }} · {{ (gv.top5_assets_profit_share * 100)|round(1) }}%／{{ (gv.best5pct_days_return_share * 100)|round(1) }}%</td></tr>
+                <tr><td class="py-2">r5 多空頭年化超額</td><td class="py-2 text-right">{{ r.validation.gates.r5 }} · 多頭 {{ (gv.regime.bull.annualized_excess * 100)|round(1) }}%／空頭 {{ (gv.regime.bear.annualized_excess * 100)|round(1) }}%</td></tr>
+                <tr><td class="py-2">研究建議／原始登記</td><td class="py-2 text-right">{{ r.validation.research_advice }}／{{ r.validation.registration_decision }}（非認證）</td></tr>
+            </tbody></table></div>
+        <div class="quant-card overflow-x-auto p-4"><h2 class="mb-3 text-base font-semibold text-white">獲利來源集中度</h2>
+            <p class="text-xs text-muted">前 5 檔占淨利 {{ (r.concentration.top5_share_of_net * 100)|round(1) }}% · 最佳 5% 交易日占報酬 {{ (r.concentration.best5pct_days_return_share * 100)|round(1) }}% · 持有過 {{ r.concentration.held }} 檔</p>
+            <table class="mt-2 w-full text-sm"><thead class="text-xs text-muted"><tr><th class="py-2 text-left">貢獻前 5 檔</th><th class="py-2 text-right">淨損益（元）</th><th class="py-2 text-left pl-4">拖累前 5 檔</th><th class="py-2 text-right">淨損益（元）</th></tr></thead><tbody class="divide-y divide-line">
+                {% for top in r.concentration.top5 %}{% set bottom = r.concentration.bottom5[loop.index0] %}<tr><td class="py-2"><a class="text-blue-300" href="/stock-analysis?id={{ top.stock }}">{{ top.stock }}</a></td><td class="num py-2 text-right">{{ '{:,.0f}'.format(top.net_pnl) }}</td><td class="py-2 pl-4"><a class="text-blue-300" href="/stock-analysis?id={{ bottom.stock }}">{{ bottom.stock }}</a></td><td class="num py-2 text-right">{{ '{:,.0f}'.format(bottom.net_pnl) }}</td></tr>{% endfor %}
+            </tbody></table>
+            <p class="mt-2 text-xs text-muted">年度貢獻：{% for year, value in r.concentration.yearly_strategy_return.items() %}{{ year }} {{ (value * 100)|round(1) }}%{% if not loop.last %} · {% endif %}{% endfor %}</p></div>
+        <div class="quant-card overflow-x-auto p-4"><h2 class="mb-3 text-base font-semibold text-white">交易成本（本期間，封存資金）</h2>
+            <p class="text-sm">成交 {{ r.trading_cost.fills }} 筆 · 手續費 {{ '{:,.0f}'.format(r.trading_cost.fees) }} 元 · 證交稅 {{ '{:,.0f}'.format(r.trading_cost.taxes) }} 元</p>
+            <p class="mt-1 text-xs text-muted">滑價已含於成交價。以 1,000,000 元封存資金計；換算金額時乘以 {{ r.trading_cost.scaled_by|round(4) }}（示意）。</p></div>
+    </section>
+    {% endif %}
+    {% if trades %}<section role="tabpanel" id="panel-trades" aria-labelledby="tab-trades" x-show="tab === 'trades'" x-cloak class="quant-card overflow-x-auto p-4" data-testid="trades-section"><h2 class="mb-3 text-base font-semibold text-white">本次交易紀錄</h2><table class="min-w-[760px] w-full text-sm"><thead class="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th class="px-3 py-2 text-left">日期</th><th class="px-3 py-2 text-left">股票</th><th class="px-3 py-2 text-left">方向</th><th class="px-3 py-2 text-right">價格</th><th class="px-3 py-2 text-right">數量</th>{% if research %}<th class="px-3 py-2 text-right">手續費</th><th class="px-3 py-2 text-right">證交稅</th>{% endif %}</tr></thead><tbody class="divide-y divide-line">{% for trade in trades %}<tr><td class="px-3 py-2">{{ trade.get('date', trade.get('trade_date', '資料不可用')) }}</td><td class="px-3 py-2">{{ trade.get('stock_id', '資料不可用') }}</td><td class="px-3 py-2">{{ trade.get('action', trade.get('side', '資料不可用')) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('price', trade.get('entry_price'))) }}</td><td class="num px-3 py-2 text-right">{{ metric(trade.get('shares', trade.get('quantity'))) }}</td>{% if research %}<td class="num px-3 py-2 text-right">{{ trade.fee|round|int }}</td><td class="num px-3 py-2 text-right">{{ trade.tax|round|int }}</td>{% endif %}</tr>{% endfor %}</tbody></table></section>{% endif %}
 </div>
 
 <script>

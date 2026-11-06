@@ -10,12 +10,12 @@ from scripts import research_workflow as workflow
 from scripts import track_b_stats as stats
 
 
-def screen(result, *, trial_sharpe_variance, registry=workflow.REGISTRY, research_ledger=workflow.RESEARCH_MODE_LEDGER):
+def screen(result, *, trial_sharpe_variance, registry=workflow.REGISTRY, research_ledger=workflow.RESEARCH_MODE_LEDGER, version='V1'):
     """Apply the registered OD-24 mathematics to a complete development result only."""
     if workflow.verify_registry(registry) != 'PASS':
         raise ValueError('REGISTRY_UNVERIFIED')
     with Path(registry).open(encoding='utf-8-sig', newline='') as stream:
-        expected = screen_registration()
+        expected = screen_registration(version)
         matches = [row for row in csv.DictReader(stream) if row['hypothesis_id'] == expected['hypothesis_id']]
     if len(matches) != 1 or any(matches[0][k] != v for k, v in expected.items()):
         raise ValueError('REGISTRY_UNVERIFIED')

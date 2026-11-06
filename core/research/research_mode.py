@@ -93,8 +93,8 @@ def assumptions_sha(assumptions=RESEARCH_ASSUMPTIONS_V3):
     return hashlib.sha256(encoded).hexdigest()
 
 
-def screen_registration():
-    return {
+def screen_registration(version='V1'):
+    v1 = {
         'hypothesis_id': 'RESEARCH-SCREEN:V1',
         'strategy': 'ALL',
         'hypothesis': 'Diagnostic candidates meet all five preregistered OD-24 screening criteria under research assumptions.',
@@ -103,6 +103,18 @@ def screen_registration():
         'trial_budget': '12 (registry metadata only; research ledger counts every admitted configuration)',
         'source': 'dual-track-research-mode / RESEARCH-SCREEN:V1',
     }
+    if version == 'V1':
+        return v1
+    if version != 'V2':
+        raise KeyError(version)
+    from pathlib import Path
+    module = Path(__file__).with_name('benchmark_v2.py')
+    return {**v1, 'hypothesis_id': 'RESEARCH-SCREEN:V2',
+            'hypothesis': v1['hypothesis'] + ' Market proxy V2: V1 membership and daily equal weight on raw bars; cash and stock dividends'
+                          ' credited on the ex-date; reference-change and unresolved event stock-days dropped and counted; primary proxy'
+                          ' carries no transaction cost (benchmark_cost=NONE). benchmark_v2.py sha256 '
+                          + hashlib.sha256(module.read_bytes()).hexdigest(),
+            'source': '2026-11-03-research-validation-execution-v1 / RESEARCH-SCREEN:V2'}
 
 
 def assumptions_registration(version='V1'):

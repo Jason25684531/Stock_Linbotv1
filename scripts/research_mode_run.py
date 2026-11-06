@@ -27,6 +27,12 @@ FAMILIES = {
     'd5': {'prepared': RESEARCH / 'prepared_v6', 'signals': RESEARCH / 'd5_signals_v5', 'output': RESEARCH / 'd5_runs_v5',
            'grid': ROOT / 'outputs/portfolio_research/d5_portfolio_research_20260814_v1/parameter_grid.csv',
            'count': 48, 'assumptions': D5_RESEARCH_ASSUMPTIONS_V5, 'evidence_kind': 'D5_RESEARCH_PIT_REPRODUCIBLE_V1'},
+    'h1': {'prepared': RESEARCH / 'prepared_v6', 'signals': RESEARCH / 'h1_signals_v1', 'output': RESEARCH / 'h1_runs_v1',
+           'grid': ROOT / 'outputs/strategy_research/h1_near_high_252d_v1/strategy_grid.csv',
+           'count': 12, 'assumptions': RESEARCH_ASSUMPTIONS_V6, 'evidence_kind': 'H1_RAW_REPRODUCIBLE_V1'},
+    'h4': {'prepared': RESEARCH / 'prepared_v6', 'signals': RESEARCH / 'h4_signals_v1', 'output': RESEARCH / 'h4_runs_v1',
+           'grid': ROOT / 'outputs/strategy_research/h4_growth_momentum_v1/strategy_grid.csv',
+           'count': 12, 'assumptions': RESEARCH_ASSUMPTIONS_V6, 'evidence_kind': 'H4_RAW_REPRODUCIBLE_V1'},
 }
 COSTS = {'initial_cash': 1_000_000, 'fee_rate': .001425, 'tax_rate': .003, 'minimum_fee': 20, 'slippage': .001}
 
@@ -35,13 +41,13 @@ def configs(family, prepared, signals, evidence):
     spec = FAMILIES[family]
     manifest = json.loads((signals / 'signals_manifest.json').read_text(encoding='utf-8'))
     grid = pd.read_csv(spec['grid'])
-    key = 'strategy_id' if family == 'day3' else 'config_id'
+    key = 'config_id' if family == 'd5' else 'strategy_id'
     if len(grid) != spec['count'] or grid[key].duplicated().any():
         raise ValueError('ARCHIVED_GRID_COUNT_MISMATCH')
     sha = assumptions_sha(spec['assumptions'])
     for row in grid.to_dict('records'):
         cadence = int(row['rebalance_days'])
-        if family == 'day3':
+        if family != 'd5':
             index = manifest['composites'].index(row['composite_id'])
             identity = {'strategy': row['factor_set'], 'config_id': row['strategy_id'], 'composite_id': row['composite_id'],
                         'stock_weighting': row['portfolio_weighting']}
