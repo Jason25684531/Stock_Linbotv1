@@ -17,6 +17,7 @@
         <div><p class="mt-1 text-sm text-muted">{{ start_date }} → {{ end_date }} · {% for strategy in selected_strategies %}<span class="num text-blue-300">{{ strategy }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p></div>
         <a href="{{ url_for('backtest') }}" class="rounded-md border border-strong px-4 py-2 text-sm text-ink hover:border-strong">重新設定</a>
     </div>
+    {% if save_status == 'SAVED' %}<p class="rounded border border-blue-500/30 p-3 text-sm" data-testid="save-status">已永久保存 Run ID <a class="num text-blue-300" href="{{ url_for('backtest_run_detail', run_id=run_id) }}">{{ run_id }}</a> (EXPERIMENTAL, 非認證)</p>{% elif save_status == 'SAVE_FAILED' %}<p class="rounded border border-red-500/50 p-3 text-sm text-red-300" data-testid="save-status">SAVE_FAILED ({{ save_error }}): 本次結果未永久保存，僅為暫時顯示；上一份成功紀錄未變</p>{% endif %}
     {% if research %}{% set r = research %}
     <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100" data-testid="research-banner">
         <p class="font-semibold">{{ r.display_name }} · 封存回測結果（未認證研究策略） · {{ r.period_label }}</p>

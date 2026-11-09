@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
 from core import db_helper
+from core.backtest import run_store
 from core.runtime import fundamental_production
 from . import app, research_payloads, services
 
@@ -109,6 +110,60 @@ def dashboard():
 
 
 FUNDAMENTAL_STRATEGY_ID = 'fundamental_g2g3_top5_reb60_score_weighted_v1'
+# Real rules of the seven legacy strategies (core/strategies/*, config/settings.py), shown next to the user-facing name.
+LEGACY_FACTORS = {
+    'hybrid_trend_rank': '收盤>MA20>MA60、成交量>300萬、RSI 40-70、KD 濾網；AI 模型不可用，回測為 rules-only',
+    'defensive_low_volatility': '均線多頭、NATR<3.5、RSI 45-65、MACD 柱>-0.2、乖離 -6~12，依 20 日標準差排序',
+    'growth_momentum_breakout': '月營收 YoY>18%、接近 60 日高點、量比>0.9；月營收無公告時間',
+    'quality_growth': '營益率>6%、營收 YoY>0、EPS>0、收盤>MA60；月營收無公告時間',
+    'institutional_flow_confirmation': '籌碼分數>=55、外資或投信連買、量比>=0.8、RSI 40-80、乖離<15',
+    'mean_reversion': '收盤>MA60、KD<35、布林寬度<15、乖離 -8~3、量比<1、RSI 30-55',
+    'quality_value_low_volatility': '營益率>=8%、EPS>0、NATR<4、20 日標準差<3、RSI 40-65；不含殖利率因子',
+}
+LEGACY_SUMMARY = Path(__file__).resolve().parents[1] / 'outputs/research_mode/legacy_validation_v1/summary.json'
+LEGACY_RECOVERY = LEGACY_SUMMARY.parent.parent / 'legacy_od29_recovery_v1'
+LEGACY_ITEMS = LEGACY_SUMMARY.parent.parent / 'combination_lab_v1/items'
+
+
+def _legacy_status(strategy_id):
+    """Gate result and data health from the governed baseline summary; NOT_TESTED until it exists."""
+    try:
+        row = json.loads(LEGACY_SUMMARY.read_text(encoding='utf-8')).get(strategy_id, {})
+    except (OSError, ValueError):
+        row = {}
+    def verified_result(path, expected_item):
+        if not path.is_file():
+            return None
+        try:
+            evidence = json.loads(path.read_text(encoding='utf-8'))
+            run_id = evidence.get('run_id') or evidence.get('failure_run_id')
+            if not run_id:
+                return {'status': 'UNVERIFIED', 'reason': evidence.get('save_status') or '回測紀錄未保存'}
+            loaded = run_store.load_run(run_id)
+            run = loaded['run']
+            if strategy_id not in (run.get('strategy_ids') or [run.get('strategy_id')]):
+                raise ValueError('strategy mismatch')
+            if not evidence.get('experiment_id') or run.get('item_id') != expected_item or run.get('trial_id') != evidence['experiment_id']:
+                raise ValueError('run identity mismatch')
+            metrics = run_store.read_frame(loaded, 'metrics') if run['status'] == 'SUCCESS' else {}
+            error = run_store.read_frame(loaded, 'error') if run['status'] == 'FAILED' else {}
+            return {'run_id': run_id, 'status': run['status'], 'created_at': run.get('created_at'),
+                    'gates': (metrics.get('gates_comparison') or {}).get('gates'),
+                    'pit_status': (metrics.get('checks') or {}).get('pit_status'),
+                    'valuation': {name: (track.get('quality') or {}).get('status') for name, track in
+                                  ((metrics.get('checks') or {}).get('valuation') or {}).items()},
+                    'reason': error.get('message')}
+        except (OSError, ValueError, KeyError):
+            return {'status': 'UNVERIFIED', 'reason': '回測紀錄或 SHA256 驗證失敗'}
+
+    return {'gate_result': row.get('gate_result', 'NOT_TESTED'), 'data_health': row.get('data_health', '基準回測尚未執行'),
+            'recommendation': row.get('recommendation', 'NOT_EVALUATED'), 'model_status': 'MODEL_BLOCKED（rules-only）',
+            'original_baseline': verified_result(LEGACY_ITEMS / f'LEGACY_{strategy_id}.json', f'LEGACY:{strategy_id}'),
+            'recovery_baseline': verified_result(LEGACY_RECOVERY / f'{strategy_id}.json', f'OD29:{strategy_id}')}
+
+
+def _run_summary(run):
+    return {key: run.get(key) for key in ('run_id', 'status_class', 'created_at', 'period')} if run else None
 
 
 def _build_strategy_catalog() -> list[dict[str, object]]:
@@ -149,7 +204,7 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
             {
                 'strategy_id': strategy_id,
                 'name': strategy_id,
-                'display_name': getattr(strategy, 'display_name', metadata.display_name_en),
+                'display_name': metadata.display_name_zh or getattr(strategy, 'display_name', metadata.display_name_en),
                 'display_name_en': metadata.display_name_en,
                 'display_name_zh': metadata.display_name_zh,
                 'type': info.get('type', ''),
@@ -174,6 +229,10 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
                     load_error.get('code', 'EXECUTOR_UNAVAILABLE') if not has_executor else 'BACKTEST_IDENTITY_UNSUPPORTED'),
                 'reason': None,
                 'active': strategy_id in active,
+                'factor_summary': LEGACY_FACTORS.get(strategy_id),
+                **(_legacy_status(strategy_id) if strategy_id in LEGACY_FACTORS else {}),
+                'latest_successful_run': _run_summary(run_store.latest(strategy_id)),
+                'latest_reference_run': _run_summary(run_store.latest(strategy_id, 'reference')),
             }
         )
 
@@ -317,7 +376,8 @@ def update_strategy():
         if success:
             if len(selected_strategies) == 1:
                 strategy_obj = services.strategy_manager.get_active_strategy()
-                flash(f'✅ 已切換至 {strategy_obj.display_name}', 'success')
+                metadata = services.StrategyManager.STRATEGY_METADATA.get(services.strategy_manager.resolve(selected_strategies[0]))
+                flash(f'✅ 已切換至 {metadata.display_name_zh if metadata else strategy_obj.display_name}', 'success')
             else:
                 flash(f'✅ 已啟用 {len(selected_strategies)} 個策略', 'success')
             print(f'[Strategy] 切換至: {selected_strategies}')
@@ -1549,6 +1609,9 @@ def backtest():
             selected_strategies=selected_strategies,
             start_date=start_date,
             end_date=end_date,
+            run_id=result.get('run_id'),
+            save_status=result.get('save_status'),
+            save_error=result.get('save_error'),
         )
     except Exception as exc:
         traceback.print_exc()
@@ -1585,6 +1648,8 @@ def api_run_backtest():
             {
                 'success': True,
                 'persisted': persist_to_db,
+                **({'run_id': result['run_id']} if result.get('run_id') else {}),
+                'save_status': result.get('save_status'),
                 'data': {
                     'metrics': result['metrics'],
                     'strategy_performance': result['strategy_performance'],

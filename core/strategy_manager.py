@@ -84,13 +84,13 @@ class StrategyManager:
     }
 
     STRATEGY_METADATA = {
-        'hybrid_trend_rank': StrategyMetadata('hybrid_trend_rank', ('v31', 'v31_hybrid'), '混合趨勢排名策略', 'Hybrid Trend Rank', 'trend'),
-        'defensive_low_volatility': StrategyMetadata('defensive_low_volatility', ('v33', 'v33_low_vol'), '防禦型低波動策略', 'Defensive Low Volatility', 'defensive'),
-        'growth_momentum_breakout': StrategyMetadata('growth_momentum_breakout', ('v34', 'v34_turbo'), '成長動能突破策略', 'Growth Momentum Breakout', 'growth'),
-        'quality_growth': StrategyMetadata('quality_growth', ('v35', 'v35_innovation'), '品質成長策略', 'Quality Growth', 'quality'),
-        'institutional_flow_confirmation': StrategyMetadata('institutional_flow_confirmation', ('v36', 'v36_chip_momentum'), '法人資金流確認策略', 'Institutional Flow Confirmation', 'flow'),
-        'mean_reversion': StrategyMetadata('mean_reversion', ('v37', 'v37_mean_reversion'), '均值回歸策略', 'Mean Reversion', 'reversion'),
-        'quality_value_low_volatility': StrategyMetadata('quality_value_low_volatility', ('v38', 'v38_value_dividend'), '品質價值低波動策略', 'Quality Value Low Volatility', 'value'),
+        'hybrid_trend_rank': StrategyMetadata('hybrid_trend_rank', ('v31', 'v31_hybrid'), '趨勢混合選股', 'Hybrid Trend Rank', 'trend'),
+        'defensive_low_volatility': StrategyMetadata('defensive_low_volatility', ('v33', 'v33_low_vol'), '低波動選股', 'Defensive Low Volatility', 'defensive'),
+        'growth_momentum_breakout': StrategyMetadata('growth_momentum_breakout', ('v34', 'v34_turbo'), '雙渦輪成長', 'Growth Momentum Breakout', 'growth'),
+        'quality_growth': StrategyMetadata('quality_growth', ('v35', 'v35_innovation'), '經營效益', 'Quality Growth', 'quality'),
+        'institutional_flow_confirmation': StrategyMetadata('institutional_flow_confirmation', ('v36', 'v36_chip_momentum'), '籌碼動能', 'Institutional Flow Confirmation', 'flow'),
+        'mean_reversion': StrategyMetadata('mean_reversion', ('v37', 'v37_mean_reversion'), '均值回歸', 'Mean Reversion', 'reversion'),
+        'quality_value_low_volatility': StrategyMetadata('quality_value_low_volatility', ('v38', 'v38_value_dividend'), '品質價值低波動', 'Quality Value Low Volatility', 'value'),
         'macd_cross': StrategyMetadata('macd_cross', (), 'MACD 黃金交叉', 'MACD Cross', 'trend', 'tquant', 'TQ_MACD交易策略.ipynb'),
         'kd_oversold': StrategyMetadata('kd_oversold', (), 'KD 超賣', 'KD Oversold', 'reversion', 'tquant', 'TQ_KD指標回測實戰.ipynb'),
         'mad_distance': StrategyMetadata('mad_distance', (), 'MAD 均線距離', 'Moving Average Distance', 'trend', 'tquant', 'TQ_MAD_移動均線距離策略.ipynb'),

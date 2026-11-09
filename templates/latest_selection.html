@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}最新研究選股 - Stock Linbot{% endblock %}
+{% block page_kicker %}研究{% endblock %}
+{% block page_heading %}最新研究選股{% endblock %}
+{% block content %}
+<div class="space-y-5" data-testid="latest-selection" x-data="{ sid: '', reply: null, async load() { if (!this.sid) return; const r = await fetch('/api/selection/latest?strategy=' + encodeURIComponent(this.sid)); this.reply = await r.json(); } }">
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100" data-testid="latest-disabled">
+        <p class="font-semibold">LATEST_SIGNAL_DISABLED</p>
+        <p class="mt-1">研究型最新選股需要 Owner 的前瞻研究授權、PIT 合格的最新資料 provider；最新資料屬於 2026 封存期，研究模組不得讀取。因此本頁不顯示任何名單。</p>
+        <p class="mt-1">四條流程彼此分開：市場資料庫每日更新、既有正式每日推薦（<a class="text-blue-300" href="{{ url_for('dashboard') }}">總覽</a>，流程未變）、H4／Lab 研究型最新選股（本頁，停用）、2026 sealed OOS（拒絕）。</p>
+    </section>
+    <section class="quant-card min-w-0 space-y-3 break-words p-4 text-sm">
+        <label>策略或組合 <select x-model="sid" @change="load()" class="mt-1 block w-full max-w-full rounded border border-strong bg-secondary px-2 py-1"><option value="">選擇</option>
+            {% for sid, name in options %}<option value="{{ sid }}">{{ name }}（{{ sid }}）</option>{% endfor %}</select></label>
+        <template x-if="reply"><div class="text-xs"><p x-text="'狀態：' + reply.status"></p><p x-text="'缺少：' + (reply.missing || []).join('、')"></p></div></template>
+        <p class="text-xs text-muted">開放後會顯示的欄位：{{ fields|join('、') }}。目前狀態：{{ state.status }}（{{ state.reason }}）。</p>
+    </section>
+</div>
+{% endblock %}

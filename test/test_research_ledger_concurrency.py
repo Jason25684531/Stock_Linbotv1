@@ -18,11 +18,11 @@ def _write(writer, registry, ledger, source):
                                     {'input': source}, '2025-12-31', registry=registry, ledger=ledger)
 
 
-def _read(ledger, formal, errors):
+def _read(ledger, formal, expected, errors):
     for _ in range(READS):
         try:
             workflow.research_trials(ledger)
-            assert workflow.effective_trials(formal) == 743
+            assert workflow.effective_trials(formal) == expected
         except Exception as exc:  # any reader failure is the race this test exists for
             errors.put(f'{type(exc).__name__}: {exc}')
 
@@ -40,10 +40,11 @@ def _setup(tmp_path):
 def test_concurrent_admits_and_reads_keep_the_chain(tmp_path):
     registry, ledger, formal, source = _setup(tmp_path)
     formal_sha = hashlib.sha256(formal.read_bytes()).hexdigest()
+    expected = workflow.effective_trials(formal)  # the copied formal count; its value grows with real registered trials
     context = mp.get_context('spawn')
     errors = context.Queue()
     procs = [context.Process(target=_write, args=(w, str(registry), str(ledger), str(source))) for w in range(WRITERS)]
-    procs += [context.Process(target=_read, args=(str(ledger), str(formal), errors)) for _ in range(READERS)]
+    procs += [context.Process(target=_read, args=(str(ledger), str(formal), expected, errors)) for _ in range(READERS)]
     for p in procs:
         p.start()
     for p in procs:
@@ -55,7 +56,7 @@ def test_concurrent_admits_and_reads_keep_the_chain(tmp_path):
     assert found == []
     assert workflow.verify_trials(ledger) == 'PASS'
     assert workflow.research_trials(ledger) == WRITERS * PER_WRITER
-    assert workflow.effective_trials(formal) == 743
+    assert workflow.effective_trials(formal) == expected
     assert hashlib.sha256(formal.read_bytes()).hexdigest() == formal_sha  # the formal copy is never written
 
 

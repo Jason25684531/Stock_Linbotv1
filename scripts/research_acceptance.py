@@ -15,9 +15,9 @@ sys.path.insert(0, str(ROOT))
 from scripts import research_verify_synthetic, research_workflow
 
 # Active changes only: archived ones live in openspec/changes/archive/ and their specs are checked by `openspec validate --specs`.
-CHANGES = ('2026-11-05-h4-web-integration-v1',)
+CHANGES = ('2026-11-05-h4-web-integration-v1', '2026-11-06-multi-strategy-validation-and-composite-v1')
 OUTPUT_ROOT = ROOT / 'outputs/research_repair'
-SYNTHETIC = OUTPUT_ROOT / 'a191_synthetic_20261105_v16'  # v15 code hashes predate the t164sb01 XBRL-viewer allowlist (h4-final-resolution-v1)
+SYNTHETIC = OUTPUT_ROOT / 'a191_synthetic_20261106_v17'  # v16 code hashes predate the display-name change in core/strategy_manager.py (2026-11-06-msv)
 SNAPSHOT_ROOT = ROOT / 'outputs/research_workflow'
 RESEARCH_REPORT = ROOT / 'outputs/research_mode/report_v6/research_track.json'
 OD_P6_FREEZE = '2026-10-30'  # design decision 11: no TWSE Detail probe after this date; one attempt already recorded that day

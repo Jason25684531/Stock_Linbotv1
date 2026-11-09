@@ -78,6 +78,13 @@ def _isolate_strategy_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(StrategyManager, '_instance', None)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_backtest_runs(monkeypatch, tmp_path):
+    """Web backtests save runs; tests write them to tmp, never to outputs/backtest_runs."""
+    from core.backtest import run_store
+    monkeypatch.setattr(run_store, 'ROOT', tmp_path / 'backtest_runs')
+
+
 @pytest.fixture
 def manager():
     """每次測試前重設 StrategyManager Singleton，確保測試隔離"""

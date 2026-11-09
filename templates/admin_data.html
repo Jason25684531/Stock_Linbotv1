@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}資料管理 - Stock Linbot{% endblock %}
+{% block page_kicker %}系統{% endblock %}
+{% block page_heading %}市場資料管理{% endblock %}
+{% block content %}
+<div class="space-y-5" data-testid="admin-data">
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100">
+        <p>本頁只更新市場資料庫，不呼叫正式每日推薦、LINE 或券商；研究模組仍不能讀取 2026 封存資料。</p>
+        <p class="mt-1">管理介面僅適用本機或內網；沒有 HTTPS 與反向代理保護時，不符合公開網際網路上線的安全要求。</p>
+        {% if not admin_enabled %}<p class="mt-1 font-semibold text-amber-300" data-testid="auth-blocked">{{ admin_reason }}（頁面唯讀）</p>{% endif %}
+    </section>
+    {% if view == 'login' %}
+    <form method="post" action="{{ url_for('admin_login') }}" class="quant-card max-w-md space-y-3 p-5 text-sm" data-testid="admin-login">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="block">管理員 token<input type="password" name="token" autocomplete="current-password" class="mt-1 block w-full rounded border border-strong bg-secondary px-3 py-2"></label>
+        <button class="rounded bg-blue-600 px-4 py-2 text-white" {% if not admin_enabled %}disabled{% endif %}>登入</button>
+        <p class="text-xs text-muted">15 分鐘內失敗 5 次會暫停登入；session 30 分鐘逾時。</p>
+    </form>
+    {% else %}
+    <section class="quant-card grid gap-3 p-4 text-sm sm:grid-cols-2" data-testid="data-status">
+        <div>最新交易日：<span class="num">{{ status.latest_trade_date or '未知' }}</span></div>
+        <div>最近更新：<span class="num">{{ (status.last_update or {}).update_id or '無紀錄' }}</span> {{ (status.last_update or {}).status or '' }}</div>
+        <div>排程狀態：<strong data-testid="scheduler-state">{{ status.scheduler_state }}</strong></div>
+        <div>每日自動更新開關：{{ 'ON' if status.schedule.enabled else 'OFF' }}（{{ status.schedule.time }}）</div>
+        <div>執行中：{{ 'YES' if status.update_in_progress else 'NO' }}</div>
+        <div>未涵蓋：{{ status.coverage_gaps|join('、') }}</div>
+    </section>
+    {% if status.scheduler_state == 'SCHEDULER_SETUP_REQUIRED' %}<p class="text-sm text-amber-300">作業系統排程尚未安裝與驗收，每日自動更新尚未運作；請依 docs/research/2026-11-06-multi-strategy-validation-and-composite-v1/scheduler_setup.md 由 Owner 設定。手動更新仍可使用。</p>{% endif %}
+    {% if status.attention %}<section class="quant-card p-4 text-sm"><h2 class="font-semibold text-white">缺失或延遲</h2><ul class="mt-2 list-disc pl-5">{% for a in status.attention %}<li>{{ a.dataset }} {{ a.date }}：{{ a.status }} {{ a.reason or '' }}</li>{% endfor %}</ul></section>{% endif %}
+    <section class="quant-card space-y-4 p-4 text-sm" data-testid="data-actions">
+        {% if admin %}
+        <form method="post" class="flex flex-wrap items-end gap-3"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="manual">
+            <label><input type="checkbox" name="force" value="1"> 強制重抓</label><button class="rounded bg-blue-600 px-4 py-2 text-white">手動更新最新交易日</button></form>
+        <form method="post" class="flex flex-wrap items-end gap-3"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="backfill">
+            <label>補抓日期（YYYY-MM-DD，逗號分隔，最多 31 天）<input name="dates" class="mt-1 block w-72 rounded border border-strong bg-secondary px-3 py-2"></label><button class="rounded border border-strong px-4 py-2">補抓</button></form>
+        <form method="post" class="flex flex-wrap items-end gap-3"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="toggle">
+            <label>每日開關 <select name="enabled" class="rounded border border-strong bg-secondary px-2 py-1"><option value="1">ON</option><option value="0">OFF</option></select></label>
+            <label>時間 <input type="time" name="time" value="{{ status.schedule.time }}" class="rounded border border-strong bg-secondary px-2 py-1"></label><button class="rounded border border-strong px-4 py-2">儲存</button></form>
+        <form method="post" action="{{ url_for('admin_logout') }}"><button class="text-xs text-muted">登出</button></form>
+        {% else %}<p>需要管理員登入才能更新資料。<a class="text-blue-300" href="{{ url_for('admin_login') }}">登入</a></p>{% endif %}
+    </section>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="update-history"><h2 class="text-sm font-semibold text-white">更新紀錄</h2>
+        <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">Update ID</th><th class="p-1">模式</th><th class="p-1">日期</th><th class="p-1">狀態</th></tr></thead>
+        <tbody>{% for h in history %}<tr><td class="num p-1">{{ h.update_id }}</td><td class="p-1">{{ h.mode }}</td><td class="num p-1">{{ (h.dates or [])|join(', ') }}</td><td class="p-1">{{ h.status }}</td></tr>{% else %}<tr><td colspan="4" class="p-2 text-muted">尚無更新紀錄。</td></tr>{% endfor %}</tbody></table></section>
+    {% endif %}
+</div>
+{% endblock %}

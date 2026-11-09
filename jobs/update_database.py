@@ -661,6 +661,27 @@ def print_summary_report(price_count, revenue_ok, financial_ok, elapsed):
 
 
 def main() -> int:
+    """Run the update under the lock shared with services.market_data_update.
+
+    A manual update holding the lock is waited for (the evening pipeline must not stop because of it); after the
+    wait limit the job reports UPDATE_IN_PROGRESS and fails as before."""
+    from services.market_data_update import UpdateInProgress, acquire_lock
+
+    for _ in range(LOCK_WAIT_ATTEMPTS):
+        try:
+            with acquire_lock():
+                return _run_update()
+        except UpdateInProgress:
+            time.sleep(LOCK_WAIT_SECONDS)
+    print(f'UPDATE_IN_PROGRESS: lock wait timed out after {LOCK_WAIT_ATTEMPTS * LOCK_WAIT_SECONDS} seconds', flush=True)
+    return 1
+
+
+LOCK_WAIT_SECONDS = 30
+LOCK_WAIT_ATTEMPTS = 240  # ponytail: 2 hours, the stale-lock age; a held lock past that is reported, not broken
+
+
+def _run_update() -> int:
     pipeline_name, step_name, run_date = _resolve_pipeline_run_context('update_database')
     record_pipeline_step_start(
         pipeline_name=pipeline_name,

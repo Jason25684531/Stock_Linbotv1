@@ -89,6 +89,10 @@ from core.strategy import (
     get_v30_params_from_db,
 )
 from core.strategy_manager import StrategyManager
+from core.backtest import run_store
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 if sys.platform == 'win32':
@@ -175,8 +179,48 @@ def _run_portfolio_backtest(selected_strategies, start_date=None, end_date=None,
         weights=weights,
         persist_to_db=persist_to_db,
     )
-    result = engine.run_portfolio_backtest()
+    record = {'strategy_id': ','.join(map(str, selected_strategies)), 'strategy_type': 'LEGACY_WEB_BACKTEST', 'status_class': 'EXPERIMENTAL'}
+    try:
+        record = _web_run_record(selected_strategies, start_date, end_date, weights)
+        result = engine.run_portfolio_backtest()
+    except Exception as exc:
+        try:
+            run_store.save_failure(record, exc)
+        except Exception as save_exc:  # the engine error is the one the caller must see
+            logger.error('backtest failure not recorded: %s', save_exc)
+        raise
+    try:
+        result['run_id'] = run_store.save_run(record, _web_run_frames(result))
+        result['save_status'] = 'SAVED'
+    except Exception as exc:  # never a fake run_id: the page shows SAVE_FAILED and the result stays temporary
+        logger.error('backtest run not saved: %s', exc)
+        result['save_status'], result['save_error'] = 'SAVE_FAILED', type(exc).__name__
     return result, start_date, end_date
+
+
+def _web_run_record(selected_strategies, start_date, end_date, weights):
+    resolver = StrategyManager()
+    ids = [resolver.resolve(s) for s in selected_strategies]
+    parameters = {'strategies': ids, 'start_date': start_date, 'end_date': end_date, 'weights': weights,
+                  'fee_rate': Config.FEE_RATE, 'tax_rate': Config.TAX_RATE, 'slippage_max': Config.SLIPPAGE_MAX_PIPS}
+    root = Path(__file__).resolve().parents[1]
+    flags = ['SEALED_WINDOW_NOT_FOR_VALIDATION'] if end_date > run_store.DEV_END else []
+    return {'strategy_id': ids[0] if len(ids) == 1 else 'PORTFOLIO:' + '+'.join(ids), 'strategy_ids': ids,
+            'strategy_type': 'LEGACY_WEB_BACKTEST', 'parameters': parameters, 'parameter_hash': run_store.canonical_hash(parameters),
+            'source_hash': run_store.canonical_hash({p: run_store.file_hash(root / p) for p in ('core/backtest/runner.py', 'core/strategy_manager.py')}),
+            'data_version': f'UNVERSIONED_LIVE_DB@{end_date}', 'period': [start_date, end_date],
+            'comparison_group': run_store.WEB_GROUP_PREFIX + ':' + run_store.canonical_hash(parameters)[:12],
+            'cost_model': {'fee_rate': Config.FEE_RATE, 'tax_rate': Config.TAX_RATE, 'slippage_max': Config.SLIPPAGE_MAX_PIPS},
+            'benchmark': None, 'status_class': 'EXPERIMENTAL', 'certification_status': 'NOT_CERTIFIED', 'flags': flags}
+
+
+def _web_run_frames(result):
+    trades = pd.DataFrame(result.get('trades') or [])
+    holding_columns = [c for c in ('strategy', 'stock_id', 'buy_date', 'sell_date') if c in trades.columns]
+    return {'nav': pd.DataFrame(result['equity_curve']), 'trades': trades,
+            'holdings': trades[holding_columns] if holding_columns else pd.DataFrame(columns=['stock_id']),
+            'picks': trades[[c for c in ('strategy', 'stock_id', 'buy_date') if c in trades.columns]] if len(trades) else pd.DataFrame(columns=['stock_id']),
+            'metrics': {'metrics': result.get('metrics'), 'strategy_performance': result.get('strategy_performance')}}
 
 
 def _load_backtest_summary_or_error(error_message):
@@ -676,6 +720,7 @@ def main() -> int:
 
 
 from . import web_server as _web_server  # noqa: E402,F401
+from . import platform_routes as _platform_routes  # noqa: E402,F401
 from .line_bot import callback, handle_message, postback_handler, reply_message  # noqa: E402
 
 

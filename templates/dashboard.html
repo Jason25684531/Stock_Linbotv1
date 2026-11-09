@@ -59,7 +59,7 @@ document.addEventListener('alpine:init', () => {
         marketClass() { const value = String(this.summary.data?.market_light?.state || this.summary.data?.market_light?.label || '').toUpperCase(); return /BULL|多頭|偏多/.test(value) ? 'text-up' : /BEAR|空頭|偏空/.test(value) ? 'text-down' : 'text-muted'; },
         hasField(key) { return this.recommendations.some(row => row[key] !== null && row[key] !== undefined && row[key] !== ''); },
         number(value) { return value === null || value === undefined || value === '' ? '資料不可用' : Number(value).toLocaleString('zh-TW'); },
-        strategyName(id) { const item = this.strategies.strategies?.find(item => item.strategy_id === id); return item ? [...(item.aliases || []), item.display_name_zh || item.display_name_en || id].join(' · ') : id; },
+        strategyName(id) { const item = this.strategies.strategies?.find(item => item.strategy_id === id); return item ? (item.display_name_zh || item.display_name_en || id) : id; },
         stepName(alias) { return {'1_update':'更新資料', '2_run':'策略選股', '5_push':'推播通知'}[alias] || alias; },
         breadthValue() { if (this.snapshot.error) return '資料載入失敗'; const data = this.snapshot.data?.breadth; return data ? `${data.up_ratio ?? '—'}% 上漲 / ${data.down_ratio ?? '—'}% 下跌` : 'UNKNOWN'; },
         institutionalValue() { if (this.summary.error) return '資料載入失敗'; const state = this.summary.data?.institutional_sync; return state?.label || state?.state || '未檢查'; },

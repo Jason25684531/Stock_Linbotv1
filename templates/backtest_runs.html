@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}回測歷史 - Stock Linbot{% endblock %}
+{% block page_kicker %}回測分析{% endblock %}
+{% block page_heading %}回測歷史紀錄{% endblock %}
+{% block content %}
+<div class="space-y-5" data-testid="backtest-runs">
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100">
+        每次回測都有不可覆寫的 Run ID 與 SHA256 manifest；FAILED 只記錄錯誤，不覆蓋上一份成功結果。分類 OFFICIAL_ARCHIVED、RESEARCH、EXPERIMENTAL、DATA_BLOCKED 皆非認證。
+    </section>
+    <form method="get" class="flex flex-wrap items-end gap-3 text-sm">
+        <label>策略 ID <input name="strategy" value="{{ strategy or '' }}" class="mt-1 block rounded border border-strong bg-secondary px-3 py-2"></label>
+        <button class="rounded bg-blue-600 px-4 py-2 text-white">篩選</button>
+        <a class="text-blue-300" href="{{ url_for('backtest') }}">回到回測頁</a>
+    </form>
+    <section class="quant-card overflow-x-auto p-4">
+        <table class="w-full text-sm"><thead class="text-left text-xs text-muted"><tr>
+            <th class="p-2">Run ID</th><th class="p-2">狀態</th><th class="p-2">分類</th><th class="p-2">策略</th><th class="p-2">期間</th><th class="p-2">建立時間</th><th class="p-2">驗證</th></tr></thead>
+            <tbody class="divide-y divide-line">
+            {% for r in runs %}<tr data-testid="run-row">
+                <td class="num p-2"><a class="text-blue-300" href="{{ url_for('backtest_run_detail', run_id=r.run_id) }}">{{ r.run_id }}</a></td>
+                <td class="p-2 {% if r.status == 'FAILED' %}text-red-300{% endif %}">{{ r.status }}</td>
+                <td class="p-2">{{ r.status_class }}{% if r.flags %}<span class="block text-xs text-amber-300">{{ r.flags|join(', ') }}</span>{% endif %}</td>
+                <td class="num p-2">{{ r.strategy_id }}</td>
+                <td class="num p-2">{{ (r.period or [])|join(' ~ ') }}</td>
+                <td class="num p-2">{{ (r.created_at or '')[:19] }}</td>
+                <td class="p-2">{{ 'SHA256 OK' if r.verified else 'MANIFEST_MISMATCH' }}</td>
+            </tr>{% else %}<tr><td colspan="7" class="p-4 text-muted">尚無回測紀錄。</td></tr>{% endfor %}
+            </tbody></table>
+    </section>
+</div>
+{% endblock %}

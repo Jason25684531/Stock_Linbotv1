@@ -11,7 +11,7 @@ with sync_playwright() as playwright:
     page.goto('http://127.0.0.1:5059/strategies')
     page.get_by_role('button', name='技術', exact=True).click()
     assert page.get_by_role('button', name='技術', exact=True).get_attribute('aria-pressed') == 'true'
-    assert page.locator('label:visible', has_text='品質成長策略').count() == 0
+    assert page.locator('label:visible', has_text='經營效益').count() == 0
     page.locator('label:visible', has_text='MACD 黃金交叉').click()
     assert page.get_by_role('button', name='套用到每日篩選', exact=True).is_enabled()
     assert page.get_by_role('button', name='執行組合回測', exact=True).is_enabled()
@@ -27,9 +27,9 @@ with sync_playwright() as playwright:
     assert page.locator('label:visible', has_text='基本面 G2/G3').count() == 1
     assert page.locator('label:visible', has_text='MACD 黃金交叉').count() == 0
     page.get_by_role('button', name='品質', exact=True).click()
-    assert page.locator('label:visible', has_text='品質成長策略').count() == 1
+    assert page.locator('label:visible', has_text='經營效益').count() == 1
     page.get_by_role('button', name='籌碼', exact=True).click()
-    assert page.locator('label:visible', has_text='法人資金流確認策略').count() == 1
+    assert page.locator('label:visible', has_text='籌碼動能').count() == 1
     page.set_viewport_size({'width': 390, 'height': 844})
     page.get_by_role('button', name='技術', exact=True).click()
     card = page.locator('article:visible').filter(has=page.locator('label', has_text='MACD 黃金交叉'))

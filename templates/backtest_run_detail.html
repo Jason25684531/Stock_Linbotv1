@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}回測紀錄 {{ run.run_id }} - Stock Linbot{% endblock %}
+{% block page_kicker %}回測分析{% endblock %}
+{% block page_heading %}回測紀錄 <span class="num">{{ run.run_id }}</span>{% endblock %}
+{% block extra_head %}<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>{% endblock %}
+{% block content %}
+<div class="space-y-5" data-testid="backtest-run-detail">
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100" data-testid="run-status">
+        <p class="font-semibold">{{ run.status }} · {{ run.status_class }} · {{ run.certification_status }}{% if run.oos_status %} · {{ run.oos_status }}{% endif %}</p>
+        <p class="mt-1">此紀錄不是認證結果。{% if run.gate_result %}門檻結果：{{ run.gate_result }}。{% endif %}{% if run.flags %}旗標：{{ run.flags|join(', ') }}。{% endif %}</p>
+    </section>
+    {% if compare_refused %}<p class="rounded border border-red-500/40 p-3 text-sm text-red-300" data-testid="compare-refused">{{ compare_refused }}</p>{% endif %}
+    {% if error %}<section class="quant-card p-4 text-sm text-red-300" data-testid="run-error">錯誤：{{ error.error_type }} — {{ error.message }}</section>{% endif %}
+    <section class="quant-card grid gap-3 p-4 text-sm sm:grid-cols-2">
+        <div>策略：<span class="num">{{ run.strategy_id }}</span>（{{ run.strategy_type }}）</div>
+        <div>期間：<span class="num">{{ (run.period or [])|join(' ~ ') }}</span></div>
+        <div>假設／試驗：<span class="num">{{ run.hypothesis_id or '-' }} / {{ run.trial_id or '-' }}</span></div>
+        <div>條件：<span class="num">{{ (run.condition_ids or [])|join(' AND ') or '-' }}</span></div>
+        <div class="break-all">參數 hash：<span class="num">{{ run.parameter_hash }}</span></div>
+        <div class="break-all">程式 hash：<span class="num">{{ run.source_hash }}</span></div>
+        <div class="break-all">資料版本：<span class="num">{{ run.data_version }}</span></div>
+        <div class="break-all">比較群組：<span class="num">{{ run.comparison_group }}</span></div>
+        <div>Benchmark：{{ run.benchmark or '無' }}</div>
+        <div>成本：<span class="num">{{ run.cost_model }}</span></div>
+    </section>
+    {% if curves != '[]' %}<section class="quant-card p-4"><h2 class="text-base font-semibold text-white">淨值曲線</h2><div id="nav-chart" class="mt-3 h-80"></div></section>{% endif %}
+    {% for rid, rows in metric_rows.items() %}<section class="quant-card overflow-x-auto p-4" data-testid="run-metrics">
+        <h2 class="text-base font-semibold text-white">績效與風險 <span class="num text-sm text-muted">{{ rid }}</span></h2>
+        <table class="mt-2 w-full text-sm"><tbody class="divide-y divide-line">{% for m in rows %}<tr><td class="p-2">{{ m.name }}</td>
+            <td class="num p-2 text-right">{% if m.value is none %}<span class="text-muted">不可計算：{{ m.reason }}</span>{% elif m.value is mapping %}{{ m.value }}{% else %}{{ m.value|round(4) if m.value is number else m.value }}{% endif %}</td></tr>{% endfor %}</tbody></table>
+        {% set g = (metrics[rid] or {}).gates_comparison %}{% if g and g.gates %}<p class="mt-2 text-xs text-amber-200">OD-24 g1~g5（比較用，資料未認證）：{% for k, v in g.gates.items() %}{{ k }} {{ 'PASS' if v else 'FAIL' }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+    </section>{% endfor %}
+    {% if trades %}<section class="quant-card overflow-x-auto p-4"><h2 class="text-base font-semibold text-white">交易紀錄（前 500 筆）</h2>
+        <table class="mt-2 w-full text-xs"><thead class="text-muted"><tr>{% for k in trades[0].keys() %}<th class="p-1 text-left">{{ k }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for t in trades %}<tr>{% for v in t.values() %}<td class="num p-1">{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></section>{% endif %}
+    <section class="quant-card p-4 text-sm"><h2 class="text-base font-semibold text-white">同策略歷史</h2>
+        <ul class="mt-2 space-y-1">{% for h in history %}<li><a class="num text-blue-300" href="{{ url_for('backtest_run_detail', run_id=h.run_id) }}">{{ h.run_id }}</a> · {{ h.status }} · {{ h.status_class }}
+            {% if h.run_id != run.run_id and h.status == 'SUCCESS' %}· <a class="text-blue-300" href="{{ url_for('backtest_run_detail', run_id=run.run_id, compare=h.run_id) }}">並列比較</a>{% endif %}</li>{% endfor %}</ul>
+        <p class="mt-3"><a class="text-blue-300" href="{{ url_for('backtest_runs', strategy=run.strategy_id) }}">完整回測歷史</a> · <a class="text-blue-300" href="{{ url_for('multi_strategy_report', download=1) }}">下載研究報告</a></p>
+    </section>
+</div>
+<script>
+const navCurves = {{ curves|safe }};
+if (navCurves.length && window.Plotly) Plotly.newPlot('nav-chart', navCurves, {paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: {color: '#c9d4e3'}, margin: {t: 10, r: 10}}, {responsive: true});
+</script>
+{% endblock %}
