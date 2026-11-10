@@ -33,8 +33,8 @@ def test_collapsed_navigation_has_distinct_named_svg_icons():
     html = render('dashboard')
     nav = re.search(r'<nav\b.*?</nav>', html, re.S)[0]
     links = re.findall(r'<a title="([^"]+)".*?(<svg.*?</svg>)', nav)
-    assert len(links) == 8  # 2026-11-06: Factor Combination Lab, latest research selection, data management
-    assert len({svg for _, svg in links}) == 8
+    assert len(links) == 9  # 2026-11-09: reference comparison (change market-data-autonomy-and-reference-research-v1)
+    assert len({svg for _, svg in links}) == 9
     assert all(label and 'aria-hidden="true"' in svg for label, svg in links)
 
 
@@ -64,7 +64,7 @@ def test_primary_templates_use_tokens_readable_sizes_and_numeric_font():
 def test_navigation_copy_is_chinese_and_status_tokens_are_preserved(monkeypatch):
     html = render('dashboard')
     nav = re.search(r'<nav\b.*?</nav>', html, re.S)[0]
-    assert re.findall(r'<span class="nav-label">(.*?)</span>', nav) == ['總覽', '個股分析', '策略中心', '回測分析', '組合研究', '最新選股', '資料管理', '系統狀態']
+    assert re.findall(r'<span class="nav-label">(.*?)</span>', nav) == ['總覽', '個股分析', '策略中心', '回測分析', '組合研究', '參考比較', '最新選股', '資料管理', '系統狀態']
     assert '券商下單' in html and '已停用' in html
     assert 'LIVE TRADING' not in html
     import app.web_server as web

@@ -37,8 +37,15 @@ def untrusted_reason(path: Path) -> str:
     return ''
 
 
-def main() -> int:
+def main(argv=None) -> int:
     path = Path(tc.GRANTS)
+    if '--ingestion' in (sys.argv[1:] if argv is None else argv):  # change 2026-11-09-market-data-autonomy: the routine ingestion grant
+        from core.runtime import ingestion_authority
+        info = ingestion_authority.describe(path)
+        print(json.dumps(info, ensure_ascii=True, indent=1, default=str))
+        if not info['trusted']:
+            print(f'untrusted  : {untrusted_reason(path)}')
+        return 0 if info['trusted'] and not info.get('reason') else 1
     reason = untrusted_reason(path)
     trusted = tc.grant_trusted(path)
     print(f'grant file : {path}')

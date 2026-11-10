@@ -81,3 +81,35 @@ def test_interrupted_result_is_verified_and_recorded_once(tmp_path, monkeypatch)
     import pytest
     with pytest.raises(ValueError, match='RESULT_RUN_MISMATCH'):
         recovery.run_one(sid, None, '')
+
+
+def test_new_recovery_run_saves_version_2_evidence_against_an_isolated_ledger(tmp_path, monkeypatch):
+    """Synthetic data, temporary registry, ledger and Run Store: the formal ledger and store are never touched."""
+    import functools
+    from core.backtest import run_store
+    from scripts import research_workflow as rw
+    from test_legacy_baseline_run import synthetic_inputs
+    sid = 'quality_value_low_volatility'
+    registry, ledger = tmp_path / 'registry.csv', tmp_path / 'trial_ledger.jsonl'
+    rw.register({'hypothesis_id': recovery.hypothesis(sid), 'strategy': sid, 'hypothesis': 'synthetic', 'falsification_test': 'x',
+                 'data_window': '2023-01-03..2025-12-31', 'trial_budget': '1', 'source': 'test'}, path=registry)
+    inputs = {}
+    for name in ('bars', 'financial_statements', 'monthly_revenue', 'publication_dates', 'corporate_actions', 'tri_source', 'tri_calendar'):
+        inputs[name] = tmp_path / f'{name}.txt'
+        inputs[name].write_text(name, encoding='utf-8')
+    real_run, real_rows, real_admit = recovery.legacy.run_legacy, rw._trial_rows, rw.admit_experiment
+    monkeypatch.setattr(recovery, 'OUT', tmp_path / 'out')
+    monkeypatch.setattr(run_store, 'ROOT', tmp_path / 'runs')
+    monkeypatch.setattr(recovery.legacy, 'input_paths', lambda: inputs)
+    monkeypatch.setattr(recovery.legacy, 'run_legacy', lambda s: real_run(s, start='2023-01-03', end='2023-04-28', snapshot_builder=synthetic_inputs))
+    monkeypatch.setattr(recovery.workflow, 'admit_experiment', functools.partial(real_admit, registry=registry, ledger=ledger))
+    monkeypatch.setattr(recovery.workflow, '_trial_rows', lambda _: real_rows(ledger))
+    monkeypatch.setattr(recovery.workflow, 'record_result', lambda *a, **k: None)
+    result = recovery.run_one(sid, None, 'synthetic benchmark unavailable')
+    assert result['status'] == 'SUCCESS', result.get('reason')
+    loaded = run_store.load_run(result['run_id'])
+    assert {'positions_daily.csv', 'trades_stress.csv', 'open_positions.csv', 'costs.json', 'valuation_events.csv', 'pit_detail.csv',
+            'health.json'} <= set(loaded['files']) and loaded['run']['evidence_version'] == 2 and loaded['run']['admission'] == 'TRIAL'
+    row = next(r for r in real_rows(ledger) if r['experiment_id'] == result['experiment_id'])
+    status = run_store.evidence_status(loaded, row, rw.verify_trials(ledger) == 'PASS', rw._tree_sha)
+    assert status['status'] == 'ADMISSION_VERIFIED' and status['reproducible_offline'], status

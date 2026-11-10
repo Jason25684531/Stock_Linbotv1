@@ -162,7 +162,7 @@ def fetch_margin_balance_twse(
             if target_table is None:
                 return pd.DataFrame()
 
-            fields = target_table.get('fields', [])
+            fields = public_data.qualified_fields(target_table)  # 融資／融券 share field names; groups tell them apart
             rows = target_table.get('data', [])
 
             if not rows:
@@ -194,8 +194,8 @@ def fetch_margin_balance_twse(
                 _clean_number
             )
 
-            # 過濾無效代號
-            result = result[result['stock_id'].str.match(r'^\d{4,6}$')]
+            # 過濾無效代號（與 jobs/update_database.clean_market_frame 相同：個股 + 含英文字尾的 ETF，如 00631L）
+            result = result[result['stock_id'].str.fullmatch(r'(?:[1-9]\d{3}|00\d{2,4}[A-Z]?)')]
 
             return result
 

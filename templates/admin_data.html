@@ -25,7 +25,28 @@
         <div>執行中：{{ 'YES' if status.update_in_progress else 'NO' }}</div>
         <div>未涵蓋：{{ status.coverage_gaps|join('、') }}</div>
     </section>
-    {% if status.scheduler_state == 'SCHEDULER_SETUP_REQUIRED' %}<p class="text-sm text-amber-300">作業系統排程尚未安裝與驗收，每日自動更新尚未運作；請依 docs/research/2026-11-06-multi-strategy-validation-and-composite-v1/scheduler_setup.md 由 Owner 設定。手動更新仍可使用。</p>{% endif %}
+    {% if status.scheduler_state == 'SCHEDULER_SETUP_REQUIRED' %}<p class="text-sm text-amber-300" data-testid="scheduler-note">{% if (status.scheduler_tasks or {}).tasks %}作業系統排程已存在（見下方排程實況），但尚未通過下一個交易日的實跑驗收（python -m services.market_data_update --verify-scheduled）；連續交易日的營運證據仍在累積。{% else %}作業系統排程尚未安裝與驗收，每日自動更新尚未運作；請依 docs/research/2026-11-09-autonomous-data-readiness-v1/scheduler_setup.md 由 Owner 設定。{% endif %}手動更新仍可使用。</p>{% endif %}
+    <section class="quant-card grid gap-3 p-4 text-sm sm:grid-cols-2" data-testid="data-calendar">
+        <div>預期交易日：<span class="num">{{ (status.calendar or {}).expected_session }}</span>（<strong data-testid="calendar-state">{{ (status.calendar or {}).state }}</strong>）</div>
+        <div>Benchmark：<strong data-testid="benchmark-state">{{ (status.benchmark or {}).status }}</strong></div>
+        <p class="sm:col-span-2 text-xs text-muted">CALENDAR_UNVERIFIED 表示該年度官方休市表尚未匯入：每日更新會自動匯入一次，未驗證的交易日一律不推送 LINE；Benchmark 未與官方 MFI94U 交叉核對，不是資料認證。</p>
+    </section>
+    {% set auth = status.authorization or {} %}
+    <section class="quant-card grid min-w-0 gap-2 break-all p-4 text-xs sm:grid-cols-2" data-testid="ingestion-authority"><h2 class="sm:col-span-2 text-sm font-semibold text-white">每日更新授權（market_data_ingestion）</h2>
+        <div>市場範圍：<strong data-testid="market-scope">{{ status.market_scope }}</strong>（TWSE {{ (status.coverage or {}).twse }} · TPEx {{ (status.coverage or {}).tpex }}）</div>
+        <div>授權狀態：<strong data-testid="ingestion-reason">{{ auth.reason or auth.mode or ('TRUSTED' if auth.trusted else 'UNKNOWN') }}</strong>{% if auth.mode == 'BUILTIN' and not auth.reason %}（內建例行政策，decision.md D7；停用：環境變數 STOCK_LINBOT_INGESTION_DISABLED=1 或檔案 INGESTION_DISABLED）{% endif %}</div>
+        <div>授權檔：<span class="num">{{ auth.grants_path }}</span>（可信 {{ 'YES' if auth.trusted else 'NO' }}）</div>
+        <div>用量：<span class="num">{{ auth.uses if auth.uses is not none else '-' }} / {{ auth.max_uses or '-' }}</span> · 到期 {{ auth.expires_at or '-' }} · 表 {{ (auth.tables or [])|join(', ') or '-' }}</div>
+        <div class="sm:col-span-2">觀察到的休市日：{% for day in (status.closures or {}) %}<span class="num mr-2">{{ day }}</span>{% else %}無{% endfor %}</div>
+        <div class="sm:col-span-2">排程實況：{% if status.scheduler_tasks %}{% for task in status.scheduler_tasks.tasks %}<span class="block num">{{ task.name }} · next {{ task.next_run }} · last {{ task.last_run }} · result {{ task.last_result }}</span>{% endfor %}{% else %}尚未擷取（python scripts/scheduler_status.py）{% endif %}</div>
+        <details class="sm:col-span-2"><summary>最近 ingestion audit（{{ (status.ingestion_audit_tail or [])|length }} 列）</summary>{% for row in status.ingestion_audit_tail or [] %}<div class="num">{{ row.at }} {{ row.source_id or '' }} {{ row.result }} {{ row.status or '' }}</div>{% endfor %}</details>
+    </section>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="data-sources"><h2 class="text-sm font-semibold text-white">資料來源與授權</h2>
+        <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">資料集</th><th class="p-1">寫入方式</th><th class="p-1">最近狀態</th><th class="p-1">阻擋原因</th><th class="p-1">實際請求端點</th></tr></thead>
+        <tbody>{% for name, s in (status.sources or {}).items() %}<tr class="align-top"><td class="p-1">{{ name }}</td><td class="p-1">{{ s.split_mode }}</td><td class="p-1">{{ s.last_status or '-' }}</td>
+            <td class="p-1">{% for r in (s.blocked_reason or [])[:3] %}<div>{{ r.split(':')[0] }}</div>{% endfor %}</td>
+            <td class="p-1 break-all">{% for e in s.endpoints %}<div>{{ e }}</div>{% else %}local{% endfor %}</td></tr>{% endfor %}</tbody></table>
+        <p class="mt-2 text-muted">每個公開端點都以與實際請求相同的 context 先過既有授權閘門；restricted 端點（TPEx）需另行授權。寫入正式資料庫另需 WRITE_PRODUCTION_DB 授權。</p></section>
     {% if status.attention %}<section class="quant-card p-4 text-sm"><h2 class="font-semibold text-white">缺失或延遲</h2><ul class="mt-2 list-disc pl-5">{% for a in status.attention %}<li>{{ a.dataset }} {{ a.date }}：{{ a.status }} {{ a.reason or '' }}</li>{% endfor %}</ul></section>{% endif %}
     <section class="quant-card space-y-4 p-4 text-sm" data-testid="data-actions">
         {% if admin %}
@@ -40,8 +61,8 @@
         {% else %}<p>需要管理員登入才能更新資料。<a class="text-blue-300" href="{{ url_for('admin_login') }}">登入</a></p>{% endif %}
     </section>
     <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="update-history"><h2 class="text-sm font-semibold text-white">更新紀錄</h2>
-        <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">Update ID</th><th class="p-1">模式</th><th class="p-1">日期</th><th class="p-1">狀態</th></tr></thead>
-        <tbody>{% for h in history %}<tr><td class="num p-1">{{ h.update_id }}</td><td class="p-1">{{ h.mode }}</td><td class="num p-1">{{ (h.dates or [])|join(', ') }}</td><td class="p-1">{{ h.status }}</td></tr>{% else %}<tr><td colspan="4" class="p-2 text-muted">尚無更新紀錄。</td></tr>{% endfor %}</tbody></table></section>
+        <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">Update ID</th><th class="p-1">模式</th><th class="p-1">觸發</th><th class="p-1">日期</th><th class="p-1">狀態</th></tr></thead>
+        <tbody>{% for h in history %}<tr><td class="num p-1">{{ h.update_id }}</td><td class="p-1">{{ h.mode }}</td><td class="p-1">{{ h.trigger or '-' }}</td><td class="num p-1">{{ (h.dates or [])|join(', ') }}</td><td class="p-1">{{ h.status }}</td></tr>{% else %}<tr><td colspan="5" class="p-2 text-muted">尚無更新紀錄。</td></tr>{% endfor %}</tbody></table></section>
     {% endif %}
 </div>
 {% endblock %}

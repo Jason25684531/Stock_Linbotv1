@@ -23,6 +23,9 @@ def _isolate_authorization_records(monkeypatch, tmp_path):
     monkeypatch.setattr(research_budget, 'STATE', tmp_path / 'research_budget')
     monkeypatch.setattr(task_controller, 'STATE', tmp_path / 'task_state')
     monkeypatch.setattr(task_controller, 'GRANTS', tmp_path / 'absent-owner-grants.json')
+    monkeypatch.setenv('STOCK_LINBOT_INGESTION_DISABLED', '1')  # decision.md D7: no test reaches TWSE through the built-in policy
+    from core.runtime import ingestion_authority
+    monkeypatch.setattr(ingestion_authority, 'MACHINE_ROOT', tmp_path / 'machine-updates')  # never count or read the real audit
 
 
 @pytest.fixture

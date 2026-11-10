@@ -264,6 +264,9 @@ def enrich_with_margin_balance(
         return df, f'融資融券合併失敗（不中斷）: {exc}'
 
 
+MARKET_OPTIONAL_COLUMNS = ('foreign_buy', 'trust_buy', 'dealer_buy', 'margin_balance', 'short_balance')
+
+
 def process_and_save(df, date_str, engine):
     """
     清洗股票行情資料並寫入資料庫
@@ -282,6 +285,19 @@ def process_and_save(df, date_str, engine):
     if df is None or df.empty:
         return 0
 
+    df = clean_market_frame(df, date_str)
+
+    from core.db_helper import get_table_columns, upsert_stock_data
+    if engine is not None:
+        missing_columns = set(MARKET_OPTIONAL_COLUMNS) - get_table_columns('daily_market_data', engine=engine)
+        if missing_columns:
+            raise RuntimeError(f'Market schema missing nullable columns: {sorted(missing_columns)}')
+    return upsert_stock_data(df, 'daily_market_data')
+
+
+def clean_market_frame(df, date_str):
+    """Pure cleaning of one fetched market frame (no database access); process_and_save writes its result.
+    services/market_data_update.py stages this output before any commit."""
     requested_date = normalize_date_str(date_str)
     if not requested_date or not _is_business_weekday(requested_date):
         raise ValueError(f'Market snapshot date is not a valid business weekday: {date_str}')
@@ -293,11 +309,12 @@ def process_and_save(df, date_str, engine):
         else:
             df[col] = 0
 
-    optional_cols = ['foreign_buy', 'trust_buy', 'dealer_buy', 'margin_balance', 'short_balance']
+    optional_cols = list(MARKET_OPTIONAL_COLUMNS)
     for col in optional_cols:
         if col not in df.columns:
             df[col] = None
-    df[optional_cols] = df[optional_cols].apply(pd.to_numeric, errors='coerce').astype(object).where(
+    unseparated = df[optional_cols].apply(lambda s: s.map(lambda v: v.replace(',', '') if isinstance(v, str) else v))  # T86: -21,603,811
+    df[optional_cols] = unseparated.apply(pd.to_numeric, errors='coerce').astype(object).where(
         lambda values: values.notna(), None
     )
 
@@ -325,13 +342,7 @@ def process_and_save(df, date_str, engine):
             f'{before_filter} → {len(df)} 筆'
             f'（排除 {filtered_out} 筆權證/衍生品）'
         )
-
-    from core.db_helper import get_table_columns, upsert_stock_data
-    if engine is not None:
-        missing_columns = set(optional_cols) - get_table_columns('daily_market_data', engine=engine)
-        if missing_columns:
-            raise RuntimeError(f'Market schema missing nullable columns: {sorted(missing_columns)}')
-    return upsert_stock_data(df, 'daily_market_data')
+    return df
 
 # ============================================
 # 🚀 主程式 - V35 統一更新入口
@@ -661,20 +672,30 @@ def print_summary_report(price_count, revenue_ok, financial_ok, elapsed):
 
 
 def main() -> int:
-    """Run the update under the lock shared with services.market_data_update.
-
-    A manual update holding the lock is waited for (the evening pipeline must not stop because of it); after the
-    wait limit the job reports UPDATE_IN_PROGRESS and fails as before."""
-    from services.market_data_update import UpdateInProgress, acquire_lock
-
-    for _ in range(LOCK_WAIT_ATTEMPTS):
-        try:
-            with acquire_lock():
-                return _run_update()
-        except UpdateInProgress:
-            time.sleep(LOCK_WAIT_SECONDS)
-    print(f'UPDATE_IN_PROGRESS: lock wait timed out after {LOCK_WAIT_ATTEMPTS * LOCK_WAIT_SECONDS} seconds', flush=True)
-    return 1
+    """Step 1 of the evening pipeline (design D4): the market data service is the single writer of the market tables. It catches up every
+    missing TWSE session under the trusted ingestion grant; this job keeps the update_database pipeline_runs step and its exit code:
+    0 only when prices are stored for the trading-calendar expected session, so --stop-on-error never runs picks or LINE on old data."""
+    import os
+    from services.market_data_update import DEFAULT_ROOT, MarketDataUpdateService
+    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('update_database')
+    record_pipeline_step_start(pipeline_name=pipeline_name, step_name=step_name, run_date=run_date)
+    service = MarketDataUpdateService(root=os.environ.get('STOCK_LINBOT_UPDATE_ROOT') or DEFAULT_ROOT)
+    for _ in range(LOCK_WAIT_ATTEMPTS):  # a manual update holding the lock is waited for, as before
+        record = service.run('daily')
+        if record['status'] != 'UPDATE_IN_PROGRESS':
+            break
+        time.sleep(LOCK_WAIT_SECONDS)
+    expected = service.expected(datetime.now().date())[0]
+    latest = normalize_date_str(get_latest_trade_date())
+    current = latest == expected
+    if current:
+        print(f"Dashboard aggregation prewarm summary: {prewarm_dashboard_aggregation_cache(latest)}")
+    problems = [f"{r['dataset']}|{r['date']}: {r['status']}" for r in record.get('results', []) if r['status'] not in ('SUCCESS', 'PIT_UNVERIFIED', 'SKIPPED_ALREADY_SUCCESS', 'CLOSED_OBSERVED')]
+    summary = f"service {record['status']} {record.get('reason') or ''}; latest {latest}, expected {expected}; " + '; '.join(problems)
+    record_pipeline_step_finish(pipeline_name=pipeline_name, step_name=step_name, run_date=run_date, status='success' if current else 'failed',
+                                source_date=latest, trade_date=latest, error_summary=None if current else summary[:1000])
+    print(summary, flush=True)
+    return 0 if current else 1
 
 
 LOCK_WAIT_SECONDS = 30
@@ -682,6 +703,8 @@ LOCK_WAIT_ATTEMPTS = 240  # ponytail: 2 hours, the stale-lock age; a held lock p
 
 
 def _run_update() -> int:
+    """Legacy MCP update (TWSE and TPEx together). Not called by main() since change 2026-11-09-market-data-autonomy (design D4);
+    kept until deletion evidence exists (docs/refactor/deletion_candidates.md)."""
     pipeline_name, step_name, run_date = _resolve_pipeline_run_context('update_database')
     record_pipeline_step_start(
         pipeline_name=pipeline_name,

@@ -2,6 +2,8 @@
 
 No caller-supplied budget, ledger path, round, free/official flag, redirect or retry transport override.
 """
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
@@ -130,9 +132,9 @@ def context(url, *, method='GET', params=None, data=None, purpose=None):
         elif host == 'openapi.twse.com.tw' and method == 'GET' and path in OPENAPI_PATHS:
             dataset = OPENAPI_PATHS[path]
             if dataset == 'holidaySchedule':
-                if values != {'year': '2026'}:
-                    raise ValueError('explicit 2026 calendar required')
-                job, expected = 'calendar_2026', 'calendar_2026'
+                if values not in ({'year': '2026'}, {'year': '2027'}):
+                    raise ValueError('explicit 2026 or 2027 calendar required')
+                job = expected = f"calendar_{values['year']}"
             elif values:
                 raise ValueError('unexpected OpenAPI parameters')
             else:
@@ -216,6 +218,14 @@ def cached(ctx):
         raise AuthorizationDenied('CACHE_INVALID: verified source, hash and schema required') from exc
 
 
+def qualified_fields(table) -> list:
+    """Field names prefixed by their group title when `groups` spans cover the fields (MI_MARGN repeats a name under each group)."""
+    fields, groups = table.get('fields'), table.get('groups')
+    if not isinstance(groups, list) or not all(isinstance(g, dict) and isinstance(g.get('span'), int) for g in groups)             or sum(g['span'] for g in groups) != len(fields):
+        return fields
+    return [title + field for title, field in zip((str(g.get('title') or '') for g in groups for _ in range(g['span'])), fields)]
+
+
 def verify_response(ctx, response):
     if response.status_code != 200:
         raise AuthorizationDenied(f'HTTP_STOP: status {response.status_code}; no automatic retry or redirect')
@@ -227,11 +237,12 @@ def verify_response(ctx, response):
         if any(word in text.lower() for word in ('captcha', 'access denied', 'login', '查詢過量', '驗證碼')):
             raise AuthorizationDenied('SOURCE_BLOCKED: no login or rate-limit circumvention')
         expected = {'t57sb01': ('證券代號', '資料年度', '上傳日期', '電子檔案'), 't164sb04': ('營業利益', '每股盈餘'), 't164sb01': ('營業利益', '每股盈餘')}.get(ctx.dataset, ('公司代號', '營業收入'))
-        if '<table' not in text.lower() or not all(field in text for field in expected):
+        flat = re.sub(r'<[^>]*>|\s', '', text)  # MOPS splits headers with <br> (公司<br>代號)
+        if '<table' not in text.lower() or not all(field in flat for field in expected):
             raise ValueError('MOPS response lacks the expected public data table')
         return
     payload = response.json()
-    if ctx.dataset == 'MI_INDEX' and isinstance(payload, dict) and payload.get('stat') in (
+    if ctx.dataset in ('MI_INDEX', 'TWT49U') and isinstance(payload, dict) and payload.get('stat') in (
             '很抱歉，沒有符合條件的資料!', '查詢日期大於今日，請重新查詢!', '查詢日期小於93年2月11日，請重新查詢!'):
         return  # documented source classifications, never a guessed holiday or fabricated price
     if ctx.dataset in ('TWT49U_DETAIL', 'TWTAUU', 'TWTB8U', 'TWT49U', 'MI_INDEX', 'T86', 'MI_MARGN'):
@@ -250,7 +261,7 @@ def verify_response(ctx, response):
             if not isinstance(table, dict):
                 raise ValueError('invalid table shape')
             fields, rows = table.get('fields'), table.get('data')
-            if not isinstance(fields, list) or not fields or not all(isinstance(f, str) and f.strip() for f in fields) or len(set(fields)) != len(fields):
+            if not isinstance(fields, list) or not fields or not all(isinstance(f, str) and f.strip() for f in fields) or len(set(qualified_fields(table))) != len(fields):
                 raise ValueError('official data fields missing or ambiguous')
             if not isinstance(rows, list) or any(not isinstance(row, list) or len(row) != len(fields) or any(isinstance(v, (dict, list)) for v in row) for row in rows):
                 raise ValueError('official data row shape or width differs from fields')
@@ -279,8 +290,9 @@ def verify_response(ctx, response):
             if not any(REQUIRED_CLOSING_FIELDS <= fields for fields in valid_fields):
                 raise ValueError('daily closing schema drift')
     elif ctx.dataset == 'holidaySchedule':
-        if not isinstance(payload, list) or not payload or not all('2026' in str(row) for row in payload):
-            raise ValueError('calendar response does not establish 2026 coverage')
+        year = dict(ctx.parameters).get('year')
+        if not isinstance(payload, list) or not payload or not all(year in str(row) or str(int(year) - 1911) in str(row) for row in payload):
+            raise ValueError(f'calendar response does not establish {year} coverage')
     elif not isinstance(payload, list):
         raise ValueError('OpenAPI array expected')
 
@@ -358,6 +370,52 @@ def _persist_source_stop(group, response):
                                                                           'reason': 'upstream rate limit or blocking response'}).encode())
 
 
+_INGESTION = ContextVar('market_data_ingestion_scope', default=None)
+
+
+@contextmanager
+def ingestion_scope(dataset, market_scope='TWSE_ONLY'):
+    """Routine market-data maintenance (design D2): inside, request() is authorized by the trusted ingestion grant, debits one grant use per
+    HTTP attempt and writes ingestion_audit.jsonl; the research budget is never touched. Outside, request() is unchanged."""
+    token = _INGESTION.set((dataset, market_scope))
+    try:
+        yield
+    finally:
+        _INGESTION.reset(token)
+
+
+def _today_ymd() -> str:
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y%m%d')
+
+
+def _unpublished_session(ctx, response) -> bool:
+    """TWSE's no-data MI_INDEX reply for today (or later) means not published yet, not a closure."""
+    from core.research.sources.twse import NON_TRADING_STAT
+    if ctx.dataset != 'MI_INDEX':
+        return False
+    try:
+        stat = response.json().get('stat')
+    except (ValueError, AttributeError):
+        return False
+    return ctx.dataset == 'MI_INDEX' and stat == NON_TRADING_STAT and dict(ctx.parameters).get('date', '') >= _today_ymd()
+
+
+def ingestion_audit_path() -> Path:
+    root = os.environ.get('STOCK_LINBOT_UPDATE_ROOT') or Path(__file__).resolve().parents[2] / 'outputs/market_data_updates'
+    return Path(root) / 'ingestion_audit.jsonl'
+
+
+def _ingestion_audit(row):
+    """Append to the current root's audit and to the machine audit (the daily cap counts the machine audit, whatever the root)."""
+    from core.runtime import ingestion_authority as ia
+    line = json.dumps({'at': datetime.now().astimezone().isoformat(timespec='seconds'), **row}, ensure_ascii=False) + '\n'
+    for root in ia._roots():  # a failed write raises: no audit, no request
+        root.mkdir(parents=True, exist_ok=True)
+        with (root / 'ingestion_audit.jsonl').open('a', encoding='utf-8') as handle:
+            handle.write(line)
+
+
 def request(method, url, *, params=None, data=None, purpose=None, headers=None, timeout=30, session=None):
     """A single HTTP attempt. Success is cached by canonical identity; failed/unknown requests retain their debit."""
     from core.runtime import operation_policy as policy
@@ -371,7 +429,11 @@ def request(method, url, *, params=None, data=None, purpose=None, headers=None, 
         if hit is not None:
             return hit
         _check_source_stop(ctx.rate_group)
-        policy.enforce(policy.Operation.DOWNLOAD_MARKET_DATA, dataset=ctx.dataset, official=True, request_context=ctx)
+        ingestion = _INGESTION.get()
+        if ingestion is not None:
+            policy.enforce(policy.Operation.INGEST_MARKET_DATA, dataset=ingestion[0], market_scope=ingestion[1], request_context=ctx)
+        else:
+            policy.enforce(policy.Operation.DOWNLOAD_MARKET_DATA, dataset=ctx.dataset, official=True, request_context=ctx)
         # Don't accept an authenticated/retrying session through the public path.
         effective_headers = {str(k).lower(): v for k, v in (headers or {}).items()}
         if session is not None:
@@ -380,7 +442,26 @@ def request(method, url, *, params=None, data=None, purpose=None, headers=None, 
         if set(effective_headers) - allowed_headers:
             raise AuthorizationDenied('PUBLIC_CREDENTIALS_FORBIDDEN')
         mode = policy.current_mode()
-        if mode is policy.ExecutionMode.RESEARCH:
+        interval = 3.2
+        if ingestion is not None:
+            from scripts import task_controller as tc
+            from core.runtime import ingestion_authority as ia
+            ingestion_audit_path().parent.mkdir(parents=True, exist_ok=True)
+            ingestion_audit_path().open('a', encoding='utf-8').close()  # unwritable audit: refuse before a use is consumed
+            with _exclusive(Path(budget.STATE) / 'ingestion.reserve.lock'):  # one lock for every rate group: the daily cap is counted and taken atomically
+                try:
+                    grant = ia.evaluate(operation='read', context=ctx, dataset=ingestion[0], market_scope=ingestion[1])[0]
+                    if not (grant or {}).get('builtin'):  # the built-in policy is counted by the RESERVED rows below
+                        grant = tc.require_grant(ia.OPERATION, ia.OPERATION, root=tc.STATE, grants_path=tc.GRANTS,
+                                                 scope={'source': ia.source_id(ctx)}, uses=1)
+                except Exception as exc:  # including block() on a task file that does not exist: refused, nothing consumed
+                    raise AuthorizationDenied(f'INGESTION_QUOTA_OR_SCOPE_REFUSED: {type(exc).__name__}: {exc}'[:300]) from None
+                attempt, interval = uuid.uuid4().hex, max(3.2, float(grant['rate_limit_seconds']))
+                _ingestion_audit({'attempt': attempt, 'result': 'RESERVED', 'source_id': ia.source_id(ctx), 'dataset': ingestion[0],
+                                  'market_scope': ingestion[1], 'endpoint': ctx.url, 'parameters': dict(ctx.parameters),
+                                  'grant_id': 'BUILTIN' if grant.get('builtin') else tc.grant_id(grant),
+                                  'uses_logged': None if grant.get('builtin') else tc.grant_uses(grant), 'request_key': ctx.key})
+        elif mode is policy.ExecutionMode.RESEARCH:
             attempt = budget.reserve(ctx)
         else:
             from scripts import task_controller as tc
@@ -395,14 +476,18 @@ def request(method, url, *, params=None, data=None, purpose=None, headers=None, 
 
         def finish(outcome, response=None, error=None):
             _persist_source_stop(ctx.rate_group, response)
-            if mode is policy.ExecutionMode.RESEARCH:
+            if ingestion is not None:
+                _ingestion_audit({'attempt': attempt, 'result': outcome, 'request_key': ctx.key, 'error': error,
+                                  'status': response.status_code if response is not None else None,
+                                  'sha256': hashlib.sha256(response.content).hexdigest() if response is not None else None})
+            elif mode is policy.ExecutionMode.RESEARCH:
                 budget.finish(attempt, outcome=outcome, released_at=gate.last_release_wall, response=response, error=error)
             else:
                 policy._append({'operation': 'production_official_http', 'attempt': attempt, 'result': outcome,
                                 'status': response.status_code if response is not None else None, 'error': error,
                                 'sha256': hashlib.sha256(response.content).hexdigest() if response is not None else None}, strict=True)
         # A prior sender may have paused after gate release; wait from this lock acquisition as well.
-        gate = RequestGate(3.2, state_path=Path(budget.STATE) / f'{ctx.rate_group}.gate', delay_first_request=True)
+        gate = RequestGate(interval, state_path=Path(budget.STATE) / f'{ctx.rate_group}.gate', delay_first_request=True)
         response = None
         try:
             gate.wait()
@@ -419,6 +504,9 @@ def request(method, url, *, params=None, data=None, purpose=None, headers=None, 
                    error=f'{type(exc).__name__}: {str(exc)[:250]}')
             raise
         finish('VERIFIED', response=response)
+        if ingestion is not None and _unpublished_session(ctx, response):
+            response.research_cache_hit = False
+            return response  # not cached: tomorrow it must be fetched again, never replayed as a closure (decision.md D5)
         raw_path, meta_path = _cache_paths(ctx)
         _atomic(raw_path, response.content)
         metadata = {'key': ctx.key, 'context': json.loads(ctx.audit_json()), 'sha256': hashlib.sha256(response.content).hexdigest(),

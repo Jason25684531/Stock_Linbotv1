@@ -21,6 +21,11 @@ RUN_ID = re.compile(r'^\d{8}T\d{6}Z-[0-9a-f]{8}$')
 STATUS_CLASSES = ('OFFICIAL_ARCHIVED', 'RESEARCH', 'EXPERIMENTAL', 'DATA_BLOCKED')
 REQUIRED = ('strategy_id', 'parameter_hash', 'source_hash', 'data_version', 'comparison_group', 'certification_status', 'status_class')
 REQUIRED_FILES = ('nav', 'holdings', 'trades', 'picks', 'metrics')
+# evidence_version 2 (change 2026-11-09-autonomous-data-readiness-v1): admission copy plus complete post-run evidence
+REQUIRED_FILES_V2 = REQUIRED_FILES + ('positions_daily', 'trades_stress', 'open_positions', 'costs', 'valuation_events', 'pit_detail', 'health')
+ADMISSION_KEYS = ('admission_id', 'trial_id', 'hypothesis_id', 'code_sha256', 'inputs_sha256', 'input_paths', 'config', 'pinned',
+                  'valuation_policy', 'research_window', 'admitted_at')
+PINNED_ROLES = ('benchmark', 'calendar', 'data')
 DEV_END = '2025-12-31'
 WEB_GROUP_PREFIX = 'WEB_ADHOC'
 
@@ -93,6 +98,13 @@ def _check(record, frames):
         if not record.get('reason') or set(frames) - {'metrics'}:
             raise ValueError('DATA_BLOCKED_RECORD_HAS_NO_PERFORMANCE')
         return
+    if record.get('evidence_version') == 2:
+        admission, empty = record.get('admission_record') or {}, (None, '', {}, [])
+        incomplete = [k for k in ADMISSION_KEYS if admission.get(k) in empty]
+        incomplete += [f'pinned.{role}' for role in PINNED_ROLES if (admission.get('pinned') or {}).get(role) in empty]
+        incomplete += [name for name in REQUIRED_FILES_V2 if name not in frames]
+        if incomplete:
+            raise ValueError('RUN_ADMISSION_INCOMPLETE:' + ','.join(incomplete))
     if missing := [name for name in REQUIRED_FILES if name not in frames]:
         raise ValueError('RUN_FILES_MISSING:' + ','.join(missing))
     nav = frames['nav']
@@ -180,6 +192,80 @@ def history(*, root=None, strategy_id=None):
         if strategy_id is None or strategy_id in ids:
             rows.append({**run, 'verified': verified})
     return sorted(rows, key=lambda r: (r.get('created_at', ''), r['run_id']), reverse=True)
+
+
+def _when(text):
+    return datetime.fromisoformat(str(text).replace('Z', '+00:00'))
+
+
+def evidence_status(loaded, ledger_row=None, ledger_verified=False, hash_input=None) -> dict:
+    """ADMISSION_VERIFIED only against the trusted trial ledger row (the caller reads and verifies the ledger; core never imports scripts).
+    An admission_record inside run.json, or hashes taken after the run, never upgrade a run on their own.
+    hash_input(path) -> sha256 recomputes admitted inputs for reproducible_offline (skipped when None)."""
+    run = loaded['run']
+    admission, trial = run.get('admission_record') or {}, run.get('trial_id')  # v1 'admission' is the kind string (TRIAL / REPLAY)
+    if not trial:
+        return {'status': 'HISTORICAL_EVIDENCE_MISSING', 'reasons': ['NO_TRIAL'], 'reproducible_offline': False}
+    if ledger_row is None:
+        return {'status': 'POST_RUN_NOT_ADMISSION_VERIFIED' if admission else 'HISTORICAL_EVIDENCE_MISSING',
+                'reasons': ['LEDGER_ROW_MISSING'], 'reproducible_offline': False}
+    if not admission:
+        return {'status': 'POST_RUN_NOT_ADMISSION_VERIFIED', 'reasons': ['NO_ADMISSION_BLOCK'], 'reproducible_offline': False}
+    reasons = [] if ledger_verified else ['LEDGER_UNVERIFIED']
+    if run.get('evidence_version') != 2:
+        reasons.append('NOT_EVIDENCE_VERSION_2')
+    # Bind the admission to what this run executed: parameter_hash and source_hash are computed from the run's own config and code files
+    # when it is saved, so a copied admission_record cannot vouch for a run made with other parameters or code.
+    if run.get('parameter_hash') != ledger_row.get('config_sha256'):
+        reasons.append('RUN_PARAMETERS_NOT_ADMITTED')
+    if not ledger_row.get('code_sha256') or run.get('source_hash') != canonical_hash(ledger_row.get('code_sha256')):
+        reasons.append('RUN_CODE_NOT_ADMITTED')
+    if not (admission.get('admission_id') == trial == ledger_row.get('experiment_id')):
+        reasons.append('ADMISSION_ID_MISMATCH')
+    if not (ledger_row.get('hypothesis_id') == admission.get('hypothesis_id') == run.get('hypothesis_id')):
+        reasons.append('HYPOTHESIS_MISMATCH')
+    try:
+        if not _when(ledger_row['at']) < _when(run['created_at']):
+            reasons.append('ADMITTED_AFTER_RUN')
+    except (KeyError, TypeError, ValueError):
+        reasons.append('ADMISSION_TIME_UNKNOWN')
+    if admission.get('admitted_at') != ledger_row.get('at'):
+        reasons.append('ADMITTED_AT_MISMATCH')
+    if ledger_row.get('config_sha256') != canonical_hash(admission.get('config')):
+        reasons.append('CONFIG_HASH_MISMATCH')
+    if not ledger_row.get('code_sha256') or ledger_row.get('code_sha256') != admission.get('code_sha256'):
+        reasons.append('CODE_HASH_MISMATCH')
+    ledger_inputs, admitted = ledger_row.get('inputs_sha256') or {}, admission.get('inputs_sha256') or {}
+    for role in PINNED_ROLES:
+        names = (admission.get('pinned') or {}).get(role)
+        for name in ([names] if isinstance(names, str) else names or [None]):
+            if name not in ledger_inputs:
+                reasons.append(f'PINNED_INPUT_MISSING:{role}')
+            elif ledger_inputs[name] != admitted.get(name):
+                reasons.append(f'PINNED_INPUT_MISMATCH:{role}:{name}')
+    if reasons:
+        return {'status': 'POST_RUN_NOT_ADMISSION_VERIFIED', 'reasons': reasons, 'reproducible_offline': False}
+    changed = [name for name, path in (admission.get('input_paths') or {}).items()
+               if hash_input is None or not Path(path).exists() or hash_input(path) != ledger_inputs.get(name)]
+    return {'status': 'ADMISSION_VERIFIED', 'reasons': [], 'reproducible_offline': not changed,
+            'reproducibility_reasons': ['INPUTS_NOT_CHECKED'] if hash_input is None else [f'INPUT_CHANGED:{n}' for n in changed]}
+
+
+def repair_pointers(*, root=None) -> list:
+    """Point each single-strategy pointer at its newest verified successful run when an interrupted save left it older; never creates a run."""
+    root = Path(root or ROOT)
+    repairs = []
+    for run in sorted(history(root=root), key=lambda r: (r.get('created_at', ''), r['run_id'])):
+        ids = run.get('strategy_ids') or [run.get('strategy_id')]
+        if not run['verified'] or run.get('status') != 'SUCCESS' or len(ids) != 1:
+            continue
+        for kind in ('successful', 'reference') if run.get('reference') else ('successful',):
+            current = latest(ids[0], kind, root=root)
+            if current is None or (current.get('created_at', ''), current['run_id']) < (run['created_at'], run['run_id']):
+                _pointer(root, kind, ids[0], run['run_id'])
+                repairs.append({'strategy_id': ids[0], 'kind': kind, 'run_id': run['run_id'],
+                                'previous': None if current is None else current['run_id']})
+    return repairs
 
 
 def latest(strategy_id, kind='successful', *, root=None):

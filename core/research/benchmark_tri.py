@@ -115,11 +115,12 @@ def research_series(calendar, root=DEFAULT_ROOT) -> pd.Series:
 
 MI_INDEX_RAW = ROOT / 'artifacts' / 'factors' / 'd3_full_20230103_20260728' / '_raw' / 'twse_rwd'
 TRI_ROW = '發行量加權股價報酬指數 '.strip()
+PRICE_ROW = '發行量加權股價指數 '.strip()
 
 
-def extract_from_mi_index(raw=MI_INDEX_RAW, root=DEFAULT_ROOT, first='20221230', last='20251231') -> dict:
-    """Write the official total-return index closes found in already-downloaded exchange MI_INDEX daily files (the same index MFI94U
-    publishes) as tri_from_mi_index.csv. Files are selected by the date in their name before any is opened, so no 2026 file is read."""
+def index_from_mi_index(row_name, raw=MI_INDEX_RAW, first='20221230', last='20251231'):
+    """(rows [(iso date, value text)], {file: sha256}) of one index row. Files are selected by the date in their name before any is opened,
+    so no 2026 file is read."""
     import hashlib
     chosen = [p for p in sorted(Path(raw).glob('MI_INDEX_*.json')) if first <= p.name[9:17] <= min(last, DEV_END.replace('-', ''))]
     rows, digests = [], {}
@@ -127,10 +128,17 @@ def extract_from_mi_index(raw=MI_INDEX_RAW, root=DEFAULT_ROOT, first='20221230',
         payload = path.read_bytes()
         digests[path.name] = hashlib.sha256(payload).hexdigest()
         for table in json.loads(payload.decode('utf-8')).get('tables') or []:
-            hit = next((row for row in table.get('data') or [] if row and row[0] == TRI_ROW), None)
+            hit = next((row for row in table.get('data') or [] if row and row[0] == row_name), None)
             if hit:
                 rows.append((f'{path.name[9:13]}-{path.name[13:15]}-{path.name[15:17]}', str(hit[1]).replace(',', '')))
                 break
+    return rows, digests
+
+
+def extract_from_mi_index(raw=MI_INDEX_RAW, root=DEFAULT_ROOT, first='20221230', last='20251231') -> dict:
+    """Write the official total-return index closes found in already-downloaded exchange MI_INDEX daily files (the same index MFI94U
+    publishes) as tri_from_mi_index.csv."""
+    rows, digests = index_from_mi_index(TRI_ROW, raw, first, last)
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     with (root / 'tri_from_mi_index.csv').open('w', encoding='utf-8', newline='') as handle:
@@ -139,9 +147,55 @@ def extract_from_mi_index(raw=MI_INDEX_RAW, root=DEFAULT_ROOT, first='20221230',
         writer.writerows(rows)
     (root / 'tri_from_mi_index.provenance.md').write_text(
         '# Provenance\n\nSource: local exchange MI_INDEX daily files (row 發行量加權股價報酬指數 ), '
-        f'{len(chosen)} files {first}..{last}; sha256 per file below. MFI94U itself was not downloaded (needs Owner authorization), '
+        f'{len(digests)} files {first}..{last}; sha256 per file below. MFI94U itself was not downloaded (needs Owner authorization), '
         'so no cross-check against MFI94U was possible.\n\n' + '\n'.join(f'- {n} {d}' for n, d in digests.items()) + '\n', encoding='utf-8')
-    return {'files_read': len(chosen), 'rows': len(rows)}
+    return {'files_read': len(digests), 'rows': len(rows)}
+
+
+CROSS_STATUS = 'BENCHMARK_SOURCE_NOT_CROSS_VERIFIED'
+JUMP, GAP, TOLERANCE = 0.10, 0.03, 0.005  # single-day move, total-return vs price daily return, cross-check abs difference
+
+
+def provenance(calendar, root=DEFAULT_ROOT, price=None) -> dict:
+    """Hashes, coverage and diagnostic anomalies of the local series. price: TAIEX price index Series (dev window) for the return gap.
+    Anomalies are diagnostics only: nothing here declares a source wrong or edits a file."""
+    import hashlib
+    report = quality(calendar, root)
+    found = files(root)
+    note = Path(root) / 'tri_from_mi_index.provenance.md'
+    sources = sorted(line[2:].strip() for line in note.read_text(encoding='utf-8').splitlines() if line.startswith('- MI_INDEX_')) if note.is_file() else []
+    series = load(root)
+    series = series[series.index <= pd.Timestamp(DEV_END)]
+    moves = series.pct_change().dropna()
+    out = {'status': CROSS_STATUS, 'coverage_status': report['status'], 'coverage_reason': report['reason'],
+           'file_sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in found},
+           'source_files': len(sources), 'source_digest': hashlib.sha256('\n'.join(sources).encode('utf-8')).hexdigest() if sources else None,
+           'rows': len(series), 'first': series.index.min().strftime('%Y-%m-%d') if len(series) else None,
+           'last': series.index.max().strftime('%Y-%m-%d') if len(series) else None,
+           'checks': {k: report.get(k, []) for k in ('missing_dates', 'duplicate_dates', 'non_positive_dates', 'extra_dates')},
+           'DIAGNOSTIC_ANOMALY': {'jumps_over_10pct': [d.strftime('%Y-%m-%d') for d in moves.index[moves.abs() > JUMP]]}}
+    if price is not None:
+        gap = (moves - price[price.index <= pd.Timestamp(DEV_END)].pct_change()).dropna()
+        out['DIAGNOSTIC_ANOMALY'].update(return_gap={'days': len(gap), 'mean': float(gap.mean()) if len(gap) else None,
+                                                     'min': float(gap.min()) if len(gap) else None, 'max': float(gap.max()) if len(gap) else None},
+                                         return_gap_over_3pct=[d.strftime('%Y-%m-%d') for d in gap.index[gap.abs() > GAP]])
+    return out
+
+
+def crosscheck(path=None, root=DEFAULT_ROOT) -> dict:
+    """Date-by-date comparison with an MFI94U file the Owner obtained; never downloads."""
+    if path is None or not Path(path).is_file():
+        return {'status': 'INPUT_MISSING', 'reason': 'no external MFI94U file supplied; status stays ' + CROSS_STATUS}
+    end = parse_date(DEV_END)
+    pairs = [(pd.Timestamp(day), _number(v)) for d, v in _rows(Path(path)) if (day := parse_date(d)) <= end]  # 2026 rows never parsed further
+    external = pd.Series([v for _, v in pairs], index=pd.DatetimeIndex([d for d, _ in pairs]), dtype=float)
+    local = load(root)
+    frame = pd.concat({'local': local[~local.index.duplicated()], 'external': external[~external.index.duplicated()]}, axis=1)
+    frame = frame[frame.index <= pd.Timestamp(DEV_END)]
+    bad = frame[frame.isna().any(axis=1) | ((frame.local - frame.external).abs() > TOLERANCE)]
+    rows = [{'date': d.strftime('%Y-%m-%d'), 'local': None if pd.isna(r.local) else r.local, 'external': None if pd.isna(r.external) else r.external}
+            for d, r in bad.iterrows()]
+    return {'status': 'MATCH' if not rows else 'DIFFERENCES', 'compared': len(frame), 'differences': rows}
 
 
 def research_calendar(path=PREPARED_BARS) -> list[str]:

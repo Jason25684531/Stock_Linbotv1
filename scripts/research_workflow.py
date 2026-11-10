@@ -915,7 +915,7 @@ def fetch_holidays(out_dir, year='2026', path=CLOSURES) -> dict:
             return None
     before, original = attempts(), sha256(path) if Path(path).is_file() else None
     try:
-        response = public_data.request('GET', HOLIDAY_URL, params={'year': year}, purpose='calendar_2026')
+        response = public_data.request('GET', HOLIDAY_URL, params={'year': year}, purpose=f'calendar_{year}')
     except Exception as exc:  # recorded either way; budget denial and post-send failures differ only in the audit count
         after = attempts()
         result = {'status': 'BLOCKED', 'http_attempted': None if None in (before, after) else after > before,

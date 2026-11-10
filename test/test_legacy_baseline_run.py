@@ -150,3 +150,61 @@ def test_runner_records_stale_marks_for_held_missing_closes():
     assert all(np.isfinite(value) and value > 0 for _, value in track['nav'])
     assert any(e['stock_id'] == trade['stock_id'] and e['date'] == missing_day.strftime('%Y-%m-%d') for e in track['valuation_events'])
     assert track['valuation']['status'] == 'VALUATION_BLOCKED_ACTIONS_UNKNOWN'
+
+
+def test_evidence_capture_changes_no_result(monkeypatch):
+    """Design D5: the read-only wrappers leave trades and NAV identical (rtol 1e-9, atol 1e-12)."""
+    args = dict(start='2023-01-03', end='2023-04-28', snapshot_builder=synthetic_inputs)
+    captured = lb.run_legacy('quality_value_low_volatility', **args)
+    monkeypatch.setattr(lb, 'CAPTURE', False)
+    plain = lb.run_legacy('quality_value_low_volatility', **args)
+    for name in ('base', 'stress'):
+        assert captured['tracks'][name]['trades'] == plain['tracks'][name]['trades']
+        np.testing.assert_allclose([v for _, v in captured['tracks'][name]['nav']], [v for _, v in plain['tracks'][name]['nav']], rtol=1e-9, atol=1e-12)
+        assert 'positions_daily' not in plain['tracks'][name]
+    track = captured['tracks']['base']
+    by_day = pd.DataFrame(track['positions_daily']).groupby('date').value.sum()
+    nav = pd.Series(dict(track['nav']))
+    np.testing.assert_allclose(by_day.reindex(nav.index).to_numpy(), nav.to_numpy(), rtol=1e-9, atol=1e-6)
+    assert track['cost_summary']['includes_open_positions'] and track['cost_summary']['fees_and_tax_paid'] >= sum(t['cost'] for t in track['trades'])
+    assert captured['tracks']['stress']['trades'] and captured['tracks']['stress']['costs']['fee_rate'] == 2 * track['costs']['fee_rate']
+
+
+def test_pit_detail_matches_the_aggregate_and_never_infers_publication():
+    out = lb.run_legacy('quality_value_low_volatility', start='2023-01-03', end='2023-04-28', snapshot_builder=synthetic_inputs)
+    detail = pd.DataFrame(out['pit_detail'])
+    assert tuple(detail.columns) == lb.PIT_DETAIL_COLUMNS
+    assert lb.pit_totals(out['pit_detail']) == {k: out['checks'][f'pit_{k}'] for k in ('checks', 'violations', 'unverified')}
+    deadline = detail[detail.ticker == STOCKS[-1]]  # the stock without a MOPS date
+    assert len(deadline) and (deadline.pit_result == 'PIT_UNVERIFIED').all() and deadline.publication_date.isna().all()
+    assert (deadline.pit_failure_reason == 'DEADLINE_DATED_NOT_PUBLICATION').all()
+    mops = detail[detail.source == 'mops_publication']
+    assert len(mops) and (mops.pit_result == 'PIT_VERIFIED').all() and mops.publication_date.notna().all()
+    assert mops.financial_period.str.fullmatch(r'\d{4}Q[1-4]').all() and detail.source_hash.notna().all()
+
+
+def test_pit_detail_flags_filing_published_on_the_signal_date():
+    rows = pd.DataFrame({'stock_id': ['1101'], 'fundamental_availability_source': ['mops_publication'],
+                         'fundamental_due': [pd.Timestamp('2023-03-01')], 'fundamental_period': ['2022Q4'],
+                         'fundamental_publication_date': [pd.Timestamp('2023-03-01')]})
+    row = lb.pit_detail(rows, '2023-03-01', {'financials': 'f' * 64, 'publications': 'p' * 64})[0]
+    assert row['pit_result'] == 'PIT_VIOLATION' and row['pit_failure_reason'] == 'PUBLISHED_ON_OR_AFTER_SIGNAL_DATE'
+    assert lb.pit_check(rows, '2023-03-01')['violations'] == 1
+
+
+def test_injected_action_table_reaches_the_verdict():
+    initial = lb.run_legacy('quality_value_low_volatility', start='2023-01-03', end='2023-04-28', snapshot_builder=synthetic_inputs)
+    trade, missing_day = next((t, d) for t in initial['tracks']['base']['trades'] for d in DAYS
+                              if pd.Timestamp(t['buy_date']) < d < pd.Timestamp(t['sell_date']))
+    day = missing_day.strftime('%Y-%m-%d')
+
+    def with_actions(start, end):
+        inputs = synthetic_inputs(start, end)
+        bars = inputs['snapshot']
+        bars.loc[(bars.stock_id == trade['stock_id']) & (bars.trade_date == missing_day), 'close_price'] = np.nan
+        inputs['actions'] = {'events': [{'ticker': trade['stock_id'], 'ex_date': day}], 'coverage': {sid: ('2022-01-01', '2025-12-31') for sid in STOCKS}, 'status': 'PARTIALLY_VERIFIED'}
+        return inputs
+
+    verdict = lb.run_legacy('quality_value_low_volatility', start='2023-01-03', end='2023-04-28', snapshot_builder=with_actions)['tracks']['base']['valuation']
+    assert verdict['status'] == 'VALUATION_BLOCKED_CORPORATE_ACTION' and verdict['coverage'] == 'PARTIALLY_VERIFIED'
+    assert {'date': day, 'stock_id': trade['stock_id'], 'match': 'MATCHED_ACTION'} in verdict['event_match']

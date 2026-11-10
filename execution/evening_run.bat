@@ -6,6 +6,10 @@ chcp 65001 >nul
 cd /d D:\01_Project\Stocke\Stock_Linbotv1
 set PYTHON=D:\01_Project\Stocke\Stock_Linbotv1\myenv\Scripts\python.exe
 set SCHEDULER=jobs\scheduler.py
+REM change 2026-11-09-market-data-autonomy (decision.md D1/D2): trusted grant file outside the repo, listed-share scope, scheduled trigger
+set STOCK_LINBOT_GRANTS=C:\ProgramData\StockLinbot\grants\owner_grants.json
+set STOCK_LINBOT_MARKET_SCOPE=TWSE_ONLY
+set STOCK_LINBOT_TRIGGER=scheduled
 
 echo ============================================================
 echo  StockAI - 晚間資料庫更新與選股排程啟動

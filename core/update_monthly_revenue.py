@@ -20,7 +20,7 @@ from core.db_helper import get_db_engine
 from core.runtime.operation_policy import db_write_gate
 from core.runtime import public_data
 
-def fetch_mops_static_revenue(year, month):
+def fetch_mops_static_revenue(year, month, markets=('sii', 'otc')):
     """
     從 MOPS 靜態 HTML 爬取指定月份的月營收資料
     
@@ -38,7 +38,7 @@ def fetch_mops_static_revenue(year, month):
     print(f"\n📅 正在爬取 {year}年{month}月 (民國 {roc_year} 年)...")
     
     all_data = []
-    markets = [('sii', '上市'), ('otc', '上櫃')]
+    markets = [(code, name) for code, name in (('sii', '上市'), ('otc', '上櫃')) if code in markets]  # TWSE_ONLY: sii only
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
@@ -97,62 +97,68 @@ def fetch_mops_static_revenue(year, month):
         
     return pd.concat(all_data, ignore_index=True)
 
+def _revenue_columns(df):
+    col_stock = next((c for c in df.columns if '公司代號' in c), None)
+    col_rev = next((c for c in df.columns if '當月營收' in c and '去年' not in c), None)
+    col_yoy = next((c for c in df.columns if '去年同月增減' in c and '%' in c), None)
+    return (col_stock, col_rev, col_yoy) if col_stock and col_rev else None
+
+
+def clean_revenue_frame(df):
+    """Pure cleaning of one fetched MOPS month: stock_id, year, month, revenue (thousands -> units), revenue_yoy; None without key columns."""
+    if df is None or df.empty or (columns := _revenue_columns(df)) is None:
+        return None
+    col_stock, col_rev, col_yoy = columns
+    clean_df = pd.DataFrame()
+    clean_df['stock_id'] = df[col_stock].astype(str).str.replace('.0', '', regex=False).str.strip()
+    clean_df['year'] = df['year']
+    clean_df['month'] = df['month']
+    clean_df['revenue'] = pd.to_numeric(df[col_rev].astype(str).str.replace(',', '', regex=False), errors='coerce').fillna(0) * 1000
+    clean_df['revenue_yoy'] = pd.to_numeric(df[col_yoy], errors='coerce').fillna(0) if col_yoy else 0.0
+    return clean_df
+
+
+def write_revenue_frame(conn, clean_df) -> int:
+    """Create the table if missing, replace the frame's year and month, append the rows. Raises on any error (the caller owns the transaction)."""
+    year_val = int(clean_df.iloc[0]['year'])
+    month_val = int(clean_df.iloc[0]['month'])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS monthly_revenue (
+            stock_id VARCHAR(10),
+            year INT,
+            month INT,
+            revenue BIGINT,
+            revenue_yoy FLOAT,
+            PRIMARY KEY (stock_id, year, month)
+        )
+    """))
+    conn.execute(text("DELETE FROM monthly_revenue WHERE year = :y AND month = :m"), {"y": year_val, "m": month_val})
+    clean_df.to_sql('monthly_revenue', conn, if_exists='append', index=False, chunksize=2000)
+    return len(clean_df)
+
+
 def process_and_save(df):
     """
-    清洗月營收資料並寫入 monthly_revenue 資料表
-    
-    自動建表（若不存在），清洗 stock_id 格式，
-    轉換營收金額單位（千元→元），並以 UPSERT 方式存入資料庫。
-    
+    清洗月營收資料並寫入 monthly_revenue 資料表（舊流程：吞例外、列印結果；行為以 test_update_monthly_revenue 固定）
+
     Args:
         df: 爬取回來的原始 DataFrame
     """
     if df is None or df.empty:
         return
-        
-    engine = get_db_engine()
-    
-    # 欄位映射邏輯 (適應靜態 HTML 的欄位名)
-    clean_df = pd.DataFrame()
-    
-    # 找出正確的欄位名
-    col_stock = next((c for c in df.columns if '公司代號' in c), None)
-    col_rev = next((c for c in df.columns if '當月營收' in c and '去年' not in c), None)
-    col_yoy = next((c for c in df.columns if '去年同月增減' in c and '%' in c), None)
 
-    if not col_stock or not col_rev:
+    engine = get_db_engine()
+    if _revenue_columns(df) is None:
         print("   ❌ 找不到關鍵欄位，跳過此月")
         return
 
     try:
-        clean_df['stock_id'] = df[col_stock].astype(str).str.replace('.0', '', regex=False).str.strip()
-        clean_df['year'] = df['year']
-        clean_df['month'] = df['month']
-        
-        # 轉換數值
-        clean_df['revenue'] = pd.to_numeric(df[col_rev].astype(str).str.replace(',', '', regex=False), errors='coerce').fillna(0) * 1000
-        clean_df['revenue_yoy'] = pd.to_numeric(df[col_yoy], errors='coerce').fillna(0) if col_yoy else 0.0
-        
-        # 寫入資料庫
-        year_val = int(clean_df.iloc[0]['year'])
-        month_val = int(clean_df.iloc[0]['month'])
-        
+        clean_df = clean_revenue_frame(df)
         db_write_gate(dataset='monthly_revenue')
         with engine.begin() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS monthly_revenue (
-                    stock_id VARCHAR(10),
-                    year INT,
-                    month INT,
-                    revenue BIGINT,
-                    revenue_yoy FLOAT,
-                    PRIMARY KEY (stock_id, year, month)
-                )
-            """))
-            conn.execute(text("DELETE FROM monthly_revenue WHERE year = :y AND month = :m"), {"y": year_val, "m": month_val})
-            clean_df.to_sql('monthly_revenue', conn, if_exists='append', index=False, chunksize=2000)
+            write_revenue_frame(conn, clean_df)
             print(f"      ✅ 寫入成功 ({len(clean_df)} 筆)")
-            
+
     except Exception as e:
         print(f"   ❌ 處理失敗: {e}")
 

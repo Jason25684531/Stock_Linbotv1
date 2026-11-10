@@ -7,6 +7,8 @@ Line 推播主程式（早晚雙模式）
     python jobs/push_to_line.py --time evening   # 晚間選股策劃（全策略推薦）
 """
 import os
+import threading
+import time
 import sys
 from pathlib import Path
 
@@ -70,6 +72,66 @@ def get_pipeline_baseline_date() -> str | None:
 
 def _current_push_request_date() -> str:
     return datetime.now().strftime('%Y-%m-%d')
+
+
+PUBLISH_DIR = Path(__file__).resolve().parents[1] / 'outputs' / 'line_publish'
+_PUBLISH_KEY = None  # set by main() for a real push: '<market date>_<morning|evening>'
+
+
+class PublishStateUnresolved(RuntimeError):
+    """A PENDING or UNKNOWN push for this session and slot: the Owner checks LINE before anything is sent again."""
+
+
+def publish_state(key) -> str | None:
+    import json
+    try:
+        return json.loads((PUBLISH_DIR / f'{key}.json').read_text(encoding='utf-8')).get('state')
+    except (OSError, ValueError):
+        return None
+
+
+def _set_publish_state(key, state, **fields):
+    import json
+    PUBLISH_DIR.mkdir(parents=True, exist_ok=True)
+    path = PUBLISH_DIR / f'{key}.json'
+    tmp = path.with_suffix(f'.{os.getpid()}.{threading.get_ident()}.tmp')  # one temp file per writer
+    tmp.write_text(json.dumps({'key': key, 'state': state, 'at': datetime.now().isoformat(timespec='seconds'), **fields}), encoding='utf-8')
+    for attempt in range(50):  # Windows refuses a replace while a reader holds the file: retry briefly, never drop the state
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(0.02)
+
+
+def publish_once(key, send) -> str:
+    """At most one broadcast per session and slot (design D10): SENT is never resent; PENDING and UNKNOWN block a blind resend; an exception
+    during the broadcast leaves UNKNOWN, because LINE may have delivered it."""
+    import json
+    PUBLISH_DIR.mkdir(parents=True, exist_ok=True)
+    try:  # exclusive create: of two concurrent pushes exactly one owns PENDING
+        handle = os.open(PUBLISH_DIR / f'{key}.json', os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        state = publish_state(key)
+        if state == 'SENT':
+            return 'ALREADY_SENT'
+        raise PublishStateUnresolved(f'PUBLISH_STATE_UNRESOLVED: {key} is {state}') from None
+    with os.fdopen(handle, 'w', encoding='utf-8') as out:
+        out.write(json.dumps({'key': key, 'state': 'PENDING', 'at': datetime.now().isoformat(timespec='seconds')}))
+    try:
+        send()
+    except BaseException as exc:
+        _set_publish_state(key, 'UNKNOWN', error=f'{type(exc).__name__}: {exc}'[:300])
+        raise
+    _set_publish_state(key, 'SENT')
+    return 'SENT'
+
+
+def _calendar_freshness(market_date, recommendation_date, time_slot):
+    from core.research.trading_calendar import publish_freshness
+    return publish_freshness(market_date, recommendation_date, datetime.now().date(), time_slot)
 
 
 def _recommendation_freshness_issue() -> tuple[bool, str | None, str | None]:
@@ -809,10 +871,9 @@ def _broadcast_flex(flex_msg: FlexMessage, dry_run: bool = False):
         configuration = Configuration(access_token=Config.LINE_CHANNEL_ACCESS_TOKEN)
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
-            line_bot_api.broadcast(BroadcastRequest(
-                messages=[flex_msg]
-            ))
-        print("✅ Flex 推播已發送！")
+            send = lambda: line_bot_api.broadcast(BroadcastRequest(messages=[flex_msg]))
+            result = publish_once(_PUBLISH_KEY, send) if _PUBLISH_KEY else send()
+        print(f"✅ Flex 推播已發送！ {result if _PUBLISH_KEY else ''}")
     except Exception as e:
         print(f"❌ Flex 推播失敗: {e}")
 
@@ -865,12 +926,30 @@ def main(argv=None):
                 )
                 print(f'LINE push blocked: {message}')
                 return 2
+            fresh, expected, reason = _calendar_freshness(market_date, recommendation_date, args.time)
+            key = f'{market_date}_{args.time}'
+            unresolved = publish_state(key) in ('PENDING', 'UNKNOWN')
+            if not fresh or unresolved or publish_state(key) == 'SENT':
+                message = reason if not fresh else f'PUBLISH_STATE_UNRESOLVED: {key} is {publish_state(key)}' if unresolved else f'ALREADY_SENT: {key}'
+                record_pipeline_step_finish(pipeline_name=pipeline_name, step_name=step_name, run_date=run_date,
+                                            status='blocked' if (not fresh or unresolved) else 'success',
+                                            source_date=recommendation_date, trade_date=market_date, error_summary=message)
+                print(f'LINE push not sent: {message}')
+                return 2 if (not fresh or unresolved) else 0
+            global _PUBLISH_KEY
+            _PUBLISH_KEY = key
 
         if args.time == 'morning':
             summary = run_morning(dry_run=args.dry_run)
         else:
             summary = run_evening(dry_run=args.dry_run)
 
+        if not args.dry_run and _PUBLISH_KEY and publish_state(_PUBLISH_KEY) in ('PENDING', 'UNKNOWN'):
+            message = f'PUBLISH_STATE_UNRESOLVED: {_PUBLISH_KEY} is {publish_state(_PUBLISH_KEY)} after the broadcast attempt'
+            record_pipeline_step_finish(pipeline_name=pipeline_name, step_name=step_name, run_date=run_date, status='failed',
+                                        source_date=run_date, trade_date=get_pipeline_baseline_date(), error_summary=message)
+            print(f'LINE push failed: {message}')
+            return 1
         trade_date = get_pipeline_baseline_date()
         status = 'success' if trade_date else 'failed'
         if args.dry_run:

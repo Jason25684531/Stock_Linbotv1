@@ -275,3 +275,51 @@ def test_every_database_write_function_calls_the_gate_first():
                  'create_user_simulation_trade', 'save_backtest_results', 'upsert_financial_statements', 'save_news_sentiment'):
         body = re.search(rf'^def {name}\(.*?(?=^def |\Z)', source, re.S | re.M).group(0)
         assert 'db_write_gate(' in body, name
+
+
+def _ingestion_grant(tmp_path, monkeypatch, **change):
+    import hashlib
+    decision = tmp_path / 'decision.md'
+    decision.write_text('D1\n', encoding='utf-8')
+    monkeypatch.setattr(tc, 'grant_trusted', lambda path: True)
+    from core.runtime import ingestion_authority
+    monkeypatch.setattr(ingestion_authority, 'DECISION_REF', str(decision))
+    return grants_file(tmp_path, {'operation': 'market_data_ingestion', 'sources': ['TWSE:MI_INDEX'], 'datasets': ['prices_volume'],
+                                  'tables': ['daily_market_data'], 'market_scope': 'TWSE_ONLY', 'operations': ['read', 'commit'],
+                                  'rate_limit_seconds': 3.2, 'decision_ref': str(decision),
+                                  'decision_sha256': hashlib.sha256(decision.read_bytes()).hexdigest(), **change})
+
+
+def _daily_context():
+    from core.runtime import public_data
+    return public_data.context('https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX', params={'date': '20261105', 'type': 'ALL', 'response': 'json'})
+
+
+def test_ingestion_policies_need_a_grant_but_are_not_production():
+    for operation in (Operation.INGEST_MARKET_DATA, Operation.COMMIT_MARKET_DATA):
+        policy = op.POLICIES[operation]
+        assert policy.category is Category.MARKET_DATA_INGESTION
+        assert (policy.external_side_effect, policy.production_sensitive, policy.grant_required) == (True, False, True)
+
+
+def test_ingestion_read_is_allowed_in_research_mode_by_the_trusted_grant_only(monkeypatch, tmp_path):
+    assert op.current_mode() is ExecutionMode.RESEARCH
+    assert not authorize(Operation.INGEST_MARKET_DATA, dataset='prices_volume').allowed  # no context
+    assert authorize(Operation.INGEST_MARKET_DATA, request_context=_daily_context(), dataset='prices_volume').reason == 'INGESTION_DISABLED'
+    _ingestion_grant(tmp_path, monkeypatch)
+    decision = authorize(Operation.INGEST_MARKET_DATA, request_context=_daily_context(), dataset='prices_volume')
+    assert decision.allowed and decision.mode is ExecutionMode.RESEARCH
+    assert not (tmp_path / tc.USAGE).exists()  # the read decision is a pre-check: the transport debits
+
+
+def test_ingestion_commit_debits_one_use_and_only_for_designated_tables(monkeypatch, tmp_path):
+    _ingestion_grant(tmp_path, monkeypatch)
+    assert authorize(Operation.COMMIT_MARKET_DATA, table='daily_market_data').allowed
+    assert len((tmp_path / tc.USAGE).read_text(encoding='utf-8').splitlines()) == 1
+    assert authorize(Operation.COMMIT_MARKET_DATA, table='daily_recommendations').reason == 'INGESTION_TABLE_NOT_GRANTED:daily_recommendations'
+    assert not authorize(Operation.COMMIT_MARKET_DATA).allowed
+
+
+def test_gate_always_enforces_ingestion(monkeypatch):
+    with pytest.raises(op.AuthorizationDenied):
+        op.gate(Operation.COMMIT_MARKET_DATA, table='daily_market_data')

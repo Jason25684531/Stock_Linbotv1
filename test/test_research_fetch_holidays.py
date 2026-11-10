@@ -77,3 +77,13 @@ def test_failed_import_or_conflict_without_a_previous_file_leaves_no_file(tmp_pa
     failed = rw.fetch_holidays(tmp_path / 'failed', path=closures.path)
     assert failed['status'] == 'BLOCKED' and 'IMPORT_FAILED' in failed['reason'] and not closures.path.exists()
     assert json.loads((tmp_path / 'failed' / 'holiday_fetch.json').read_text(encoding='utf-8'))['status'] == 'BLOCKED'
+
+
+def test_the_request_purpose_follows_the_year(tmp_path, monkeypatch):
+    """Claude review 2026-11-09 (MAJOR): purpose calendar_2026 for 2027 is refused by the allow-list, so 2027 never imports."""
+    from core.runtime import public_data
+    from scripts import research_workflow as rw
+    seen = []
+    monkeypatch.setattr(public_data, 'request', lambda *a, **k: seen.append(k.get('purpose')) or (_ for _ in ()).throw(RuntimeError('stop')))
+    rw.fetch_holidays(tmp_path / 'out', '2027', tmp_path / 'closures.json')
+    assert seen == ['calendar_2027']

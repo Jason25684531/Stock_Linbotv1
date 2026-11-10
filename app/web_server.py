@@ -106,7 +106,8 @@ def index():
 @app.route('/dashboard')
 def dashboard():
     """Dashboard 主頁面。"""
-    return render_template('dashboard.html')
+    from .platform_routes import publish_overview
+    return render_template('dashboard.html', publish=publish_overview())
 
 
 FUNDAMENTAL_STRATEGY_ID = 'fundamental_g2g3_top5_reb60_score_weighted_v1'
@@ -123,6 +124,18 @@ LEGACY_FACTORS = {
 LEGACY_SUMMARY = Path(__file__).resolve().parents[1] / 'outputs/research_mode/legacy_validation_v1/summary.json'
 LEGACY_RECOVERY = LEGACY_SUMMARY.parent.parent / 'legacy_od29_recovery_v1'
 LEGACY_ITEMS = LEGACY_SUMMARY.parent.parent / 'combination_lab_v1/items'
+
+
+ACTIONS_SUMMARY = LEGACY_SUMMARY.parents[2] / 'autonomous_data_readiness/corporate_actions/summary.json'
+
+
+def _actions_diagnosis(strategy_id):
+    """After-the-run corporate action diagnosis of the OD-29 base track (scripts/run_evidence_gap_report.py); the run itself is unchanged."""
+    try:
+        verdict = json.loads(ACTIONS_SUMMARY.read_text(encoding='utf-8'))['verdicts'][f'{strategy_id}:base']
+        return f"{verdict['with_actions_after_run']} (stored {verdict['stored']})"
+    except (OSError, ValueError, KeyError):
+        return 'NOT_RUN'
 
 
 def _legacy_status(strategy_id):
@@ -147,9 +160,14 @@ def _legacy_status(strategy_id):
                 raise ValueError('run identity mismatch')
             metrics = run_store.read_frame(loaded, 'metrics') if run['status'] == 'SUCCESS' else {}
             error = run_store.read_frame(loaded, 'error') if run['status'] == 'FAILED' else {}
+            checks = metrics.get('checks') or {}
+            from .platform_routes import evidence_for  # late import: platform_routes imports this package
             return {'run_id': run_id, 'status': run['status'], 'created_at': run.get('created_at'),
                     'gates': (metrics.get('gates_comparison') or {}).get('gates'),
-                    'pit_status': (metrics.get('checks') or {}).get('pit_status'),
+                    'pit_status': checks.get('pit_status'), 'pit_checks': checks.get('pit_checks'), 'pit_unverified': checks.get('pit_unverified'),
+                    'pit_detail': 'PRESENT' if 'pit_detail.csv' in loaded['files'] else 'HISTORICAL_PIT_DETAIL_MISSING',
+                    'evidence_status': evidence_for(loaded, hash_inputs=False)['status'],
+                    'actions_diagnosis': _actions_diagnosis(strategy_id) if expected_item.startswith('OD29:') else None,
                     'valuation': {name: (track.get('quality') or {}).get('status') for name, track in
                                   ((metrics.get('checks') or {}).get('valuation') or {}).items()},
                     'reason': error.get('message')}
@@ -289,7 +307,15 @@ def stock_analysis():
 def strategy_center():
     """Render the unified strategy catalog."""
     # research entries are display-only and appended after the runtime catalog, which other callers keep unchanged
-    return render_template('strategy_center.html', strategy_catalog=_build_strategy_catalog() + research_payloads.catalog_entries())
+    catalog = _build_strategy_catalog() + research_payloads.catalog_entries()
+    from core.research.reference import catalog as reference_catalog, runner
+    rows = {row['strategy_id']: row for row in (runner.latest_report() or {}).get('rows', [])}
+    needs = {cap.strategy_id: list(cap.data_needs) for cap in reference_catalog.capabilities()}
+    for item in catalog:  # latest reference batch (REFERENCE_ONLY): state, four levels and both cost tracks; every source is public
+        row = rows.get(item['strategy_id'])
+        item['reference'] = row and {key: row.get(key) for key in ('state', 'reason', 'levels', 'metrics', 'run_id')} | {
+            'data_needs': needs.get(item['strategy_id'], []), 'tej_required': False}
+    return render_template('strategy_center.html', strategy_catalog=catalog)
 
 
 @app.route('/strategies/research')

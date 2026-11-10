@@ -158,6 +158,38 @@ def _run_or_404(run_id):
         abort(404)
 
 
+V2_EVIDENCE_FILES = ('trades',) + run_store.REQUIRED_FILES_V2[len(run_store.REQUIRED_FILES):]
+# legacy runs pin these admitted inputs (scripts/legacy_baseline_run.PINNED_INPUTS); a version 2 run names its own in admission_record
+LEGACY_PINNED = {'benchmark': 'tri_source', 'calendar': 'tri_calendar'}
+
+
+def _ledger():
+    """(verified, {experiment_id: row}) of the trusted trial ledger; core.backtest never imports scripts, the web layer reads it."""
+    from scripts import research_workflow as rw
+    rows = {}
+    for row in rw._trial_rows():
+        rows.setdefault(row['experiment_id'], row)  # the admission (TRIAL) row, not a later REPLAY of it
+    return rw.verify_trials() == 'PASS', rows
+
+
+def evidence_for(loaded, hash_inputs=True):
+    """Evidence status of one verified run, plus which version 2 files exist and whether benchmark and calendar are pinned."""
+    from scripts import research_workflow as rw
+    try:
+        verified, rows = _ledger()
+    except Exception as exc:  # an unreadable ledger is never an admission
+        verified, rows = False, {}
+        status = {'status': 'POST_RUN_NOT_ADMISSION_VERIFIED', 'reasons': [f'LEDGER_UNREADABLE:{type(exc).__name__}'], 'reproducible_offline': False}
+    else:
+        status = run_store.evidence_status(loaded, rows.get(loaded['run'].get('trial_id')), verified, rw._tree_sha if hash_inputs else None)
+    row = rows.get(loaded['run'].get('trial_id')) or {}
+    names = {**LEGACY_PINNED, **((loaded['run'].get('admission_record') or {}).get('pinned') or {})}
+    pinned = {role: 'PINNED_AT_ADMISSION' if names[role] in (row.get('inputs_sha256') or {}) else 'NOT_PINNED' for role in LEGACY_PINNED}
+    files = loaded.get('files') or []
+    return {**status, 'pinned': pinned,
+            'files': {name: f'{name}.csv' in files or f'{name}.json' in files for name in V2_EVIDENCE_FILES}}
+
+
 def _metric_rows(metrics):
     rows = []
     for name, value in (metrics or {}).items():
@@ -169,7 +201,13 @@ def _metric_rows(metrics):
 @app.route('/backtest/runs')
 def backtest_runs():
     strategy = (request.args.get('strategy') or '').strip() or None
-    return render_template('backtest_runs.html', runs=run_store.history(strategy_id=strategy)[:200], strategy=strategy)
+    runs = run_store.history(strategy_id=strategy)[:200]
+    try:
+        ledger = _ledger()
+        evidence = {r['run_id']: run_store.evidence_status({'run': r}, ledger[1].get(r.get('trial_id')), ledger[0]) for r in runs if r['verified']}
+    except Exception:  # the list still renders; each row shows '-'
+        evidence = {}
+    return render_template('backtest_runs.html', runs=runs, strategy=strategy, evidence=evidence)
 
 
 @app.route('/api/backtest/runs')
@@ -208,7 +246,8 @@ def backtest_run_detail(run_id):
     trades = run_store.read_frame(loaded, 'trades').head(500).to_dict('records') if 'trades.csv' in loaded['files'] else []
     return render_template('backtest_run_detail.html', run=run, error=error, curves=json.dumps(curves), metrics=metrics,
                            metric_rows={rid: _metric_rows((m or {}).get('metrics') or {}) for rid, m in metrics.items()},
-                           compare_refused=refused, trades=trades, history=run_store.history(strategy_id=run.get('strategy_id'))[:20])
+                           compare_refused=refused, trades=trades, history=run_store.history(strategy_id=run.get('strategy_id'))[:20],
+                           evidence=evidence_for(loaded))
 
 
 @app.route('/reports/multi-strategy')
@@ -252,6 +291,71 @@ def lab_combinations():
     state = lab_state()
     return render_template('lab_combinations.html', state=state, heatmap=json.dumps((state['summary'] or {}).get('heatmap')),
                            admin=is_admin())
+
+
+@app.route('/reference')
+def reference_comparison():
+    """Fixed 21-row reference comparison (decision.md D3): the latest batch report as stored, grouped by comparison_group in catalog order;
+    no sort, score, ranking or JSON endpoint."""
+    from core.research.reference import runner
+    report = runner.latest_report()
+    gaps = {}
+    if report is not None:
+        gaps = (_read_json(runner.OUT / 'batches' / report['batch_id'] / 'gap_report.json', {}) or {}).get('strategies', {})
+    groups = {}
+    for row in (report or {}).get('rows', []):
+        groups.setdefault(row.get('comparison_group') or 'NOT_EXECUTED', []).append(row)
+    from core.research.reference import batch_job
+    return render_template('reference_mode.html', report=report, groups=groups, gaps=gaps, active='reference_comparison',
+                           job=batch_job.state(), admin=is_admin(), admin_enabled=admin_state()[0])
+
+
+def publish_overview(now=None) -> dict:
+    """Dashboard card: latest market and recommendation dates against the expected session (the same gate as the LINE push), the
+    listed-only universe and the latest LINE publish states. Read-only; a database error is shown, never hidden."""
+    from datetime import datetime
+    from core.db_helper import get_actual_latest_date, get_latest_valid_market_date, normalize_date_str
+    from core.research.trading_calendar import publish_freshness
+    now = now or datetime.now()
+    out = {'universe': 'TWSE_LISTED_ONLY', 'tpex': 'NOT_COVERED', 'slot': 'evening' if now.hour >= 15 else 'morning'}
+    try:
+        market, recommendation = normalize_date_str(get_latest_valid_market_date()), normalize_date_str(get_actual_latest_date())
+        fresh, expected, reason = publish_freshness(market, recommendation, now.date(), out['slot'])
+        out.update(market_date=market, recommendation_date=recommendation, expected_session=expected, fresh=fresh, reason=reason)
+    except Exception as exc:
+        out['error'] = f'{type(exc).__name__}: {exc}'[:200]
+    folder = ROOT / 'outputs' / 'line_publish'
+    out['line'] = [{'key': p.stem, 'state': (_read_json(p, {}) or {}).get('state')} for p in sorted(folder.glob('*.json'))[-2:]] \
+        if folder.is_dir() else []
+    return out
+
+
+@app.route('/reference/batches/<batch_id>/<name>')
+def reference_download(batch_id, name):
+    """The stored fixed-order report of one batch, as written (Markdown only: no JSON ranking API, decision.md D3)."""
+    from core.research.reference import runner
+    if name not in ('report.md', 'gap_report.md') or not re.fullmatch(r'\d{8}T\d{6}Z-[0-9a-f]{8}', batch_id):
+        abort(404)
+    path = runner.OUT / 'batches' / batch_id / name
+    if not path.is_file():
+        abort(404)
+    return send_file(path, mimetype='text/markdown', as_attachment=True, download_name=f'{batch_id}_{name}')
+
+
+@app.route('/admin/reference/<action>', methods=['POST'])
+def admin_reference(action):
+    """Start or cancel the background reference batch (admin + CSRF); a second start while any runner process lives is refused."""
+    if action not in ('start', 'cancel'):
+        abort(404)
+    refused = _require_admin_write()
+    if refused:
+        return jsonify(refused[0]), refused[1]
+    from core.research.reference import batch_job
+    result = batch_job.start() if action == 'start' else batch_job.cancel()
+    if result['status'] in ('RUN_IN_PROGRESS', 'NOT_RUNNING'):
+        return jsonify(result), 409
+    flash('參考批次已開始；重新整理本頁查看進度' if action == 'start' else '參考批次已取消；已完成的回測保留，下次會直接重用', 'success')
+    return redirect(url_for('reference_comparison'))
 
 
 @app.route('/api/lab/summary')

@@ -916,7 +916,11 @@ def _fetch_twse_snapshot(trade_date: str) -> pd.DataFrame:
         timeout=20,
     )
     response.raise_for_status()
-    payload = response.json()
+    return snapshot_frame(response.json(), trade_date)
+
+
+def snapshot_frame(payload: dict, trade_date: str) -> pd.DataFrame:
+    """Pure parse of one MI_INDEX reply (shared with services/market_data_update.twse_only_prices)."""
     if payload.get('stat') != 'OK':
         return pd.DataFrame()
 
@@ -962,7 +966,11 @@ def _fetch_twse_flow(trade_date: str) -> pd.DataFrame:
         timeout=20,
     )
     response.raise_for_status()
-    payload = response.json()
+    return flow_frame(response.json(), trade_date)
+
+
+def flow_frame(payload: dict, trade_date: str) -> pd.DataFrame:
+    """Pure parse of one T86 reply (shared with services/market_data_update.twse_only_prices)."""
     if payload.get('stat') != 'OK':
         return pd.DataFrame()
 

@@ -27,9 +27,15 @@ class Counter:
         return self.fn(day)
 
 
-def service(tmp_path, adapters, sleeps=None):
+def verified_calendar(day):
+    """A calendar whose year schedule is imported: weekdays open, weekends closed (keeps tests off the real cache)."""
+    return 'CLOSED_SCHEDULED' if mdu._as_date(day).weekday() >= 5 else 'EXPECTED_OPEN'
+
+
+def service(tmp_path, adapters, sleeps=None, calendar=verified_calendar, **kwargs):
     sleeps = [] if sleeps is None else sleeps
-    return MarketDataUpdateService(root=tmp_path, adapters=adapters, sleep=sleeps.append, today=TODAY)
+    kwargs.setdefault('commit_floor', None)  # these fixtures use 2025 sessions; the G1 floor has its own tests (test_market_data_commit.py)
+    return MarketDataUpdateService(root=tmp_path, adapters=adapters, sleep=sleeps.append, today=TODAY, calendar=calendar, **kwargs)
 
 
 def by_dataset(result):
@@ -128,7 +134,7 @@ def test_stale_reports_expected_and_actual_dates(tmp_path):
     assert row['status'] == 'STALE'
     assert row['checks']['expected_latest_trade_date'] == '2025-03-05'
     assert row['checks']['latest_trade_date'] == '2025-03-03'
-    assert 'holidays' in row['checks']['note']
+    assert 'trading_calendar' in row['checks']['note']
 
 
 def test_weekend_expected_date_is_previous_friday(tmp_path):
@@ -170,12 +176,11 @@ def test_not_covered_and_auth_blocked_reporting(tmp_path):
     assert gaps == {'splits': 'NOT_COVERED', 'capital_reductions': 'NOT_COVERED'}
 
 
-def test_daily_disabled_skips_without_fetch(tmp_path):
+def test_daily_ignores_the_schedule_switch_and_catches_up(tmp_path):
+    """The trusted ingestion grant is the switch (design D4); schedule.json no longer blocks daily mode."""
     prices = Counter(ok())
-    svc = service(tmp_path, {'prices_volume': prices})
-    assert svc.run('daily')['status'] == 'SKIPPED_DISABLED'
-    assert prices.calls == 0 and not list(tmp_path.glob('[0-9]*.json'))
-    save_schedule(tmp_path, True, '18:30')
+    svc = service(tmp_path, {'prices_volume': prices}, latest_market_date=lambda: '2025-03-04')
+    assert load_schedule(tmp_path)['enabled'] is False
     result = svc.run('daily', datasets=['prices_volume'])
     assert result['status'] == 'COMPLETED' and result['dates'] == ['2025-03-05'] and prices.calls == 1
 
@@ -239,37 +244,203 @@ def test_import_graph_is_clean():
     assert done.returncode == 0, done.stdout + done.stderr
 
 
-def test_update_database_waits_for_a_manual_update(monkeypatch, capsys):
-    """The evening pipeline must not stop because a manual update holds the lock: main() waits, then runs."""
-    import contextlib
-    import jobs.update_database as job
-    import services.market_data_update as svc
-    calls = {'n': 0}
-
-    @contextlib.contextmanager
-    def lock():
-        calls['n'] += 1
-        if calls['n'] < 3:
-            raise svc.UpdateInProgress('held')
-        yield
-
-    monkeypatch.setattr(svc, 'acquire_lock', lock)
-    monkeypatch.setattr(job, 'LOCK_WAIT_SECONDS', 0)
-    monkeypatch.setattr(job, '_run_update', lambda: 0)
-    assert job.main() == 0 and calls['n'] == 3
-    monkeypatch.setattr(job, 'LOCK_WAIT_ATTEMPTS', 1)
-    calls['n'] = -10
-    assert job.main() == 1
-    assert 'UPDATE_IN_PROGRESS: lock wait timed out' in capsys.readouterr().out
-
-
-def test_pipeline_bookkeeping_denial_never_writes_database(tmp_path, monkeypatch):
+def test_service_never_writes_pipeline_runs(tmp_path, monkeypatch):
+    """jobs/update_database.py owns the update_database pipeline_runs rows (design D4); the service writes none."""
     import core.db_helper as db
-    import core.runtime.operation_policy as policy
     calls = []
-    instance = service(tmp_path, {'prices_volume': ok()})
-    instance.uses_default_adapters = True
-    monkeypatch.setattr(policy, 'enforce', lambda *a, **k: (_ for _ in ()).throw(policy.AuthorizationDenied('denied')))
     monkeypatch.setattr(db, 'record_pipeline_step_start', lambda **kw: calls.append(kw))
-    instance._pipeline_step('start')
+    monkeypatch.setattr(db, 'record_pipeline_step_finish', lambda **kw: calls.append(kw))
+    service(tmp_path, {'prices_volume': ok()}).run('manual', datasets=['prices_volume'])
     assert calls == []
+
+
+# ---------------------------------------------------------------- change 2026-11-09-autonomous-data-readiness-v1 (design D6, D7)
+
+def test_precheck_contexts_equal_the_real_requests():
+    from core.research.sources import twse
+    from core.runtime import public_data
+    contexts = mdu.precheck('corporate_actions', '2025-03-05', gate=lambda ctx: None)
+    real = public_data.context(twse.TWT49U_URL, params={'startDate': '20250305', 'endDate': '20250305', 'response': 'json'})
+    assert [c.key for c in contexts] == [real.key]
+    # the MCP server builds the MI_INDEX URL with a query string; the benchmark adapter passes params: both are one request identity
+    mcp_style = public_data.context(mdu.endpoints('prices_volume', '2025-03-05', 'TWSE')[0]['url'])
+    assert mcp_style.key == mdu.precheck('benchmark', '2025-03-05', gate=lambda ctx: None)[0].key
+    revenue = mdu.precheck('monthly_revenue', '2025-03-05', gate=lambda ctx: None)
+    assert {c.dataset for c in revenue} == {'monthly_revenue'} and len(revenue) == 8  # Feb and Jan x sii and otc x '2' and '02' spellings
+    assert [dict(c.parameters)['TYPEK'] for c in mdu.precheck('financials', '2025-03-05', gate=lambda ctx: None, market='ALL')] == ['sii', 'otc']
+
+
+def test_restricted_endpoint_and_denied_budget_block_before_fetch():
+    with pytest.raises(mdu.EndpointBlocked) as blocked:
+        mdu.precheck('prices_volume', '2025-03-05', gate=lambda ctx: None, market='ALL')
+    assert sum(r.startswith('RESTRICTED_SOURCE_REQUIRES_SEPARATE_AUTHORIZATION:tpex') for r in blocked.value.reasons) == 3
+
+    def deny(ctx):
+        raise PermissionError('download_market_data: BudgetDenied: BUDGET_UNASSIGNED: no approved fixed request plan for this purpose')
+    fetched = []
+    run = mdu.guarded('corporate_actions', fetched.append, check=lambda n, d: mdu.precheck(n, d, gate=deny), audit=set)
+    with pytest.raises(mdu.EndpointBlocked) as denied:
+        run('2025-03-05')
+    assert denied.value.reasons[0].startswith('BUDGET_UNASSIGNED:') and fetched == []
+
+
+def test_unexpected_audited_request_is_source_scope_mismatch(tmp_path):
+    audits = iter([{(1, 'expected')}, {(1, 'expected'), (2, 'other-request')}])
+    run = mdu.guarded('benchmark', lambda day: {'rows': 1}, check=lambda n, d: [], audit=lambda: next(audits))
+    assert run('2025-03-05') == {'status': 'SOURCE_SCOPE_MISMATCH', 'unexpected_request_keys': ['other-request']}
+    svc = service(tmp_path, {'benchmark': lambda day: {'status': 'SOURCE_SCOPE_MISMATCH'}})
+    assert by_dataset(svc.run('manual', datasets=['benchmark']))['benchmark']['status'] == 'SOURCE_SCOPE_MISMATCH'
+
+
+def _prices(day, rows=150, duplicate=False):
+    import pandas as pd
+    ids = [str(1000 + i) for i in range(rows)]
+    frame = pd.DataFrame({'stock_id': ids + ids[:1] * duplicate, 'trade_date': day, 'close_price': 10.0})
+    return {'frame': frame, 'rows': len(frame), 'min_rows': 100, 'latest_trade_date': day, 'required_empty': []}
+
+
+def test_commit_only_after_write_authorization_and_reread(tmp_path):
+    commits = []
+    committers = {'prices_volume': (lambda frame, day: commits.append(frame) or len(frame), lambda frame, day: len(frame))}
+
+    def denied(name):
+        raise PermissionError('write_production_db: write_production_db is a Production operation; mode is research')
+    blocked = by_dataset(service(tmp_path / 'a', {'prices_volume': _prices}, committers=committers, enforce=denied).run('manual', datasets=['prices_volume']))
+    row = blocked['prices_volume']
+    assert row['status'] == 'COMMIT_AUTH_BLOCKED' and commits == [] and Path(row['staging']['path']).is_file()
+    assert row['staging']['sha256'] == mdu._file_sha(row['staging']['path']) and not (tmp_path / 'a' / 'state.json').exists()
+    done = by_dataset(service(tmp_path / 'b', {'prices_volume': _prices}, committers=committers, enforce=lambda name: None).run('manual', datasets=['prices_volume']))
+    assert done['prices_volume']['status'] == 'SUCCESS' and done['prices_volume']['reread_rows'] == 150 and len(commits[0]) == 150
+    short = {'prices_volume': (lambda frame, day: len(frame), lambda frame, day: 3)}
+    failed = by_dataset(service(tmp_path / 'c', {'prices_volume': _prices}, committers=short, enforce=lambda name: None).run('manual', datasets=['prices_volume']))
+    assert failed['prices_volume']['status'] == 'COMMIT_VERIFY_FAILED'
+
+
+def test_staged_file_changed_before_commit_is_refused(tmp_path):
+    def tamper(name):
+        for path in (tmp_path / 'staging').rglob('*.parquet'):
+            path.write_bytes(path.read_bytes() + b'x')
+    commits = []
+    committers = {'prices_volume': (lambda frame, day: commits.append(1), lambda frame, day: 0)}
+    row = by_dataset(service(tmp_path, {'prices_volume': _prices}, committers=committers, enforce=tamper).run('manual', datasets=['prices_volume']))['prices_volume']
+    assert row['status'] == 'STAGING_HASH_MISMATCH' and commits == []
+
+
+def test_duplicate_keys_never_commit(tmp_path):
+    """Duplicate primary keys stop the commit for every SPLIT dataset (monthly revenue is SPLIT since design D4)."""
+    import pandas as pd
+    commits = []
+    committers = {name: (lambda frame, day: commits.append(1), lambda frame, day: 10**6) for name in ('prices_volume', 'monthly_revenue')}
+    revenue = pd.DataFrame({'stock_id': ['1101', '1101'], 'year': [2025, 2025], 'month': [2, 2], 'revenue': [1.0, 2.0]})
+    adapters = {'prices_volume': lambda day: _prices(day, duplicate=True),
+                'monthly_revenue': lambda day: {'frame': revenue, 'rows': 2, 'latest_trade_date': None, 'has_announcement_date': True, 'required_empty': []}}
+    rows = by_dataset(service(tmp_path, adapters, committers=committers, enforce=lambda name: None).run('manual', datasets=list(adapters)))
+    for name in adapters:
+        assert rows[name]['status'] == 'INTEGRITY_INVALID' and 'PRIMARY_KEY_DUPLICATES:1' in rows[name]['validation']
+    assert commits == []
+
+
+def test_schema_drift_is_not_retried(tmp_path):
+    class SchemaDriftError(Exception):
+        pass
+
+    def drift(day):
+        raise SchemaDriftError('TWT49U required fields are missing')
+    calls = Counter(drift)
+    row = by_dataset(service(tmp_path, {'corporate_actions': calls}).run('manual', datasets=['corporate_actions']))['corporate_actions']
+    assert row['status'] == 'SCHEMA_DRIFT' and calls.calls == 1
+
+
+def test_unverified_calendar_gives_freshness_unknown_and_closed_days_skip(tmp_path):
+    unverified = service(tmp_path / 'u', {'prices_volume': ok(latest='2025-03-03')}, calendar=lambda day: 'CALENDAR_UNVERIFIED')
+    row = by_dataset(unverified.run('manual', datasets=['prices_volume']))['prices_volume']
+    assert row['status'] == 'FRESHNESS_UNKNOWN' and row['checks']['stale'] is False
+    save_schedule(tmp_path / 'h', True, '17:00')
+    holiday = service(tmp_path / 'h', {'prices_volume': Counter(ok())}, calendar=lambda day: 'CLOSED_SCHEDULED')
+    assert holiday.run('daily')['status'] == 'SKIPPED_NON_BUSINESS_DAY'
+
+
+def test_verify_scheduled_requires_a_scheduled_trigger(tmp_path, monkeypatch):
+    svc = service(tmp_path, {name: ok() for name in mdu.DATASETS})
+    svc.run('manual')
+    assert 'TRIGGER_NOT_SCHEDULED' in svc.verify_scheduled()['problems']
+    monkeypatch.setenv('STOCK_LINBOT_TRIGGER', 'scheduled')
+    svc.run('manual', force=True)
+    result = svc.verify_scheduled()
+    assert result['status'] == 'VERIFIED' and result['problems'] == [] and result['session'] == '2025-03-05'
+
+
+def test_cli_daily_against_an_isolated_root(tmp_path):
+    root = tmp_path / 'isolated_root'
+    env = {**os.environ, 'STOCK_LINBOT_UPDATE_ROOT': str(root)}
+    done = subprocess.run([sys.executable, '-m', 'services.market_data_update', '--daily'], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0 and json.loads(done.stdout)['status'] == 'SKIPPED_INGESTION_DISABLED'
+    assert not root.exists()  # without a trusted ingestion grant a daily run reads, fetches and writes nothing, not even the root
+
+
+def test_scheduled_run_that_updated_nothing_fails_acceptance(tmp_path, monkeypatch):
+    monkeypatch.setenv('STOCK_LINBOT_TRIGGER', 'scheduled')
+    blocked = {name: (lambda day: {'status': 'IMPLEMENTED_BUT_AUTH_BLOCKED'}) for name in mdu.DATASETS}
+    svc = service(tmp_path, blocked)
+    svc.run('manual')
+    result = svc.verify_scheduled()
+    assert result['status'] == 'FAILED'
+    assert sorted(p.split(':')[1] for p in result['problems'] if p.startswith('DATASET_NOT_UPDATED')) == sorted(mdu.REQUIRED_DAILY)
+
+
+def test_commit_exception_is_reported_and_the_run_continues(tmp_path):
+    def broken(frame, day):
+        raise RuntimeError('Market schema missing nullable columns')
+    committers = {'prices_volume': (broken, lambda frame, day: 0)}
+    adapters = {'prices_volume': _prices, 'benchmark': ok(rows=1)}
+    result = service(tmp_path, adapters, committers=committers, enforce=lambda name: None).run('manual', datasets=list(adapters))
+    rows = by_dataset(result)
+    assert rows['prices_volume']['status'] == 'COMMIT_FAILED' and Path(rows['prices_volume']['staging']['path']).is_file()
+    assert rows['benchmark']['status'] == 'SUCCESS' and result['status'] == 'COMPLETED_WITH_ERRORS'
+    assert 'prices_volume|2025-03-05' not in json.loads((tmp_path / 'state.json').read_text(encoding='utf-8'))
+
+
+def test_rows_already_present_do_not_prove_a_commit(tmp_path):
+    """The re-read sees every key (an earlier pipeline wrote them) but this commit wrote fewer rows: not a success."""
+    committers = {'prices_volume': (lambda frame, day: len(frame) - 1, lambda frame, day: len(frame))}
+    row = by_dataset(service(tmp_path, {'prices_volume': _prices}, committers=committers, enforce=lambda name: None).run('manual', datasets=['prices_volume']))
+    assert row['prices_volume']['status'] == 'COMMIT_VERIFY_FAILED'
+
+
+def test_one_write_authorization_per_commit(tmp_path, monkeypatch):
+    from core.runtime import operation_policy
+    calls = []
+    monkeypatch.setattr(operation_policy, 'enforce', lambda *a, **k: calls.append(a))
+    svc = service(tmp_path, {})
+    monkeypatch.delenv('STOCK_LINBOT_ENFORCE', raising=False)
+    svc._authorize_commit('daily_market_data')
+    monkeypatch.setenv('STOCK_LINBOT_ENFORCE', 'write_production_db')
+    svc._authorize_commit('daily_market_data')
+    assert [call[0] for call in calls] == [operation_policy.Operation.COMMIT_MARKET_DATA] * 2  # one ingestion commit check per commit, always
+
+    def denied(frame, day):
+        raise PermissionError('write_production_db: write_production_db is a Production operation; mode is research')
+    row = by_dataset(service(tmp_path / 'g', {'prices_volume': _prices}, committers={'prices_volume': (denied, lambda f, d: 0)})
+                     .run('manual', datasets=['prices_volume']))['prices_volume']
+    assert row['status'] == 'COMMIT_AUTH_BLOCKED'
+
+
+def test_financials_commit_never_alters_the_schema(tmp_path, monkeypatch):
+    """Missing optional column: COMMIT_FAILED before any statement; ensure_financial_columns (ALTER TABLE) is never called."""
+    import pandas as pd
+    from sqlalchemy import create_engine, text
+    from core import db_helper
+    engine = create_engine(f"sqlite:///{tmp_path / 'fin.db'}")
+    with engine.begin() as conn:
+        conn.execute(text('CREATE TABLE financial_statements (stock_id TEXT, year INT, quarter INT, eps REAL)'))
+    monkeypatch.setattr(db_helper, 'ensure_financial_columns', lambda conn: pytest.fail('the service never alters a table'))
+    committer = mdu.TableCommitter('financial_statements', ('stock_id', 'year', 'quarter'), engine=lambda: engine,
+                                   required_columns=mdu.FINANCIAL_OPTIONAL_COLUMNS, date_of=mdu.COMMITTERS['financials'].date_of)
+    frame = pd.DataFrame({'stock_id': ['1101', '2330'], 'year': [2024, 2024], 'quarter': [4, 4], 'eps': [1.0, 2.0]})
+    adapter = lambda day: {'frame': frame, 'rows': 2, 'latest_trade_date': None, 'has_announcement_date': True, 'required_empty': []}
+    row = by_dataset(service(tmp_path, {'financials': adapter}, committers={'financials': committer}, enforce=lambda name: None)
+                     .run('manual', datasets=['financials']))['financials']
+    assert row['status'] == 'COMMIT_FAILED' and 'SCHEMA_NOT_READY' in row['errors'][0]
+    assert pd.read_sql(text('SELECT COUNT(*) AS n FROM financial_statements'), engine)['n'][0] == 0
+    q3 = frame.assign(year=2026, quarter=3)
+    assert mdu.COMMITTERS['financials'].key_dates(q3, '2026-11-05') == ['2026-09-28', '2026-09-28']  # the period, not the run date

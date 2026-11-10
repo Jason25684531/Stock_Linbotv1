@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}參考策略比較 - Stock Linbot{% endblock %}
+{% block page_kicker %}研究{% endblock %}
+{% block page_heading %}參考策略比較（21 項）{% endblock %}
+{% block content %}
+{% macro metric(m) %}{% if m.value is not none %}{{ '%.4f'|format(m.value) }}{% else %}None ({{ m.reason }}){% endif %}{% endmacro %}
+<div class="space-y-5" data-testid="reference">
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100" data-testid="reference-banner">
+        <p class="font-semibold">REFERENCE_ONLY · NOT_CERTIFIED · NOT_A_TRIAL</p>
+        {% if report %}
+        <p class="mt-1">{{ report.disclosure }}</p>
+        <p class="mt-1 text-xs">批次 {{ report.batch_id }}（{{ report.created_at }}）· 期間 2023-01-03 至 2025-12-31 · 上市股（TWSE）· 基礎成本與兩倍成本 · 2026 封存資料一律不讀</p>
+        {% endif %}
+    </section>
+    {% if not report %}
+    <p class="text-sm text-muted" data-testid="reference-empty">NO_REFERENCE_BATCH：尚未產生參考批次（python -m core.research.reference.runner）。</p>
+    {% else %}
+    <section class="rounded-lg border border-line p-4 text-sm" data-testid="reference-counts">
+        {% for state, n in report.counts.items() %}<span class="mr-4">{{ state }} {{ n }}</span>{% endfor %}
+    </section>
+    {% for group, rows in groups.items() %}
+    <section class="overflow-x-auto rounded-lg border border-line" data-testid="reference-group">
+        <h2 class="border-b border-line px-4 py-2 text-sm font-semibold">比較群組 {{ group }}{% if group == 'NOT_EXECUTED' %}（未執行，只列狀態與原因；數值不可與其他群組並列）{% endif %}</h2>
+        <table class="w-full text-left text-xs">
+            <thead><tr class="text-muted">
+                <th class="px-3 py-2">策略</th><th class="px-3 py-2">狀態</th><th class="px-3 py-2">原因</th>
+                <th class="px-3 py-2">報酬</th><th class="px-3 py-2">Sharpe</th><th class="px-3 py-2">最大回撤</th>
+                <th class="px-3 py-2">報酬 2x</th><th class="px-3 py-2">Sharpe 2x</th><th class="px-3 py-2">最大回撤 2x</th>
+                <th class="px-3 py-2">層級</th><th class="px-3 py-2">資料缺口</th>
+            </tr></thead>
+            <tbody>
+            {% for row in rows %}
+            <tr class="border-t border-line align-top" data-testid="reference-row" data-strategy="{{ row.strategy_id }}">
+                <td class="px-3 py-2 font-mono">{% if row.run_id %}{{ row.strategy_id }}<span class="block text-muted">{{ row.run_id }}</span><span class="block break-all text-muted" data-testid="run-identity">{{ row.run_identity }}</span>{% else %}{{ row.strategy_id }}{% endif %}</td>
+                <td class="px-3 py-2">{{ row.state }}</td>
+                <td class="px-3 py-2">{{ row.reason }}{% if row.error %}<span class="block text-red-300">{{ row.error }}</span>{% endif %}{% for w in row.warnings %}<span class="block text-amber-300">{{ w }}</span>{% endfor %}</td>
+                {% for track in ('base', 'x2') %}{% for name in ('total_return', 'sharpe', 'max_drawdown') %}
+                <td class="px-3 py-2 font-mono">{% if row.metrics %}{{ metric(row.metrics[track][name]) }}{% endif %}</td>
+                {% endfor %}{% endfor %}
+                <td class="px-3 py-2" data-testid="reference-levels">{% for level, ok in row.levels.items() %}<span class="block">{{ level }} {{ 'YES' if ok else 'NO' }}</span>{% endfor %}</td>
+                <td class="px-3 py-2">{% for gap in (gaps.get(row.strategy_id) or {}).get('gaps', []) %}<span class="block">{{ gap.field }}: {{ (gap.recovery or {}).status }} {{ (gap.recovery or {}).reason or '' }}</span>{% endfor %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endfor %}
+    <p class="text-xs" data-testid="reference-downloads">下載（固定順序，未排名）：
+        <a class="text-blue-300" href="{{ url_for('reference_download', batch_id=report.batch_id, name='report.md') }}">比較報告 report.md</a> ·
+        <a class="text-blue-300" href="{{ url_for('reference_download', batch_id=report.batch_id, name='gap_report.md') }}">資料缺口 gap_report.md</a></p>
+    {% endif %}
+    <section class="rounded-lg border border-line p-4 text-sm" data-testid="reference-job">
+        <h2 class="font-semibold">批次執行</h2>
+        <p class="mt-1">狀態：<strong data-testid="reference-job-status">{{ job.status }}</strong>
+            {% if job.started_at %}· 開始 {{ job.started_at }} · pid {{ job.pid }}{% endif %}
+            · 已存回測 <span data-testid="reference-job-progress">{{ job.saved_runs or 0 }} / {{ job.planned }}</span>
+            {% if job.batch_id %}· 批次 {{ job.batch_id }}{% endif %}</p>
+        {% if job.status == 'RUNNING_ELSEWHERE' %}<p class="text-amber-300">另一個參考批次程序正在執行（pid {{ job.pids|join(', ') }}），不可重複啟動。</p>{% endif %}
+        {% if job.log_tail %}<pre class="mt-2 overflow-x-auto text-xs text-muted" data-testid="reference-job-log">{{ job.log_tail|join('\n') }}</pre>{% endif %}
+        <p class="mt-1 text-xs text-muted">相同資料、程式、參數與成本的策略直接重用（REUSE），不重跑；取消只停止此頁啟動的程序，已完成的回測保留。</p>
+        {% if admin %}
+        <div class="mt-2 flex gap-3">
+            <form method="post" action="{{ url_for('admin_reference', action='start') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <button class="rounded bg-blue-600 px-4 py-2 text-white" data-testid="reference-start" {% if job.pids %}disabled{% endif %}>啟動參考批次</button></form>
+            <form method="post" action="{{ url_for('admin_reference', action='cancel') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <button class="rounded border border-strong px-4 py-2" data-testid="reference-cancel" {% if job.status != 'RUNNING' %}disabled{% endif %}>取消</button></form>
+        </div>
+        {% elif admin_enabled %}<p class="mt-2 text-xs">需要<a class="text-blue-300" href="{{ url_for('admin_login') }}">管理員登入</a>才能啟動或取消批次。</p>
+        {% else %}<p class="mt-2 text-xs text-muted">管理功能未啟用（未設定管理 token），本頁唯讀。</p>{% endif %}
+    </section>
+</div>
+{% endblock %}

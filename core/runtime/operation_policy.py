@@ -44,6 +44,7 @@ class Category(str, Enum):
     RESEARCH = 'research'
     LOCAL_RESEARCH = 'research'  # compatibility alias
     PUBLIC_RESEARCH_FETCH = 'public_research_fetch'
+    MARKET_DATA_INGESTION = 'market_data_ingestion'  # routine TWSE reads + three market tables, trusted ingestion grant only
     RESTRICTED_EXTERNAL = 'restricted_external'
     EXTERNAL_RESEARCH = 'restricted_external'  # legacy external operations require context or separate authority
     PRODUCTION = 'production'
@@ -65,6 +66,8 @@ class Operation(str, Enum):
     GENERATE_REPORT = 'generate_report'
     RUN_REGISTERED_EXPERIMENT = 'run_registered_experiment'
     DOWNLOAD_MARKET_DATA = 'download_market_data'
+    INGEST_MARKET_DATA = 'ingest_market_data'
+    COMMIT_MARKET_DATA = 'commit_market_data'
     CALL_RESEARCH_API = 'call_research_api'
     FETCH_PUBLIC_DATA = 'public_research_fetch'
     WRITE_PRODUCTION_DB = 'write_production_db'
@@ -81,6 +84,7 @@ class Operation(str, Enum):
 _LOCAL = OperationPolicy(Category.RESEARCH, False, False, False)
 _EXTERNAL = OperationPolicy(Category.RESTRICTED_EXTERNAL, True, False, True)
 _PUBLIC = OperationPolicy(Category.PUBLIC_RESEARCH_FETCH, True, False, False)
+_INGESTION = OperationPolicy(Category.MARKET_DATA_INGESTION, True, False, True)
 _PRODUCTION = OperationPolicy(Category.PRODUCTION, True, True, True)
 _FORBIDDEN = OperationPolicy(Category.FORBIDDEN, True, True, True)
 POLICIES = {
@@ -88,6 +92,7 @@ POLICIES = {
     Operation.GENERATE_REPORT: _LOCAL, Operation.RUN_REGISTERED_EXPERIMENT: _LOCAL,
     Operation.DOWNLOAD_MARKET_DATA: _EXTERNAL, Operation.CALL_RESEARCH_API: _EXTERNAL,
     Operation.FETCH_PUBLIC_DATA: _PUBLIC,
+    Operation.INGEST_MARKET_DATA: _INGESTION, Operation.COMMIT_MARKET_DATA: _INGESTION,
     Operation.WRITE_PRODUCTION_DB: _PRODUCTION, Operation.PUBLISH_EXTERNAL: _PRODUCTION, Operation.CREATE_SCHEDULE: _PRODUCTION,
     Operation.SUBMIT_LIVE_ORDER: _FORBIDDEN, Operation.MODIFY_LIVE_ORDER: _FORBIDDEN, Operation.CANCEL_LIVE_ORDER: _FORBIDDEN,
     Operation.MODIFY_AUTHORIZATION: _FORBIDDEN, Operation.CHANGE_PRODUCTION_QUOTA: _FORBIDDEN, Operation.CHANGE_PRODUCTION_SCOPE: _FORBIDDEN,
@@ -204,7 +209,7 @@ def _official_ok(context=None) -> str:
 
 
 def authorize(operation, *, strategy=None, dataset=None, task_id='authorize', scope=None, uses=1, official=False, cost=0.0,
-              request_context=None, restricted_source=None) -> Decision:
+              request_context=None, restricted_source=None, table=None, market_scope='TWSE_ONLY') -> Decision:
     """Decide. A refusal is a Decision, not an exception; the one exception is a Production-category operation whose decision record cannot be
     written (OSError: no record, no action). There is no production=, trusted=, grants_path= or root= parameter: the mode comes from
     current_mode() and the grant file and usage log are always task_controller's GRANTS and STATE, so a caller cannot reset a grant quota."""
@@ -232,6 +237,25 @@ def authorize(operation, *, strategy=None, dataset=None, task_id='authorize', sc
                 grant_id = tc.grant_id(grant)
             except Exception as exc:  # any failure, including an unreadable grant file or log, is a denial
                 allowed, reason = False, f'{type(exc).__name__}: {exc}'[:300]
+    elif policy.category is Category.MARKET_DATA_INGESTION:
+        # Trusted ingestion grant only: never the research budget, official_fetch or the mode (decision.md D1). A read is a
+        # pre-check (public_data debits per HTTP attempt); a commit debits one use here.
+        try:
+            from core.runtime import ingestion_authority, public_data
+            from scripts import task_controller as tc
+            if operation is Operation.INGEST_MARKET_DATA:
+                context = None if request_context is None else public_data.validate_context(request_context)
+                grant, reason = (None, 'INGEST_MARKET_DATA needs a request context') if context is None else ingestion_authority.evaluate(
+                    operation='read', context=context, dataset=dataset, market_scope=market_scope)
+            else:
+                grant, reason = ingestion_authority.evaluate(operation='commit', table=table, market_scope=market_scope)
+                if grant is not None and not grant.get('builtin'):
+                    grant = tc.require_grant(task_id, ingestion_authority.OPERATION, root=tc.STATE, grants_path=tc.GRANTS,
+                                             scope={'tables': table}, uses=1)
+            grant_id = None if grant is None else 'BUILTIN' if grant.get('builtin') else tc.grant_id(grant)
+        except Exception as exc:  # any failure, including block() on a task file that does not exist, is a denial
+            reason = f'{type(exc).__name__}: {exc}'[:300]
+        allowed = not reason
     elif policy.category in (Category.RESTRICTED_EXTERNAL, Category.PUBLIC_RESEARCH_FETCH):
         try:
             if request_context is not None:
@@ -286,7 +310,7 @@ def gate(operation, **kwargs):
     observe by default, authorize-or-raise once the operation is listed in STOCK_LINBOT_ENFORCE. A forbidden (or unregistered) operation is
     never audit-only: it always goes through enforce() and is denied."""
     policy = POLICIES.get(operation)
-    if not isinstance(operation, Operation) or policy is None or policy.category in (Category.FORBIDDEN, Category.PUBLIC_RESEARCH_FETCH, Category.RESTRICTED_EXTERNAL) or operation.value in enforced_operations():
+    if not isinstance(operation, Operation) or policy is None or policy.category in (Category.FORBIDDEN, Category.PUBLIC_RESEARCH_FETCH, Category.RESTRICTED_EXTERNAL, Category.MARKET_DATA_INGESTION) or operation.value in enforced_operations():
         enforce(operation, **kwargs)
     else:
         observe(operation, strategy=kwargs.get('strategy'), dataset=kwargs.get('dataset'))

@@ -16,6 +16,18 @@
         <article class="metric-card"><p class="metric-label">啟用策略</p><div class="num mt-2 text-xl font-bold text-blue-300" x-text="strategyCount()">—</div></article>
         <article class="metric-card"><p class="metric-label">系統狀態</p><div class="status-badge mt-2" :class="statusTone(systemLabel())" x-text="statusLabel(systemLabel())">○ 未檢查</div></article>
     </section>
+    {% if publish is defined %}
+    <section class="quant-card grid gap-2 p-4 text-sm sm:grid-cols-2 xl:grid-cols-4" data-testid="publish-overview">
+        <div>資料日：<span class="num" data-testid="publish-market-date">{{ publish.market_date or '未知' }}</span></div>
+        <div>推薦日：<span class="num">{{ publish.recommendation_date or '未知' }}</span></div>
+        <div>預期交易日：<span class="num">{{ publish.expected_session or '未知' }}</span>
+            <strong data-testid="publish-fresh" class="{{ 'text-emerald-300' if publish.fresh else 'text-amber-300' }}">{{ '最新' if publish.fresh else '未更新' }}</strong></div>
+        <div>股票池：<strong data-testid="publish-universe">{{ publish.universe }}</strong>（上櫃 {{ publish.tpex }}）</div>
+        {% if publish.reason %}<p class="text-xs text-amber-300 sm:col-span-2 xl:col-span-4 break-all">{{ publish.reason }}</p>{% endif %}
+        {% if publish.error %}<p class="text-xs text-red-300 sm:col-span-2 xl:col-span-4 break-all">{{ publish.error }}</p>{% endif %}
+        <div class="sm:col-span-2 xl:col-span-4 text-xs" data-testid="publish-line">LINE 推送：{% for item in publish.line %}<span class="num mr-3">{{ item.key }} {{ item.state }}</span>{% else %}尚無推送紀錄{% endfor %}</div>
+    </section>
+    {% endif %}
     <div class="flex items-center justify-end gap-3 text-xs text-muted"><span x-show="lastRefresh" x-text="'最後檢查：' + lastRefresh"></span><button type="button" @click="refresh().then(() => $dispatch('notify', '已完成資料檢查'))" :disabled="refreshing" class="rounded border border-strong px-3 py-2" x-text="refreshing ? '更新中…' : '重新整理資料'"></button></div>
     <div x-show="!recommendationLoading && recommendationMessage()" class="rounded border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200" x-text="recommendationMessage()"></div>
     <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">

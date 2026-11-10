@@ -109,3 +109,29 @@ def test_extract_from_mi_index_reads_no_2026_file(tmp_path):
     assert b.extract_from_mi_index(raw=raw, root=out) == {'files_read': 2, 'rows': 2}
     series = b.load(out)
     assert list(series.index.strftime('%Y-%m-%d')) == ['2025-12-30', '2025-12-31'] and series.iloc[-1] == 50100.2
+
+
+def test_provenance_is_deterministic_and_anomalies_are_diagnostic_only(tmp_path):
+    rows = full_rows()
+    rows[2] = (rows[2][0], rows[1][1] * 1.15)  # a 15% one-day move
+    write_json(tmp_path, rows)
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    price = pd.Series([v for _, v in full_rows()], index=pd.to_datetime(CALENDAR))
+    first, second = (benchmark_tri.provenance(CALENDAR, root=tmp_path, price=price) for _ in range(2))
+    assert first == second and first['status'] == 'BENCHMARK_SOURCE_NOT_CROSS_VERIFIED'
+    assert first['DIAGNOSTIC_ANOMALY']['jumps_over_10pct'] == ['2024-01-04', '2025-12-31']  # up 15%, then back down
+    assert '2024-01-04' in first['DIAGNOSTIC_ANOMALY']['return_gap_over_3pct']
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before  # nothing corrected
+
+
+def test_crosscheck_lists_differences_and_never_downloads(tmp_path):
+    local, external = tmp_path / 'local', tmp_path / 'ext'
+    local.mkdir(), external.mkdir()
+    write_json(local, full_rows())
+    changed = full_rows()
+    changed[1] = (changed[1][0], changed[1][1] + 1.0)
+    write_json(external, changed, name='MFI94U.json')
+    assert benchmark_tri.crosscheck(None, root=local)['status'] == 'INPUT_MISSING'
+    result = benchmark_tri.crosscheck(external / 'MFI94U.json', root=local)
+    assert result['status'] == 'DIFFERENCES' and [r['date'] for r in result['differences']] == ['2024-01-03']
+    assert benchmark_tri.crosscheck(local / 'MFI94U_2024.json', root=local)['status'] == 'MATCH'

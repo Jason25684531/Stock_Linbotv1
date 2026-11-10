@@ -84,7 +84,13 @@ def input_paths():
             'delistings': n7.OUT / 'delistings.csv', 'user_settings': n7.NATIVE7 / 'user_settings.json',
             'financial_statements': n7.MYSQL / 'snapshot_financial_statements.parquet', 'monthly_revenue': n7.MYSQL / 'snapshot_monthly_revenue.parquet',
             'publication_dates': PIT_RECORDS, 'tri_source': ROOT / 'data/benchmark/MFI94U',
-            'tri_calendar': ROOT / 'outputs/research_mode/prepared_v6/bars.json'}
+            'tri_calendar': ROOT / 'outputs/research_mode/prepared_v6/bars.json',
+            'corporate_actions': ROOT / 'outputs/research_mode/prepared_v6/actions.json'}
+
+
+# Version 2 evidence: which admitted inputs are the benchmark, the calendar and the data (core.backtest.run_store.evidence_status).
+PINNED_INPUTS = {'benchmark': 'tri_source', 'calendar': 'tri_calendar',
+                 'data': ['bars', 'financial_statements', 'monthly_revenue', 'publication_dates', 'corporate_actions']}
 
 
 def check_injectable(strategy_id, overrides):
@@ -112,10 +118,11 @@ def check_injectable(strategy_id, overrides):
 
 def load_inputs(start, end):
     """Default builder: the native7 inputs. Window filters are applied afterwards by _prepare, for injected builders too."""
+    from core.research import corporate_actions
     from core.research.native_frame import load_publication_dates
 
     paths = input_paths()
-    return {'snapshot': n7.build_snapshot(start, end), 'financials': pd.read_parquet(paths['financial_statements']),
+    return {'actions': corporate_actions.load(), 'snapshot': n7.build_snapshot(start, end), 'financials': pd.read_parquet(paths['financial_statements']),
             'revenue': pd.read_parquet(paths['monthly_revenue']), 'publications': load_publication_dates(), 'settings': n7.read(paths['user_settings']),
             'benchmark': pd.read_csv(paths['benchmarks'], parse_dates=['date']).set_index('date').taiex_price,
             'delistings': pd.read_csv(paths['delistings'], dtype={'stock_id': str}, encoding='utf-8-sig')}
@@ -156,15 +163,21 @@ def _prepare(inputs, start, end):
     rev = inputs['revenue']
     rev = rev[(_due(rev.year + (rev.month == 12), rev.month % 12 + 1, 10) <= last).to_numpy()].reset_index(drop=True)
     data = NativeResearchData(snap, fin, rev, publications=inputs['publications'])
-    # ponytail: carry each filing's availability date into the frame rows so the PIT check reads the date of the report actually used
-    data._fin = data._fin.assign(fundamental_due=data._fin['due'])
+    # ponytail: carry each filing's availability date, period and MOPS date into the frame rows so the PIT check reads the report actually
+    # used. `keys` repeats prepare_fundamentals' own left merge, so its index labels are the ones _fin kept.
+    keys = fin[['stock_id', 'year', 'quarter']].assign(stock_id=fin.stock_id.astype(str))
+    pubs = inputs['publications']
+    keys = keys.merge(pubs, on=['stock_id', 'year', 'quarter'], how='left') if pubs is not None else keys.assign(publication_date=pd.NaT)
+    data._fin = data._fin.assign(fundamental_due=data._fin['due'],
+                                 fundamental_period=(keys.year.astype(int).astype(str) + 'Q' + keys.quarter.astype(int).astype(str)).loc[data._fin.index],
+                                 fundamental_publication_date=keys.publication_date.loc[data._fin.index])
     bench = inputs.get('benchmark')
     digests = {k: _digest(v) for k, v in (('snapshot', snap), ('financials', fin), ('revenue', rev), ('publications', inputs['publications']),
                                           ('settings', inputs['settings']), ('benchmark', bench), ('delistings', inputs.get('delistings')))}
     sessions = [d.strftime('%Y-%m-%d') for d in sorted(snap.trade_date.unique()) if start <= d.strftime('%Y-%m-%d') <= end]
     return SimpleNamespace(data=data, settings=inputs['settings'], sessions=sessions, start=start, end=end, digests=digests,
                            bench=None if bench is None else bench[(bench.index >= pd.Timestamp(start)) & (bench.index <= last)],
-                           delistings=inputs.get('delistings'))
+                           delistings=inputs.get('delistings'), actions=inputs.get('actions'))
 
 
 @functools.lru_cache(maxsize=1)
@@ -185,6 +198,39 @@ def pit_check(rows, signal_date):
     used = source.notna()
     early = pd.to_datetime(rows['fundamental_due']) < t
     return {'checks': int(used.sum()), 'violations': int((used & ~early).sum()), 'unverified': int((used & early & source.ne('mops_publication')).sum())}
+
+
+PIT_DETAIL_COLUMNS = ('ticker', 'signal_date', 'financial_period', 'statement_version', 'publication_date', 'source', 'source_hash',
+                      'pit_result', 'pit_failure_reason')
+
+
+def pit_detail(rows, signal_date, hashes):
+    """One evidence row per row pit_check counts (same rules); publication_date only from MOPS, never a deadline or period end."""
+    t = pd.Timestamp(signal_date)
+    tickers = rows['stock_id'].astype(str) if 'stock_id' in rows else rows.index.astype(str)
+    if 'fundamental_availability_source' not in rows or 'fundamental_due' not in rows:
+        return [dict.fromkeys(PIT_DETAIL_COLUMNS) | {'ticker': sid, 'signal_date': signal_date, 'pit_result': 'PIT_UNVERIFIED',
+                                                      'pit_failure_reason': 'AVAILABILITY_COLUMNS_MISSING'} for sid in tickers]
+    out = []
+    for sid, row in zip(tickers, rows.to_dict('records')):
+        source = row['fundamental_availability_source']
+        if not isinstance(source, str):
+            continue  # no filing used: not a PIT check (pit_check counts only used rows)
+        mops = source == 'mops_publication'
+        early = pd.Timestamp(row['fundamental_due']) < t if pd.notna(row['fundamental_due']) else False
+        published = row.get('fundamental_publication_date')
+        out.append({'ticker': sid, 'signal_date': signal_date, 'financial_period': row.get('fundamental_period'),
+                    'statement_version': (hashes.get('financials') or '')[:12] or None,
+                    'publication_date': pd.Timestamp(published).strftime('%Y-%m-%d') if mops and pd.notna(published) else None,
+                    'source': source, 'source_hash': hashes.get('publications' if mops else 'financials'),
+                    'pit_result': 'PIT_VIOLATION' if not early else 'PIT_VERIFIED' if mops else 'PIT_UNVERIFIED',
+                    'pit_failure_reason': 'PUBLISHED_ON_OR_AFTER_SIGNAL_DATE' if not early else None if mops else 'DEADLINE_DATED_NOT_PUBLICATION'})
+    return out
+
+
+def pit_totals(detail):
+    return {'checks': len(detail), 'violations': sum(r['pit_result'] == 'PIT_VIOLATION' for r in detail),
+            'unverified': sum(r['pit_result'] == 'PIT_UNVERIFIED' for r in detail)}
 
 
 def pit_status(totals):
@@ -231,9 +277,9 @@ class _CostLog:
 
 
 class _Observer:
-    def __init__(self, chip):
-        self.chip, self.pit = chip, False
-        self.picks, self.chip_dates = [], []
+    def __init__(self, chip, hashes=None):
+        self.chip, self.pit, self.hashes = chip, False, hashes or {}
+        self.picks, self.chip_dates, self.pit_rows = [], [], []
         self.pit_totals = {'checks': 0, 'violations': 0, 'unverified': 0}
 
     def selected(self, day, frame, candidates):
@@ -242,6 +288,7 @@ class _Observer:
         if self.pit and candidates is not None and len(candidates):
             for k, v in pit_check(candidates, day).items():
                 self.pit_totals[k] += v
+            self.pit_rows += pit_detail(candidates, day, self.hashes)
 
     def pick(self, day, ids):
         self.picks += [[day, str(sid), rank] for rank, sid in enumerate(ids, 1)]
@@ -279,15 +326,51 @@ def _record_trades(engine, costs):
     engine.buy, engine.sell = recorded_buy, recorded_sell
 
 
+CAPTURE = True  # read-only evidence wrappers (design D5); tests switch them off to prove they change nothing
+
+
+def _record_positions(engine, rows):
+    """After each session's marks and NAV, before the close signals: one row per held stock plus a CASH row (sum = that day's NAV)."""
+    marks, mark, close = {}, engine._mark_position, engine.process_close_signals
+
+    def recorded_mark(sid, info, date_str):
+        value = mark(sid, info, date_str)
+        marks[sid] = (info['shares'], value)
+        return value
+
+    def recorded_close(date_str, trend):
+        rows.extend({'date': date_str, 'stock_id': sid, 'shares': shares, 'value': value}
+                    for sid, (shares, value) in sorted(marks.items()) if sid in engine.positions)
+        rows.append({'date': date_str, 'stock_id': 'CASH', 'shares': None, 'value': engine.capital})
+        marks.clear()
+        return close(date_str, trend)
+
+    engine._mark_position, engine.process_close_signals = recorded_mark, recorded_close
+
+
+def _evidence(engine, positions, costs, sessions):
+    """Open positions at the end and cost/turnover totals that include them (closed-trade figures alone omit open entries)."""
+    last = {r['stock_id']: r['value'] for r in positions if positions and r['date'] == positions[-1]['date']}
+    open_rows = [{'stock_id': sid, 'shares': info['shares'], 'entry_price': info.get('cost'), 'last_mark_value': last.get(sid)}
+                 for sid, info in sorted(engine.positions.items())]
+    traded = sum((t['buy_price'] + t['sell_price']) * t['shares'] for t in engine.trades) + sum(r['shares'] * (r['entry_price'] or 0) for r in open_rows)
+    nav = pd.Series(engine.daily_assets, dtype='float64')
+    years = len(sessions) / 252
+    return open_rows, {'fees_and_tax_paid': costs.paid, 'includes_open_positions': True, 'traded_value': traded,
+                       'turnover_annual': traded / nav.mean() / years if len(nav) and nav.mean() > 0 and years else None,
+                       'slippage': 'applied inside fill prices (seeded); not separable from the fill price'}
+
+
 def _run_track(strategy_id, overrides, prep, multiple):
     """One engine run with native7's settings; costs and slippage cap scaled by `multiple`, same slippage seed."""
     import core.backtest.runner as runner
     from core.backtest.costs import CostModel
-    from core.backtest.execution import stale_valuation_verdict
+    from core.research import corporate_actions
     from scripts.native_recovery import isolated
 
     costs = _costs(multiple)
-    observer = _Observer(strategy_id == CHIP_STRATEGY)
+    observer = _Observer(strategy_id == CHIP_STRATEGY, prep.digests)
+    positions = []
     select = runner.select_backtest_candidates
 
     def observed_select(strategy, platform, name, frame, asof_date, runtime_overrides=None):
@@ -305,6 +388,8 @@ def _run_track(strategy_id, overrides, prep, multiple):
             _inject(engine, overrides)
         engine.costs = _CostLog(CostModel(costs['fee_rate'], costs['tax_rate'], costs['minimum_fee']))
         _record_trades(engine, engine.costs)
+        if CAPTURE:
+            _record_positions(engine, positions)
         observer.pit = bool(FUNDAMENTAL_COLUMNS & set(engine.required_inputs))
         find = engine.find_candidates
         engine.find_candidates = lambda day: observer.pick(day, find(day))
@@ -319,7 +404,10 @@ def _run_track(strategy_id, overrides, prep, multiple):
               for t in engine.trades]
     track = {'nav': [[d, float(v)] for d, v in zip(engine.daily_dates, engine.daily_assets)], 'trades': trades, 'engine_error': engine_error, 'costs': costs,
              'valuation_policy': engine.valuation_policy, 'valuation_events': list(engine.valuation_events),
-             'valuation': stale_valuation_verdict(engine.valuation_events, getattr(prep.data, 'action_dates', None))}
+             'valuation': corporate_actions.verdict(engine.valuation_events, getattr(prep, 'actions', None))}
+    if CAPTURE:
+        track['positions_daily'] = positions
+        track['open_positions'], track['cost_summary'] = _evidence(engine, positions, engine.costs, prep.sessions)
     return track, engine, observer
 
 
@@ -365,7 +453,7 @@ def run_legacy(strategy_id, overrides=None, *, start=START, end=END, snapshot_bu
               'max_hold_days': engine.max_hold_days, 'required_inputs': list(engine.required_inputs), 'fill_rule': engine.fill_rule}
     bench = prep.bench
     return {'strategy_id': strategy_id, 'overrides': dict(sorted(overrides.items())), 'config': config_for(strategy_id, overrides) | {'start': start, 'end': end},
-            'tracks': {'base': base, 'stress': stress}, 'picks': observer.picks, 'checks': checks,
+            'tracks': {'base': base, 'stress': stress}, 'picks': observer.picks, 'checks': checks, 'pit_detail': observer.pit_rows,
             'data_version': source_hash(prep.digests), 'input_digests': prep.digests,
             'benchmark': None if bench is None or bench.empty else [[d.strftime('%Y-%m-%d'), float(v)] for d, v in bench.items()],
             'benchmark_note': ('TAIEX_PRICE_SOURCE_UNAVAILABLE' if bench is None or bench.empty else 'TAIEX price index (price return)')

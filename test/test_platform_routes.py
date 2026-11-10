@@ -1,4 +1,5 @@
 import collections
+from pathlib import Path
 import json
 
 import pandas as pd
@@ -130,3 +131,60 @@ def test_save_failed_banner_is_rendered(client, monkeypatch):
     page = client.post('/backtest', data={'strategies': 'mean_reversion', 'start_date': '2025-01-01', 'end_date': '2025-02-01'}).get_data(as_text=True)
     assert 'SAVE_FAILED (OSError)' in page
     assert '/backtest/runs/' not in page.split('data-testid="save-status"')[1][:400]
+
+
+# ---------------------------------------------------------------- change 2026-11-09-autonomous-data-readiness-v1 (design D8)
+
+RECOVERY_V38 = '20261106T173926Z-f0589c22'
+REAL_RUNS = Path(__file__).resolve().parents[1] / 'outputs/backtest_runs'  # read-only: these pages never write
+
+
+def test_recovery_run_page_shows_post_run_evidence(client, monkeypatch):
+    monkeypatch.setattr(run_store, 'ROOT', REAL_RUNS)
+    if not (run_store.ROOT / RECOVERY_V38).is_dir():
+        pytest.skip('recovery run not present')
+    html = client.get(f'/backtest/runs/{RECOVERY_V38}').get_data(as_text=True)
+    assert 'data-testid="run-evidence"' in html and 'POST_RUN_NOT_ADMISSION_VERIFIED' in html and 'NO_ADMISSION_BLOCK' in html
+    assert 'NOT_PINNED' in html and 'trades：PRESENT' in html and 'trades_stress：MISSING' in html and 'data-testid="reproducible">NO<' in html
+    listing = client.get('/backtest/runs').get_data(as_text=True)
+    assert 'data-testid="run-evidence">POST_RUN_NOT_ADMISSION_VERIFIED<' in listing
+
+
+def test_isolated_version_2_run_page_is_admission_verified(client, tmp_path, monkeypatch):
+    from app import platform_routes
+    from scripts import research_workflow as rw
+    from test_backtest_run_store import _admitted, _record, _v2, _v2_frames
+    rows, admit = rw._trial_rows, rw.admit_experiment  # unpatched: the temporary ledger only
+    _, ledger, row, admission, _ = _admitted(tmp_path)
+    monkeypatch.setattr(run_store, 'ROOT', tmp_path / 'runs')
+    rid = run_store.save_run(_v2(_record(), admission), _v2_frames())
+    monkeypatch.setattr(platform_routes, '_ledger', lambda: (rw.verify_trials(ledger) == 'PASS', {r['experiment_id']: r for r in rows(ledger)}))
+    html = client.get(f'/backtest/runs/{rid}').get_data(as_text=True)
+    assert 'data-testid="evidence-status">ADMISSION_VERIFIED<' in html and 'data-testid="reproducible">YES<' in html
+    assert 'trades_stress：PRESENT' in html and 'pit_detail：PRESENT' in html and row['experiment_id'] in html
+
+
+def test_admin_page_shows_calendar_sources_and_trigger(client, monkeypatch, tmp_path):
+    from app import platform_routes
+    from services.market_data_update import MarketDataUpdateService
+    svc = MarketDataUpdateService(root=tmp_path, adapters={}, today='2026-11-09', calendar=lambda day: 'CALENDAR_UNVERIFIED')
+    monkeypatch.setattr(platform_routes, '_service', lambda: svc)
+    html = client.get('/admin/data').get_data(as_text=True)
+    if 'data-testid="data-calendar"' not in html:  # read-only login view when the admin token is unset
+        _admin(client, monkeypatch)
+        html = client.get('/admin/data').get_data(as_text=True)
+    assert 'data-testid="calendar-state">CALENDAR_UNVERIFIED<' in html and 'data-testid="data-sources"' in html
+    assert 'restricted:tpex https://www.tpex.org.tw' in html and 'BENCHMARK_SOURCE_NOT_CROSS_VERIFIED' in html
+    assert 'PARTIAL_UNSPLITTABLE' not in html  # monthly revenue is SPLIT since design D4
+
+
+def test_strategy_center_carries_pit_and_action_evidence(monkeypatch):
+    from app import web_server
+    monkeypatch.setattr(run_store, 'ROOT', REAL_RUNS)
+    if not (web_server.LEGACY_RECOVERY / 'quality_value_low_volatility.json').is_file():
+        pytest.skip('recovery evidence not present')
+    recovery = web_server._legacy_status('quality_value_low_volatility')['recovery_baseline']
+    assert recovery['pit_status'] == 'PIT_UNVERIFIED' and (recovery['pit_checks'], recovery['pit_unverified']) == (41783, 10173)
+    assert recovery['pit_detail'] == 'HISTORICAL_PIT_DETAIL_MISSING' and recovery['evidence_status'] == 'POST_RUN_NOT_ADMISSION_VERIFIED'
+    expected = 'NOT_RUN' if not web_server.ACTIONS_SUMMARY.is_file() else 'STALE_ACTIONS_PARTIALLY_VERIFIED (stored VALUATION_BLOCKED_ACTIONS_UNKNOWN)'
+    assert recovery['actions_diagnosis'] == expected

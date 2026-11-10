@@ -242,6 +242,7 @@ def save(item, evidence, levels_note):
               'comparison_group': group, 'status_class': status_class, 'reference': item['kind'] == 'legacy_baseline',
               'certification_status': 'NOT_CERTIFIED', 'oos_status': 'OOS_NOT_AVAILABLE',
               'gate_result': 'DATA_BLOCKED' if item['kind'].startswith('legacy') else 'RESEARCH_CANDIDATE_UNCERTIFIED'}
+    record.update(evidence.pop('_record_extra', None) or {})  # evidence_version 2 fields (admission_record)
     evidence['comparison_group'] = group
     if frames is None:
         return None

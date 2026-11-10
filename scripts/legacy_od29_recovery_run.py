@@ -31,6 +31,26 @@ def register_all():
                                'data_window': f'{legacy.START}..{legacy.END}', 'source': legacy.RECOVERY_ROUND})
 
 
+def _frame(rows, columns):
+    return pd.DataFrame(rows, columns=columns) if not rows else pd.DataFrame(rows)
+
+
+def v2_frames(raw, stress_trades):
+    """Post-run evidence of evidence_version 2 (complete daily positions, stress trades, open positions, costs, events, PIT detail)."""
+    base, tracks = raw['tracks']['base'], raw['tracks']
+    return {'trades_stress': stress_trades,
+            'positions_daily': _frame(base['positions_daily'], ['date', 'stock_id', 'shares', 'value']),
+            'open_positions': _frame(base['open_positions'], ['stock_id', 'shares', 'entry_price', 'last_mark_value']),
+            'costs': {name: track['cost_summary'] for name, track in tracks.items()},
+            'valuation_events': _frame([{'track': name, **e} for name, track in tracks.items() for e in track['valuation_events']],
+                                       ['track', 'date', 'stock_id', 'reason', 'price_source_date', 'stale_days']),
+            'pit_detail': _frame(raw['pit_detail'], list(legacy.PIT_DETAIL_COLUMNS)),
+            'health': {'engine_error': {name: track['engine_error'] for name, track in tracks.items()},
+                       'valuation': {name: track['valuation'] for name, track in tracks.items()},
+                       'unfillable_orders': raw['checks']['unfillable_orders'], 'lookahead_violations': raw['checks']['lookahead_violations'],
+                       'pit_status': raw['checks']['pit_status']}}
+
+
 def run_one(sid, levels, levels_note):
     if sid not in STRATEGIES:
         raise ValueError('STRATEGY_NOT_APPROVED')
@@ -59,6 +79,12 @@ def run_one(sid, levels, levels_note):
                                           legacy.input_paths(), legacy.END)
     evidence = {'hypothesis_id': hid, 'experiment_id': admission['experiment_id'], 'admission': admission['kind'],
                 'config': config, 'input_sha256': admission['inputs_sha256'], 'code_sha256': admission['code_sha256']}
+    # evidence_version 2: a copy of the ledger admission; run_store.evidence_status still verifies it against the ledger itself
+    record_extra = {'evidence_version': 2, 'admission_record': {
+        'admission_id': admission['experiment_id'], 'trial_id': admission['experiment_id'], 'hypothesis_id': hid,
+        'code_sha256': admission['code_sha256'], 'inputs_sha256': admission['inputs_sha256'],
+        'input_paths': {name: str(path) for name, path in legacy.input_paths().items()}, 'config': config, 'pinned': legacy.PINNED_INPUTS,
+        'valuation_policy': config['valuation_policy'], 'research_window': [legacy.START, legacy.END], 'admitted_at': admission.get('at')}}
     item = {'item_id': f'OD29:{sid}', 'kind': 'legacy_baseline', 'strategy_id': sid}
     try:
         raw = legacy.run_legacy(sid)
@@ -83,7 +109,11 @@ def run_one(sid, levels, levels_note):
                         gates_comparison=common.comparison_gates(returns, pnl, levels),
                         _frames={'nav': common._nav_frame(navs['base'], navs['stress']), 'trades': trades['base'],
                                  'holdings': trades['base'][['stock_id', 'buy_date', 'sell_date']],
-                                 'picks': pd.DataFrame(raw['picks'], columns=['date', 'stock_id', 'rank'])})
+                                 'picks': pd.DataFrame(raw['picks'], columns=['date', 'stock_id', 'rank']), **v2_frames(raw, trades['stress'])},
+                        _record_extra=record_extra)
+        # the code this process ran, hashed now from the files (run_store.evidence_status binds it to the ledger code hashes)
+        from core.backtest import run_store
+        record_extra['source_hash'] = run_store.canonical_hash({path: workflow.sha256(path) for path in admission['code_sha256']})
         try:
             evidence['run_id'] = common.save(item, evidence, levels_note)
         except Exception as exc:
