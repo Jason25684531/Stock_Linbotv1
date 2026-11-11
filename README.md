@@ -9,9 +9,8 @@
 ```text
 TWSE / MOPS / 新聞
    │
-   ├─ services/mcp/server.py ── MCP HTTP 服務 :8080（市場統計、法人、公司資料等 tools）
-   │        ▲
-   │        │ core/mcp_client.py
+   ├─ core/runtime/public_data.py ── 公開資料請求的授權與稽核
+   ├─ services/mcp/server.py ── MCP HTTP 服務 :8080（部分市場資料路徑）
    ▼        │
 jobs/scheduler.py ── Windows 工作排程器 08:30 morning / 18:30 evening（在主機上執行）
    │  update_database → run_daily → daily_backtest_validation → push_to_line
@@ -25,7 +24,7 @@ app/ ── Flask :1688（Web 頁面、JSON API、LINE webhook /callback）
 | 服務 | Compose 名稱 | 埠 | 說明 |
 |---|---|---|---|
 | MySQL 8.0 | `db` | 3306 | 資料儲存在 volume `mysql_data` |
-| MCP 服務 | `twse_mcp_server` | 8080 | 對外抓資料的唯一邊界 |
+| MCP 服務 | `twse_mcp_server` | 8080 | 市場資料服務；部分非 TWSE_ONLY 路徑使用 MCP |
 | Web／LINE Bot | `stock_bot` | 1688 | `python app.py` |
 | 排程 | 不在 Compose 中 | — | 主機 `myenv` 透過 `localhost` 連到上面三個服務 |
 
@@ -35,20 +34,25 @@ app/ ── Flask :1688（Web 頁面、JSON API、LINE webhook /callback）
 |---|---|
 | `app/__init__.py` | 組合根與相容門面。`create_app()`、`from app import app` 和 `python app.py` 都可用 |
 | `app/web_server.py` | Web 路由與 JSON 契約 |
+| `app/platform_routes.py`、`app/research_payloads.py` | 研究平台路由、研究頁面資料組裝 |
 | `app/line_bot.py`、`line_flows.py`、`line_commands.py` | LINE webhook、postback、指令比對、Flex 訊息組裝 |
 | `app/dashboard_payloads.py` | 健康檢查、總經、市場快照、MCP overlay 與本地 fallback |
 | `app/news_overlay.py` | 新聞情緒資訊與降級處理 |
 | `config.py`、`config/settings.py` | 所有設定與常數，從環境變數讀取 |
-| `core/db_helper.py` | 資料庫存取（其他模組不寫原始 SQL） |
+| `core/db_helper.py` | 共用資料庫存取；部分服務與工作另有 SQL |
 | `core/mcp_client.py` | MCP 傳輸、重試、逾時 |
+| `core/runtime/public_data.py` | 公開資料請求授權、限額與稽核邊界 |
 | `core/strategy/` | `StrategyRegistry`（策略身分）、`StrategyRunner`（執行）、legacy adapter |
 | `core/strategies/` | 各策略實作，包含舊版 `v31`–`v38` 模組 |
 | `core/strategy_manager.py` | 設定、啟用策略與相容門面（`strategy_settings.json`） |
 | `core/backtest/` | 回測引擎、成本、滑價、績效指標 |
 | `core/runtime/` | Fundamental 策略的身分凍結、shadow、Fresh OOS 與上線閘門 |
 | `core/research/`、`core/validation/` | 因子研究、PIT 資料、walk-forward 與穩健性驗證 |
+| `core/research/reference/`、`core/research/history/` | 參考研究與歷史資料工作流程 |
 | `core/crawlers/`、`core/update_*.py` | 融資融券、季財報、月營收補充資料 |
 | `services/mcp/server.py` | MCP HTTP 服務（`scripts/twse_mcp_server.py` 是相容啟動器） |
+| `services/market_data_update.py` | 市場資料更新、驗證與寫入流程 |
+| `scripts/` | 研究執行、證據工具與部分執行期共用程式 |
 | `jobs/` | 正式 CLI 入口；研究類 `run_*` 都只能明確指定執行 |
 | `execution/*.bat` | Windows 包裝：排程、手動選單、重啟 |
 | `templates/`、`static/` | Web 前端（規範見 `openspec/specs/frontend-design.md`） |
@@ -106,7 +110,7 @@ pipeline 依序執行：
 
 `jobs/update_database.py` -> `jobs/run_daily.py` -> `jobs/run_daily_backtest_validation.py` -> `jobs/push_to_line.py`
 
-- `update_database`：透過 MCP 抓股價與法人資料，在本地補上月營收、季財報、融資融券，最後預熱 Dashboard 快取。
+- `update_database`：依市場範圍與資料來源更新股價、法人、月營收、季財報及融資融券，最後預熱 Dashboard 快取。
 - `run_daily`：執行啟用中的策略，寫入 `daily_recommendations`。同一天即使沒有候選股，也會寫一筆 heartbeat。
 - 每個步驟的狀態都記錄在 `pipeline_runs`，Web 的系統頁會讀取它。
 - `daily_backtest_validation` 是輕量檢查，由 `ENABLE_DAILY_BACKTEST_VALIDATION`（預設關閉）和 `DAILY_BACKTEST_WINDOW_DAYS`（預設 60）控制。它只對小範圍股票做短窗口驗證，is not full historical research backtesting and not parameter optimization。
@@ -127,7 +131,7 @@ python jobs/scheduler.py fundamental_shadow_operation
 ## 策略平台
 
 - `StrategyRegistry` 是策略身分的唯一來源，負責解析 canonical ID 和舊版 alias。`StrategyRunner` 負責執行。`StrategyManager` 是設定與相容門面，不是另一套身分來源。
-- 目前的 canonical 策略：`hybrid_trend_rank`、`defensive_low_volatility`、`growth_momentum_breakout`、`quality_growth`、`institutional_flow_confirmation`、`mean_reversion`、`quality_value_low_volatility`。啟用中的策略記錄在 `strategy_settings.json`。
+- 目前有 19 個 canonical 策略，完整清單以 `core/strategy_manager.py` 的 `CANONICAL_REGISTRY` 為準。啟用中的策略記錄在 `strategy_settings.json`。
 - 舊策略 key（例如 `v34_turbo`、`v35_innovation`）透過 alias 解析。改顯示名稱或 metadata 時，**不得改寫歷史資料庫紀錄**。
 - Fundamental（`fundamental_g2g3_top5_reb60_score_weighted_v1`）和 legacy 策略分開執行。它的身分已凍結，PIT／Fresh OOS 閘門由 `core/runtime/` 強制執行，未通過時一律封鎖。在 `ENABLE_FUNDAMENTAL_PRODUCTION` 開啟且閘門通過之前，它只會以 shadow 狀態顯示在 Strategy Center，不進入推薦和推播。下單功能永遠關閉：
 
