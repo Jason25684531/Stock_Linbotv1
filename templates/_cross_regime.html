@@ -1,0 +1,90 @@
+{% from '_history_ui.html' import trust_cell, pct, num, fpct %}
+<section id="cross-regime" class="space-y-3 rounded-lg border border-line p-4 text-xs" data-testid="cross-regime">
+    <h2 class="text-sm font-semibold text-white">跨市場環境驗證（2015～2025 參考研究）</h2>
+    {% if not cross %}
+    <p class="text-muted" data-testid="cross-regime-empty">NO_HISTORICAL_REFERENCE_REPORT：尚未產生歷史參考回測報告（python -m scripts.historical_foundation run）。</p>
+    {% else %}
+    <div class="rounded border border-amber-500/40 bg-amber-500/5 p-3 text-amber-100" data-testid="cross-regime-banner">
+        <p class="font-semibold">{{ cross.labels|join(' · ') }}</p>
+        <p class="mt-1">Snapshot <span class="num">{{ cross.snapshot_id }}</span> · Evaluation <span class="num">{{ cross.evaluation_id }}</span> · 市場環境規格 <span class="num">{{ cross.regime_spec.regime_spec_id }}</span>（登記 {{ cross.regime_spec.registered_at }}，早於所有歷史 Run）</p>
+        <p class="mt-1">趨勢：{{ cross.regime_spec.spec.trend.measure }}（≥+10% 多頭、≤−10% 空頭、其餘盤整）；波動：{{ cross.regime_spec.spec.volatility.measure }}（≥20% 高波動）；{{ cross.regime_spec.spec.scoring }}。</p>
+        <p class="mt-1">Benchmark：{{ cross.benchmark }}。彙總只用 VERIFIED 年份（VERIFIED_ONLY）；含 PARTIAL 年份者另列為敏感度。BLOCKED 年份沒有數字。表格依 catalog 順序，不排名。</p>
+        <ul class="mt-1 list-disc pl-5">{% for x in cross.engine_limits %}<li>{{ x }}</li>{% endfor %}</ul>
+    </div>
+    <div class="overflow-x-auto"><table class="w-full" data-testid="cross-regime-overview"><thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">狀態</th><th class="p-1">視窗</th><th class="p-1">逐年 Data Trust</th>
+        <th class="p-1">2019-2021 基礎 / 2x</th><th class="p-1">2022-2025 基礎 / 2x</th><th class="p-1">研究判定</th><th class="p-1">優先順序建議</th></tr></thead>
+        <tbody>{% for s in cross.strategies %}{% set a = s.analysis %}<tr class="align-top" data-testid="cross-regime-row">
+            <td class="p-1">{% if a %}<a class="text-blue-300" href="{{ url_for('reference_comparison', history=s.strategy_id) }}#cross-regime">{{ s.strategy_id }}</a>{% else %}{{ s.strategy_id }}{% endif %}</td>
+            <td class="p-1">{{ s.state }}{% if not a %}（{{ s.reason }}）{% endif %}</td><td class="num p-1">{{ (s.window or ['-'])|join('～') }}</td>
+            <td class="p-1 whitespace-nowrap">{% for y, st in s.trust_years.items() %}{{ trust_cell(st, y) }}{% endfor %}</td>
+            <td class="num p-1">{% if a %}{{ pct(a.segments.VERIFIED_ONLY['2019-2021'].base.cumulative_return) }} / {{ pct(a.segments.VERIFIED_ONLY['2019-2021'].x2.cumulative_return) }}{% else %}-{% endif %}</td>
+            <td class="num p-1">{% if a %}{{ pct(a.segments.VERIFIED_ONLY['2022-2025'].base.cumulative_return) }} / {{ pct(a.segments.VERIFIED_ONLY['2022-2025'].x2.cumulative_return) }}{% else %}-{% endif %}</td>
+            <td class="p-1">{{ s.decision.state }}</td><td class="p-1">{{ s.decision.priority }}</td></tr>{% endfor %}</tbody></table></div>
+    <div class="overflow-x-auto" data-testid="compare-table"><h3 class="text-sm font-semibold text-white">新版 vs 舊版（21 項，基礎成本，兩版共同年份的逐年報酬連乘；catalog 順序，不排名）</h3>
+        {% set table = cross.get('legacy_comparison_table') %}
+        {% if not table %}<p class="text-muted">尚未產生新版與舊版的逐策略比較（本輪 F 工作完成後出現）。</p>{% else %}
+        <table class="mt-1 w-full"><thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">最終狀態</th><th class="p-1">帳務</th><th class="p-1">舊版（原始價）</th><th class="p-1">新版（{{ (cross.get('engine') or {}).get('new', 'POSITION_LEDGER_CA_V1') }}）</th><th class="p-1">差異</th><th class="p-1">原因</th></tr></thead>
+            <tbody>{% for r in table %}<tr class="align-top" data-testid="compare-row"><td class="p-1">{{ r.get('strategy_id') }}</td><td class="p-1">{{ r.get('final_state') or '-' }}</td><td class="p-1">{{ r.get('accounting') or '-' }}</td>
+                <td class="num p-1">{{ fpct(r.get('legacy_base_total_return')) }}</td><td class="num p-1">{{ fpct(r.get('new_base_total_return')) }}</td><td class="num p-1">{{ fpct(r.get('delta')) }}</td><td class="p-1 break-all">{{ r.get('reason') or '' }}</td></tr>{% endfor %}</tbody></table>{% endif %}</div>
+    {% set sel = (cross.strategies|selectattr('strategy_id', 'equalto', history_selected)|list or [none])[0] %}
+    {% if sel and sel.analysis %}{% set a = sel.analysis %}
+    <div class="min-w-0 space-y-3 overflow-x-auto rounded border border-line p-3" data-testid="cross-regime-detail">
+        <h3 class="text-sm font-semibold text-white">{{ sel.strategy_id }}</h3>
+        <p>Run <span class="num">{{ sel.run_id }}</span> · Run Identity <span class="num break-all">{{ sel.run_identity }}</span> · 視窗 {{ sel.window|join('～') }} · 規格早於 Run：{{ 'YES' if sel.spec_before_run else 'NO（POST_HOC_SPEC）' }}</p>
+        <p>資料限制：{{ sel.limitations|join('；') or '無' }}{% if sel.no_trades %}；<strong>整段無交易</strong>{% endif %}</p>
+        {% set ex = sel.corporate_action_exposure or {} %}<p data-testid="action-exposure">公司行動暴露：{{ ex.exposed }}／{{ ex.trades }} 筆交易的持有期間跨越除權息或減資{% if sel.get('accounting') == 'POSITION_LEDGER_CA_V1' %}（新版：官方事件已記入持倉帳，股數、現金與每股成本一起調整）{% else %}（舊版原始價引擎：損益含除權息價差、不含股利）{% endif %}。</p>
+        <p class="text-muted">優先順序規則：{{ cross.priority_rule }}</p>
+        {% set lc = sel.get('legacy_comparison') %}{% set rr = run_record or {} %}{% set op = sel.get('open_positions') or {} %}{% set ca = sel.get('corporate_action_impact') or {} %}
+        <div class="space-y-2 rounded border border-line p-3" data-testid="legacy-compare">
+            <h4 class="font-semibold text-white">新版 vs 舊版</h4>
+            <p>最終狀態 <strong>{{ sel.get('final_state') or sel.decision.state }}</strong> · 帳務 <span class="num">{{ sel.get('accounting') or rr.get('accounting') or 'LEGACY_ACCOUNTING/PROVISIONAL' }}</span> · Run <span class="num">{{ rr.get('run_id') or sel.run_id }}</span> · Run Identity <span class="num break-all">{{ sel.run_identity }}</span> · 公司行動帳本版本 <span class="num break-all">{{ rr.get('ledger_version') or '尚未提供' }}</span></p>
+            {% if not lc %}<p class="text-muted">尚未產生此策略的新版與舊版比較（新版 Run 完成後出現；舊版基準見 legacy_baseline.json）。</p>{% else %}
+            <p class="text-muted">舊版 Run <span class="num">{{ lc.get('legacy_run_id') }}</span>（{{ lc.get('legacy_accounting') }}，快照 {{ lc.get('legacy_snapshot_id') }}，視窗 {{ (lc.get('window_legacy') or ['-'])|join('～') }}）· 新版視窗 {{ (lc.get('window_new') or ['-'])|join('～') }}</p>
+            {% set L = lc.get('legacy') or {} %}{% set N = lc.get('new') or {} %}{% set D = lc.get('delta') or {} %}
+            <div class="overflow-x-auto"><table class="w-full" data-testid="legacy-compare-table"><thead class="text-left text-muted"><tr><th class="p-1">指標</th><th class="p-1">舊版</th><th class="p-1">新版</th><th class="p-1">差異</th></tr></thead><tbody>
+                {% for key, label in (('common_years_return', '共同年份（' ~ ((lc.get('common_years') or ['-'])|first) ~ '～' ~ ((lc.get('common_years') or ['-'])|last) ~ '）連乘報酬（可比）'), ('base_total_return', '基礎成本總報酬（各自視窗）'), ('x2_total_return', '2x 成本總報酬（各自視窗）'), ('max_drawdown_base', '最大回撤（基礎）'), ('sharpe_base', 'Sharpe（基礎）')) %}
+                <tr><td class="p-1">{{ label }}</td><td class="num p-1">{{ fpct(L.get(key)) if key != 'sharpe_base' else (L.get(key) if L.get(key) is not none else 'None') }}</td><td class="num p-1">{{ fpct(N.get(key)) if key != 'sharpe_base' else (N.get(key) if N.get(key) is not none else 'None') }}</td><td class="num p-1">{{ fpct(D.get(key)) if key != 'sharpe_base' else (D.get(key) if D.get(key) is not none else 'None') }}</td></tr>{% endfor %}
+                <tr><td class="p-1">交易數</td><td class="num p-1">{{ L.get('trades') if L.get('trades') is not none else '-' }}</td><td class="num p-1">{{ N.get('trades') if N.get('trades') is not none else '-' }}</td><td class="num p-1">{{ D.get('trades') if D.get('trades') is not none else '-' }}</td></tr>
+                {% for y in (N.get('years') or L.get('years') or {})|list %}<tr><td class="num p-1">{{ y }}</td><td class="num p-1">{{ fpct((L.get('years') or {}).get(y)) }}</td><td class="num p-1">{{ fpct((N.get('years') or {}).get(y)) }}</td><td class="num p-1">{{ fpct((D.get('years') or {}).get(y)) }}</td></tr>{% endfor %}
+            </tbody></table></div>
+            {% set at = lc.get('attribution') or {} %}
+            <p>差異歸因：入帳現金 {{ at.get('cash_credited') if at.get('cash_credited') is not none else '-' }} · 入帳事件 {{ at.get('events_booked', '-') }} · 假定條件股票事件 {{ at.get('assumed_stock_events', '-') }} · 未解決事件 {{ at.get('unresolved_events', '-') }} · 新增週六交易日 {{ at.get('saturday_sessions_added', '-') }} · 新增 Benchmark 標記交易日 {{ at.get('benchmark_sessions_labelled_added', '-') }}</p>
+            {% if at.get('reasons') %}<ul class="list-disc pl-5">{% for x in at.get('reasons') %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+            {% endif %}
+            <p data-testid="open-positions">期末未平倉：{{ op.get('count', '-') }} 檔 · 市值 {{ op.get('value') if op.get('value') is not none else 'None' }}</p>
+            {% if op.get('rows') %}<div class="overflow-x-auto"><table class="w-full"><thead class="text-left text-muted"><tr><th class="p-1">股票</th><th class="p-1">股數</th><th class="p-1">進場價</th><th class="p-1">最後市值</th><th class="p-1">配發</th><th class="p-1">買進日</th></tr></thead>
+                <tbody>{% for r in op.get('rows') %}<tr><td class="num p-1">{{ r.get('stock_id') }}</td><td class="num p-1">{{ r.get('shares') }}</td><td class="num p-1">{{ r.get('entry_price') }}</td><td class="num p-1">{{ r.get('last_mark_value') }}</td><td class="num p-1">{{ r.get('distributions') }}</td><td class="num p-1">{{ r.get('buy_date') }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+            <p data-testid="action-impact">公司行動影響：入帳事件 {{ ca.get('events_booked', '-') }} · 入帳現金 {{ ca.get('cash_credited') if ca.get('cash_credited') is not none else '-' }} · 假定條件 {{ ca.get('assumed_stock_events', '-') }} · 未解決 {{ ca.get('unresolved_events', '-') }} · 重複抑制 {{ ca.get('duplicate_suppressed', '-') }} · 假定條件年份 {{ (ca.get('years_with_assumed_terms') or [])|join(', ') or '-' }}</p>
+        </div>
+        <div id="history-nav" class="h-72 w-full" data-testid="history-nav-chart"></div>
+        <div id="history-drawdown" class="h-56 w-full" data-testid="history-drawdown-chart"></div>
+        <div class="overflow-x-auto"><table class="w-full" data-testid="cross-regime-years"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">Data Trust</th><th class="p-1">基礎</th><th class="p-1">2x</th><th class="p-1">Sharpe</th><th class="p-1">MDD</th><th class="p-1">報酬指數</th><th class="p-1">交易數</th><th class="p-1">勝率</th><th class="p-1">平均持有</th></tr></thead>
+            <tbody>{% for y, r in a.years.items() %}<tr><td class="num p-1">{{ y }}</td><td class="p-1">{{ trust_cell(r.trust) }}</td><td class="num p-1">{{ pct(r.base.cumulative_return) }}</td><td class="num p-1">{{ pct(r.x2.cumulative_return) }}</td>
+                <td class="num p-1">{{ num(r.base.sharpe) }}</td><td class="num p-1">{{ pct(r.base.max_drawdown) }}</td><td class="num p-1">{{ pct((r.benchmark_total_return or {}).cumulative_return) }}</td>
+                <td class="num p-1">{{ (r.trades or {}).trade_count if r.trades else '-' }}</td><td class="num p-1">{{ pct((r.trades or {}).win_rate) }}</td><td class="num p-1">{{ num((r.trades or {}).avg_holding_sessions) }}</td></tr>{% endfor %}</tbody></table></div>
+        {% for basis in ('VERIFIED_ONLY', 'VERIFIED_AND_PARTIAL') %}
+        <div class="overflow-x-auto"><h4 class="mt-2 font-semibold">分段、市場環境與滾動（{{ basis }}）</h4><table class="w-full" data-testid="cross-regime-slices-{{ basis }}"><thead class="text-left text-muted"><tr><th class="p-1">切片</th><th class="p-1">交易日</th><th class="p-1">基礎</th><th class="p-1">2x</th><th class="p-1">年化</th><th class="p-1">Sharpe</th><th class="p-1">MDD</th><th class="p-1">報酬指數</th><th class="p-1">超額</th><th class="p-1">t 值</th><th class="p-1">狀態</th></tr></thead>
+            <tbody>{% for name, sl in (a.segments[basis].items()|list + a.regimes[basis].items()|list) %}<tr><td class="p-1">{{ name }}{% if sl.excluded_years %}<span class="text-muted" title="{{ sl.excluded_years|tojson }} "> *</span>{% endif %}</td><td class="num p-1">{{ sl.base.sessions }}</td>
+                <td class="num p-1">{{ pct(sl.base.cumulative_return) }}</td><td class="num p-1">{{ pct(sl.x2.cumulative_return) }}</td><td class="num p-1">{{ pct(sl.base.annualized_return) }}</td><td class="num p-1">{{ num(sl.base.sharpe) }}</td>
+                <td class="num p-1">{{ pct(sl.base.max_drawdown) }}</td><td class="num p-1">{{ pct(sl.benchmark_total_return.cumulative_return) }}</td><td class="num p-1">{{ pct(sl.base.excess_vs_benchmark) }}</td><td class="num p-1">{{ num(sl.base.t_stat) }}</td><td class="p-1">{{ sl.base.status }}</td></tr>{% endfor %}</tbody></table>
+            {% set r = a.rolling_252[basis] %}<p class="mt-1">滾動 252 日：{{ r.windows }} 個視窗 · 最小 {{ pct(r.min) }} · 中位 {{ pct(r.median) }} · 最大 {{ pct(r.max) }} · 正報酬比例 {{ pct(r.share_positive) }}</p></div>
+        {% endfor %}
+        <p>研究判定 <strong>{{ sel.decision.state }}</strong> · 優先順序建議 {{ sel.decision.priority }}（{{ sel.decision.reason }}）· CERTIFIED：NO。* 表示該切片排除了非 VERIFIED 年份。</p>
+    </div>
+    <script>
+    (function () {
+        const d = {{ history_chart|safe }};
+        if (!d || !window.Plotly) return;
+        const layout = (title) => ({title: {text: title, font: {size: 12}}, margin: {t: 30, r: 10, b: 30, l: 50}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: '#cbd5e1'}, legend: {orientation: 'h'}});
+        Plotly.newPlot('history-nav', [
+            {x: d.dates, y: d.base, name: 'base cost', type: 'scatter'}, {x: d.dates, y: d.x2, name: '2x cost', type: 'scatter'},
+            {x: d.dates, y: d.benchmark, name: 'TWSE total return index', type: 'scatter', line: {dash: 'dot'}}], layout('NAV (rebased) vs benchmark'), {displayModeBar: false, responsive: true});
+        Plotly.newPlot('history-drawdown', [{x: d.dates, y: d.base_drawdown, name: 'base', fill: 'tozeroy'}, {x: d.dates, y: d.x2_drawdown, name: '2x'}],
+            layout('Drawdown'), {displayModeBar: false, responsive: true});
+    })();
+    </script>
+    {% endif %}
+    {% if history and history.downloads %}<p>下載：{% for name in history.downloads %}<a class="mr-3 text-blue-300" href="{{ url_for('historical_download', evaluation_id=history.evaluation.evaluation_id, name=name) }}">{{ name }}</a>{% endfor %}
+        {% for name in (engine_fix or {}).get('downloads', []) %}<a class="mr-3 text-blue-300" href="{{ url_for('engine_fix_download', name=name) }}">{{ name }}</a>{% endfor %}</p>{% endif %}
+    {% endif %}
+</section>

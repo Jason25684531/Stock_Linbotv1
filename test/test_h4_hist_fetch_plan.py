@@ -12,8 +12,10 @@ def quote(day, kind='ALL'):
 
 def test_only_the_exact_historical_queries_use_the_new_job():
     assert quote('20150105').job == 'h4_hist' and quote('20211229').job == 'h4_hist'
-    assert quote('20150103').job is None  # Saturday
+    assert quote('20150103').job is None  # Saturday outside the approved make-up list
     assert quote('20211230').job is None and quote('20261027').job is None and quote('20141231').job is None
+    assert all(quote(d).job == 'hist_foundation_quotes' for d in public.HIST_SATURDAYS)  # 2026-11-10 Owner plan: exact Saturdays only
+    assert quote('20160129').job == 'h4_hist' and quote('20160131').job is None
     actions = lambda s, e: public.context(f'{TWSE}/exRight/TWT49U', params={'startDate': s, 'endDate': e, 'response': 'json'})
     assert actions('20150101', '20221231').job == 'h4_hist' and actions('20180101', '20181231').job == 'h4_hist'
     assert actions('20150101', '20231231').job is None

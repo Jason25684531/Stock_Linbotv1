@@ -39,6 +39,9 @@ OPENAPI_PATHS = {
 HIST_QUOTES = ('20150101', '20211229')  # MI_INDEX type=ALL, weekdays only
 HIST_ACTIONS = {('20150101', '20221231')} | {(f'{y}0101', f'{y}1231') for y in range(2015, 2023)}  # TWT49U
 HIST_REFERENCE = {'startDate': '20150101', 'endDate': '20211231', 'response': 'json'}  # TWTAUU, TWTB8U
+# Owner-approved fixed plan 2026-11-10 (change 2026-11-10-engine-accounting-and-history-gaps-v1, job hist_foundation_quotes): the eight TWSE
+# Saturday make-up sessions 2016-2018 that the weekday-only plan above skipped. Exact dates only, MI_INDEX type=ALL.
+HIST_SATURDAYS = frozenset({'20160130', '20160604', '20160910', '20170218', '20170603', '20170930', '20180331', '20181222'})
 # Owner-approved 2026-11-05 (change h4-fundamental-recovery-v1, job h4_fund_recovery): filings of these 15 companies only.
 FUND_TICKERS = frozenset({'2456', '5264', '2448', '6452', '3454', '3698', '1507', '5305', '1262', '1704', '3519', '2455', '2499', '6251', '6288'})
 FUND_T164 = {'encodeURIComponent': '1', 'step': '1', 'firstin': '1', 'off': '1', 'queryName': 'co_id', 'inpuType': 'co_id',
@@ -127,6 +130,8 @@ def context(url, *, method='GET', params=None, data=None, purpose=None):
                 if dataset == 'MI_INDEX' and values.get('type') == 'ALL' and set(values) == {'date', 'type', 'response'} \
                         and HIST_QUOTES[0] <= values['date'] <= HIST_QUOTES[1] and datetime.strptime(values['date'], '%Y%m%d').weekday() < 5:
                     job = 'h4_hist'
+                elif dataset == 'MI_INDEX' and values.get('type') == 'ALL' and set(values) == {'date', 'type', 'response'} and values['date'] in HIST_SATURDAYS:
+                    job = 'hist_foundation_quotes'
                 elif dataset == 'TWT49U' and (values.get('startDate'), values.get('endDate')) in HIST_ACTIONS:
                     job = 'h4_hist'
         elif host == 'openapi.twse.com.tw' and method == 'GET' and path in OPENAPI_PATHS:
@@ -307,14 +312,16 @@ def _atomic(path, raw):
     os.replace(temp, path)
 
 
+T1B_VERIFIED = {  # the two verified t1b raw bodies (2026-10-24): file, SHA256, ledger row. Also the 2023-2025 capital-change source (F06).
+    'TWTAUU': ('TWTAUU_20220101_20261023_2026-10-24T131940+0000.bin', '6237fc3b3b2861f9d742d4a2ffcb1c0a251103c732f882b000220b6f738bedd6', 6),
+    'TWTB8U': ('TWTB8U_20220101_20261023_2026-10-24T131954+0000.bin', 'ce4045ddeeaa0df53d7104f079efc7c123ac4b19365f257856aaf0af5aebad4b', 9),
+}
+
+
 def import_verified_t1b_cache():
     """Reuse the two already verified raw responses. Fixed source hashes prevent an import from silently trusting a new file."""
-    sources = {
-        'TWTAUU': ('TWTAUU_20220101_20261023_2026-10-24T131940+0000.bin', '6237fc3b3b2861f9d742d4a2ffcb1c0a251103c732f882b000220b6f738bedd6', 6),
-        'TWTB8U': ('TWTB8U_20220101_20261023_2026-10-24T131954+0000.bin', 'ce4045ddeeaa0df53d7104f079efc7c123ac4b19365f257856aaf0af5aebad4b', 9),
-    }
     imported = []
-    for name, (filename, digest, row) in sources.items():
+    for name, (filename, digest, row) in T1B_VERIFIED.items():
         ctx = context('https://www.twse.com.tw' + (T1B_PATHS[0] if name == 'TWTAUU' else T1B_PATHS[1]),
                       params={'startDate': '20220101', 'endDate': '20261023', 'response': 'json'})
         if cached(ctx) is not None:

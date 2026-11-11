@@ -56,10 +56,10 @@ def _costs(multiple=1):
             'slippage_max': float(getattr(Config, 'SLIPPAGE_MAX_PIPS', Config.SLIPPAGE_RATE)) * multiple}
 
 
-def config_for(strategy_id, overrides=None):
-    """Canonical JSON-able identity of one admission (base and 2x stress tracks share it)."""
+def config_for(strategy_id, overrides=None, accounting='LEGACY_RAW_PRICE'):
+    """Canonical JSON-able identity of one admission (base and 2x stress tracks share it). accounting: core.backtest.runner ACCOUNTING_*."""
     return {'round': ROUND, 'strategy': strategy_id, 'start': START, 'end': END, 'execution_contract': EXECUTION_CONTRACT, 'rules_only': True,
-            'valuation_policy': 'finite_positive_stale',
+            'valuation_policy': 'finite_positive_stale', 'accounting': accounting,
             'seed': n7.SLIPPAGE_SEED, **_costs(), 'stress_multiple': STRESS_MULTIPLE, 'overrides': dict(sorted((overrides or {}).items()))}
 
 
@@ -175,9 +175,14 @@ def _prepare(inputs, start, end):
     digests = {k: _digest(v) for k, v in (('snapshot', snap), ('financials', fin), ('revenue', rev), ('publications', inputs['publications']),
                                           ('settings', inputs['settings']), ('benchmark', bench), ('delistings', inputs.get('delistings')))}
     sessions = [d.strftime('%Y-%m-%d') for d in sorted(snap.trade_date.unique()) if start <= d.strftime('%Y-%m-%d') <= end]
+    ledger = inputs.get('action_ledger')  # core.research.history.ledger frame: POSITION_LEDGER_CA_V1 accounting; None keeps LEGACY_RAW_PRICE
+    if ledger is not None:
+        from core.research.history import ledger as ledger_module
+        digests['action_ledger'] = ledger_module.version(ledger)
+        ledger = ledger_module.to_engine(ledger)
     return SimpleNamespace(data=data, settings=inputs['settings'], sessions=sessions, start=start, end=end, digests=digests,
                            bench=None if bench is None else bench[(bench.index >= pd.Timestamp(start)) & (bench.index <= last)],
-                           delistings=inputs.get('delistings'), actions=inputs.get('actions'))
+                           delistings=inputs.get('delistings'), actions=inputs.get('actions'), ledger=ledger)
 
 
 @functools.lru_cache(maxsize=1)
@@ -323,7 +328,14 @@ def _record_trades(engine, costs):
         if len(engine.trades) > count:
             engine.trades[-1].update(opened.pop(sid))
 
-    engine.buy, engine.sell = recorded_buy, recorded_sell
+    def recorded_cash_out(sid, day, kind):  # a full cash-out closes the position without sell(): same entry shares and costs on the trade
+        count = len(engine.trades)
+        cash_out(sid, day, kind)
+        if len(engine.trades) > count and sid in opened:
+            engine.trades[-1].update(opened.pop(sid))
+
+    cash_out = engine._close_cashed_out
+    engine.buy, engine.sell, engine._close_cashed_out = recorded_buy, recorded_sell, recorded_cash_out
 
 
 CAPTURE = True  # read-only evidence wrappers (design D5); tests switch them off to prove they change nothing
@@ -351,9 +363,11 @@ def _record_positions(engine, rows):
 def _evidence(engine, positions, costs, sessions):
     """Open positions at the end and cost/turnover totals that include them (closed-trade figures alone omit open entries)."""
     last = {r['stock_id']: r['value'] for r in positions if positions and r['date'] == positions[-1]['date']}
-    open_rows = [{'stock_id': sid, 'shares': info['shares'], 'entry_price': info.get('cost'), 'last_mark_value': last.get(sid)}
-                 for sid, info in sorted(engine.positions.items())]
-    traded = sum((t['buy_price'] + t['sell_price']) * t['shares'] for t in engine.trades) + sum(r['shares'] * (r['entry_price'] or 0) for r in open_rows)
+    open_rows = [{'stock_id': sid, 'shares': info['shares'], 'entry_price': info.get('entry_price_raw', info.get('cost')), 'last_mark_value': last.get(sid),
+                  'distributions': info.get('distributions', 0.0), 'buy_date': info.get('buy_date'), 'entry_value': info['shares'] * (info.get('cost') or 0)}
+                 for sid, info in sorted(engine.positions.items())]  # entry_value: adjusted shares x adjusted cost = the raw entry notional
+    traded = sum(t['buy_price'] * t['shares'] + t['sell_price'] * t.get('exit_shares', t['shares']) for t in engine.trades) \
+        + sum(r['entry_value'] for r in open_rows)
     nav = pd.Series(engine.daily_assets, dtype='float64')
     years = len(sessions) / 252
     return open_rows, {'fees_and_tax_paid': costs.paid, 'includes_open_positions': True, 'traded_value': traded,
@@ -383,7 +397,8 @@ def _run_track(strategy_id, overrides, prep, multiple):
             patch.object(runner, 'select_backtest_candidates', observed_select), patch.object(runner.Config, 'SLIPPAGE_MAX_PIPS', costs['slippage_max']):
         engine = runner.BacktestEngine(mode=strategy_id, start_date=prep.start, end_date=prep.end, initial_capital=INITIAL_CAPITAL, persist_results=False,
                                        persist_to_db=False, execution_contract=EXECUTION_CONTRACT, trading_sessions=prep.sessions,
-                                       research_data=prep.data, rules_only=True, valuation_policy='finite_positive_stale')
+                                       research_data=prep.data, rules_only=True, valuation_policy='finite_positive_stale',
+                                       corporate_actions=getattr(prep, 'ledger', None))
         if overrides:
             _inject(engine, overrides)
         engine.costs = _CostLog(CostModel(costs['fee_rate'], costs['tax_rate'], costs['minimum_fee']))
@@ -400,10 +415,13 @@ def _run_track(strategy_id, overrides, prep, multiple):
             if 'numerator' not in str(error) or len(engine.daily_assets) != len(prep.sessions):
                 raise
             engine_error = f'{type(error).__name__}: {error}'
-    trades = [{k: t.get(k) for k in ('stock_id', 'buy_date', 'buy_price', 'sell_date', 'sell_price', 'shares', 'cost', 'profit_pct', 'reason')}
-              for t in engine.trades]
+    columns = ('stock_id', 'buy_date', 'buy_price', 'sell_date', 'sell_price', 'shares', 'cost', 'profit_pct', 'reason')
+    if engine.corporate_actions is not None:
+        columns += ('adjusted_buy_price', 'distributions', 'exit_shares')  # shares = entry shares; exit_shares after stock dividends / reductions
+    trades = [{k: t.get(k) for k in columns} for t in engine.trades]
     track = {'nav': [[d, float(v)] for d, v in zip(engine.daily_dates, engine.daily_assets)], 'trades': trades, 'engine_error': engine_error, 'costs': costs,
              'valuation_policy': engine.valuation_policy, 'valuation_events': list(engine.valuation_events),
+             'accounting': engine.accounting, 'corporate_action_events': list(engine.corporate_action_events),
              'valuation': corporate_actions.verdict(engine.valuation_events, getattr(prep, 'actions', None))}
     if CAPTURE:
         track['positions_daily'] = positions

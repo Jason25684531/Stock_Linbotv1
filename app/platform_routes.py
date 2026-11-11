@@ -5,6 +5,7 @@ Read paths only list files named by run manifests or the frozen lab queue; every
 from __future__ import annotations
 
 from datetime import date
+import functools
 import hmac
 import json
 import os
@@ -119,7 +120,8 @@ def admin_data():
     service = _service()
     if request.method == 'GET':
         return render_template('admin_data.html', view='data', admin_enabled=enabled, admin_reason=reason, status=service.status(),
-                               history=service.history(20), admin=is_admin())
+                               history=service.history(20), admin=is_admin(), historical=historical_dashboard(request.args),
+                               engine_fix=engine_fix_state())
     refused = _require_admin_write()
     if refused:
         return jsonify(refused[0]), refused[1]
@@ -306,8 +308,183 @@ def reference_comparison():
     for row in (report or {}).get('rows', []):
         groups.setdefault(row.get('comparison_group') or 'NOT_EXECUTED', []).append(row)
     from core.research.reference import batch_job
+    history = historical_state()
+    cross = (history or {}).get('cross_regime')
+    names = [s['strategy_id'] for s in (cross or {}).get('strategies', []) if s.get('analysis')]
+    selected = request.args.get('history') if request.args.get('history') in names else (names[0] if names else None)
     return render_template('reference_mode.html', report=report, groups=groups, gaps=gaps, active='reference_comparison',
-                           job=batch_job.state(), admin=is_admin(), admin_enabled=admin_state()[0])
+                           job=batch_job.state(), admin=is_admin(), admin_enabled=admin_state()[0], history=history, cross=cross,
+                           history_selected=selected, history_chart=json.dumps(history_chart(selected)) if selected else 'null',
+                           run_record=history_run_record(selected), engine_fix=engine_fix_state())
+
+
+# ---------------------------------------------------------------- historical data foundation (change 2026-11-10-historical-data-foundation-v1)
+
+HISTORY_DOWNLOADS = ('HISTORICAL_DATA_COVERAGE_REPORT.md', 'strategy_data_requirements.md', 'strategy_data_trust_matrix.md',
+                     'historical_source_inventory.md', 'gap_report.md', 'CROSS_REGIME_VALIDATION_REPORT.md')
+
+
+@functools.lru_cache(maxsize=8)
+def _stored_json(path, _mtime):
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
+def _stored(path):
+    path = Path(path)
+    return _stored_json(str(path), path.stat().st_mtime_ns) if path.is_file() else None
+
+
+def historical_state() -> dict | None:
+    """Latest stored evaluation, coverage report, gap report and cross-regime report; read-only, nothing is computed in the request."""
+    from scripts import historical_foundation as hf
+    pointer = _stored(hf.EVALUATIONS / 'LATEST.json')
+    if pointer is None:
+        return None
+    evaluation = _stored(hf.OUT / pointer['evaluation'])
+    folder = _report_folder(evaluation['evaluation_id'])
+    latest = _stored(hf.REPORTS / 'LATEST.json') or {}
+    cross = _stored(hf.REPORTS / latest['cross_regime']) if latest.get('evaluation_id') == evaluation['evaluation_id'] and latest.get('cross_regime') else None
+    return {'evaluation': evaluation, 'coverage': _stored(folder / 'HISTORICAL_DATA_COVERAGE_REPORT.json'), 'cross_regime': cross,
+            'gaps': (_stored(folder / 'gap_report.json') or {}).get('gaps', []),
+            'downloads': [n for n in HISTORY_DOWNLOADS if (folder / n).is_file() or (n.startswith('CROSS_REGIME') and cross)]}
+
+
+def _report_folder(evaluation_id) -> Path:
+    """The write-once report folder the LATEST pointer names for this evaluation (else the one the current code would write)."""
+    from scripts import historical_foundation as hf
+    latest = _stored(hf.REPORTS / 'LATEST.json') or {}
+    if latest.get('evaluation_id') == evaluation_id and latest.get('folder'):
+        return hf.REPORTS / latest['folder']
+    return hf.report_folder(evaluation_id)
+
+
+def historical_dashboard(args) -> dict | None:
+    """/admin/data section: year x category grid and gap list, filtered by ?year=&category=&status= (whitelisted values only)."""
+    from core.research.history import categories as cats
+    state = historical_state()
+    if state is None:
+        return None
+    year = args.get('year', '')
+    category = args.get('category', '') if args.get('category', '') in cats.BY_ID else ''
+    status = args.get('status', '') if args.get('status', '') in cats.STATUSES else ''
+    keep = lambda c: (not year or str(c['year']) == year) and (not category or c['category'] == category) and (not status or c['status'] == status)
+    cells = state['evaluation']['coverage']
+    grid = {c.id: {cell['year']: cell for cell in cells if cell['category'] == c.id} for c in cats.CATEGORIES if not category or c.id == category}
+    return {**state, 'filters': {'year': year, 'category': category, 'status': status}, 'years': [y for y in cats.YEARS if not year or str(y) == year],
+            'categories': cats.CATEGORIES, 'statuses': cats.STATUSES, 'grid': grid, 'cells': [c for c in cells if keep(c)],
+            'gap_rows': [g for g in state['gaps'] if keep(g)], 'job': _history_job()}
+
+
+def _history_job():
+    from core.research.reference import batch_job
+    job = batch_job.state()
+    return job if job.get('kind', 'reference') != 'reference' or job.get('status') in ('RUNNING_ELSEWHERE', 'IDLE') else {'status': 'IDLE', 'pids': job.get('pids', [])}
+
+
+def strategy_history(strategy_id) -> dict | None:
+    state = historical_state()
+    if state is None or strategy_id not in state['evaluation']['trust']:
+        return None
+    ev = state['evaluation']
+    requirement = next(r for r in ev['requirements'] if r['strategy_id'] == strategy_id)
+    cross = next((s for s in (state['cross_regime'] or {}).get('strategies', []) if s['strategy_id'] == strategy_id), None)
+    return {'cells': ev['trust'][strategy_id], 'summary': ev['summaries'][strategy_id], 'requirement': requirement, 'cross_regime': cross,
+            'evaluation_id': ev['evaluation_id'], 'snapshot_id': ev['snapshot_id']}
+
+
+@app.route('/strategies/<path:strategy_id>/data-trust')
+def strategy_data_trust(strategy_id):
+    from core.research.history import categories as cats
+    info = strategy_history(strategy_id)
+    if info is None:
+        abort(404)
+    return render_template('strategy_data_trust.html', info=info, strategy_id=strategy_id, categories=cats.CATEGORIES, active_nav='strategy_center')
+
+
+@app.route('/historical/reports/<evaluation_id>/<name>')
+def historical_download(evaluation_id, name):
+    from scripts import historical_foundation as hf
+    if name not in HISTORY_DOWNLOADS or not re.fullmatch(r'EV1-[0-9a-f]{12}', evaluation_id):
+        abort(404)
+    path = _report_folder(evaluation_id) / name
+    latest = _stored(hf.REPORTS / 'LATEST.json') or {}
+    if name == 'CROSS_REGIME_VALIDATION_REPORT.md' and latest.get('evaluation_id') == evaluation_id and latest.get('cross_regime_md'):
+        path = hf.REPORTS / latest['cross_regime_md']  # the report of the latest batch outcome
+    if not path.is_file():
+        abort(404)
+    return send_file(path, mimetype='text/markdown', as_attachment=True, download_name=f'{evaluation_id}_{name}')
+
+
+@app.route('/admin/history/<action>', methods=['POST'])
+def admin_history(action):
+    """Admin + CSRF: refresh the historical layer (no HTTP: local raw files and the read-only extract) or run the historical reference batch.
+    Shares the one job slot with the reference batch; a fetch beyond the research budget is impossible here (budget jobs are Owner-only)."""
+    if action not in ('refresh', 'run', 'cancel'):
+        abort(404)
+    refused = _require_admin_write()
+    if refused:
+        return jsonify(refused[0]), refused[1]
+    from core.research.reference import batch_job
+    result = batch_job.cancel() if action == 'cancel' else batch_job.start(workers=6 if action == 'run' else 1, kind=f'history_{action}')
+    if result['status'] in ('RUN_IN_PROGRESS', 'NOT_RUNNING'):
+        return jsonify(result), 409
+    flash({'refresh': '歷史資料刷新已開始（快照、評估、缺口、報告）', 'run': '歷史參考回測已開始；相同身份會直接重用',
+           'cancel': '背景工作已取消；已保存的回測保留'}[action], 'success')
+    return redirect(url_for('admin_data'))
+
+
+def history_chart(strategy_id) -> dict | None:
+    """NAV, drawdown and the total-return index rebased to the run's first session, for the Plotly chart on /reference."""
+    import pandas as pd
+    from scripts import historical_foundation as hf
+    info = strategy_history(strategy_id)
+    run_id = info and info['cross_regime'] and info['cross_regime'].get('run_id')
+    if not run_id:
+        return None
+    nav = pd.read_csv(hf.RUNS / run_id / 'nav.csv', parse_dates=['date'])
+    bench = hf.snapshot(info['snapshot_id']).frame('benchmark').set_index('date').taiex_total_return.reindex(nav.date)
+    out = {'dates': nav.date.dt.strftime('%Y-%m-%d').tolist()}
+    for track, column in (('base', 'nav_base'), ('x2', 'nav_stress')):
+        curve = nav[column] / nav[column].iloc[0]
+        out[track] = curve.round(6).tolist()
+        out[f'{track}_drawdown'] = (curve / curve.cummax() - 1).round(6).tolist()
+    out['benchmark'] = (bench / bench.iloc[0]).round(6).tolist()
+    out['trust'] = {str(c['year']): c['status'] for c in info['cells']}
+    return out
+
+
+# ---------------------------------------------------------------- engine accounting fix round (change 2026-11-10-engine-accounting-and-history-gaps-v1)
+
+ENGINE_FIX = ROOT / 'outputs/engine_history_fix'
+ENGINE_FIX_DOWNLOADS = ('FINAL_ENGINE_AND_HISTORY_VALIDATION_REPORT.md', 'legacy_baseline.json', 'evidence.json', 'state.json')
+
+
+def engine_fix_state() -> dict:
+    """Task state, gap-closure evidence and downloadable files of the round; each part is None or empty until its producer wrote it."""
+    from core.research.history import taskstate
+    state = _stored(taskstate.STATE)
+    try:
+        summary = taskstate.summary(state) if state else None
+    except (KeyError, TypeError, AttributeError):  # a half-written or foreign state file still renders as rows
+        summary = None
+    return {'state': state, 'summary': summary, 'evidence': _stored(ENGINE_FIX / 'evidence.json'),
+            'downloads': [n for n in ENGINE_FIX_DOWNLOADS if (ENGINE_FIX / n).is_file()]}
+
+
+def history_run_record(strategy_id) -> dict | None:
+    """accounting, ledger_version and open_positions of the stored run the cross-regime report names for this strategy."""
+    from scripts import historical_foundation as hf
+    info = strategy_history(strategy_id) if strategy_id else None
+    run_id = info and info['cross_regime'] and info['cross_regime'].get('run_id')
+    record = run_id and _stored(hf.RUNS / run_id / 'run.json')
+    return {k: record.get(k) for k in ('run_id', 'accounting', 'ledger_version', 'open_positions', 'cost_summary', 'created_at')} if record else None
+
+
+@app.route('/engine-fix/<name>')
+def engine_fix_download(name):
+    if name not in ENGINE_FIX_DOWNLOADS or not (ENGINE_FIX / name).is_file():
+        abort(404)
+    return send_file(ENGINE_FIX / name, mimetype='text/markdown' if name.endswith('.md') else 'application/json', as_attachment=True, download_name=name)
 
 
 def publish_overview(now=None) -> dict:

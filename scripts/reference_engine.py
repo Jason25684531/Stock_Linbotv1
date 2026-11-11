@@ -60,4 +60,6 @@ def execute_one(cap, identity) -> dict:
         stress, _, _ = legacy._run_track(cap.strategy_id, {}, prep, legacy.STRESS_MULTIPLE)
     nav = pd.DataFrame({'date': [d for d, _ in base['nav']], 'nav_base': [v for _, v in base['nav']], 'nav_stress': [v for _, v in stress['nav']]})
     return {'nav': nav, 'trades': pd.DataFrame(base['trades']), 'trades_stress': pd.DataFrame(stress['trades']),
-            'engine_error': base['engine_error'] or stress['engine_error']}
+            'engine_error': base['engine_error'] or stress['engine_error'], 'accounting': base['accounting'],
+            'corporate_actions': pd.DataFrame(base['corporate_action_events']), 'open_positions': base.get('open_positions', []),
+            'cost_summary': base.get('cost_summary')}

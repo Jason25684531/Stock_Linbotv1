@@ -22,6 +22,10 @@ ROUND = '2026-10-28-public-research'
 ROUND_CAPS = {'od_p6': 385, 't1b': 10, 'calendar_2026': 1}  # round 2026-10-28: combined ceiling 396
 # 2026-11-04 Owner-approved fixed plan (change h4-historical-data-unlock-v1): its own ceiling, outside the 396.
 CAPS = {**ROUND_CAPS, 'h4_hist': 1870, 'h4_fund_recovery': 460}  # 2026-11-05 Owner: 15 listed companies' filings, own ceiling
+# 2026-11-10 Owner-approved fixed plan (change 2026-11-10-engine-accounting-and-history-gaps-v1): 17 requests in total, retries included.
+# hist_foundation_quotes: MI_INDEX for the 8 Saturday make-up sessions 2016-2018; hist_foundation_events: TWTAUU/TWTB8U 2023-2025 (unused:
+# the verified t1b cache already holds them); hist_foundation_verify: 2384/5280 listing status and the 2019-04-29 index (unused: local evidence).
+CAPS |= {'hist_foundation_quotes': 8, 'hist_foundation_events': 6, 'hist_foundation_verify': 3}
 LEGACY = {
     'od_p6': (ROOT / 'outputs/p0_p4/2026-10-24/od_p6_request_ledger.jsonl', 3),
     't1b': (ROOT / 'outputs/finlab_recovery/2026-10-24/t1b_official/t1b_request_ledger.jsonl', 4),

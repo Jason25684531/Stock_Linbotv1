@@ -1,0 +1,83 @@
+{% from '_history_ui.html' import trust_cell, cpct, task_cell, fpct %}
+{% set h = historical %}
+<section class="quant-card space-y-3 p-4 text-xs" data-testid="historical-dashboard">
+    <h2 class="text-sm font-semibold text-white">2015～2025 歷史研究資料（REFERENCE_ONLY · 與 2026 每日資料隔離）</h2>
+    {% if not h %}
+    <p class="text-muted" data-testid="historical-empty">NO_HISTORICAL_EVALUATION：尚未建立歷史快照與評估（python -m scripts.historical_foundation refresh）。</p>
+    {% else %}
+    {% set ev = h.evaluation %}
+    <p>Snapshot <span class="num" data-testid="historical-snapshot">{{ ev.snapshot_id }}</span> · Evaluation <span class="num" data-testid="historical-evaluation">{{ ev.evaluation_id }}</span> · 建立 {{ ev.created_at }} · 0 次 HTTP · 只讀本機原始檔與唯讀對帳抽樣</p>
+    <p class="text-muted">判定：完整性錯誤 → FAILED_VALIDATION；本機無資料 → ACCESS_BLOCKED（合法來源未授權）或 SOURCE_UNAVAILABLE；獨立對帳一致率 &lt; 0.99 → FAILED_VALIDATION；不完整或無獨立來源 → PARTIAL；其餘 VERIFIED。下載成功不等於 VERIFIED。</p>
+    <form method="get" class="flex flex-wrap items-end gap-3" data-testid="historical-filters">
+        <label>年份 <select name="year" class="rounded border border-strong bg-secondary px-2 py-1"><option value="">全部</option>{% for y in range(2015, 2026) %}<option value="{{ y }}" {% if h.filters.year == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}</select></label>
+        <label>資料類別 <select name="category" class="rounded border border-strong bg-secondary px-2 py-1"><option value="">全部</option>{% for c in h.categories %}<option value="{{ c.id }}" {% if h.filters.category == c.id %}selected{% endif %}>{{ c.label }}</option>{% endfor %}</select></label>
+        <label>驗證狀態 <select name="status" class="rounded border border-strong bg-secondary px-2 py-1"><option value="">全部</option>{% for s in h.statuses %}<option value="{{ s }}" {% if h.filters.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+        <button class="rounded border border-strong px-3 py-1">篩選</button>
+    </form>
+    <div class="overflow-x-auto"><table class="w-full" data-testid="historical-grid"><thead class="text-left text-muted"><tr><th class="p-1">類別</th><th class="p-1">角色</th>{% for y in h.years %}<th class="p-1 num">{{ y }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for c in h.categories if c.id in h.grid %}<tr><td class="p-1">{{ c.label }} <span class="num text-muted">{{ c.id }}</span></td><td class="p-1">{{ c.role }}</td>
+            {% for y in h.years %}{% set cell = h.grid[c.id][y] %}<td class="p-1">{% if not h.filters.status or cell.status == h.filters.status %}{{ trust_cell(cell.status, cell.reasons|join('; ')) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+    {% if h.coverage %}
+    <div class="overflow-x-auto"><table class="w-full" data-testid="historical-years"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">股票數</th><th class="p-1">交易日完整率</th><th class="p-1">OHLCV</th><th class="p-1">除權息</th><th class="p-1">減資／面額</th><th class="p-1">無事件跳空</th><th class="p-1">下市覆蓋</th><th class="p-1">財報 PIT</th><th class="p-1">營收 PIT</th><th class="p-1">價格層</th></tr></thead>
+        <tbody>{% for r in h.coverage.years if not h.filters.year or r.year|string == h.filters.year %}<tr><td class="num p-1">{{ r.year }}</td><td class="num p-1">{{ r.stocks }}</td>
+            <td class="num p-1">{{ fpct(r.trading_day_completeness) }}</td><td class="num p-1">{{ fpct(r.ohlcv_session_completeness) }}</td>
+            <td class="p-1">{{ trust_cell(r.corporate_actions.dividends) }}</td><td class="p-1">{{ trust_cell(r.corporate_actions.capital_changes) }}</td><td class="num p-1">{{ r.corporate_actions.unexplained_price_jumps }}</td>
+            <td class="num p-1">{{ fpct(r.delisting_coverage) }}</td><td class="num p-1">{{ cpct(r.financial_pit_completeness) }}</td>
+            <td class="num p-1">{{ cpct(r.revenue_pit_completeness) }}</td><td class="p-1" data-testid="price-layer">{{ r.price_layer_verdict }}</td></tr>{% endfor %}</tbody></table></div>
+    {% endif %}
+    <details data-testid="historical-gaps" open><summary class="cursor-pointer text-sm text-white">缺口清單（{{ h.gap_rows|length }} / {{ h.gaps|length }}；每個缺口最多三輪，0 次 HTTP）</summary>
+        <div class="overflow-x-auto"><table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">類別</th><th class="p-1">狀態</th><th class="p-1">精確範圍</th><th class="p-1">輪數</th><th class="p-1">受影響策略</th><th class="p-1">最小 Owner 動作</th></tr></thead>
+        <tbody>{% for g in h.gap_rows %}<tr class="align-top"><td class="num p-1">{{ g.year }}</td><td class="p-1">{{ g.category }}</td><td class="p-1">{{ trust_cell(g.status, g.reasons|join('; ')) }}</td>
+            <td class="num p-1 break-all">{{ g.exact_range|join(', ') if g.exact_range is not string else g.exact_range }}</td><td class="num p-1">{{ g.rounds }}</td><td class="p-1">{{ g.affected_strategies|length }}</td><td class="p-1">{{ g.owner_action }}</td></tr>{% else %}<tr><td colspan="7" class="p-2 text-muted">沒有符合篩選的缺口。</td></tr>{% endfor %}</tbody></table></div></details>
+    <details data-testid="historical-sources"><summary class="cursor-pointer text-sm text-white">來源清冊與證據（historical_source_inventory，{{ ev.inventory|length }} 列）</summary>
+        <div class="overflow-x-auto"><table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">Source ID</th><th class="p-1">期間</th><th class="p-1">檔案</th><th class="p-1">Aggregate SHA256</th><th class="p-1">存取</th><th class="p-1">狀態</th></tr></thead>
+        <tbody>{% for s in ev.inventory %}<tr class="align-top"><td class="p-1 break-all">{{ s.source_id }}</td><td class="num p-1">{{ (s.period or [])|join('～') }}</td><td class="num p-1">{{ s.files }}</td><td class="num p-1">{{ (s.aggregate_sha256 or '-')[:16] }}</td><td class="p-1 break-all">{{ s.access }}</td><td class="p-1">{{ s.status }}</td></tr>{% endfor %}</tbody></table></div></details>
+    <div data-testid="historical-job">背景工作：<strong>{{ h.job.status }}</strong>{% if h.job.kind %}（{{ h.job.kind }}，開始 {{ h.job.started_at }}）{% endif %}{% if h.job.pids %} · 執行中行程 {{ h.job.pids|join(', ') }}{% endif %}
+        {% for line in h.job.log_tail or [] %}<div class="num text-muted break-all">{{ line }}</div>{% endfor %}</div>
+    {% if admin %}
+    <div class="flex flex-wrap gap-3">
+        <form method="post" action="{{ url_for('admin_history', action='refresh') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="rounded bg-blue-600 px-3 py-1 text-white" data-testid="history-refresh" {% if h.job.pids %}disabled{% endif %}>刷新歷史資料（本機、0 HTTP）</button></form>
+        <form method="post" action="{{ url_for('admin_history', action='run') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="rounded border border-strong px-3 py-1" data-testid="history-run" {% if h.job.pids %}disabled{% endif %}>啟動歷史參考回測</button></form>
+        <form method="post" action="{{ url_for('admin_history', action='cancel') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="rounded border border-strong px-3 py-1" data-testid="history-cancel" {% if h.job.status != 'RUNNING' %}disabled{% endif %}>取消</button></form>
+    </div>
+    <p class="text-muted">補抓歷史缺口需要 Owner 指派的研究預算工作（research_budget.CAPS），本頁不能新增預算、不能繞過每日請求上限或 2025-12-31 研究視窗。</p>
+    {% endif %}
+    <p>下載：{% for name in h.downloads %}<a class="mr-3 text-blue-300" href="{{ url_for('historical_download', evaluation_id=ev.evaluation_id, name=name) }}">{{ name }}</a>{% endfor %}</p>
+    {% endif %}
+</section>
+{% set fix = engine_fix or {} %}{% set ev2 = fix.get('evidence') %}
+<section class="quant-card space-y-3 p-4 text-xs" data-testid="fix-evidence">
+    <h2 class="text-sm font-semibold text-white">本輪缺口修復證據（2026-11-10 引擎帳務與歷史缺口）</h2>
+    {% if not ev2 %}<p class="text-muted">尚未產生 evidence.json（本輪缺口修復完成後出現）。</p>{% else %}
+    {% set eng = ev2.get('engine') or {} %}{% set snap = ev2.get('snapshot') or {} %}
+    <p>引擎 <span class="num">{{ eng.get('legacy', 'LEGACY_RAW_PRICE') }}</span> → <span class="num">{{ eng.get('new', 'POSITION_LEDGER_CA_V1') }}</span> · 快照 <span class="num">{{ snap.get('legacy') or '-' }}</span> → <span class="num">{{ snap.get('new') or '-' }}</span></p>
+    <div class="overflow-x-auto"><h3 class="font-semibold text-white">補齊的週六交易日（{{ (ev2.get('saturdays') or {})|length }} 日）</h3>
+        <table class="mt-1 w-full"><thead class="text-left text-muted"><tr><th class="p-1">日期</th><th class="p-1">檔案</th><th class="p-1">SHA256</th><th class="p-1">列數</th><th class="p-1">有成交</th><th class="p-1">已入快照</th><th class="p-1">FinLab 對帳（一致／比對）</th></tr></thead>
+        <tbody>{% for day, s in (ev2.get('saturdays') or {}).items() %}{% set fl = s.get('finlab') or {} %}<tr><td class="num p-1">{{ day }}</td><td class="num p-1 break-all">{{ s.get('file') or '-' }}</td><td class="num p-1">{{ (s.get('sha256') or '-')[:12] }}</td>
+            <td class="num p-1">{{ s.get('rows', '-') }}</td><td class="num p-1">{{ s.get('traded_rows', '-') }}</td><td class="p-1">{{ 'YES' if s.get('in_snapshot') else 'NO' }}</td><td class="num p-1">{{ fl.get('agreed', '-') }} / {{ fl.get('compared', '-') }}</td></tr>{% else %}<tr><td colspan="7" class="p-2 text-muted">無</td></tr>{% endfor %}</tbody></table></div>
+    {% set cc = ev2.get('capital_changes_2023_2025') or {} %}
+    <div class="overflow-x-auto"><h3 class="font-semibold text-white">2023～2025 減資／面額變更來源</h3>
+        <table class="mt-1 w-full"><thead class="text-left text-muted"><tr><th class="p-1">來源</th><th class="p-1">檔案</th><th class="p-1">SHA256</th><th class="p-1">列數</th><th class="p-1">來自</th><th class="p-1">來源 SHA256</th></tr></thead>
+        <tbody>{% for name, s in cc.items() if s is mapping %}<tr><td class="num p-1">{{ name }}</td><td class="num p-1 break-all">{{ s.get('file') or '-' }}</td><td class="num p-1">{{ (s.get('sha256') or '-')[:12] }}</td><td class="num p-1">{{ s.get('rows', '-') }}</td><td class="num p-1 break-all">{{ s.get('from') or '-' }}</td><td class="num p-1">{{ (s.get('from_sha256') or '-')[:12] }}</td></tr>{% endfor %}</tbody></table>
+        <p class="mt-1">無事件跳空：修復前 <span class="num">{{ cc.get('unexplained_jumps_before', '-') }}</span> → 修復後 <span class="num">{{ cc.get('unexplained_jumps_after', '-') }}</span>{% if cc.get('explained_now') %} · 現已解釋：{{ cc.get('explained_now')|join(', ') }}{% endif %}</p></div>
+    {% set dl = ev2.get('delisted_2015') or {} %}
+    <div><h3 class="font-semibold text-white">2015 下市股 2384 / 5280</h3>
+        {% for sid in ('2384', '5280') %}{% set d = dl.get(sid) or {} %}<p>{{ sid }} {{ d.get('name') or '' }}：下市 {{ d.get('delisting_date') or '-' }} · 來源 {{ d.get('source') or '-' }} · 2015 MI_INDEX 檔含該股 {{ d.get('mi_index_files_2015_containing', '-') }} 檔 · FinLab 最後收盤日 {{ d.get('finlab_last_close_date') or '-' }}</p>{% endfor %}
+        <p>判定：<strong>{{ dl.get('verdict') or '-' }}</strong></p></div>
+    {% set b19 = ev2.get('benchmark_2019') or {} %}
+    <p><span class="font-semibold text-white">2019 Benchmark：</span>無指數交易日 修復前 <span class="num">{{ b19.get('sessions_without_index_before', '-') }}</span> → 修復後 <span class="num">{{ b19.get('sessions_without_index_after', '-') }}</span> · 修復日 {{ b19.get('fixed_date') or '-' }} · TAIEX {{ b19.get('taiex_price') if b19.get('taiex_price') is not none else '-' }} · 報酬指數 {{ b19.get('taiex_total_return') if b19.get('taiex_total_return') is not none else '-' }} · 方法 {{ b19.get('method') or '-' }}</p>
+    {% set bd = ev2.get('budget') or {} %}
+    <p><span class="font-semibold text-white">研究預算：</span>{% for key in ('hist_foundation_quotes', 'hist_foundation_events', 'hist_foundation_verify') %}{% set u = bd.get(key) or {} %}{{ key }} <span class="num">{{ u.get('used', '-') }} / {{ u.get('cap', '-') }}</span> · {% endfor %}總上限 <span class="num">{{ bd.get('total_cap', '-') }}</span> · 本輪 HTTP 請求 <span class="num">{{ bd.get('http_requests_this_round', '-') }}</span></p>
+    {% endif %}
+    {% if fix.get('downloads') %}<p>下載：{% for name in fix.get('downloads') %}<a class="mr-3 text-blue-300" href="{{ url_for('engine_fix_download', name=name) }}">{{ name }}</a>{% endfor %}</p>{% endif %}
+</section>
+{% set st = fix.get('state') %}{% set sm = fix.get('summary') or {} %}
+<section class="quant-card space-y-3 p-4 text-xs" data-testid="fix-tasks">
+    <h2 class="text-sm font-semibold text-white">本輪工作狀態（{{ (st or {}).get('round') or '2026-11-10-engine-accounting-and-history-gaps-v1' }}）</h2>
+    {% if not st %}<p class="text-muted">尚未產生 state.json（本輪工作開始後出現）。</p>{% else %}
+    <p>更新 {{ st.get('updated_at') or '-' }} · 全部終態：{{ 'YES' if sm.get('all_terminal') else 'NO' }} · {% for s, n in (sm.get('counts') or {}).items() %}{{ s }} <span class="num">{{ n }}</span> · {% endfor %}未完成 {{ (sm.get('open') or [])|length }}</p>
+    <div class="overflow-x-auto"><table class="w-full"><thead class="text-left text-muted"><tr><th class="p-1">工作</th><th class="p-1">標題</th><th class="p-1">狀態</th><th class="p-1">修復次數</th><th class="p-1">錯誤類別</th><th class="p-1">可重試</th><th class="p-1">說明</th><th class="p-1">檢查點</th></tr></thead>
+        <tbody>{% for t in (st.get('tasks') or {}).values() %}<tr class="align-top {% if t.get('status') in ('BLOCKED', 'FAILED') %}text-red-300{% endif %}" data-testid="fix-task-row" data-task="{{ t.get('task_id') }}"><td class="num p-1">{{ t.get('task_id') }}</td><td class="p-1">{{ t.get('title') or '-' }}</td><td class="p-1">{{ task_cell(t.get('status')) }}</td>
+            <td class="num p-1">{{ t.get('repairs', 0) }}</td><td class="p-1">{{ t.get('error_class') or '-' }}</td><td class="p-1">{{ '-' if t.get('retryable') is none else ('YES' if t.get('retryable') else 'NO') }}</td><td class="p-1 break-all">{{ t.get('note') or '' }}</td><td class="num p-1 break-all">{{ t.get('checkpoint') or '-' }}</td></tr>{% else %}<tr><td colspan="8" class="p-2 text-muted">尚無工作紀錄。</td></tr>{% endfor %}</tbody></table></div>
+    {% endif %}
+</section>

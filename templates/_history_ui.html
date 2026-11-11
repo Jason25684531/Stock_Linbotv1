@@ -1,0 +1,20 @@
+{% set trust_style = {
+    'VERIFIED': ['V', 'bg-emerald-600/70 text-white'], 'PARTIAL': ['P', 'bg-amber-500/70 text-black'],
+    'ACCESS_BLOCKED': ['AB', 'bg-rose-700/70 text-white'], 'SOURCE_UNAVAILABLE': ['SU', 'bg-slate-600 text-white'],
+    'FAILED_VALIDATION': ['FV', 'bg-red-600 text-white'], 'GOVERNED_ONLY': ['G', 'bg-violet-700/70 text-white'],
+    'NOT_REQUIRED': ['-', 'text-muted'], 'COMPARISON_ONLY': ['CMP', 'text-sky-300'], 'REQUIRED': ['REQ', 'text-white']
+} %}
+{% macro trust_cell(status, title='') -%}
+    {%- set s = trust_style.get(status, [status, 'text-muted']) -%}
+    <span class="inline-block min-w-[2rem] rounded px-1 text-center num text-xs {{ s[1] }}" title="{{ status }} {{ title }}" data-status="{{ status }}">{{ s[0] }}</span>
+{%- endmacro %}
+{% macro pct(m) -%}{% if m and m.value is not none %}{{ '%.2f'|format(m.value * 100) }}%{% elif m %}<span class="text-muted" title="{{ m.reason }} ">None</span>{% else %}-{% endif %}{%- endmacro %}
+{% macro cpct(c) -%}{% if c and c.value is not none %}{{ '%.2f'|format(c.value * 100) }}%{% elif c %}<span class="text-muted" title="{{ c.reason }} ">None</span>{% else %}-{% endif %}{%- endmacro %}
+{% macro num(m) -%}{% if m and m.value is not none %}{{ '%.3f'|format(m.value) }}{% elif m %}<span class="text-muted" title="{{ m.reason }} ">None</span>{% else %}-{% endif %}{%- endmacro %}
+{# plain floats of the legacy-vs-new comparison (not {value, reason} metrics): None stays None, never 0 #}
+{% macro fpct(x) -%}{% if x is defined and x is not none and x is number %}{{ '%.2f'|format(x * 100) }}%{% elif x is defined and x is not none %}{{ x }}{% else %}<span class="text-muted">None</span>{% endif %}{%- endmacro %}
+{% set task_style = {
+    'PASS': 'bg-emerald-600/70 text-white', 'RUNNING': 'bg-amber-500/70 text-black', 'RETRYING': 'bg-amber-500/70 text-black',
+    'BLOCKED': 'bg-rose-700/70 text-white', 'FAILED': 'bg-red-600 text-white', 'SKIPPED_DEPENDENCY': 'bg-slate-600 text-white', 'PENDING': 'text-muted'
+} %}
+{% macro task_cell(status) -%}<span class="inline-block rounded px-1 num text-xs {{ task_style.get(status, 'text-muted') }}" data-status="{{ status }}">{{ status }}</span>{%- endmacro %}

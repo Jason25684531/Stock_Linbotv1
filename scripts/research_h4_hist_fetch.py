@@ -33,12 +33,13 @@ def plan():
     return items
 
 
-def fetch(only=None, limit=None):
+def fetch(only=None, limit=None, items=None):
+    """items: an explicit (file name, url, params) list instead of plan() (the 2026-11-10 Saturday plan reuses this transport and log)."""
     OUT.mkdir(parents=True, exist_ok=True)
     RAW.mkdir(parents=True, exist_ok=True)
     failures = sent = 0
     summary = {'cached': 0, 'sent': 0, 'failed': 0, 'stopped': None}
-    for name, url, params in plan():
+    for name, url, params in (plan() if items is None else items):
         if only and name not in only:
             continue
         if limit is not None and sent >= limit:

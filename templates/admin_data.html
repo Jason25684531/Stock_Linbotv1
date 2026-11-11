@@ -48,6 +48,7 @@
             <td class="p-1 break-all">{% for e in s.endpoints %}<div>{{ e }}</div>{% else %}local{% endfor %}</td></tr>{% endfor %}</tbody></table>
         <p class="mt-2 text-muted">每個公開端點都以與實際請求相同的 context 先過既有授權閘門；restricted 端點（TPEx）需另行授權。寫入正式資料庫另需 WRITE_PRODUCTION_DB 授權。</p></section>
     {% if status.attention %}<section class="quant-card p-4 text-sm"><h2 class="font-semibold text-white">缺失或延遲</h2><ul class="mt-2 list-disc pl-5">{% for a in status.attention %}<li>{{ a.dataset }} {{ a.date }}：{{ a.status }} {{ a.reason or '' }}</li>{% endfor %}</ul></section>{% endif %}
+    {% include '_historical_data.html' %}
     <section class="quant-card space-y-4 p-4 text-sm" data-testid="data-actions">
         {% if admin %}
         <form method="post" class="flex flex-wrap items-end gap-3"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="manual">

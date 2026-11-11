@@ -315,6 +315,19 @@ def strategy_center():
         row = rows.get(item['strategy_id'])
         item['reference'] = row and {key: row.get(key) for key in ('state', 'reason', 'levels', 'metrics', 'run_id')} | {
             'data_needs': needs.get(item['strategy_id'], []), 'tej_required': False}
+    from app.platform_routes import strategy_history
+    for item in catalog:  # 2015-2025 data trust per year (change 2026-11-10-historical-data-foundation-v1), stored evaluation only
+        info = strategy_history(item['strategy_id'])
+        cross = (info or {}).get('cross_regime') or {}
+        compare = cross.get('legacy_comparison') or None  # new engine (POSITION_LEDGER_CA_V1) vs the stored legacy raw-price run
+        decision = (cross.get('decision') or {}).get('state')
+        item['history'] = info and {'cells': [{'year': c['year'], 'status': c['status']} for c in info['cells']],
+                                    'earliest': info['summary']['earliest_usable_date'], 'verified': info['summary']['data_trust_verified'],
+                                    'decision': decision, 'final_state': cross.get('final_state') or decision, 'accounting': cross.get('accounting'),
+                                    'usable_years': [c['year'] for c in info['cells'] if c.get('backtestable')],
+                                    'governed_validation': decision == 'GOVERNED_VALIDATION_REQUIRED',
+                                    'compare': compare and {**{k: ((compare.get(k) or {}).get('common_years_return')) for k in ('legacy', 'new', 'delta')},
+                                                            'years': compare.get('common_years') or []}}
     return render_template('strategy_center.html', strategy_catalog=catalog)
 
 

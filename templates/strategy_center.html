@@ -70,7 +70,7 @@
                             <div class="mt-1 break-all num text-xs text-blue-300" x-text="item.strategy_id"></div>
                             <p class="mt-2 text-xs text-muted" x-show="item.source === 'tquant'" x-text="'來源：' + item.source_notebook"></p>
                             <p class="mt-1 text-xs text-amber-200" x-show="item.source === 'tquant'">持股數、再平衡和出場規則依本專案引擎，績效和原 notebook 不同。</p>
-                            <p class="mt-1 text-xs" style="overflow-wrap:anywhere" data-testid="reference-status" x-show="item.reference" x-text="referenceText(item)"></p>
+                            <p class="mt-1 text-xs" style="overflow-wrap:anywhere" data-testid="reference-status" x-show="item.reference" x-text="referenceText(item)"></p><div class="mt-1 flex flex-wrap items-center gap-0.5 text-xs" data-testid="history-trust" x-show="item.history"><template x-for="cell in (item.history ? item.history.cells : [])" :key="cell.year"><span class="rounded px-1 num" :class="trustClass(cell.status)" :title="cell.year + &quot; &quot; + cell.status" x-text="String(cell.year).slice(2)"></span></template><a class="ml-1 text-blue-300 hover:text-blue-200" :href="&quot;/strategies/&quot; + encodeURIComponent(item.strategy_id) + &quot;/data-trust&quot;">2015-2025 data trust</a><span class="ml-1 text-muted" x-text="historyText(item)"></span><span class="basis-full text-muted" style="overflow-wrap:anywhere" data-testid="engine-compare" x-text="compareText(item)"></span></div>
                             <template x-if="item.research"><div class="mt-2 text-xs" data-testid="research-entry">
                                 <p class="text-amber-200" x-text="researchText(item)"></p>
                                 <a class="mt-1 inline-block text-blue-300 hover:text-blue-200" :href="item.detail_url">查看策略詳情與歷史選股 →</a>
@@ -144,7 +144,7 @@
                 </template>
                 <p class="mt-1 text-xs text-amber-200" style="overflow-wrap:anywhere" x-show="item.recovery_baseline?.pit_status" x-text="item.recovery_baseline && ('補跑 PIT：' + item.recovery_baseline.pit_status + '｜估值資料：' + JSON.stringify(item.recovery_baseline.valuation))"></p>
                 <p class="mt-1 text-xs text-amber-200" style="overflow-wrap:anywhere" data-testid="recovery-evidence" x-show="item.recovery_baseline?.evidence_status" x-text="evidenceText(item.recovery_baseline)"></p>
-                <p class="mt-1 text-xs" style="overflow-wrap:anywhere" data-testid="reference-status" x-show="item.reference" x-text="referenceText(item)"></p>
+                <p class="mt-1 text-xs" style="overflow-wrap:anywhere" data-testid="reference-status" x-show="item.reference" x-text="referenceText(item)"></p><div class="mt-1 flex flex-wrap items-center gap-0.5 text-xs" data-testid="history-trust" x-show="item.history"><template x-for="cell in (item.history ? item.history.cells : [])" :key="cell.year"><span class="rounded px-1 num" :class="trustClass(cell.status)" :title="cell.year + &quot; &quot; + cell.status" x-text="String(cell.year).slice(2)"></span></template><a class="ml-1 text-blue-300 hover:text-blue-200" :href="&quot;/strategies/&quot; + encodeURIComponent(item.strategy_id) + &quot;/data-trust&quot;">2015-2025 data trust</a><span class="ml-1 text-muted" x-text="historyText(item)"></span><span class="basis-full text-muted" style="overflow-wrap:anywhere" data-testid="engine-compare" x-text="compareText(item)"></span></div>
                 <template x-if="item.research"><div class="mt-2 text-xs" data-testid="research-entry-mobile">
                     <p class="text-amber-200" x-text="researchText(item)"></p>
                     <a class="mt-1 inline-block text-blue-300 hover:text-blue-200" :href="item.detail_url">查看策略詳情與歷史選股 →</a>
@@ -245,6 +245,22 @@ function strategyCenter(catalog) {
         evidenceText(r) {
             if (!r) return '';  // x-text is evaluated even while x-show hides the line
             return `補跑證據：${r.evidence_status}｜PIT ${r.pit_checks ?? '-'} 檢查、${r.pit_unverified ?? '-'} 未驗證，明細 ${r.pit_detail}｜公司行動（事後診斷）：${r.actions_diagnosis || 'NOT_RUN'}｜非認證`;
+        },
+        trustClass(status) {
+            return {VERIFIED: 'bg-emerald-600/70 text-white', PARTIAL: 'bg-amber-500/70 text-black', ACCESS_BLOCKED: 'bg-rose-700/70 text-white',
+                    SOURCE_UNAVAILABLE: 'bg-slate-600 text-white', FAILED_VALIDATION: 'bg-red-600 text-white', GOVERNED_ONLY: 'bg-violet-700/70 text-white'}[status] || 'text-muted';
+        },
+        historyText(item) {
+            const h = item.history;
+            return h ? `最早可用 ${h.earliest || '無'}｜DATA_TRUST_VERIFIED ${h.verified || 'NO'}｜歷史研究判定 ${h.decision || '-'}｜CERTIFIED NO` : '';
+        },
+        compareText(item) {
+            const h = item.history, fp = (x) => x === null || x === undefined ? 'None' : (x * 100).toFixed(2) + '%';
+            if (!h) return '';
+            const years = (h.usable_years || []).length ? `${h.usable_years[0]}-${h.usable_years[h.usable_years.length - 1]}` : '無';
+            const span = (h.compare && (h.compare.years || []).length) ? `${h.compare.years[0]}-${h.compare.years[h.compare.years.length - 1]} ` : '';
+            const cmp = h.compare ? `｜${span}舊版 ${fp(h.compare.legacy)} → 新版 ${fp(h.compare.new)}（差異 ${fp(h.compare.delta)}）` : '｜新舊比較尚未產生';
+            return `引擎狀態 ${h.final_state || '-'}｜帳務 ${h.accounting || 'LEGACY_ACCOUNTING/PROVISIONAL'}｜可用年份 ${years}${cmp}${h.governed_validation ? '｜需治理驗證（GOVERNED_VALIDATION_REQUIRED）' : ''}`;
         },
         referenceText(item) {
             const r = item.reference, pct = (m) => m && m.value !== null ? (m.value * 100).toFixed(2) + '%' : `None (${m ? m.reason : '-'})`;

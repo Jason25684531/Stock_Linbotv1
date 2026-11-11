@@ -413,6 +413,12 @@ def _valid_close(price):
     return price is not None and math.isfinite(float(price)) and float(price) > 0
 
 
+# Accounting models (change 2026-11-10-engine-accounting-and-history-gaps-v1). LEGACY_RAW_PRICE: raw prices, no corporate-action booking
+# (an ex-date gap is a price move). POSITION_LEDGER_CA_V1: raw prices, every official event booked on the held position.
+ACCOUNTING_LEGACY, ACCOUNTING_LEDGER = 'LEGACY_RAW_PRICE', 'POSITION_LEDGER_CA_V1'
+PAR_VALUE = 10.0  # NT$: fractional shares after an adjustment are settled in cash at par
+
+
 class BacktestEngine:
     """
     多策略回測引擎
@@ -422,7 +428,7 @@ class BacktestEngine:
     def __init__(self, mode='v31', start_date=None, end_date=None, initial_capital=INITIAL_CAPITAL,
                  persist_results=True, use_db_params=USE_DB_PARAMS, strategy_filter_mode: str | None = None,
                  persist_to_db: bool | None = None, execution_contract='legacy_same_close', trading_sessions=None,
-                 research_data=None, rules_only=False, valuation_policy='legacy'):
+                 research_data=None, rules_only=False, valuation_policy='legacy', corporate_actions=None):
         """
         初始化回測引擎
 
@@ -446,6 +452,12 @@ class BacktestEngine:
             raise ValueError('finite_positive_stale is a research valuation policy (next_session_open_v2 with research_data)')
         self.valuation_policy = valuation_policy
         self.valuation_events = []  # STALE_VALUATION records (research policy only)
+        if corporate_actions is not None and (execution_contract != 'next_session_open_v2' or research_data is None):
+            raise ValueError('corporate_actions is a research accounting option (next_session_open_v2 with research_data)')
+        self.corporate_actions = corporate_actions  # {'YYYY-MM-DD': [ledger rows]} (core.research.history.ledger.to_engine) or None
+        self.accounting = ACCOUNTING_LEDGER if corporate_actions is not None else ACCOUNTING_LEGACY
+        self.corporate_action_events = []  # one record per event met by a held position: BOOKED, DUPLICATE_SUPPRESSED or UNRESOLVED_NOT_BOOKED
+        self._applied_action_ids = set()
         self.execution_contract = execution_contract
         self.trading_sessions = list(trading_sessions or [])
         if execution_contract == 'next_session_open_v2':
@@ -454,8 +466,7 @@ class BacktestEngine:
             normalized = [_parse_iso_date(day) for day in self.trading_sessions]
             if not normalized or normalized != sorted(set(normalized)):
                 raise ValueError('next_session_open_v2 requires ordered unique externally validated trading sessions')
-            if any(_coerce_to_date(day).weekday() >= 5 for day in normalized):
-                raise ValueError('Weekend sessions are invalid for the TWSE stock execution contract')
+            # Saturday make-up sessions are real TWSE sessions (eight in 2016-2018): the validated calendar decides, never the weekday
             if persist_results or persist_to_db:
                 raise ValueError('Research execution requires persist_results=False and persist_to_db=False')
             if research_data is None:
@@ -690,6 +701,63 @@ class BacktestEngine:
                                       'price': info['last_valid_close'], 'price_source_date': info['last_valid_date'], 'stale_days': info['stale_days'],
                                       'shares': info['shares'], 'value': value})
         return value
+
+    def _apply_corporate_actions(self, date_str):
+        """POSITION_LEDGER_CA_V1: book every ledger event dated `date_str` on the positions held at the previous close, before any order fills.
+
+        shares <- floor(shares * multiplier), the fractional share and cash_per_share * old shares are credited to cash (recorded on the
+        position as distributions, so the trade's profit includes them), and every per-share mark (cost, highest, stop, last valid close)
+        is scaled by price_factor so no exit rule reads the ex-date gap as a move. An event id is booked at most once per run; a second
+        occurrence is recorded as DUPLICATE_SUPPRESSED and changes nothing. UNRESOLVED terms are recorded and never booked.
+        """
+        for row in (getattr(self, 'corporate_actions', None) or {}).get(date_str, ()):  # legacy fixtures build engines without __init__
+            sid = str(row['stock_id'])
+            if sid not in self.positions:
+                continue
+            info = self.positions[sid]
+            event = {'date': date_str, 'stock_id': sid, 'event_id': row['event_id'], 'kind': row['kind'], 'terms_status': row['terms_status'],
+                     'source_file': row.get('source_file'), 'source_version': row.get('source_version'), 'shares_before': info['shares'],
+                     'shares_after': info['shares'], 'cash_credited': 0.0, 'price_factor': 1.0}
+            if row['event_id'] in self._applied_action_ids:
+                self.corporate_action_events.append(event | {'status': 'DUPLICATE_SUPPRESSED'})
+                continue
+            self._applied_action_ids.add(row['event_id'])
+            if row['terms_status'] not in ('REFERENCE_DERIVED', 'RECONCILED_FINLAB', 'ASSUMED_STOCK'):
+                self.corporate_action_events.append(event | {'status': 'UNRESOLVED_NOT_BOOKED'})
+                continue
+            shares, factor = info['shares'], float(row['price_factor'])
+            exact = shares * float(row['share_multiplier'])
+            new_shares = int(math.floor(exact + 1e-9))
+            credit = shares * float(row['cash_per_share']) + (exact - new_shares) * PAR_VALUE
+            info.setdefault('entry_price_raw', info['cost'])
+            for key in ('cost', 'highest', 'stop_loss', 'last_valid_close', 'last_price'):
+                if info.get(key) is not None:
+                    info[key] = info[key] * factor
+            info['shares'] = new_shares
+            info['distributions'] = info.get('distributions', 0.0) + credit
+            self.portfolio.credit(credit)
+            self.corporate_action_events.append(event | {'status': 'BOOKED', 'shares_after': new_shares, 'cash_credited': credit, 'price_factor': factor,
+                                                         'share_multiplier': float(row['share_multiplier']), 'cash_per_share': float(row['cash_per_share'])})
+            if new_shares <= 0:  # the whole holding was cancelled for cash: a closed trade, not a position
+                self._close_cashed_out(sid, date_str, row['kind'])
+
+    def _ledger_end_mark(self, sid, info, final_date):
+        """The final session's valid close, else the carried mark. Never research_data.last_close: a raw close older than a booked event is
+        in pre-event units, while the carried mark was scaled with the shares."""
+        bar = self.research_data.bar(sid, final_date)
+        close = bar.get('close_price') if bar else None
+        return float(close) if _valid_close(close) else info.get('last_valid_close')
+
+    def _close_cashed_out(self, sid, date_str, kind):
+        info = self.portfolio.close_position(sid)
+        basis = info['total_cost'] + info.get('partial_basis', 0.0)
+        net = info.get('distributions', 0.0) + info.get('partial_net', 0.0)
+        profit_pct = (net - basis) / basis * 100 if basis else 0.0
+        self.trades.append({'stock_id': sid, 'strategy': 'v31_hybrid' if self.mode == 'v31' else self.mode, 'buy_date': info['buy_date'], 'sell_date': date_str,
+                            'buy_price': info.get('entry_price_raw', info['cost']), 'sell_price': 0.0, 'profit_pct': profit_pct, 'reason': f'CORPORATE_ACTION_CASH_OUT:{kind}',
+                            'days': info['days'], 'distributions': info.get('distributions', 0.0), 'adjusted_buy_price': info['cost'], 'exit_shares': 0})
+        self.trade_count += 1
+        self.win_count += profit_pct > 0
 
     def _apply_execution_slippage(self, price: float, side: str) -> float:
         """Apply adverse execution-only slippage without mutating market data."""
@@ -1155,14 +1223,14 @@ class BacktestEngine:
             info['partial_net'] = info.get('partial_net', 0.0) + net
             info['partial_basis'] = info.get('partial_basis', 0.0) + basis
             return
-        net += info.get('partial_net', 0.0)
+        net += info.get('partial_net', 0.0) + info.get('distributions', 0.0)  # cash and fractional-share settlements booked on the position
         basis += info.get('partial_basis', 0.0)
         profit = net - basis
         profit_pct = profit / basis * 100
 
         # 記錄交易
         strategy_key = 'v31_hybrid' if self.mode == 'v31' else self.mode
-        self.trades.append({
+        trade = {
             'stock_id': stock_id,
             'strategy': strategy_key,
             'buy_date': info['buy_date'],
@@ -1172,8 +1240,11 @@ class BacktestEngine:
             'profit_pct': profit_pct,
             'reason': reason,
             'days': info['days']
-        })
-        
+        }
+        if 'distributions' in info:  # ledger accounting only: legacy trade dicts stay identical to the characterization
+            trade.update(buy_price=info['entry_price_raw'], adjusted_buy_price=info['cost'], distributions=info['distributions'], exit_shares=shares)
+        self.trades.append(trade)
+
         self.portfolio.close_position(stock_id)
 
         self.trade_count += 1
@@ -1245,6 +1316,7 @@ class BacktestEngine:
         print("-" * 60)
         
         for date_str in date_list:
+            self._apply_corporate_actions(date_str)  # entitlement belongs to the holder at the previous close: before any open fills
             self.execute_pending_open(date_str)
             trend = self.get_market_trend(date_str)
             
@@ -1264,7 +1336,9 @@ class BacktestEngine:
         final = self.capital
         final_trade_date = date_list[-1]
         for sid, info in self.positions.items():
-            if self.research_data is not None:
+            if self.research_data is not None and getattr(self, 'corporate_actions', None) is not None:
+                price = self._ledger_end_mark(sid, info, final_trade_date)
+            elif self.research_data is not None:
                 price = self.research_data.last_close(sid, final_trade_date)
                 if getattr(self, 'valuation_policy', 'legacy') == 'finite_positive_stale' and not _valid_close(price):
                     price = info.get('last_valid_close')  # carried mark (recorded as STALE_VALUATION on the last session); None -> MISSING_END_MARK
@@ -1418,6 +1492,8 @@ class BacktestEngine:
                         'data_exclusions': getattr(self, 'data_exclusions', []),
                         'unexecuted_end_of_window_signals': self.pending_orders,
                         'valuation_policy': getattr(self, 'valuation_policy', 'legacy'),
+                        'accounting': getattr(self, 'accounting', ACCOUNTING_LEGACY),
+                        'corporate_action_events': list(getattr(self, 'corporate_action_events', [])),
                         'valuation_events': list(getattr(self, 'valuation_events', [])),  # dated, stale-flagged marks (OD-P5); never fills
                         'valuation': stale_valuation_verdict(getattr(self, 'valuation_events', []), getattr(self.research_data, 'action_dates', None))}
 

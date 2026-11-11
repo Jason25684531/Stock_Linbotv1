@@ -15,6 +15,9 @@ from pathlib import Path
 from core.research.reference import catalog, runner
 
 MODULE = 'core.research.reference.runner'
+HISTORY = 'scripts.historical_foundation'  # change 2026-11-10-historical-data-foundation-v1: one job slot shared by every kind
+KINDS = {'reference': [MODULE], 'history_refresh': [HISTORY, 'refresh'], 'history_run': [HISTORY, 'run']}
+DONE = '"status": "DONE"'  # last line a history command prints when it completes
 
 
 def _job_path() -> Path:
@@ -39,7 +42,7 @@ def runner_pids() -> list:
     found = []
     for proc in psutil.process_iter(['pid', 'cmdline']):
         cmdline = proc.info.get('cmdline') or []
-        if MODULE in cmdline:
+        if MODULE in cmdline or HISTORY in cmdline:
             found.append(proc.info['pid'])
     return found
 
@@ -56,39 +59,43 @@ def state() -> dict:
     saved = sorted(p.name for p in runner._runs().glob('*') if p.is_dir() and
                    datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat() >= started) if runner._runs().is_dir() else []
     report = runner.latest_report()
-    if job.get('pid') in alive:
-        status = 'RUNNING'
-    elif job.get('status') == 'CANCELLED':
-        status = 'CANCELLED'
-    elif report and report.get('created_at', '') >= started:
-        status, job['batch_id'] = 'FINISHED', report['batch_id']
-    else:
-        status = 'FAILED'
     try:
         tail = Path(job['log']).read_text(encoding='utf-8', errors='replace').splitlines()[-5:]
     except OSError:
         tail = []
+    if job.get('pid') in alive:
+        status = 'RUNNING'
+    elif job.get('status') == 'CANCELLED':
+        status = 'CANCELLED'
+    elif job.get('kind', 'reference') != 'reference':
+        status = 'FINISHED' if any(DONE in line for line in tail) else 'FAILED'
+    elif report and report.get('created_at', '') >= started:
+        status, job['batch_id'] = 'FINISHED', report['batch_id']
+    else:
+        status = 'FAILED'
     return {**job, 'status': status, 'pids': alive, 'saved_runs': len(saved), 'planned': planned(), 'log_tail': tail}
 
 
-def start(workers=6, popen=subprocess.Popen) -> dict:
+def start(workers=6, popen=subprocess.Popen, kind='reference') -> dict:
     """Check, spawn and record under one cross-process lock, so a double click handled by two threads starts one runner."""
     from core.research.sources.twse import _exclusive
+    if kind not in KINDS:
+        raise ValueError(f'UNKNOWN_JOB_KIND: {kind}')
     with _exclusive(runner.OUT / 'jobs' / 'start.lock', timeout=30):
-        return _start_locked(workers, popen)
+        return _start_locked(workers, popen, kind)
 
 
-def _start_locked(workers, popen) -> dict:
+def _start_locked(workers, popen, kind='reference') -> dict:
     alive = runner_pids()
     if alive:
         return {'status': 'RUN_IN_PROGRESS', 'pids': alive}
     stamp = datetime.now(timezone.utc)
-    log = runner.OUT / 'jobs' / f'batch_{stamp:%Y%m%dT%H%M%SZ}.log'
+    log = runner.OUT / 'jobs' / f'{"batch" if kind == "reference" else kind}_{stamp:%Y%m%dT%H%M%SZ}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open('w', encoding='utf-8') as handle:
-        proc = popen([sys.executable, '-X', 'utf8', '-m', MODULE, '--workers', str(int(workers))], cwd=str(runner.ROOT),
+        proc = popen([sys.executable, '-X', 'utf8', '-m', *KINDS[kind], '--workers', str(int(workers))], cwd=str(runner.ROOT),
                      stdout=handle, stderr=subprocess.STDOUT)
-    job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED'}
+    job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED', 'kind': kind}
     _write(job)
     return job
 

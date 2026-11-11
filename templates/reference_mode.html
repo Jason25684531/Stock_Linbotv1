@@ -2,6 +2,7 @@
 {% block title %}參考策略比較 - Stock Linbot{% endblock %}
 {% block page_kicker %}研究{% endblock %}
 {% block page_heading %}參考策略比較（21 項）{% endblock %}
+{% block extra_head %}{% if cross %}<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>{% endif %}{% endblock %}
 {% block content %}
 {% macro metric(m) %}{% if m.value is not none %}{{ '%.4f'|format(m.value) }}{% else %}None ({{ m.reason }}){% endif %}{% endmacro %}
 <div class="space-y-5" data-testid="reference">
@@ -20,7 +21,8 @@
     </section>
     {% for group, rows in groups.items() %}
     <section class="overflow-x-auto rounded-lg border border-line" data-testid="reference-group">
-        <h2 class="border-b border-line px-4 py-2 text-sm font-semibold">比較群組 {{ group }}{% if group == 'NOT_EXECUTED' %}（未執行，只列狀態與原因；數值不可與其他群組並列）{% endif %}</h2>
+        <h2 class="border-b border-line px-4 py-2 text-sm font-semibold">比較群組 {{ group }}{% if group == 'NOT_EXECUTED' %}（未執行，只列狀態與原因；數值不可與其他群組並列）{% else %}
+            <span class="ml-2 text-amber-300" data-testid="legacy-accounting-label">LEGACY_ACCOUNTING/PROVISIONAL：2023～2025 參考批次以舊原始價引擎計算（公司行動未入帳）；新版結果見下方跨市場環境區</span>{% endif %}</h2>
         <table class="w-full text-left text-xs">
             <thead><tr class="text-muted">
                 <th class="px-3 py-2">策略</th><th class="px-3 py-2">狀態</th><th class="px-3 py-2">原因</th>
@@ -68,5 +70,6 @@
         {% elif admin_enabled %}<p class="mt-2 text-xs">需要<a class="text-blue-300" href="{{ url_for('admin_login') }}">管理員登入</a>才能啟動或取消批次。</p>
         {% else %}<p class="mt-2 text-xs text-muted">管理功能未啟用（未設定管理 token），本頁唯讀。</p>{% endif %}
     </section>
+    {% include '_cross_regime.html' %}
 </div>
 {% endblock %}

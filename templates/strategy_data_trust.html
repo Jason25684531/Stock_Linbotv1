@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from '_history_ui.html' import trust_cell, pct, num %}
+{% block title %}資料可信度 {{ strategy_id }} - Stock Linbot{% endblock %}
+{% block page_kicker %}策略中心{% endblock %}
+{% block page_heading %}資料可信度：{{ strategy_id }}{% endblock %}
+{% block content %}
+{% set s = info.summary %}{% set req = info.requirement %}
+<div class="space-y-5 text-xs" data-testid="strategy-data-trust">
+    <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm text-amber-100">
+        <p class="font-semibold">REFERENCE_ONLY · NOT_CERTIFIED · NOT_A_TRIAL</p>
+        <p class="mt-1">Snapshot <span class="num">{{ info.snapshot_id }}</span> · Evaluation <span class="num">{{ info.evaluation_id }}</span>。可信度只看此策略實際需要的資料；不相關資料標 NOT_REQUIRED。</p>
+    </section>
+    <section class="quant-card grid gap-2 p-4 sm:grid-cols-2" data-testid="trust-summary">
+        <div>家族 / 引擎：{{ req.family }} / {{ req.engine or 'NONE' }}{% if req.governance %}（治理：{{ req.governance }}）{% endif %}</div>
+        <div>暖機：{{ req.warmup_calendar_days }} 日曆天</div>
+        <div>最早可用日期：<strong class="num" data-testid="earliest-usable">{{ s.earliest_usable_date or '無' }}</strong></div>
+        <div>DATA_TRUST_VERIFIED：<strong data-testid="data-trust">{{ s.data_trust_verified or 'NO' }}</strong>（全期間 2015～2025：{{ 'YES' if s.data_trust_full_2015_2025 else 'NO' }}）</div>
+        <div>回測可用年份：{{ info.cells|selectattr('backtestable')|map(attribute='year')|join(', ') or '無' }}</div>
+        <div>正式認證：<strong>NO</strong>（只來自既有正式認證流程）</div>
+        {% if info.cross_regime %}{% set cr = info.cross_regime %}<div class="sm:col-span-2" data-testid="history-outcome">歷史參考回測：{{ cr.state }} · {{ (cr.window or [])|join('～') }} · 研究判定 <strong>{{ cr.decision.state }}</strong> · 優先順序建議 {{ cr.decision.priority }}（{{ cr.decision.reason }}）· 最終狀態 <strong>{{ cr.get('final_state') or cr.decision.state }}</strong> · 帳務 <span class="num">{{ cr.get('accounting') or 'LEGACY_ACCOUNTING/PROVISIONAL' }}</span></div>{% endif %}
+    </section>
+    <section class="quant-card overflow-x-auto p-4"><h2 class="text-sm font-semibold text-white">需求資料（strategy_data_requirements）</h2>
+        <p class="mt-1 text-muted">規則輸入（策略原始碼實際使用的欄位）：{{ req.rule_inputs|join(', ') or '無（TQuant 以價格計算）' }}</p>
+        <table class="mt-2 w-full" data-testid="requirement-row"><tbody>{% for c in categories %}<tr><td class="p-1">{{ c.label }}</td><td class="num p-1 text-muted">{{ c.id }}</td><td class="p-1">{{ trust_cell(req.needs[c.id]) }}</td><td class="p-1 text-muted">{{ req.why.get(c.id, '') }}</td></tr>{% endfor %}</tbody></table></section>
+    <section class="quant-card overflow-x-auto p-4"><h2 class="text-sm font-semibold text-white">逐年可信度（strategy_data_trust_matrix）</h2>
+        <table class="mt-2 w-full" data-testid="trust-years"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">狀態</th><th class="p-1">可回測</th><th class="p-1">暖機年份</th><th class="p-1">約束類別</th><th class="p-1">原因</th></tr></thead>
+        <tbody>{% for c in info.cells %}<tr class="align-top"><td class="num p-1">{{ c.year }}</td><td class="p-1">{{ trust_cell(c.status) }}</td><td class="p-1">{{ 'YES' if c.backtestable else 'NO' }}</td>
+            <td class="num p-1">{{ c.warmup_years|join(', ') or '-' }}</td><td class="p-1">{{ c.binding|join(', ') or '-' }}</td><td class="p-1 break-all">{{ c.reasons|join('；') or '-' }}</td></tr>{% endfor %}</tbody></table></section>
+    <section class="quant-card overflow-x-auto p-4"><h2 class="text-sm font-semibold text-white">逐類別 × 年份</h2>
+        <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">類別</th>{% for c in info.cells %}<th class="num p-1">{{ c.year }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for cat in categories %}<tr><td class="p-1">{{ cat.label }}</td>{% for c in info.cells %}<td class="p-1">{{ trust_cell(c.by_category[cat.id]) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></section>
+    <p><a class="text-blue-300" href="{{ url_for('strategy_center') }}">回策略中心</a>{% if info.cross_regime and info.cross_regime.analysis %} · <a class="text-blue-300" href="{{ url_for('reference_comparison', history=strategy_id) }}#cross-regime">跨市場環境結果</a>{% endif %}</p>
+</div>
+{% endblock %}
