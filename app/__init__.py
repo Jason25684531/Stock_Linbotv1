@@ -17,7 +17,7 @@ from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, url_for
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -45,7 +45,6 @@ from core.db_helper import (
     get_backtest_trades,
     get_backtest_equity_curve,
     get_daily_recommendations,
-    get_backtest_summary_from_db,
     get_latest_trade_date,
     get_news_sentiment,
     get_open_holdings,
@@ -223,30 +222,8 @@ def _web_run_frames(result):
             'metrics': {'metrics': result.get('metrics'), 'strategy_performance': result.get('strategy_performance')}}
 
 
-def _load_backtest_summary_or_error(error_message):
-    summary = get_backtest_summary_from_db()
-    if summary is None:
-        from core.viz_helper import get_backtest_summary
-
-        summary = get_backtest_summary()
-    if summary is None:
-        return None, (jsonify({'error': error_message}), 404)
-    return summary, None
-
-
 def _apply_settings_batch(updates):
     return all(update_setting(key, value) for key, value in updates.items())
-
-
-def _build_summary_response(summary):
-    return {
-        'total_roi': summary['total_roi'],
-        'win_rate': summary['win_rate'],
-        'mdd': summary['max_drawdown'],
-        'sharpe': summary['sharpe_ratio'],
-        'trade_count': summary['trade_count'],
-        'avg_hold_days': summary['avg_hold_days'],
-    }
 
 
 _UI_BASELINE_DATE_CACHE: tuple[str | None, float] = (None, 0.0)
@@ -721,6 +698,7 @@ def main() -> int:
 
 from . import web_server as _web_server  # noqa: E402,F401
 from . import platform_routes as _platform_routes  # noqa: E402,F401
+from . import intelligence_routes as _intelligence_routes  # noqa: E402,F401
 from .line_bot import callback, handle_message, postback_handler, reply_message  # noqa: E402
 
 
@@ -750,7 +728,6 @@ __all__ = [
     '_get_stock_mentions_map',
     '_get_stock_specific_news_summary',
     '_is_quick_mode_cmd',
-    '_load_backtest_summary_or_error',
     '_load_strategy_candidates',
     '_match_strategy_switch',
     '_normalize_backtest_dates',

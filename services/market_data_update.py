@@ -56,7 +56,7 @@ def _pid_alive(pid: int) -> bool:
     except ImportError:
         pass
     if os.name == 'nt':
-        return True  # ponytail: os.kill(pid, 0) terminates the target on Windows; without psutil a lock is never presumed dead
+        return True  # ponytail: os.kill(pid, 0) terminates the target on Windows; without psutil a lock is never presumed dead; revisit when a safe liveness check is available.
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

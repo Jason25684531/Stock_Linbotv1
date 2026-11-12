@@ -14,7 +14,7 @@ def test_primary_html_route_inventory_is_explicit_after_migration():
     assert "/stock-analysis" in routes
     assert "/strategies" in routes
     assert "/system" in routes
-    assert "/api/trades" in routes
+    assert "/api/trades" not in routes  # removed 2026-11-11: no template, script or spec caller
 
 
 def test_phase1_stock_analysis_adapter_preserves_series_schema(monkeypatch):

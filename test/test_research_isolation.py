@@ -12,7 +12,6 @@ def test_production_consumers_never_read_research_snapshot(tmp_path, monkeypatch
     snapshot = tmp_path / 'snapshot'
     snapshot.mkdir()
     (snapshot / 'candidates.json').write_text('{"candidates":[{"stock_id":"9999"}]}', encoding='utf-8')
-    monkeypatch.setattr(web_server, 'RESEARCH_SNAPSHOT_DIR', snapshot)
     monkeypatch.setattr(dashboard_payloads, 'build_research_status_payload', lambda *a, **k: pytest.fail('research payload read'))
     import builtins
     original_open, original_builtin_open = Path.open, builtins.open

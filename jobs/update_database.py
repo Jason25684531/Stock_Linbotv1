@@ -27,7 +27,6 @@ from config import Config
 from core.db_helper import (
     MIN_VALID_MARKET_ROWS,
     _is_business_weekday,
-    get_db_engine,
     get_latest_trade_date,
     normalize_date_str,
     record_pipeline_step_finish,
@@ -64,15 +63,6 @@ def _resolve_pipeline_run_context(step_name: str) -> tuple[str, str, str]:
 # ============================================
 
 
-def get_latest_date_from_db(engine):
-    """查詢資料庫目前最新的日期"""
-    try:
-        latest = get_latest_trade_date()
-        if not latest:
-            return None
-        return pd.Timestamp(latest).date()
-    except Exception:
-        return None
 
 
 def get_earliest_incomplete_date(engine, lookback_days: int = 7):
@@ -167,7 +157,7 @@ def fetch_market_data_with_mcp(
         warnings.append('外資買賣超未回傳有效資料')
 
     if not snapshot_df.empty and flow_df.empty:
-        # 法人缺漏時仍寫入行情（欄位保留 NULL），run_price_update 會回頭補抓
+        # 法人缺漏時仍寫入行情（欄位保留 NULL）。
         warnings.append(f'法人資料尚未取得 ({date_str})，先寫入行情')
     final_df = merge_market_data(snapshot_df, flow_df, date_str)
     return final_df, warnings
@@ -349,62 +339,6 @@ def clean_market_frame(df, date_str):
 # ============================================
 
 
-def run_price_update(engine):
-    """
-    步驟一：更新每日股價行情
-
-    從 MCP 服務抓取最新的日線行情與外資買賣超，
-    並在寫入前追加融資融券 enrichment，
-    自動偵測資料庫最新日期並補齊至今日。
-
-    Args:
-        engine: SQLAlchemy 資料庫引擎
-
-    Returns:
-        int: 本次更新的總筆數
-    """
-    print(f"\n{'='*60}")
-    print("📈 步驟 1/3：更新每日股價行情")
-    print(f"{'='*60}")
-
-    latest_date = get_latest_date_from_db(engine)
-    if latest_date:
-        start_dt = latest_date + timedelta(days=1)
-        print(f"📅 資料庫最新: {latest_date}，將從 {start_dt} 開始更新...")
-    else:
-        start_dt = datetime.strptime("2024-01-01", "%Y-%m-%d").date()
-        print(f"⚠️ 資料庫為空，將從 {start_dt} 開始更新...")
-
-    incomplete_dt = get_earliest_incomplete_date(engine)
-    if incomplete_dt and incomplete_dt < start_dt:
-        start_dt = incomplete_dt
-        print(f"🔁 {start_dt} 法人或融資融券不完整，從該日重新抓取...")
-
-    end_dt = datetime.now().date()
-
-    if start_dt > end_dt:
-        print("✅ 股價資料已是最新，無需更新。")
-        return 0
-
-    mcp_client = MCPClient()
-    total_count = 0
-    current_dt = start_dt
-    while current_dt <= end_dt:
-        date_str = current_dt.strftime("%Y-%m-%d")
-        if not _is_business_weekday(date_str):
-            current_dt += timedelta(days=1)
-            continue
-        count = update_market_date(engine, date_str, mcp_client=mcp_client)
-        if count > 0:
-            print(f"💾 成功寫入 {count} 筆資料！")
-            total_count += count
-        else:
-            print("💤 假日或無資料")
-
-        current_dt += timedelta(days=1)
-        time.sleep(random.randint(3, 5))
-
-    return total_count
 
 
 def update_market_date(
@@ -616,59 +550,6 @@ def run_financial_update():
         return False
 
 
-def print_summary_report(price_count, revenue_ok, financial_ok, elapsed):
-    """
-    印出更新流程的統計摘要
-
-    Args:
-        price_count: 股價更新筆數
-        revenue_ok: 月營收是否成功
-        financial_ok: 季度財報是否成功
-        elapsed: 總耗時秒數
-    """
-    engine = get_db_engine()
-
-    print(f"\n{'='*60}")
-    print("📊 V35 每日更新流程 - 統計摘要")
-    print(f"{'='*60}")
-
-    # 各表筆數統計
-    try:
-        with engine.connect() as conn:
-            price_total = conn.execute(
-                text("SELECT COUNT(*) FROM daily_market_data")
-            ).scalar() or 0
-            financial_total = conn.execute(
-                text("SELECT COUNT(*) FROM financial_statements")
-            ).scalar() or 0
-
-            try:
-                revenue_total = conn.execute(
-                    text("SELECT COUNT(*) FROM monthly_revenue")
-                ).scalar() or 0
-            except Exception:
-                revenue_total = 0
-
-        print("\n📋 資料表統計:")
-        print(
-            f"  {'daily_market_data':<25} {price_total:>10,} 筆"
-            f"（本次新增 {price_count}）"
-        )
-        print(f"  {'monthly_revenue':<25} {revenue_total:>10,} 筆")
-        print(f"  {'financial_statements':<25} {financial_total:>10,} 筆")
-    except Exception as e:
-        print(f"  ⚠️ 統計查詢失敗: {e}")
-
-    price_status = '✅ 完成' if price_count > 0 else '💤 本次無新增資料'
-    revenue_status = '✅ 完成' if revenue_ok else '⚠️ 跳過/失敗'
-    financial_status = '✅ 完成' if financial_ok else '⚠️ 跳過/失敗'
-
-    print("\n📋 更新狀態:")
-    print(f"  {'📈 股價行情':<15} {price_status}")
-    print(f"  {'💰 月營收':<15} {revenue_status}")
-    print(f"  {'📊 季度財報':<15} {financial_status}")
-    print(f"\n⏱️ 總耗時: {elapsed // 60:.0f} 分 {elapsed % 60:.0f} 秒")
-    print(f"{'='*60}\n")
 
 
 def main() -> int:
@@ -699,68 +580,9 @@ def main() -> int:
 
 
 LOCK_WAIT_SECONDS = 30
-LOCK_WAIT_ATTEMPTS = 240  # ponytail: 2 hours, the stale-lock age; a held lock past that is reported, not broken
+LOCK_WAIT_ATTEMPTS = 240  # ponytail: 2 hours, the stale-lock age; a held lock past that is reported, not broken; revisit when the lock policy changes.
 
 
-def _run_update() -> int:
-    """Legacy MCP update (TWSE and TPEx together). Not called by main() since change 2026-11-09-market-data-autonomy (design D4);
-    kept until deletion evidence exists (docs/refactor/deletion_candidates.md)."""
-    pipeline_name, step_name, run_date = _resolve_pipeline_run_context('update_database')
-    record_pipeline_step_start(
-        pipeline_name=pipeline_name,
-        step_name=step_name,
-        run_date=run_date,
-    )
-    run_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    print(f"\n{'='*60}")
-    print("Stock Linbot V35 - daily data update")
-    print(f"Run timestamp: {run_timestamp}")
-    print(f"{'='*60}")
-
-    start_time = datetime.now()
-    latest_trade_date = None
-    price_count = 0
-
-    try:
-        print("\nInitializing database engine...")
-        engine = get_db_engine()
-
-        price_count = run_price_update(engine)
-        revenue_ok = run_monthly_revenue_update()
-        financial_ok = run_financial_update()
-
-        latest_trade_date = normalize_date_str(get_latest_trade_date())
-        if latest_trade_date:
-            prewarm_summary = prewarm_dashboard_aggregation_cache(latest_trade_date)
-            print(f"Dashboard aggregation prewarm summary: {prewarm_summary}")
-
-        elapsed = (datetime.now() - start_time).total_seconds()
-        print_summary_report(price_count, revenue_ok, financial_ok, elapsed)
-
-        record_pipeline_step_finish(
-            pipeline_name=pipeline_name,
-            step_name=step_name,
-            run_date=run_date,
-            status='success',
-            source_date=latest_trade_date,
-            trade_date=latest_trade_date,
-            rows_inserted=price_count,
-        )
-        print("Daily data update completed.")
-        return 0
-    except Exception as exc:
-        record_pipeline_step_finish(
-            pipeline_name=pipeline_name,
-            step_name=step_name,
-            run_date=run_date,
-            status='failed',
-            source_date=latest_trade_date,
-            trade_date=latest_trade_date,
-            rows_inserted=price_count if price_count > 0 else None,
-            error_summary=str(exc),
-        )
-        raise
 
 
 if __name__ == "__main__":

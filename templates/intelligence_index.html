@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}策略研究與風險分析 - Stock Linbot{% endblock %}
+{% block page_heading %}策略研究與風險分析{% endblock %}
+{% block content %}
+<div class="space-y-5 text-sm" data-testid="intelligence-index">
+    {{ iu.labels_banner('依策略目錄順序列出，不排名。') }}
+    {% set p = panel %}
+    <section class="quant-card p-4" data-testid="job-panel">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-white">分析工作</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+                <a class="text-blue-300" href="{{ url_for('intelligence_portfolio') }}">策略組合分析</a>
+                <a class="text-blue-300" href="{{ url_for('intelligence_forward') }}">前瞻觀察</a>
+                {% for name in reports %}<a class="text-blue-300" href="{{ url_for('intelligence_report', name=name) }}" data-testid="report-link">下載 {{ name }}</a>{% endfor %}
+            </div>
+        </div>
+        <div class="mt-2 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <div>批次槽位：<strong>{{ p.slot.status }}</strong>{% if p.slot.kind %}（{{ p.slot.kind }}）{% endif %}</div>
+            <div>Job ID：<span class="num break-all" data-testid="job-id">{{ (p.job or {}).get('job_id') or '—' }}</span></div>
+            <div>整體結果：<strong data-testid="job-status">{{ (p.job or {}).get('status') or '尚未執行' }}</strong>{% if (p.job or {}).get('exit_code') is not none %}（結束碼 {{ p.job.exit_code }}）{% endif %}</div>
+            <div>階段統計：{% for k, v in p.counts.items() %}{{ k }} {{ v }}{% if not loop.last %}、{% endif %}{% else %}—{% endfor %}</div>
+        </div>
+        {% if p.slot.log_tail %}<pre class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-black/30 p-2 text-xs text-muted">{{ p.slot.log_tail|join('\n') }}</pre>{% endif %}
+        {% set failed = p.rows|selectattr('status', 'in', ['FAILED', 'FAILED_WITH_EVIDENCE'])|list %}
+        {% if failed %}<details class="mt-2 text-xs" data-testid="failed-rows"><summary class="cursor-pointer text-amber-200">{{ failed|length }} 個階段失敗（失敗分類與重試次數）</summary>
+            <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">階段</th><th class="p-1">狀態</th><th class="p-1">分類</th><th class="p-1">次數</th><th class="p-1">錯誤</th></tr></thead>
+            <tbody>{% for r in failed %}<tr class="align-top"><td class="p-1">{{ r.strategy_id }}</td><td class="p-1">{{ r.stage }}</td><td class="p-1">{{ r.status }}</td><td class="p-1">{{ r.failure_class }}</td><td class="num p-1">{{ r.retries }}</td><td class="p-1 break-all">{{ r.last_error }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}
+        {% if is_admin() %}
+        <div class="mt-3 flex flex-wrap gap-2" data-testid="admin-controls">
+            <form method="post" action="{{ url_for('admin_intelligence', action='start') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <button class="rounded bg-blue-600 px-3 py-2 text-xs text-white" type="submit" data-testid="intelligence-start">{{ '重試（只重算失敗或未完成的階段）' if (p.job or {}).get('status') in ('PARTIAL', 'FAILED') else '啟動分析' }}</button></form>
+            {% if p.slot.status == 'RUNNING' and p.slot.kind == 'intelligence' %}
+            <form method="post" action="{{ url_for('admin_intelligence', action='cancel') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <button class="rounded border border-red-500/60 px-3 py-2 text-xs text-red-200" type="submit" data-testid="intelligence-cancel">取消</button></form>{% endif %}
+        </div>
+        {% endif %}
+    </section>
+    <section class="quant-card overflow-x-auto p-4">
+        <h2 class="text-sm font-semibold text-white">21 套策略</h2>
+        <ul class="mt-2 space-y-2 text-xs sm:hidden" data-testid="strategy-list">
+            {% for row in rows %}{% set r = row.result %}
+            <li class="rounded border border-line p-2">
+                <a class="text-blue-300 break-all" href="{{ url_for('intelligence_strategy', sid=row.strategy_id) }}">{{ row.strategy_id }}</a>
+                {% if r %}
+                {% set track = (r.performance.verified or r.performance.provisional) if r.performance else none %}
+                <div class="mt-1 flex flex-wrap items-center gap-1">{{ r.profile.type.label }} {{ iu.badge(r.status) }}{% if r.run %}{{ iu.badge(r.run.identity_status) }}{% endif %}</div>
+                {% if track %}<div class="mt-1">CAGR {{ iu.mv(track.cagr) }}（{{ 'VERIFIED' if r.performance.verified else 'PROVISIONAL' }}）・MDD {{ iu.mv(track.max_drawdown) }}・{{ iu.badge(r.dimensions.return_target.status) }}</div>{% endif %}
+                {% else %}<div class="mt-1 text-muted">{% if row.failed %}最近一次分析失敗（{{ row.failed }}）{% else %}尚無分析結果{% endif %}</div>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        <table class="mt-2 hidden w-full min-w-[760px] text-xs sm:table" data-testid="strategy-table">
+            <thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">類型</th><th class="p-1">狀態</th><th class="p-1">Run 身份</th><th class="p-1">可信期間</th><th class="p-1">成本後 CAGR</th><th class="p-1">5%／10% 目標</th><th class="p-1">最大回撤</th><th class="p-1">正式認證</th></tr></thead>
+            <tbody>
+            {% for row in rows %}{% set r = row.result %}
+            <tr class="border-t border-line align-top" data-testid="row-{{ row.strategy_id }}">
+                <td class="p-1"><a class="text-blue-300" href="{{ url_for('intelligence_strategy', sid=row.strategy_id) }}">{{ row.strategy_id }}</a></td>
+                {% if r %}
+                <td class="p-1">{{ r.profile.type.label }}</td>
+                <td class="p-1">{{ iu.badge(r.status) }}</td>
+                <td class="p-1">{{ iu.badge(r.run.identity_status) if r.run else '—' }}</td>
+                <td class="num p-1">{{ (r.performance.verified_span or [])|join('～') if r.performance and r.performance.verified_span else '無' }}</td>
+                {% set track = r.performance.verified or r.performance.provisional if r.performance else none %}
+                <td class="p-1">{% if track %}{{ iu.mv(track.cagr) }} <span class="text-xs text-muted">{{ 'VERIFIED' if r.performance.verified else 'PROVISIONAL' }}</span>{% else %}—{% endif %}</td>
+                <td class="p-1">{{ iu.badge(r.dimensions.return_target.status) if r.dimensions else '—' }}</td>
+                <td class="p-1">{% if track %}{{ iu.mv(track.max_drawdown) }}{% else %}—{% endif %}</td>
+                <td class="p-1">{{ r.certification }}</td>
+                {% else %}<td class="p-1 text-muted" colspan="8">{% if row.failed %}最近一次分析失敗（{{ row.failed }}）{% else %}尚無分析結果（管理員可啟動分析工作）{% endif %}</td>{% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

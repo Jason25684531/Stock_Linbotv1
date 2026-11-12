@@ -15,14 +15,11 @@ import pandas as pd
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import text
 
-from config import Config, V34_MODE_PRESETS, V35_MODE_PRESETS
+from config import Config
 from core import db_helper
 from core.backtest import run_store
 from core.runtime import fundamental_production
 from . import app, research_payloads, services
-
-RESEARCH_SNAPSHOT_DIR = Path(os.environ.get('STOCK_LINBOT_RESEARCH_SNAPSHOT',
-    str(Path(__file__).resolve().parents[1] / 'outputs/research_workflow/research_status_snapshot')))
 
 
 _MARKET_DATE_CACHE: tuple[str | None, float] = (None, 0.0)
@@ -429,47 +426,9 @@ def update_strategy():
     return redirect(url_for('strategy_center'))
 
 
-@app.route('/update_mode', methods=['POST'])
-def update_mode():
-    """切換 V34/V35 共用模式：積極 / 平衡 / 寬鬆。"""
-    try:
-        mode_map = {
-            'aggressive': ('積極', 'aggressive'),
-            'balanced': ('平衡', 'balanced'),
-            'loose': ('寬鬆', 'loose'),
-            'conservative': ('穩健', 'conservative'),
-        }
-        req_mode = (request.form.get('mode') or '').strip().lower()
-        if req_mode not in mode_map:
-            flash('❌ 未知模式，請使用 積極/平衡/寬鬆', 'error')
-            return redirect(url_for('dashboard'))
-
-        mode_label, preset_key = mode_map[req_mode]
-        updates = {**V34_MODE_PRESETS[preset_key], **V35_MODE_PRESETS[preset_key]}
-        ok_mode = services.update_setting('mode', req_mode)
-        ok_params = services._apply_settings_batch(updates)
-
-        if ok_mode and ok_params:
-            flash(f'✅ 已切換至【{mode_label}模式】（V34/V35 同步更新）', 'success')
-        elif ok_mode:
-            flash(f'⚠️ 已切換模式，但部分參數更新失敗（{mode_label}）', 'error')
-        else:
-            flash('❌ 模式切換失敗', 'error')
-    except Exception as exc:
-        flash(f'❌ 模式切換異常: {exc}', 'error')
-
-    return redirect(url_for('dashboard'))
-
-
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
-
-
-@app.route('/api/research/strategy-status', methods=['GET'])
-def api_research_strategy_status():
-    from .dashboard_payloads import build_research_status_payload
-    return _dashboard_json_response(build_research_status_payload(RESEARCH_SNAPSHOT_DIR))
 
 
 @app.route('/api/performance')
@@ -495,104 +454,6 @@ def api_performance():
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
-
-@app.route('/api/trades')
-def api_trades():
-    """取得交易明細（最近 50 筆）。"""
-    try:
-        db_trades = services.get_recent_backtest_trades(limit=50)
-        if db_trades:
-            return jsonify(db_trades)
-
-        trades_file = Config.BACKTEST_TRADES_CSV
-        if not os.path.exists(trades_file):
-            return jsonify({'error': '交易數據不存在，請先執行 jobs/run_backtest.py'}), 404
-
-        df = pd.read_csv(trades_file)
-        if 'strategy' not in df.columns:
-            df['strategy'] = 'unknown'
-
-        df_recent = df.tail(50)
-        df_recent = df_recent.where(pd.notnull(df_recent), None)
-        trades = df_recent.to_dict('records')
-        return jsonify(trades)
-    except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
-
-
-@app.route('/api/summary')
-def api_summary():
-    """取得回測摘要統計。"""
-    try:
-        summary, error_response = services._load_backtest_summary_or_error('回測數據不存在')
-        if error_response:
-            return error_response
-        return jsonify(services._build_summary_response(summary))
-    except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
-
-
-@app.route('/api/backtest-result')
-def api_backtest_result():
-    """Read-only backtest summary alias for smoke checks and dashboards."""
-    return api_summary()
-
-
-@app.route('/api/user/trade', methods=['POST'])
-def api_user_trade():
-    """記錄使用者模擬交易。"""
-    try:
-        data = request.get_json(silent=True) or {}
-        user_id = 'admin'
-        stock_id = data.get('stock_id')
-        buy_price = data.get('buy_price')
-        buy_date = data.get('buy_date')
-
-        if not all([user_id, stock_id, buy_price, buy_date]):
-            return jsonify({'error': '缺少必要參數'}), 400
-
-        if not services.create_user_simulation_trade(
-            user_id=user_id,
-            stock_id=stock_id,
-            buy_price=buy_price,
-            buy_date=buy_date,
-        ):
-            return jsonify({'error': '資料庫寫入失敗'}), 500
-
-        return jsonify({'success': True, 'message': '模擬交易記錄成功'})
-    except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
-
-
-@app.route('/api/pk/battle', methods=['GET'])
-def api_pk_battle():
-    """取得人機對決統計數據。"""
-    try:
-        user_roi = 15.5
-        ai_roi = 19.2
-
-        trades_file = Config.BACKTEST_TRADES_CSV
-        if os.path.exists(trades_file):
-            df_trades = pd.read_csv(trades_file)
-            if 'roi' in df_trades.columns and not df_trades.empty:
-                ai_roi = df_trades['roi'].mean()
-                ai_win_rate = (df_trades['roi'] > 0).mean() * 100
-            else:
-                ai_win_rate = 50
-        else:
-            ai_win_rate = 50
-
-        user_win_rate = 45
-        return jsonify(
-            {
-                'user_roi': round(user_roi, 2),
-                'ai_roi': round(ai_roi, 2),
-                'user_win_rate': round(user_win_rate, 2),
-                'ai_win_rate': round(ai_win_rate, 2),
-            }
-        )
-    except Exception as exc:
-        return jsonify({'error': str(exc)}), 500
 
 
 @app.route('/api/strategies')
@@ -866,14 +727,6 @@ def api_daily_signals():
     except Exception as exc:
         traceback.print_exc()
         return jsonify({'error': str(exc)}), 500
-
-
-@app.route('/api/news_sentiment')
-def api_news_sentiment():
-    """回傳指定日期（或最新）消息面情緒摘要。"""
-    date_str = request.args.get('date')
-    data = services.get_news_sentiment(date_str)
-    return jsonify(data)
 
 
 @app.route('/api/dashboard/health-check')
@@ -1300,28 +1153,6 @@ def api_market_snapshot():
     )
 
 
-@app.route('/api/market/institutional')
-def api_market_institutional():
-    df, as_of_date, warnings = _load_market_frame()
-    latest = _latest_market_rows(df, as_of_date)
-    if latest.empty:
-        return _market_envelope('empty', as_of_date, ['daily_market_data'], {'totals': _build_institutional_totals(latest)}, warnings)
-    data = {'totals': _build_institutional_totals(latest), 'top': {}, 'synchronized_buys': []}
-    for column in ('foreign_buy', 'trust_buy', 'dealer_buy'):
-        data['top'][column] = {
-            'buy': _top_records(latest, column, ascending=False, fields=['stock_id', column]),
-            'sell': _top_records(latest, column, ascending=True, fields=['stock_id', column]),
-        }
-    available_flow = [column for column in ('foreign_buy', 'trust_buy', 'dealer_buy') if column in latest.columns]
-    if available_flow:
-        sync = latest.copy()
-        for column in available_flow:
-            sync[column] = pd.to_numeric(sync[column], errors='coerce').fillna(0)
-        sync['sync_count'] = sync[available_flow].gt(0).sum(axis=1)
-        sync['total_net'] = sync[available_flow].sum(axis=1)
-        sync = sync[(sync['sync_count'] >= 2) & (sync['total_net'] > 0)].sort_values('total_net', ascending=False).head(10)
-        data['synchronized_buys'] = [_record_from_row(row, ['stock_id', 'foreign_buy', 'trust_buy', 'dealer_buy', 'total_net']) for _, row in sync.iterrows()]
-    return _market_envelope('ok' if len(available_flow) == 3 else 'degraded', as_of_date, ['daily_market_data'], data, warnings)
 
 
 @app.route('/api/market/technical')

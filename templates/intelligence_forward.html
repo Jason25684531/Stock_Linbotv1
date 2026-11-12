@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}前瞻觀察 - Stock Linbot{% endblock %}
+{% block page_heading %}前瞻觀察{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="intelligence-forward">
+{{ iu.labels_banner() }}
+    <section class="quant-card p-4" data-testid="forward-state">
+        <p class="text-base font-semibold text-amber-200">GOVERNANCE_BLOCKED</p>
+        <p class="mt-2">研究模組目前不得讀取 2025-12-31 之後的資料（Owner 決定 OD-2，2026-11-11）。所以這裡不顯示任何策略訊號、股票或後續報酬，也不回填前瞻成績。</p>
+        <p class="mt-2">讀取狀態：<span class="num">{{ state.status }}</span>（{{ state.reason }}）</p>
+        <p class="mt-2">啟用前需要的條件：</p>
+        <ul class="mt-1 list-disc pl-5 text-xs">{% for m in state.missing %}<li class="num">{{ m }}</li>{% endfor %}</ul>
+        <p class="mt-3 text-xs text-muted">正式每日推薦是另一條既有流程，不受本頁影響，本頁也不會修改它。前瞻成績只能隨時間逐日累積，不得以歷史資料回填。</p>
+    </section>
+</div>
+{% endblock %}

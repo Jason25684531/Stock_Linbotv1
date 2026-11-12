@@ -1,0 +1,446 @@
+{
+ "fields": {
+  "benchmark": {
+   "sources": [
+    {
+     "ref": "scripts/historical_foundation.py::BENCHMARK",
+     "sha256": "18f7a83f209f15c7f69b676c6f4414cd9e58fdf304ca05e655e506aa5a796e6f"
+    }
+   ],
+   "text": "比較基準為臺灣證券交易所發行量加權股價報酬指數（MI_INDEX 列）；市場狀態分段使用價格指數。"
+  },
+  "cost_model": {
+   "sources": [
+    {
+     "ref": "core/backtest/costs.py::CostModel",
+     "sha256": "08891e4791a371c1f38bb027a7049b123a617a0aa5eb5499ba3d560c261479a8"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::_costs",
+     "sha256": "c4c4a5151aa34cf952be8bbb62ab2b6674a3c3302bdf05248e06426032dddb4b"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::config_for",
+     "sha256": "734494c0a430d3471c27d73eb6730b3ca392b2aa772274537ef56ec67109d207"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::STRESS_MULTIPLE",
+     "sha256": "813eff8f683d03d9648e6d72a1de9ece680b12ef6af5b0c811af45d882a43dc0"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::_run_track",
+     "sha256": "233194663891c7c0f3f857298d9ad47649e1b4e55b1df43df5879654aa95dd58"
+    },
+    {
+     "ref": "test/test_legacy_baseline_run.py::test_config_for_is_deterministic",
+     "sha256": "feb669627aca9cfd3e08970a6ac5082a0c320d9ad68196c3c395aa95ccb93e38"
+    },
+    {
+     "ref": "core/backtest/runner.py::FEE_RATE",
+     "sha256": "50adaf96eeaee0c3d9e8204c7e2fbe9f492f15d96027b4c64baf8752ca51ac9b"
+    },
+    {
+     "ref": "core/backtest/runner.py::TAX_RATE",
+     "sha256": "f7a098952b78da94c8b5f63a41209e39344221ff1221a76ec05ab4426405651d"
+    },
+    {
+     "ref": "core/backtest/runner.py::MIN_FEE",
+     "sha256": "0a05a98d4138c84ce9d4b21fe8a53ccadafea85e3c99533867552db2e11fe622"
+    },
+    {
+     "ref": "core/backtest/execution.py::apply_slippage",
+     "sha256": "a6279dd5954d12bd127c96101175471f56d35e8b0fc4b6524a57f9f60756e20f"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._apply_execution_slippage",
+     "sha256": "c46d19d01a566c2c0d67645833d02b51ae2716f65f3dafda4781605b7988363a"
+    }
+   ],
+   "text": "買進手續費 = max(int(成交金額 × 手續費率), 最低手續費)；賣出手續費相同，另加證交稅 int(成交金額 × 稅率)（CostModel）。歷史回測基準軌（_costs）為手續費率 0.001425、稅率 0.003、最低手續費 20 元、滑價上限 0.001；手續費率與稅率取自 core/backtest/runner.py 的 FEE_RATE、TAX_RATE，最低手續費為 MIN_FEE。滑價為每筆成交價朝不利方向偏移 0 至滑價上限的均勻亂數，每一軌執行前以固定種子 20261023 重設亂數。壓力軌把手續費率、稅率、最低手續費與滑價上限全部乘以 2（STRESS_MULTIPLE）。"
+  },
+  "data_requirements": {
+   "sources": [
+    {
+     "ref": "core/research/reference/catalog.py::capabilities",
+     "sha256": "1845aa6344c9a329f2e2110c8d8ae5a9e6e075a096629ce4c02ec74b37b1bd41"
+    },
+    {
+     "ref": "core/research/reference/catalog.py::TQUANT_NEEDS",
+     "sha256": "f3a6a0d685e6aef43ff460982b3dc5e36d242fb718515634df879bfb425ecd5e"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::load_history",
+     "sha256": "53c5cdcee34b7539003e3094bd9397514a1f84c283fadc01d09bb79c41a94340"
+    },
+    {
+     "ref": "scripts/reference_engine.py::snapshot_history",
+     "sha256": "c2e5b246b2e756473334b580f85298b3052331f6c5afa56123756f4610029069"
+    },
+    {
+     "ref": "scripts/reference_engine.py::execute_one",
+     "sha256": "05f1622ecf3810b43355dc3d88c38a995b5a717edee14d50599d75016ecd31a0"
+    },
+    {
+     "ref": "scripts/history_engine.py::execute_window",
+     "sha256": "2bbaee116b1a1bcd5173096bf6d92c278778677a04a9df9b56cce3ba1b3f8f7c"
+    },
+    {
+     "ref": "scripts/history_engine.py::_tquant_bars",
+     "sha256": "a9f84667d5204a3952596ec23590b1635e05d1e43f0eb5dbb0702fb20e1cb5bd"
+    },
+    {
+     "ref": "scripts/history_engine.py::engine_inputs",
+     "sha256": "087947e77a6be3477d84b81157d3239d632be9cf5f79a2509e8fef9aaeab7869"
+    },
+    {
+     "ref": "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.window",
+     "sha256": "1a9b77cf0db26ee1edfbca48fd91d121bd18eb00aa26d9ec8df0bf9b4ded1acf"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.history_columns",
+     "sha256": "49d9ef7be2e488b29fd597e055e4df6b9aa6a036cea219645189feed4201359b"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._open_fill_rejection",
+     "sha256": "80aaab55d435f5cbd00231db5c6fc7fd361aa2719e4971469195bbe74ab508f4"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.__init__",
+     "sha256": "4cf386327b7d138f9af8c74c2237277f0e0f2f515e53bff2d04722774d72edd2"
+    },
+    {
+     "ref": "core/research/native_frame.py::rule_inputs",
+     "sha256": "02d1adf456a1248edbdb0964691d8ce9b04b38aec67363e76fe7687fc43cb676"
+    },
+    {
+     "ref": "core/research/native_frame.py::FRAME_INPUTS",
+     "sha256": "56cd14e5189cb4a97ff4afa284783a6b043313f392a8f168fa5df7eaab31b2e6"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._apply_corporate_actions",
+     "sha256": "96db81f9726fbc35ab890894197c720a2c866096457b5675a2e4372b52750378"
+    },
+    {
+     "ref": "core/backtest/runner.py::PAR_VALUE",
+     "sha256": "ab48ab1be2e4afec519ab8ace3619d4d0141168cbcccd24517b09e26275f4a3e"
+    }
+   ],
+   "text": "catalog 把本策略列為 tquant 家族、引擎 TQUANT_SNAPSHOT，資料需求為官方日線的 close_price、high_price、low_price、volume（TQUANT_NEEDS）。選股歷史由 load_history 提供：截至訊號日、回看 550 個日曆日，只保留 Config.MARKET_SYMBOL 有資料的日期與四位數 1xxx–9xxx 代碼，同一股票同日重複時保留最後一筆。歷史回測中 execute_one 在 cap.engine 為 TQUANT_SNAPSHOT 時把 load_history 換成 snapshot_history，以固定的官方日線取代 MySQL，篩選規則相同；execute_window 再把 reference_engine._bars 換成該歷史快照的日線。本策略只使用每檔最近 21 筆收盤價。引擎側另需研究橫截面的開盤價、最高、最低、成交量、成交金額，以及前一交易日的收盤價與成交金額（成交檢查與參與上限）。rule_inputs 只掃描策略模組本身的字串，本模組沒有 FRAME_INPUTS 中的欄位名，所以 required_inputs 為空，引擎橫截面不因缺值排除股票。歷史回測（execute_window）把快照的公司行動帳傳入引擎：持股期間的除權息、減資等事件在當日開盤成交前記入持股，股數乘以 share_multiplier 取整、現金配發與零股（以面額 10 元結算）記入現金、成本與停損價依 price_factor 調整。"
+  },
+  "entry": {
+   "sources": [
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.filter_candidates",
+     "sha256": "c0b8e84a7d12a1d42825b55b518f2b78b9318380558a4349c8d69c7ed004b468"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.run",
+     "sha256": "ff6f6f88fa70c13650e4e04ff8c536fa9e6931654b24d70eb882658d4c9483e7"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.process_close_signals",
+     "sha256": "e4f0738b44d9a5f9a3331ae7641055228db124e2ef9dd0ecce4fbccf99202a13"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.get_market_trend",
+     "sha256": "4da3ec2a7090bd5184022bf9059deef68bacb9d9005844aa55694e6dfb0ce5e3"
+    },
+    {
+     "ref": "core/db_helper.py::get_market_trend",
+     "sha256": "532a5b4d31011ea4116811eceb7c0b3e13b8ace960b779eda24703f1e66ddef8"
+    },
+    {
+     "ref": "core/backtest/runner.py::MARKET_SYMBOL",
+     "sha256": "45c80eeaed0b9cda597aa51b1b5978c992ee4457be8509006a147ded20c7f2df"
+    },
+    {
+     "ref": "scripts/native_recovery.py::isolated",
+     "sha256": "09f9c2ae58926caeca8f851a83679b8d914eceae2af89caa10430319735cdf3f"
+    },
+    {
+     "ref": "core/research/native_frame.py::NativeResearchData.stock_data",
+     "sha256": "e5fa048edf6a3812c7f754ab4b175a0036fcd634086fc7cb5febbc91059126f9"
+    },
+    {
+     "ref": "core/calc_indicators.py::build_feature_history",
+     "sha256": "83afdba30b7493287b67aa7930489d7bae067cef58494509dd874edd72d2480e"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::EXECUTION_CONTRACT",
+     "sha256": "79431a09450b909627f43e1569805f1ac8ea02dadd5f20ca20b6de63402bb8fd"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.execute_pending_open",
+     "sha256": "bf05cceee31f3f6a56ec1793eac5b6cf8f7945a1693d358a5de0b7c9c8d65bb5"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._open_fill_rejection",
+     "sha256": "80aaab55d435f5cbd00231db5c6fc7fd361aa2719e4971469195bbe74ab508f4"
+    },
+    {
+     "ref": "core/backtest/execution.py::fill_check",
+     "sha256": "d9d2fbc40a99b8addb68bbedc542ddfb86ea8203c83276a6a39746fba7d435c4"
+    },
+    {
+     "ref": "core/backtest/execution.py::limit_prices",
+     "sha256": "dcdb2ecf979476e3557c19a39bbbff411fcc260d0f0e0568c295bdf892782752"
+    }
+   ],
+   "text": "策略本身沒有大盤濾網（TQuantStrategy.filter_candidates 不檢查大盤）。引擎每個交易日依序：記入公司行動、在開盤執行前一日的掛單、判斷大盤趨勢，再於收盤處理出場與選股；只有大盤趨勢標籤為 BULL 時才呼叫選股。BULL 的定義（get_market_trend）是 Config.MARKET_SYMBOL 當日收盤價高於其 MA60 的 0.95 倍（程式註解寫 0.97，實際程式為 0.95），否則為 BEAR；MA60 無效時改以最近至多 60 筆收盤平均自算，少於 20 筆或發生錯誤時為 BEAR。歷史回測中 native_recovery.isolated 把 get_stock_data 換成 NativeResearchData.stock_data，該列的 MA60 為 60 筆收盤滾動平均（最少 30 筆）。候選股中尚未持有者以買單在下一個交易日開盤成交（執行契約 next_session_open_v2）。下一交易日開盤價缺漏或無效時買單作廢；前一交易日沒有有效官方收盤價（漲跌停價無法計算）、當日無成交，或開盤即漲停鎖死（開盤 = 最高 = 最低且開盤 ≥ 漲停價）時拒絕成交。漲跌停價為參考價的 ±10%，再依檔位向區間內取整。"
+  },
+  "exit": {
+   "sources": [
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.stop_loss",
+     "sha256": "d2961648d23ce9020eb475abcc51969e6997c3c18af8444faa245b4546bda56b"
+    },
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.take_profit",
+     "sha256": "852017d3dc7e954e42d1c8640a4778c83eb8e598424fdfeab82878a3f2dddc6c"
+    },
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.max_hold_days",
+     "sha256": "66d3f9771c44e481a70049722d8ed0f5042b680ca5a8fd019e30010fd07c38aa"
+    },
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.check_exit_signal",
+     "sha256": "583ddf3b291fe9be16e228bd7d4d0afff5e5726b40e3f3cb582c502e3eb29a10"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._load_params",
+     "sha256": "6368f94392e247915e4724884ffa67084f56a8394fb302d651b12f5e3f61f031"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.check_and_execute_exit",
+     "sha256": "de4e85bc4c258f17e5c1ec3aca7be67b4841db2bbfe2603242e9bf543e3a7cf5"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._exit_at_signal",
+     "sha256": "23f6c8426e2f62adbd5cc2f9bfdc4bce3973bbb313227b4cb94d482dd0e94679"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.buy",
+     "sha256": "80eac68203c705a89bf7c73158c5cc2c4bb182aa01ae98c50225d7e1889a1500"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.sell",
+     "sha256": "839ec42058aad50ee799849ae06e6fe0764526fe85e9919c38114f3b44a8913a"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.execute_pending_open",
+     "sha256": "bf05cceee31f3f6a56ec1793eac5b6cf8f7945a1693d358a5de0b7c9c8d65bb5"
+    }
+   ],
+   "text": "TQuant 移植策略沿用 BaseStrategy 的固定屬性：停損 7%（stop_loss 回傳 0.07）、停利 15%（take_profit 回傳 0.15）、最長持有 10 天（max_hold_days 回傳 10）。這些是常數回傳值，不經 _get_float_setting 讀取設定鍵，所以歷史回測的固定設定檔不影響它們；引擎由 _load_params 從策略物件讀取這三個值。買進時初始停損價為成交日開盤價（滑價前）× 0.93。引擎在每個交易日收盤先把持有天數加 1，再以當日收盤價呼叫 check_exit_signal；當日無行情時不判斷。報酬 = (收盤 − 成本) ÷ 成本，成本為含滑價的買進價。階梯式移動停損：報酬達 30% 時停損價上移至成本 × 1.25，達 20% 時上移至成本 × 1.15，達 10% 時上移至成本 × 1.01，停損價只上移不下移。賣出條件依序為：收盤價 ≤ 停損價（停損）、報酬 ≥ 15%（停利）、持有天數 ≥ 10（時間到）、大盤趨勢為 BEAR 且報酬為負（趨勢轉空）。出場訊號以賣單在下一個交易日開盤執行；賣單被拒絕或只部分成交時，剩餘持股保留，並在之後的收盤再次判斷出場。"
+  },
+  "factors": {
+   "sources": [
+    {
+     "ref": "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.signal",
+     "sha256": "eed39023a07cec5cc9f259fb46d8e958fd48780acd61c4299085006e42fee8a7"
+    },
+    {
+     "ref": "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.window",
+     "sha256": "1a9b77cf0db26ee1edfbca48fd91d121bd18eb00aa26d9ec8df0bf9b4ded1acf"
+    }
+   ],
+   "text": "volatility = 最近 21 筆收盤的日報酬（pct_change，共 20 個）樣本標準差 × 100，是百分比數值。回檔分數 = (當日收盤 − 最近 20 筆收盤的最大值) ÷ volatility；最近 20 筆含當日。分子是以新台幣計的價差，分母是百分比數值，兩者單位不同：同樣百分比的回檔，股價越高，分數越負，越容易入選。EMA40、EMA80 以 pandas ewm(span=40)、ewm(span=80) 只對這 21 筆收盤計算（adjust 為預設的 True），取最後一筆的值。"
+  },
+  "holdings": {
+   "sources": [
+    {
+     "ref": "core/backtest/runner.py::MAX_HOLDINGS",
+     "sha256": "1e92a92e5ce2a60e0b4b806554cf7dcc1d63733b9ca84af26b41c9d7452c2121"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._get_max_holdings",
+     "sha256": "2a2737386c61bb398f0ad2b1db0c9e3c96b96166f2f4afddc0b4efd69f2eea13"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.find_candidates",
+     "sha256": "67e822acbfea6dd1d093cedf97b210205cb6e2b8340a93d27db36ad33bad29c7"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::config_for",
+     "sha256": "734494c0a430d3471c27d73eb6730b3ca392b2aa772274537ef56ec67109d207"
+    },
+    {
+     "ref": "scripts/legacy_baseline_run.py::_run_track",
+     "sha256": "233194663891c7c0f3f857298d9ad47649e1b4e55b1df43df5879654aa95dd58"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.filter_candidates",
+     "sha256": "c0b8e84a7d12a1d42825b55b518f2b78b9318380558a4349c8d69c7ed004b468"
+    },
+    {
+     "ref": "core/research/native_frame.py::NativeResearchData.cross_section",
+     "sha256": "933b5b11365cc954da93c595ee304a97c3d2cadc7c32b49e5924be631b7d2eac"
+    },
+    {
+     "ref": "core/calc_indicators.py::build_feature_history",
+     "sha256": "83afdba30b7493287b67aa7930489d7bae067cef58494509dd874edd72d2480e"
+    }
+   ],
+   "text": "引擎同時最多持有 3 檔（MAX_HOLDINGS）；_get_max_holdings 在當日新聞情緒標記為「偏空」時改用 Config.NEWS_BEAR_MAX_HOLDINGS。歷史回測以 rules_only 執行，不套用 AI 模型排序，find_candidates 保留策略回傳的順序並取前 3 檔。filter_candidates 依引擎橫截面的列順序回傳入選股票，該橫截面由 build_feature_history 依股票代碼排序，所以當天入選超過 3 檔時，候選是代碼排序最前面的 3 檔。"
+  },
+  "hypothesis": {
+   "sources": [
+    {
+     "ref": "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.signal",
+     "sha256": "eed39023a07cec5cc9f259fb46d8e958fd48780acd61c4299085006e42fee8a7"
+    }
+   ],
+   "text": "在 40 期指數均線高於 80 期指數均線的股票中，買進當日收盤從最近 20 筆最高收盤回落、且回落價差除以波動度後小於 −3 者。其經濟想法是：上升趨勢中的短期回檔是暫時性的，之後價格傾向回到趨勢方向上漲。"
+  },
+  "pit_dependencies": {
+   "sources": [
+    {
+     "ref": "scripts/reference_engine.py::snapshot_history",
+     "sha256": "c2e5b246b2e756473334b580f85298b3052331f6c5afa56123756f4610029069"
+    },
+    {
+     "ref": "core/research/reference/runner.py::check_reference_window",
+     "sha256": "96610c7955a84b0c8751a2d67bc1c49afd1c84c5fd8cc159f509d76cfb0d3196"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.filter_candidates",
+     "sha256": "c0b8e84a7d12a1d42825b55b518f2b78b9318380558a4349c8d69c7ed004b468"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.groups",
+     "sha256": "d69189ad4fe3472ff76029a77fa492e1f7ab3479f4ebdb6f1cfc1111f8bc50dd"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.execute_pending_open",
+     "sha256": "bf05cceee31f3f6a56ec1793eac5b6cf8f7945a1693d358a5de0b7c9c8d65bb5"
+    }
+   ],
+   "text": "只使用訊號日（含）以前的官方日線：snapshot_history 先以 check_reference_window 檢查視窗，再只取 trade_date 介於訊號日前 550 個日曆日與訊號日之間的列；filter_candidates 再濾掉晚於訊號日的列，若歷史最後一天不是訊號日則當日不選股；groups 只採用最後一筆日期等於訊號日的股票。成交日必須晚於訊號日，否則 execute_pending_open 中止。本策略只用價格，不使用財報、月營收、法人或融資資料。"
+  },
+  "rebalance": {
+   "sources": [
+    {
+     "ref": "core/strategies/_tquant.py::ENGINE_NOTICE",
+     "sha256": "221ae192be0b666e98cc1827221bebbe3222423e6fb4dc3d7b0eb8089314f301"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.process_close_signals",
+     "sha256": "e4f0738b44d9a5f9a3331ae7641055228db124e2ef9dd0ecce4fbccf99202a13"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.check_and_execute_exit",
+     "sha256": "de4e85bc4c258f17e5c1ec3aca7be67b4841db2bbfe2603242e9bf543e3a7cf5"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.buy",
+     "sha256": "80eac68203c705a89bf7c73158c5cc2c4bb182aa01ae98c50225d7e1889a1500"
+    }
+   ],
+   "text": "沒有固定日曆的換股，也沒有移植原 notebook 的再平衡（ENGINE_NOTICE：持股數、再平衡和出場規則依本專案引擎）。持股只在出場條件觸發後賣出；空出的名額在大盤趨勢為 BULL 的交易日，由當日新的候選股遞補；已持有的股票再次入選時不加碼。"
+  },
+  "risk_controls": {
+   "sources": [
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.stop_loss",
+     "sha256": "d2961648d23ce9020eb475abcc51969e6997c3c18af8444faa245b4546bda56b"
+    },
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.take_profit",
+     "sha256": "852017d3dc7e954e42d1c8640a4778c83eb8e598424fdfeab82878a3f2dddc6c"
+    },
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.max_hold_days",
+     "sha256": "66d3f9771c44e481a70049722d8ed0f5042b680ca5a8fd019e30010fd07c38aa"
+    },
+    {
+     "ref": "core/strategies/base.py::BaseStrategy.check_exit_signal",
+     "sha256": "583ddf3b291fe9be16e228bd7d4d0afff5e5726b40e3f3cb582c502e3eb29a10"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.process_close_signals",
+     "sha256": "e4f0738b44d9a5f9a3331ae7641055228db124e2ef9dd0ecce4fbccf99202a13"
+    },
+    {
+     "ref": "core/backtest/execution.py::fill_check",
+     "sha256": "d9d2fbc40a99b8addb68bbedc542ddfb86ea8203c83276a6a39746fba7d435c4"
+    },
+    {
+     "ref": "core/backtest/execution.py::CAP",
+     "sha256": "ab4404270ab69a860857b768bc90339fc7c2ef2b83ad128e576576e848cbcfc3"
+    },
+    {
+     "ref": "core/backtest/runner.py::MAX_HOLDINGS",
+     "sha256": "1e92a92e5ce2a60e0b4b806554cf7dcc1d63733b9ca84af26b41c9d7452c2121"
+    },
+    {
+     "ref": "core/backtest/runner.py::POSITION_SIZE",
+     "sha256": "1ce7613e600690234545e9c116f76a48adff86357ef7bcbc6c11deaaaaae1c97"
+    }
+   ],
+   "text": "個股風控為初始停損 7%、停利 15%、最長持有 10 天（BaseStrategy 屬性的固定回傳值）與階梯式移動停損。策略本身沒有大盤濾網；引擎只在大盤為 BULL 時進場，大盤為 BEAR 且持股虧損時出場。開盤漲停鎖死不買、跌停鎖死不賣；單筆成交不超過前一交易日成交金額的 5%；同時最多 3 檔，每筆預算為初始資金的 20%。"
+  },
+  "selection": {
+   "sources": [
+    {
+     "ref": "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.signal",
+     "sha256": "eed39023a07cec5cc9f259fb46d8e958fd48780acd61c4299085006e42fee8a7"
+    },
+    {
+     "ref": "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.window",
+     "sha256": "1a9b77cf0db26ee1edfbca48fd91d121bd18eb00aa26d9ec8df0bf9b4ded1acf"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.history_columns",
+     "sha256": "49d9ef7be2e488b29fd597e055e4df6b9aa6a036cea219645189feed4201359b"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::load_history",
+     "sha256": "53c5cdcee34b7539003e3094bd9397514a1f84c283fadc01d09bb79c41a94340"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.groups",
+     "sha256": "d69189ad4fe3472ff76029a77fa492e1f7ab3479f4ebdb6f1cfc1111f8bc50dd"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.select_history",
+     "sha256": "8b1c18e958903074f97ebcd180961a49f3e5a9c3e638a58727a39a379e6df204"
+    },
+    {
+     "ref": "core/strategies/_tquant.py::TQuantStrategy.filter_candidates",
+     "sha256": "c0b8e84a7d12a1d42825b55b518f2b78b9318380558a4349c8d69c7ed004b468"
+    }
+   ],
+   "text": "選股範圍為選股歷史中的四位數 1xxx–9xxx 代碼。共用的 groups 要求每檔最近 21 筆必須剛好 21 筆、最後一筆日期等於訊號日、收盤價全為有限值且大於 0。入選條件依序為：volatility > 0；EMA40 > EMA80；回檔分數 < −3。filter_candidates 以入選名單過濾引擎橫截面。策略本身沒有大盤濾網。"
+  },
+  "weighting": {
+   "sources": [
+    {
+     "ref": "scripts/legacy_baseline_run.py::INITIAL_CAPITAL",
+     "sha256": "be698c7709d3032b2e4b5b7669dac471292c96b006986e082ff35eb554a98cfa"
+    },
+    {
+     "ref": "core/backtest/runner.py::POSITION_SIZE",
+     "sha256": "1ce7613e600690234545e9c116f76a48adff86357ef7bcbc6c11deaaaaae1c97"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine.buy",
+     "sha256": "80eac68203c705a89bf7c73158c5cc2c4bb182aa01ae98c50225d7e1889a1500"
+    },
+    {
+     "ref": "core/backtest/runner.py::BacktestEngine._capped",
+     "sha256": "e9c31ae1cf2460e18faebd2b59dd9d83c3f033a157d65c2f20469a8547d6761b"
+    },
+    {
+     "ref": "core/backtest/execution.py::CAP",
+     "sha256": "ab4404270ab69a860857b768bc90339fc7c2ef2b83ad128e576576e848cbcfc3"
+    },
+    {
+     "ref": "core/backtest/execution.py::cap_shares",
+     "sha256": "af1badcc957bdfcfc0f6c968ec0971d3b99cac58eb05b1b4ba2054428e8a2c51"
+    }
+   ],
+   "text": "歷史回測初始資金為 1,000,000 元（INITIAL_CAPITAL）。每筆買進的預算為初始資金的 20%（POSITION_SIZE）；預算超過可用現金時改用可用現金的 90%；預算不足以按開盤價買 1,000 股時不買。股數為 int(預算 ÷ 開盤價)，再受參與上限限制：成交股數不超過前一交易日成交金額的 5% 除以滑價後價格（CAP），前一交易日成交金額未知或非正時為 0 股。持有期間不調整權重。"
+  }
+ },
+ "strategy_id": "contrarian_pullback"
+}

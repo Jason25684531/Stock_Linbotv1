@@ -386,12 +386,7 @@ def cross_regime(evaluation, rows, root=None) -> dict:
     bench = hf.snapshot(evaluation['snapshot_id']).frame('benchmark')
     spec = json.loads((hf.OUT / 'regime_specs' / f'{regime.REGIME_SPEC_ID}.json').read_text(encoding='utf-8'))
     snap = hf.snapshot(evaluation['snapshot_id'])
-    marks = pd.concat([snap.frame('events')[['stock_id', 'ex_date']].rename(columns={'ex_date': 'date'}), snap.frame('capital_changes')[['stock_id', 'date']]])
-    marks = {sid: pd.DatetimeIndex(sorted(g.date)) for sid, g in marks.groupby('stock_id')}
-    from core.research.history.coverage import Facts
-    found = Facts(snap).jumps
-    found = found[~found.explained] if len(found) else found
-    jumps = {sid: pd.DatetimeIndex(sorted(g.trade_date)) for sid, g in found.groupby('stock_id')} if len(found) else {}
+    marks, jumps = event_marks(snap)
     out = {'evaluation_id': evaluation['evaluation_id'], 'snapshot_id': evaluation['snapshot_id'], 'regime_spec': spec, 'labels': regime.LABELS,
            'engine_limits': ENGINE_LIMITS, 'legacy_engine_limit': LEGACY_ENGINE_LIMIT, 'accounting': hf.ACCOUNTING, 'benchmark': hf.BENCHMARK,
            'priority_rule': PRIORITY_RULE, 'legacy_baseline': {k: _legacy_baseline().get(k) for k in ('snapshot_id', 'engine_version', 'frozen_at')},
@@ -410,16 +405,7 @@ def cross_regime(evaluation, rows, root=None) -> dict:
             if entry['accounting'] != hf.ACCOUNTING:  # a legacy-accounting run can never be a verified reuse under the new identity
                 entry['final_state'] = 'FAILED' if row['state'] == 'REUSE' else entry['final_state']
             entry['ledger_version'] = record.get('ledger_version')
-            exposure = action_exposure(trades, marks, jumps)
-            trust = {c['year']: c['status'] for c in evaluation['trust'][row['strategy_id']]}
-            trust |= {y: 'EXCLUDED_UNEXPLAINED_PRICE_JUMP' for y in exposure['unexplained_jump_years']}  # a held position crossed one
-            held = (pd.to_datetime(trades.sell_date) - pd.to_datetime(trades.buy_date)).dt.days.max() if len(trades) else None
-            flat = trades.empty and nav.nav_base.nunique() == 1  # never traded: no position can be open at the end
-            untracked = [] if flat else untracked_open_position_years(row['window'][1], jumps, held)
-            trust |= {y: 'EXCLUDED_UNTRACKED_OPEN_POSITIONS' for y in untracked}
-            exposure['untracked_open_position_years'] = untracked
-            impact = corporate_action_impact(actions)
-            trust |= {y: 'PARTIAL' for y in impact['years_with_assumed_terms'] if trust.get(y) == 'VERIFIED'}  # a held position crossed an ASSUMED_STOCK event
+            trust, exposure, impact = run_trust(evaluation['trust'][row['strategy_id']], nav, trades, actions, row['window'][1], marks, jumps)
             entry['analysis'] = regime.analyze(nav, trades, bench, trust)
             entry['created_at'] = record.get('created_at')
             entry['spec_before_run'] = spec_before(spec['registered_at'], record.get('created_at'))
@@ -524,6 +510,33 @@ def cross_regime_md(report) -> str:
             lines.append(f"\n滾動 252 日（{basis}）：視窗 {r['windows']}；最小 {_fmt(r['min'])}；中位 {_fmt(r['median'])}；最大 {_fmt(r['max'])}；正報酬比例 {_fmt(r['share_positive'])}。")
         lines.append(f"\n研究判定：{s['decision']['state']}；優先順序建議 {s['decision']['priority']}（{s['decision']['reason']}）；CERTIFIED：NO。")
     return '\n'.join(lines) + '\n'
+
+
+def event_marks(snap):
+    """Ex-dates and capital-change dates per stock, and unexplained price jumps per stock, from the snapshot."""
+    marks = pd.concat([snap.frame('events')[['stock_id', 'ex_date']].rename(columns={'ex_date': 'date'}), snap.frame('capital_changes')[['stock_id', 'date']]])
+    marks = {sid: pd.DatetimeIndex(sorted(g.date)) for sid, g in marks.groupby('stock_id')}
+    from core.research.history.coverage import Facts
+    found = Facts(snap).jumps
+    found = found[~found.explained] if len(found) else found
+    jumps = {sid: pd.DatetimeIndex(sorted(g.trade_date)) for sid, g in found.groupby('stock_id')} if len(found) else {}
+    return marks, jumps
+
+
+def run_trust(cells, nav, trades, actions, window_end, marks, jumps):
+    """Per-year trust of one run: the coverage matrix, downgraded where a held position crossed an unexplained price jump,
+    where open positions cannot be tracked, and to PARTIAL where a held position crossed an ASSUMED_STOCK event."""
+    exposure = action_exposure(trades, marks, jumps)
+    trust = {c['year']: c['status'] for c in cells}
+    trust |= {y: 'EXCLUDED_UNEXPLAINED_PRICE_JUMP' for y in exposure['unexplained_jump_years']}  # a held position crossed one
+    held = (pd.to_datetime(trades.sell_date) - pd.to_datetime(trades.buy_date)).dt.days.max() if len(trades) else None
+    flat = trades.empty and nav.nav_base.nunique() == 1  # never traded: no position can be open at the end
+    untracked = [] if flat else untracked_open_position_years(window_end, jumps, held)
+    trust |= {y: 'EXCLUDED_UNTRACKED_OPEN_POSITIONS' for y in untracked}
+    exposure['untracked_open_position_years'] = untracked
+    impact = corporate_action_impact(actions)
+    trust |= {y: 'PARTIAL' for y in impact['years_with_assumed_terms'] if trust.get(y) == 'VERIFIED'}  # a held position crossed an ASSUMED_STOCK event
+    return trust, exposure, impact
 
 
 def regime_reports(rows, evaluation=None, root=None) -> Path:

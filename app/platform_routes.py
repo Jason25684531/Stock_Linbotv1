@@ -535,13 +535,6 @@ def admin_reference(action):
     return redirect(url_for('reference_comparison'))
 
 
-@app.route('/api/lab/summary')
-def api_lab_summary():
-    state = lab_state()
-    return jsonify({**{k: state[k] for k in ('summary', 'item_states', 'conditions', 'combinations')},
-                    'queue_sha256': (_read_json(LAB / 'queue.sha256.json', {}) or {}).get('queue_sha256')})
-
-
 _lab_lock = threading.Lock()
 
 

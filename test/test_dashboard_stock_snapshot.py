@@ -506,7 +506,6 @@ def test_market_snapshot_endpoints_return_normalized_envelopes(monkeypatch):
         '/api/market/summary',
         '/api/market/recommendations',
         '/api/market/snapshot',
-        '/api/market/institutional',
         '/api/market/technical',
         '/api/market/margin',
     ]
@@ -526,7 +525,6 @@ def test_market_snapshot_endpoints_return_normalized_envelopes(monkeypatch):
     assert recommendation['ai_score'] == 0.91
     assert recommendation['factor_fields']['rsi_z_score'] == 1.2
     assert client.get('/api/market/snapshot').get_json()['data']['breadth']['up_count'] == 2
-    assert client.get('/api/market/institutional').get_json()['data']['totals']['total_net'] == 500
     assert client.get('/api/market/technical').get_json()['data']['rsi_overbought'][0]['stock_id'] == '2330'
     assert client.get('/api/market/margin').get_json()['data']['high_short_margin_risk'][0]['stock_id'] == '2330'
 

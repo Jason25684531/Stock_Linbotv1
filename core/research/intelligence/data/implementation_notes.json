@@ -1,0 +1,212 @@
+{
+ "source": "撰寫規格卡時閱讀策略程式發現（2026-11-11）；範圍凍結，策略程式沒有修改。I 開頭為策略實作差異、E 開頭為引擎共通行為，編號與 outputs/strategy_intelligence/DEFERRED_FINDINGS.md 一致，本檔是唯一來源。",
+ "engine": [
+  {
+   "id": "E2",
+   "text": "成交金額上限造成的部分出場，引擎只在持有期間有公司行動時才記錄出場股數，中間成交的日期與價格沒有存檔，因此多數策略的每日持倉無法逐日對帳。",
+   "refs": [
+    "core/backtest/runner.py::BacktestEngine.sell"
+   ]
+  },
+  {
+   "id": "E4",
+   "text": "引擎的「大盤 BULL」進場條件取自 Config.MARKET_SYMBOL（2330）收盤高於 60 日均線 × 0.95，不是加權指數；程式註解寫 0.97。跨環境分析另用加權指數的版本化規則，兩者是不同定義。",
+   "refs": [
+    "core/db_helper.py::get_market_trend"
+   ]
+  },
+  {
+   "id": "E9",
+   "text": "引擎每次買進以初始資金 20% 為預算、至少一張（1,000 股）：股價高於預算／1,000（初始資金 100 萬時約 200 元）的股票永遠買不到，訊號仍會產生但不會成交。這對所有引擎策略都成立，對只選高價股的策略影響最大。",
+   "refs": [
+    "core/backtest/runner.py::BacktestEngine.buy",
+    "core/backtest/runner.py::POSITION_SIZE"
+   ]
+  },
+  {
+   "id": "E10",
+   "text": "原生策略的成交量門檻單位不一致：V33 為 5,000,000、V30 為 3,000,000（註解寫萬股），V36／V37 為 500、V38 為 300，兩組可能差 10 的 4 次方倍。",
+   "refs": [
+    "core/strategies/defensive_low_volatility.py::DefensiveLowVolatilityStrategy.filter_candidates",
+    "core/strategies/mean_reversion.py::MeanReversionStrategy.filter_candidates"
+   ]
+  }
+ ],
+ "strategies": {
+  "mean_reversion": [
+   {
+    "id": "I01",
+    "text": "布林寬度 bb_width 是比例（約 0.05～0.3），上限 V37_BB_WIDTH_MAX = 15 寫成百分比，這個條件永遠不會排除任何股票。",
+    "refs": [
+     "core/strategies/mean_reversion.py::MeanReversionStrategy.filter_candidates"
+    ]
+   },
+   {
+    "id": "I02",
+    "text": "說明寫 K<35「或向上交叉」與 RSI 35～55；程式只有 K<35，RSI 為 30～55。",
+    "refs": [
+     "core/strategies/mean_reversion.py::MeanReversionStrategy.filter_candidates"
+    ]
+   }
+  ],
+  "institutional_flow_confirmation": [
+   {
+    "id": "I03",
+    "text": "check_exit_signal 的兩條籌碼出場讀 position_info 的 chip_score，引擎買進時不寫 chip_score，預設 50，回測中這兩條出場永遠不會觸發。",
+    "refs": [
+     "core/strategies/institutional_flow_confirmation.py::InstitutionalFlowConfirmationStrategy.check_exit_signal"
+    ]
+   },
+   {
+    "id": "I04",
+    "text": "說明的 ATR 停損不存在；RSI 範圍為 40～80 而非 45～80；「三大法人連買」實際是外資至少 3 日或投信至少 2 日。",
+    "refs": [
+     "core/strategies/institutional_flow_confirmation.py::InstitutionalFlowConfirmationStrategy.filter_candidates"
+    ]
+   }
+  ],
+  "defensive_low_volatility": [
+   {
+    "id": "I05",
+    "text": "說明寫 NATR<4%、停損 5%；程式為 3.5 與 6%。候選依 std_20 排序，這是新台幣價差而非百分比，偏向低價股而不是低波動股。",
+    "refs": [
+     "core/strategies/defensive_low_volatility.py::DefensiveLowVolatilityStrategy.filter_candidates"
+    ]
+   }
+  ],
+  "quality_value_low_volatility": [
+   {
+    "id": "I06",
+    "text": "程式沒有「高殖利率」「高 EPS」條件，只要求 EPS>0；std_20 < 3.0 以新台幣計，偏向低價股；訊息說會放寬門檻重試，但實際直接回傳空集合。",
+    "refs": [
+     "core/strategies/quality_value_low_volatility.py::QualityValueLowVolatilityStrategy.filter_candidates"
+    ]
+   }
+  ],
+  "quality_growth": [
+   {
+    "id": "I07",
+    "text": "說明寫營益率 >10%，程式為 6%；filter_candidates 沒有呼叫大盤濾網（引擎仍只在 BULL 進場）；結果沒有排序，前 3 檔依輸入順序。",
+    "refs": [
+     "core/strategies/quality_growth.py::QualityGrowthStrategy.filter_candidates"
+    ]
+   },
+   {
+    "id": "I08",
+    "text": "釘選設定檔的 v35 小寫鍵覆蓋 Config 預設值；目前 DATA_BLOCKED，不影響結果。",
+    "refs": [
+     "scripts/legacy_baseline_run.py::input_paths"
+    ]
+   }
+  ],
+  "growth_momentum_breakout": [
+   {
+    "id": "I09",
+    "text": "釘選設定檔的 v34 小寫鍵覆蓋 Config 預設值（例如營收年增門檻 14.0 而非 18.0）；目前 DATA_BLOCKED，不影響結果。",
+    "refs": [
+     "scripts/legacy_baseline_run.py::input_paths"
+    ]
+   }
+  ],
+  "hybrid_trend_rank": [
+   {
+    "id": "I10",
+    "text": "Config.USE_KD_FILTER 為 True，K<30 永遠必要（說明寫可選）；說明的量能放大與 XGBoost 排序在 rules_only 回測中不存在；沒有排序，前 3 檔依輸入順序。",
+    "refs": [
+     "core/strategies/hybrid_trend_rank.py::HybridTrendRankStrategy.filter_candidates"
+    ]
+   }
+  ],
+  "regression_momentum": [
+   {
+    "id": "I11",
+    "text": "select_history 依分數排序，但 filter_candidates 依引擎資料框（股票代號）順序回傳，引擎取前 3 檔，所以「分數最高」實際上是代號最小的入選股票。說明的成交金額實際以 close × volume 平均計算。",
+    "refs": [
+     "core/strategies/_tquant.py::TQuantStrategy.filter_candidates",
+     "core/strategies/regression_momentum.py::RegressionMomentumStrategy.select_history"
+    ]
+   }
+  ],
+  "volatility_adjusted_momentum": [
+   {
+    "id": "I12",
+    "text": "與 regression_momentum 相同：分數排序在 filter_candidates 失去，前 3 檔是代號最小的入選股票；股票池是本機全市場而非原 notebook 的 TWN100。",
+    "refs": [
+     "core/strategies/_tquant.py::TQuantStrategy.filter_candidates",
+     "core/strategies/volatility_adjusted_momentum.py::VolatilityAdjustedMomentumStrategy.select_history"
+    ]
+   }
+  ],
+  "mad_distance": [
+   {
+    "id": "I13",
+    "text": "select_history 回傳符合條件的股票但不依分數排序，依股票代號順序，引擎取前 3 檔。",
+    "refs": [
+     "core/strategies/mad_distance.py::MadDistanceStrategy.select_history"
+    ]
+   }
+  ],
+  "bias_reversion": [
+   {
+    "id": "I14",
+    "text": "名稱為乖離率，但程式沒有計算價格與均線的乖離；實際規則是收盤低於前 6 根收盤最低值，且低於最近 7 根收盤的 (1/7)^k 加權平均。",
+    "refs": [
+     "core/strategies/bias_reversion.py::BiasReversionStrategy.signal"
+    ]
+   }
+  ],
+  "contrarian_pullback": [
+   {
+    "id": "I15",
+    "text": "分數以新台幣價差（收盤減 20 日最高收盤）除以百分比波動（20 日日報酬標準差 × 100），−3 門檻隨股價水準改變；EMA40、EMA80 只用 21 根收盤計算。",
+    "refs": [
+     "core/strategies/contrarian_pullback.py::ContrarianPullbackStrategy.signal"
+    ]
+   }
+  ],
+  "volume_surge": [
+   {
+    "id": "I16",
+    "text": "條件只看成交量（當日量大於含當日 4 日均量 2.5 倍），不檢查價格漲跌方向。",
+    "refs": [
+     "core/strategies/volume_surge.py::VolumeSurgeStrategy.signal"
+    ]
+   }
+  ],
+  "macd_cross": [
+   {
+    "id": "I17",
+    "text": "select_history 只看 2330，所以這個策略最多只會持有 2330 一檔。",
+    "refs": [
+     "core/strategies/macd_cross.py::MacdCrossStrategy.select_history"
+    ]
+   },
+   {
+    "id": "I18",
+    "text": "因引擎限制 E9（每檔 20% 預算、至少一張），2330 開盤價自 2017-05 起都高於約 202.5 元，此後再也沒有成交：2018～2023 的 VERIFIED 年份幾乎全程空手，報酬接近 0。這段期間的數字反映的是「持有現金」，不是策略訊號的表現。",
+    "refs": [
+     "core/strategies/macd_cross.py::MacdCrossStrategy.select_history",
+     "core/backtest/runner.py::BacktestEngine.buy"
+    ]
+   }
+  ],
+  "H4:GROWTH-MOMENTUM-V2": [
+   {
+    "id": "I19",
+    "text": "執行器寫死 0.5／0.5 權重，沒有讀規格參數中的 weights。",
+    "refs": [
+     "core/research/h4_signal.py"
+    ]
+   }
+  ],
+  "fundamental_g2g3_top5_reb60_score_weighted_v1": [
+   {
+    "id": "I20",
+    "text": "另一因子缺值時綜合分數退回單一因子排名；研究重播在每次再平衡賣出全部持股再依新權重買回。",
+    "refs": [
+     "core/runtime/fundamental_shadow.py"
+    ]
+   }
+  ]
+ }
+}

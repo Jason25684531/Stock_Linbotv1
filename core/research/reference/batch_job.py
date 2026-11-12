@@ -16,8 +16,10 @@ from core.research.reference import catalog, runner
 
 MODULE = 'core.research.reference.runner'
 HISTORY = 'scripts.historical_foundation'  # change 2026-11-10-historical-data-foundation-v1: one job slot shared by every kind
-KINDS = {'reference': [MODULE], 'history_refresh': [HISTORY, 'refresh'], 'history_run': [HISTORY, 'run']}
+INTELLIGENCE = 'scripts.strategy_intelligence'  # change 2026-11-11-strategy-intelligence-platform-v1: same single slot
+KINDS = {'reference': [MODULE], 'history_refresh': [HISTORY, 'refresh'], 'history_run': [HISTORY, 'run'], 'intelligence': [INTELLIGENCE, 'run']}
 DONE = '"status": "DONE"'  # last line a history command prints when it completes
+PARTIAL = '"status": "PARTIAL"'  # an intelligence job where some strategies failed: never shown as FINISHED
 
 
 def _job_path() -> Path:
@@ -42,7 +44,7 @@ def runner_pids() -> list:
     found = []
     for proc in psutil.process_iter(['pid', 'cmdline']):
         cmdline = proc.info.get('cmdline') or []
-        if MODULE in cmdline or HISTORY in cmdline:
+        if MODULE in cmdline or HISTORY in cmdline or INTELLIGENCE in cmdline:
             found.append(proc.info['pid'])
     return found
 
@@ -68,7 +70,7 @@ def state() -> dict:
     elif job.get('status') == 'CANCELLED':
         status = 'CANCELLED'
     elif job.get('kind', 'reference') != 'reference':
-        status = 'FINISHED' if any(DONE in line for line in tail) else 'FAILED'
+        status = 'FINISHED' if any(DONE in line for line in tail) else 'PARTIAL' if any(PARTIAL in line for line in tail) else 'FAILED'
     elif report and report.get('created_at', '') >= started:
         status, job['batch_id'] = 'FINISHED', report['batch_id']
     else:
@@ -92,10 +94,12 @@ def _start_locked(workers, popen, kind='reference') -> dict:
     stamp = datetime.now(timezone.utc)
     log = runner.OUT / 'jobs' / f'{"batch" if kind == "reference" else kind}_{stamp:%Y%m%dT%H%M%SZ}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
+    job_id = f'{stamp:%Y%m%dT%H%M%SZ}-{kind}'
+    extra = ['--job-id', job_id] if kind == 'intelligence' else []
     with log.open('w', encoding='utf-8') as handle:
-        proc = popen([sys.executable, '-X', 'utf8', '-m', *KINDS[kind], '--workers', str(int(workers))], cwd=str(runner.ROOT),
+        proc = popen([sys.executable, '-X', 'utf8', '-m', *KINDS[kind], '--workers', str(int(workers)), *extra], cwd=str(runner.ROOT),
                      stdout=handle, stderr=subprocess.STDOUT)
-    job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED', 'kind': kind}
+    job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED', 'kind': kind, 'job_id': job_id}
     _write(job)
     return job
 

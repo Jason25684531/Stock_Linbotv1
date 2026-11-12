@@ -165,3 +165,63 @@ The current reference map is `docs/refactor/repository_hygiene_reference_map_202
 | `specs/**`、`doc/**` | UNKNOWN | 歷史與維運文件；尚無遷移方案 | 證據不足 | 遺失歷史脈絡 | `git revert` | 保留 |
 | `core/viz_helper.py`、`core/report_helper.py` | UNKNOWN | 仍有程式引用 | 未完成重疊分析 | 報表／圖表退化 | `git revert` | 保留 |
 | `stop`、`docs/cleanup_*.md` | UNKNOWN | 已缺失且為既有工作樹變更 | 本 Change 不持有其刪除決策 | 可能影響既有工作 | 使用者原分支／revert | 保留現狀 |
+
+## 2026-11-11 architecture-boundary-and-dead-code-cleanup-v1
+
+Change：`openspec/changes/2026-11-11-architecture-boundary-and-dead-code-cleanup-v1`。基線 `5c156e7`。
+
+**Owner 決定（最終）**：刪除。中斷的 apply 執行曾在本節寫入「保留既有 CLI、Web 路由及研究／驗收證據」；Owner 隨後在兩份互相矛盾的紀錄間明確選擇刪除。下表的 REMOVED 項依此執行；`init_settings.py` 依 design D9 保留。
+
+文件中的歷史提及不是呼叫者：`docs/tquant-strategies-verification-2026-10-19.md:48` 提到 `scripts/verify_tquant_cli.py`，`docs/research/2026-11-10-engine-accounting-and-history-gaps-v1/REPORT_TABLES.md:1` 提到 `scripts/engine_fix_report.py`，`docs/refactor/architecture_cleanup_2026-10-14/baseline.json` 記錄兩個 wrapper 與 4 個 CLI 的 SHA，`outputs/dual_track_validation/2026-10-23/**/reproduction_manifest_*.json` 記錄 `scripts/test_isolation_record.py`。以上皆不由程式回讀（`git grep` 全庫查無讀取 `architecture_cleanup_2026-10-14` 或這些 manifest 的程式碼雜湊者），保留為歷史；要重現時以下列指令還原。
+
+| 刪除項 | 證據 | 判定 | 還原 |
+|---|---|---|---|
+| `scripts/milestone_checkpoint.py`、`test_isolation_record.py`、`native7_monitor.ps1` | 原始碼、測試、`.claude/` 零引用；只在 `outputs/` 證據出現；不在 87 個身份釘選檔內 | REMOVED（D6-A） | `git checkout 5c156e7 -- <路徑>` |
+| `scripts/engine_fix_evidence.py`、`engine_fix_report.py`、`engine_fix_smoke.py`、`engine_fix_state.py`、`hist_foundation_fetch.py`、`historical_review.py`、`verify_engine_fix_browser.py`、`verify_reference_identities.py` | 同上；`app/platform_routes.py:462` 的 `engine_fix_state()` 是同名的另一個函式，只讀輸出目錄 | REMOVED（D6-A2） | 同上 |
+| `scripts/verify_tquant_cli.py` | 唯一用途是 `runpy` 執行 `4_run_backtest.py`，隨 wrapper 失去對象 | REMOVED（D6-A3） | 同上 |
+| `jobs/run_candidate_redundancy.py`、`run_engine_diagnostics.py`、`run_fundamental_factor_validation.py`、`run_fundamental_pit_f2.py` | 無匯入者、無 JobSpec、無 bat、無測試；身份閉包內沒有任何 `jobs/` 檔 | REMOVED（D6-B） | 同上 |
+| `4_run_backtest.py`、`5_push_to_line.py` | `app/`、`jobs/`、`execution/`、compose 無執行期呼叫；作業系統排程的兩個 bat 不經 wrapper；canonical 為 `jobs/run_backtest.py`、`jobs/push_to_line.py` | REMOVED（D6-C／D7）；契約測試改為斷言不存在 | 同上 |
+| 10 條路由：`/api/summary`、`/api/backtest-result`、`/api/trades`、`/api/pk/battle`、`/api/user/trade`、`/api/news_sentiment`、`/api/market/institutional`、`/api/research/strategy-status`、`/api/lab/summary`、`/update_mode` | 五道閘門全部通過（下表）；`url_map` 差異恰為這 10 條；只測這些路由的 `test/test_web_api_smoke.py`、`test/test_web_research_status.py` 一併刪除 | REMOVED（D6-G／D8） | `git checkout 5c156e7 -- app/web_server.py app/platform_routes.py app/__init__.py` 與兩個測試檔 |
+| 隨路由失去呼叫者的 `app/__init__.py::_load_backtest_summary_or_error`、`_build_summary_response`、`web_server.RESEARCH_SNAPSHOT_DIR`，以及 `jsonify`、`get_backtest_summary_from_db`、`V34_MODE_PRESETS`、`V35_MODE_PRESETS` 匯入 | 刪除後全庫無其他使用者；不在 `__all__`（前者已一併移出）；無測試經 `app`／`services` patch 它們（唯一 patch 者是已刪的 smoke 測試；`test_research_isolation.py` 對 `RESEARCH_SNAPSHOT_DIR` 的 patch 已移除，其讀取防護不變） | REMOVED | 同上 |
+| `init_settings.py` | `user_settings` 唯一建表與種子執行者 | KEEP（D9） | — |
+| `/api/performance`、`/api/dashboard/macro`、`/api/dashboard/health-check`、`/api/daily-signals` | 有 README 或主規格指名 | KEEP／SPEC | — |
+| `jobs/operations/`、`jobs/research/` | 只含 `__pycache__`；刪除指令遭自動審查以政策擋下 | CACHE，未刪 | — |
+
+以下 `jobs/update_database.py` 內部舊執行鏈的查核維持不變。查核指令：`rg -n -w --hidden --no-ignore` 搜尋四個符號，涵蓋原始碼、測試、排程、bat、Compose、`.claude`、文件及 OpenSpec；排除 `.git`、虛擬環境、資料與輸出目錄。另檢查 `getattr`、`importlib`、JobSpec 及命令文字；完整輸出在本機 `outputs/refactor/hygiene_20261111/function_references.txt`（該目錄受 Git 忽略）。研究身份探針使用專案自身三個身份來源與 11 個入口，2026-11-11 結果中此檔不在 87 個釘選檔案內。外部 Python 呼叫無法由本機掃描證明不存在，故限於此舊鏈，既有 CLI `main()` 與其參數行為保留。復原：以基線 `5c156e7` 的該檔對照後擷取需要的函式。
+
+| 項目 | 查核結果 | 判定 |
+|---|---|---|
+| `_run_update` | 定義但無呼叫；CLI 指向 `main()`；文字引用僅歷史設計與本變更 | SAFE_TO_REMOVE |
+| `run_price_update` | 只由 `_run_update` 呼叫；歷史文件及一則舊註解提及 | SAFE_TO_REMOVE，刪除舊註解 |
+| `get_latest_date_from_db` | 只由 `run_price_update` 呼叫 | SAFE_TO_REMOVE |
+| `print_summary_report` | 只由 `_run_update` 呼叫 | SAFE_TO_REMOVE |
+| `get_earliest_incomplete_date` | `test/test_ingestion_source_contract.py` 有呼叫 | KEEP |
+| `run_monthly_revenue_update`、`run_financial_update` | `services/market_data_update.py` 文件引用 | DEFER |
+| `core/backtest/engine.py`、`core/backtest/__init__.py`、`config.py` | 身份探針釘選 | KEEP／IDENTITY_PINNED |
+| `init_settings.py` | `user_settings` 唯一建表與種子執行者 | KEEP |
+| 策略檔方法、scheduler daily 與 bat、requirements | 策略與公開相容面、使用狀態未完整證明 | KEEP（D6 E、F、H） |
+| 四個 `jobs/run_*` 候選 | 無匯入者、JobSpec、bat 或測試；外部呼叫無法由掃描證明不存在 | REMOVED（D6 B，Owner 最終決定） |
+| 兩個數字 wrapper、通過閘門的 10 條路由 | 無執行期呼叫者；Owner 最終決定刪除 | REMOVED（D6 C、G） |
+| 12 個一次性研究／驗收腳本 | 只有文件與 outputs 的歷史提及，無程式回讀 | REMOVED（D6 A、A2、A3，Owner 最終決定） |
+| 正確性問題 | 不在本次清理範圍 | DEFER（D6 I） |
+
+路由五道閘門的重跑結果：搜尋路徑及 `url_for` 端點名稱，範圍含 templates、app、core、jobs、services、scripts、execution、Richmenu、README、主規格及測試，輸出保存在本機 `outputs/refactor/hygiene_20261111/route_references.txt`；路由所在兩個檔案均不在身份釘選清單。通過五道閘門的 10 條依 Owner 最終決定刪除；有 README 或主規格指名的 4 條保留。
+
+| 路由 | 靜態查核 | 最終決定 |
+|---|---|---|
+| `/api/summary` | 無模板或其他程式路徑引用；`api_backtest_result` 呼叫其函式 | REMOVED |
+| `/api/news_sentiment` | 未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/api/lab/summary` | 未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/update_mode` | 未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/api/trades` | 測試引用；未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/api/backtest-result` | 測試引用；呼叫 `api_summary` | REMOVED |
+| `/api/pk/battle` | 測試引用；未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/api/user/trade` | 測試引用；未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/api/market/institutional` | 測試引用；README 泛指 `/api/market/*` | REMOVED |
+| `/api/research/strategy-status` | 測試引用；未發現模板、其他程式或主規格路徑引用 | REMOVED |
+| `/api/performance` | README 指名 | KEEP／SPEC |
+| `/api/dashboard/macro` | 主規格指名 | KEEP／SPEC |
+| `/api/dashboard/health-check` | README 與主規格指名 | KEEP／SPEC |
+| `/api/daily-signals` | 排程、研究驗證腳本及主規格引用 | KEEP／SPEC |
+
+舊表狀態補充：`tmp_probe/`、`tool/**`、`doc/**`、`stop` 的已不存在對象為 CLOSED，並非允許移除其他現存文件。2026-11-02 的 `write_factor_charts` 與 `core/research/d5_research_variant.py` 三個符號已有呼叫者，撤回候選（WITHDRAWN）；歷史行保留供稽核。

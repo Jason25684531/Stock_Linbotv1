@@ -157,13 +157,16 @@ execution\run_manual.bat                  :: 手動選單：推播、更新、�
 
 ## 相容面（不得隨意移除）
 
-`app.py`、`config.py`、`4_run_backtest.py`、`5_push_to_line.py`、`scripts/twse_mcp_server.py`、`execution/*.bat`、舊策略 alias，以及 CLI、Web、LINE 和 scheduler 的公開行為。
+`app.py`、`config.py`、`scripts/twse_mcp_server.py`、`execution/*.bat`、舊策略 alias，以及 CLI、Web、LINE 和 scheduler 的公開行為。
+
+根目錄的 `4_run_backtest.py`、`5_push_to_line.py` 已於 2026-11-11 移除，請改用下列 canonical 指令（參數與舊策略旗標 `--v31`～`--v38` 不變）：
 
 ```powershell
 python app.py
 python jobs/run_backtest.py --strategies all --days 365 --mode balanced
-python 4_run_backtest.py --help
-python 5_push_to_line.py --help
+python jobs/run_backtest.py --help
+python jobs/push_to_line.py --help
+python jobs/scheduler.py morning
 ```
 
 ## 資料與產物

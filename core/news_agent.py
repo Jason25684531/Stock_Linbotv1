@@ -893,7 +893,7 @@ def _summarize_with_gemini(news_text: str) -> str:
 # ==========================================
 
 def get_morning_news_summary() -> str:
-    """早晨新聞摘要（供 5_push_to_line.py morning 模式調用）
+    """早晨新聞摘要（供 jobs/push_to_line.py morning 模式調用）
 
     流程：爬取鉅亨網 → 優先篩選盤前/盤後 → Gemini 篩選重大新聞 → 至少 5 則摘要
 

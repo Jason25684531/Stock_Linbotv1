@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}{{ sid }} 策略分析 - Stock Linbot{% endblock %}
+{% block page_heading %}<span class="break-all">策略分析：{{ (r.display_name if r else sid) }}</span>{% endblock %}
+{% block extra_head %}{% if r and r.performance %}<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>{% endif %}{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="intelligence-strategy" x-data="{ tab: 'overview', show(t) { this.tab = t; this.$nextTick(() => window.dispatchEvent(new Event('resize'))) } }">
+{{ iu.labels_banner() }}
+{% if not r %}
+    <section class="quant-card p-4" data-testid="no-result"><p>{% if failed %}最近一次分析工作中此策略失敗（{{ failed }}），失敗分類與錯誤見分析工作面板。{% endif %}此策略尚無分析結果。管理員可在 <a class="text-blue-300" href="{{ url_for('intelligence_index') }}">分析工作</a> 啟動分析。</p></section>
+{% else %}
+{% set perf = r.performance %}{% set run = r.run %}
+{% set track = (perf.verified or perf.provisional) if perf else none %}
+<section class="quant-card p-4" data-testid="header">
+    <div class="flex flex-wrap items-center gap-2">
+        <span class="break-all text-base font-semibold text-white">{{ r.display_name }}</span><span class="num text-xs text-muted">{{ sid }}</span>
+        <span class="text-xs">{{ r.profile.type.label }}{% if r.profile.secondary_types %}（次要：{{ r.profile.secondary_types|join('、') }}）{% endif %}</span>
+        {{ iu.badge(r.status) }}{% if run %}{{ iu.badge(run.identity_status) }}{% endif %}
+        <span class="text-xs">正式認證：<strong>{{ r.certification }}</strong></span>
+    </div>
+    {% if not run %}
+    <p class="mt-2 break-all text-amber-200" data-testid="blocked-reason">{{ r.status }}：{{ r.reason or '沒有可用的歷史 Run' }}。此策略沒有可用的歷史回測績效，下列只提供規格卡。</p>
+    <p class="mt-1 break-all text-xs text-muted" data-testid="provenance">分析結果 <span class="num">{{ r.identity }}</span>・Profile <span class="num">{{ r.profile.profile_id }}</span>・Definition <span class="num">{{ r.definition.definition_id }}</span>・<a class="text-blue-300" href="{{ url_for('intelligence_evidence', sid=sid, result=r.identity) }}">下載計算證據（JSON）</a></p>
+    {% else %}
+    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="headline">
+        <div><div class="text-xs text-muted">年化淨報酬（{{ 'VERIFIED' if perf.verified else 'PROVISIONAL' }}，每年 252 交易日）</div><div class="text-xl font-semibold">{{ iu.mv(track.cagr) }}</div><div class="text-xs text-muted">以日曆時間計 {{ iu.mv(track.cagr_calendar) }}</div></div>
+        <div><div class="text-xs text-muted">5%／10% 目標</div><div>{{ iu.badge(r.dimensions.return_target.status) }}</div>{% if not perf.verified %}<div class="text-xs text-muted">只在完整可信期間判定</div>{% endif %}</div>
+        <div><div class="text-xs text-muted">Benchmark CAGR（報酬指數）</div><div class="text-lg">{{ iu.mv(track.benchmark_cagr_total_return) }}</div><div class="text-xs text-muted">價格指數 {{ iu.mv(track.benchmark_cagr_price) }}</div></div>
+        <div><div class="text-xs text-muted">最大回撤</div><div class="text-lg">{{ iu.mv(track.max_drawdown) }}</div><div class="text-xs text-muted">大盤 {{ iu.mv(track.benchmark_max_drawdown_total_return) }}</div></div>
+        <div><div class="text-xs text-muted">最長回本時間</div><div class="text-lg">{{ iu.mv(track.longest_recovery_sessions, 'int') }} <span class="text-xs">交易日</span></div><div class="text-xs text-muted">期末未回本 {{ iu.mv(track.current_underwater_sessions, 'int') }} 日</div></div>
+    </div>
+    <div class="mt-3 grid gap-1 text-xs text-muted sm:grid-cols-2" data-testid="provenance">
+        <div>資料可信：可信期間 <span class="num">{{ (perf.verified_span or [])|join('～') or '無' }}</span>；Run 期間 <span class="num">{{ run.period|join('～') }}</span></div>
+        <div>Run <span class="num break-all">{{ run.run_id }}</span>・<span class="num break-all">{{ run.run_identity }}</span></div>
+        <div>Snapshot <span class="num">{{ run.snapshot_id }}</span>・Evaluation <span class="num">{{ r.versions.evaluation_id }}</span>・帳務 <span class="num">{{ run.accounting }}</span></div>
+        <div>Engine：{{ run.engine.contract }}・分錄 <span class="num">{{ (run.ledger_version or '')[:12] }}</span>・Regime <span class="num">{{ r.versions.regime_spec_id }}</span></div>
+        <div>分析結果 <span class="num">{{ r.identity }}</span>・Profile <span class="num">{{ r.versions.profile_id }}</span>・Definition <span class="num">{{ r.versions.definition_id }}</span></div>
+        <div><a class="text-blue-300" href="{{ url_for('intelligence_evidence', sid=sid, result=r.identity) }}" data-testid="evidence-link">下載計算證據（JSON）</a>
+            {% if versions|length > 1 %}・其他已存結果：{% for v in versions %}<a class="text-blue-300 num" href="{{ url_for('intelligence_strategy', sid=sid, result=v) }}">{{ v }}</a>{% if not loop.last %}、{% endif %}{% endfor %}{% endif %}</div>
+    </div>
+    {% if superseded %}<p class="mt-2 rounded border border-amber-500/50 p-2 text-xs text-amber-200" data-testid="superseded-warning">這是較早的分析結果 {{ r.identity }}，不是最新一次分析工作的結果。</p>{% endif %}
+    {% set act = r.dimensions.activity if r.dimensions else none %}
+    {% if act %}<p class="mt-2 text-xs" data-testid="activity">活動度：投入交易日 {{ iu.pct(act.invested_session_share) }}、零報酬交易日 {{ iu.pct(act.zero_return_session_share) }}、期間內最後一次出場 <span class="num">{{ act.last_exit_in_track or '無' }}</span>{% if act.note %}・<span class="text-amber-200">{{ act.note }}：成本承受、相對大盤、優勢檢查與體檢不做判定，不估資金容量，不輸出情境機率；CAGR 仍與 5%／10% 目標比較（報酬事實）</span>{% endif %}</p>{% endif %}
+    {% if run.identity_status != 'CURRENT' %}<p class="mt-2 rounded border border-amber-500/50 p-2 text-xs text-amber-200" data-testid="stale-warning">此 Run 的身份與目前程式不一致（IDENTITY_STALE）：所有數字為 PROVISIONAL，不做目標判定，也不輸出未來情境機率。</p>{% endif %}
+    {% endif %}
+</section>
+
+<nav class="flex flex-wrap gap-2 text-xs" role="tablist">
+    {% for key, label in [('overview','績效總覽'),('health','策略體檢'),('scenarios','未來一年可能多慘？'),('card','策略規格卡')] %}
+    <button type="button" role="tab" class="rounded border border-line px-3 py-2" :class="tab === '{{ key }}' ? 'bg-blue-600 text-white' : ''" @click="show('{{ key }}')" data-testid="tab-{{ key }}">{{ label }}</button>
+    {% endfor %}
+</nav>
+
+<div x-show="tab === 'overview'" data-testid="panel-overview">
+{% if not perf %}<section class="quant-card break-all p-4">{{ r.status }}：{{ r.reason }}。沒有績效數字。</section>{% else %}
+    <section class="quant-card p-4" x-data="{ range: 'full' }">
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+            {% for key, label in [('1y','1 年'),('3y','3 年'),('5y','5 年'),('10y','10 年'),('full','完整期間')] %}
+            <button type="button" class="rounded border border-line px-2 py-1" :class="range === '{{ key }}' ? 'bg-blue-600 text-white' : ''" @click="range = '{{ key }}'; window.siRange('{{ (perf.ranges[key].period or [''])[0] if perf.ranges[key].period else '' }}')" data-testid="range-{{ key }}">{{ label }}</button>
+            {% endfor %}
+        </div>
+        {% for key, rg in perf.ranges.items() %}
+        <div x-show="range === '{{ key }}'" class="mt-2 text-xs" data-testid="range-panel-{{ key }}">
+            {% if rg.reason %}<p class="text-amber-200">此區間無法計算：{{ rg.reason }}</p>{% else %}
+            <div class="flex flex-wrap gap-4">{{ iu.badge(rg.label) }}<span class="num">{{ rg.period|join('～') }}</span>
+                <span>CAGR {{ iu.mv(rg.cagr) }}</span><span>累積 {{ iu.mv(rg.total_return) }}</span><span>MDD {{ iu.mv(rg.max_drawdown) }}</span>
+                <span>Sharpe {{ iu.mv(rg.sharpe, 'num') }}</span>{% if key == 'full' %}<span>年化換手 {{ iu.mv(perf.turnover_annual, 'num') }}</span>{% endif %}<span>超額 {{ iu.mv(rg.excess_cagr, 'signed') }}</span><span>大盤 CAGR {{ iu.mv(rg.benchmark_cagr_total_return) }}</span></div>
+            {% if rg.label == 'PROVISIONAL' %}<p class="mt-1 text-amber-200">此區間含非 VERIFIED 年份（PARTIAL、排除或身份過期），數字為 PROVISIONAL，不可與 VERIFIED 數字直接比較。</p>{% endif %}{% endif %}
+        </div>
+        {% endfor %}
+        <div id="nav-chart" class="mt-3 h-[460px] w-full" data-testid="nav-chart"></div>
+        <p class="text-xs text-muted">淨值以 Run 第一日為 1；Benchmark 為加權股價報酬指數（含息）同日重設為 1；下方為水下回撤。</p>
+    </section>
+    <section class="quant-card p-4" data-testid="yearly">
+        <h2 class="text-sm font-semibold text-white">年度績效（基礎成本，括號為兩倍成本）</h2>
+        <div class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-11">
+        {% for year, y in perf.provisional.yearly.items() %}{% set st = r.year_status.get(year, 'NOT_EVALUATED') %}
+            <div class="rounded border p-2 text-center text-xs {{ 'border-line' if y.base is none or y.base == 0 else ('border-emerald-600/60 bg-emerald-600/10' if y.base > 0 else 'border-red-600/60 bg-red-600/10') }}">
+                <div class="num">{{ year }}</div><div class="text-sm font-semibold">{{ iu.pct(y.base) }}</div><div class="text-xs text-muted">({{ iu.pct(y.stress) }})</div>
+                <div class="mt-1">{{ iu.badge(st) }}</div>{% if y.sessions < 200 %}<div class="text-xs text-muted">部分年度 {{ y['from'] }} 起</div>{% endif %}
+            </div>
+        {% endfor %}
+        </div>
+    </section>
+    <section class="quant-card overflow-x-auto p-4" data-testid="regimes">
+        <h2 class="text-sm font-semibold text-white">市場環境表現（Regime {{ perf.regime.regime_spec_id }}，規則固定，不因結果調整）</h2>
+        {% if r.dimensions.activity.note %}<p class="text-xs text-amber-200">{{ r.dimensions.activity.note }}：下表只是期間報酬的拆分，不足以判斷策略在哪種環境有優勢。</p>{% endif %}
+        <p class="text-xs text-muted">環境由加權股價指數 120 日報酬（±10%）與 60 日年化波動（20%）判定；各環境的日報酬串接計算，不是連續期間。類型假設的有利環境：{{ r.profile.type.suitable_regimes|join('、') }}；不利：{{ r.profile.type.unsuitable_regimes|join('、') }}。</p>
+        {% for basis, label in [('VERIFIED_ONLY','僅 VERIFIED 年份'),('VERIFIED_AND_PARTIAL','含 PARTIAL（PROVISIONAL）')] %}
+        <h3 class="mt-3 text-xs font-semibold">{{ label }}</h3>
+        <table class="mt-1 w-full min-w-[720px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">環境</th><th class="p-1">日數</th><th class="p-1">平倉交易</th><th class="p-1">累積</th><th class="p-1">年化</th><th class="p-1">MDD</th><th class="p-1">兩倍成本累積</th><th class="p-1">相對大盤（策略累積 − 大盤累積，百分點）</th></tr></thead><tbody>
+        {% for name, g in perf.regime.regimes.get(basis, {}).items() %}<tr class="border-t border-line"><td class="p-1">{{ name }}</td><td class="num p-1">{{ g.sessions }}</td><td class="num p-1">{{ g.trades.trade_count }}</td>
+            <td class="p-1">{{ iu.mv(g.base.cumulative_return) }}</td><td class="p-1">{{ iu.mv(g.base.annualized_return) }}</td><td class="p-1">{{ iu.mv(g.base.max_drawdown) }}</td><td class="p-1">{{ iu.mv(g.x2.cumulative_return) }}</td><td class="p-1">{{ iu.mv(g.base.excess_vs_benchmark, 'signed') }}</td></tr>{% endfor %}
+        </tbody></table>{% endfor %}
+    </section>
+    <section class="quant-card overflow-x-auto p-4" data-testid="dimensions">
+        <h2 class="text-sm font-semibold text-white">七項評估（分開判定，不加權成總分）</h2>
+        {% set d = r.dimensions %}
+        <div class="mt-2 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+            <div class="rounded border border-line p-2"><div class="text-muted">1. 資料與回測可信度</div>{{ iu.badge(d.data_trust.status) }} {{ iu.badge(d.data_trust.identity) }}</div>
+            <div class="rounded border border-line p-2"><div class="text-muted">2. CAGR 5%／10% 目標（VERIFIED 期間）</div>{{ iu.badge(d.return_target.status) }} {{ iu.pct(d.return_target.cagr) }}<div class="text-xs text-muted">PROVISIONAL 全期 {{ iu.pct(d.return_target.provisional_cagr) }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">3. 交易成本承受力（{{ d.cost_tolerance.track }}）</div>{{ iu.badge(d.cost_tolerance.status) }} 兩倍成本 CAGR {{ iu.pct(d.cost_tolerance.cagr_stress) }}<div class="text-xs text-muted">{{ d.cost_tolerance.rule }}；拖累 {{ iu.pct(d.cost_tolerance.cost_drag) }}；兩倍成本正報酬年份比例（輔助）{{ iu.pct(d.cost_tolerance.auxiliary_positive_year_share_stress) }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">4. 風險預算</div>{{ iu.badge(d.risk_budget.status) }} MDD {{ iu.pct(d.risk_budget.max_drawdown) }}／大盤 {{ iu.pct(d.risk_budget.benchmark_max_drawdown) }}<div class="text-xs text-muted">{{ d.risk_budget.source }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">6. 相對 Benchmark</div>{{ iu.badge(d.benchmark.status) }} 超額 {{ iu.pct(d.benchmark.excess_cagr, True) }}<div class="text-xs text-muted">{{ d.benchmark.label }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">7. 研究樣本充分度</div>{{ iu.badge(d.sample.status) }} 平倉 {{ d.sample.closed_trades }} 筆（最低 {{ d.sample.min_closed_trades }}）；情境樣本 {{ iu.badge(d.sample.scenario_rule) }}</div>
+        </div>
+        <h3 class="mt-3 text-xs font-semibold">5. {{ d.type_edge.label }}專屬優勢（{{ d.type_edge.track }}）</h3>
+        <ul class="mt-1 list-disc pl-5 text-xs text-muted">{% for q in d.type_edge.questions %}<li>{{ q }}</li>{% endfor %}</ul>
+        <table class="mt-2 w-full min-w-[600px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">指標</th><th class="p-1">實測</th><th class="p-1">門檻</th><th class="p-1">門檻來源</th><th class="p-1">結果</th></tr></thead><tbody>
+        {% for c in d.type_edge.checks %}<tr class="border-t border-line"><td class="p-1 num">{{ c.metric }}</td><td class="p-1">{{ iu.num(c.measured, 4) }}</td><td class="p-1">{{ c.op }} {{ c.reference if c.reference is not none else '—' }}</td><td class="p-1">{{ c.source }}</td><td class="p-1">{% if c.status in ('PASS', 'FAIL') %}<span class="inline-block rounded border border-slate-600/50 px-1.5 py-0.5 text-xs">{{ '成立' if c.status == 'PASS' else '不成立' }}</span>{% else %}{{ iu.badge(c.status) }}{% endif %}</td></tr>{% endfor %}
+        </tbody></table>
+        {% if d.type_edge.defensive_value.status != 'NOT_APPLICABLE' %}<p class="mt-2 text-xs">防禦價值：{{ iu.badge(d.type_edge.defensive_value.status) }} {{ d.type_edge.defensive_value.rule }}（與報酬目標分開，不代表達標）</p>{% endif %}
+        {% set t = perf.trades %}
+        <p class="mt-2 text-xs text-muted">交易層（{{ t.track }}，排除持有期間有公司行動的 {{ t.trades_excluded_corporate_action }} 筆）：MFE 中位數 {{ iu.mv(t.mfe_median) }}、MAE 中位數 {{ iu.mv(t.mae_median) }}、進場後 5／10／20 日平均 {{ iu.mv(t.forward_return_5) }}／{{ iu.mv(t.forward_return_10) }}／{{ iu.mv(t.forward_return_20) }}；前 5 大交易占總獲利 {{ iu.mv(track.top5_profit_share) }}。</p>
+    </section>
+{% endif %}
+</div>
+
+<div x-show="tab === 'health'" x-cloak data-testid="panel-health">
+{% if not r.health %}<section class="quant-card break-all p-4">{{ r.status }}：{{ r.reason }}。沒有可體檢的回測結果。</section>{% else %}
+    {% for key, title in [('earn','賺多少？'),('drawdown','跌多深？'),('efficiency','划算嗎？'),('consistency','常贏嗎？'),('tradability','買得到嗎？')] %}
+    <section class="quant-card mb-3 p-4" data-testid="health-{{ key }}">
+        <h2 class="text-sm font-semibold text-white">{{ title }}</h2>
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+        {% for item in r.health[key] %}
+            <details class="rounded border border-line p-2 text-xs">
+                <summary class="flex cursor-pointer flex-wrap items-center gap-2"><span>{{ item.name }}</span><strong class="text-sm">{{ iu.mv(item.value, iu.health_kind.get(item.name, 'num')) }}</strong>{% if item.neutral %}<span class="inline-block rounded border border-slate-600/50 px-1.5 py-0.5 text-xs">{{ item.neutral }}</span>{% else %}{{ iu.badge(item.status) }}{% endif %}</summary>
+                <p class="mt-1">門檻：{{ item.threshold }}{% if item.source %}（來源 {{ item.source }}）{% endif %}</p>
+                <p class="mt-1 text-muted">{{ item.explanation }}</p>
+                {% if item.detail %}<p class="mt-1 text-xs text-muted break-all">明細：{{ item.detail|tojson }}</p>{% endif %}
+            </details>
+        {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+    {% set f = r.feasibility %}
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="feasibility">
+        <h2 class="text-sm font-semibold text-white">交易可行性明細</h2>
+        <p class="mt-1">持倉重建：{{ iu.badge(f.reconciliation.status) }} {% if f.reconciliation.status != 'RECONCILED' %}第一個不一致日 <span class="num">{{ f.reconciliation.first_mismatch_date }}</span>，不一致 {{ f.reconciliation.mismatch_sessions }}／{{ f.reconciliation.sessions }} 日；原因 {{ f.reconciliation.reasons|join('、') }}；部分出場期間外的不一致 {{ f.reconciliation.mismatch_outside_partial_exit_windows }} 日。持股集中度、持股重疊與資金容量因此標為不可驗證。{% else %}由交易、公司行動、期末部位與現金重建，逐日對帳 NAV（{{ f.reconciliation.tolerance }}）。{% endif %}</p>
+        <p class="mt-1">持股：平均 {{ iu.mv(f.positions.avg_holdings, 'num') }} 檔、最多 {{ iu.mv(f.positions.max_holdings, 'int') }} 檔；平均單檔最高權重 {{ iu.mv(f.positions.avg_max_weight) }}；平均 HHI {{ iu.mv(f.positions.avg_hhi, 'num') }}；平均現金比例 {{ iu.mv(f.positions.avg_cash_share) }}</p>
+        {% set L = f.liquidity %}
+        <p class="mt-1">參與率（進場金額／前一日成交金額，引擎上限 5%）：中位數 {{ iu.pct(L.entry_participation_prev.p50) }}、P90 {{ iu.pct(L.entry_participation_prev.p90) }}、最大 {{ iu.pct(L.entry_participation_prev.max) }}、受上限限制 {{ iu.pct(L.cap_binding_share) }}；當日參與率 P90 {{ iu.pct(L.entry_participation_same.p90) }}；出場（當日）P90 {{ iu.pct(L.exit_participation_same.p90) }}；持有股票平均成交金額 {{ iu.money(L.held_avg_traded_value) }} 元；缺行情交易 {{ L.trades_without_bar }} 筆</p>
+        <p class="mt-1">資金容量：{{ iu.badge(f.capacity.label) }} {{ iu.money(f.capacity.value) }} 元。{{ f.capacity.assumption }}</p>
+        <p class="mt-1">滑價模型：{{ f.slippage_model.model }}，上限 {{ iu.pct(f.slippage_model.max) }}；{{ f.slippage_model.note }}。成本：手續費 {{ f.cost_model.fee_rate }}、證交稅 {{ f.cost_model.tax_rate }}、最低 {{ f.cost_model.minimum_fee }} 元；兩倍成本壓力 ×{{ f.cost_model.stress_multiple }}。</p>
+    </section>
+{% endif %}
+</div>
+
+<div x-show="tab === 'scenarios'" x-cloak data-testid="panel-scenarios">
+{% set sc = r.scenarios %}
+{% if not sc %}<section class="quant-card break-all p-4">{{ r.status }}：{{ r.reason }}。沒有歷史回測，無法建立情境。</section>{% else %}
+    <section class="rounded-lg border border-blue-500/40 bg-blue-500/5 p-3 text-xs text-blue-100" data-testid="scenario-notice">{{ sc.notice or '歷史情境模擬，非未來價格或投資報酬預測。' }}</section>
+    {% if sc.status == 'SUFFICIENT' %}{% set sim = sc.simulation %}
+    <section class="quant-card p-4 text-xs" data-testid="scenario-meta">樣本：VERIFIED 完整年度 <span class="num">{{ sc.check.span|join('～') }}</span>（{{ sim.sample_sessions }} 個交易日）・期間 <span class="num">{{ sc.period|join('～') }}</span>・Block bootstrap 區塊 {{ sim.block }} 日・{{ sim.paths }} 條路徑 × {{ sim.horizon }} 日・種子 {{ sim.seed }}・規則 {{ sc.check.rule.id }} v{{ sc.check.rule.version }}</section>
+    <div class="grid gap-3 lg:grid-cols-3">
+        <section class="quant-card p-3" data-testid="scenario-drawdown"><h3 class="text-sm font-semibold text-white">一年內可能跌多深？</h3><div id="sc-dd" class="h-64"></div>
+            {% set ww = sc.stress.worst_window_max_drawdown %}<p class="text-xs">中位數 {{ iu.pct(sim.drawdown.median) }}・較差 5% {{ iu.pct(sim.drawdown.p05) }}・歷史任一 252 日最深回撤 {{ iu.pct(ww.value) }}（<span class="num">{{ ww.start }}～{{ ww.end }}</span>）</p></section>
+        <section class="quant-card p-3" data-testid="scenario-underwater"><h3 class="text-sm font-semibold text-white">一年內多久回不到高點？</h3><div id="sc-uw" class="h-64"></div>
+            <p class="text-xs">已回到高點的路徑：最長水下日數中位數 {{ iu.num(sim.underwater.longest_median, 0) }} 日・一年結束仍未回到高點（CENSORED）{{ iu.pct(sim.underwater.censored_share) }}，其水下日數至少 {{ iu.num(sim.underwater.censored_longest_median_lower_bound, 0) }} 日（中位數，下限）<br>第 3／6／9／12 個月仍在水下：{% for k, v in sim.underwater.share_underwater_at.items() %}{{ iu.pct(v) }}{% if not loop.last %}／{% endif %}{% endfor %}<br>歷史最長回本 {{ iu.mv(perf.verified.longest_recovery_sessions if perf.verified else none, 'int') }} 交易日（VERIFIED 期間 {{ (perf.verified_span or [])|join('～') }}）</p></section>
+        <section class="quant-card p-3" data-testid="scenario-cagr"><h3 class="text-sm font-semibold text-white">這個成績可能只是運氣嗎？</h3><div id="sc-cagr" class="h-64"></div>
+            <p class="text-xs">{% if sim.cagr.median is defined %}重抽樣 CAGR 中位數 {{ iu.pct(sim.cagr.median) }}・95% 區間 {{ iu.pct(sim.cagr.interval_95[0]) }}～{{ iu.pct(sim.cagr.interval_95[1]) }}<br>低於 0：{{ iu.pct(sim.cagr.share_below_zero) }}・低於 5% 目標：{{ iu.pct(sim.cagr.share_below_5pct) }}・前 5 大交易占總獲利 {{ iu.mv(perf.verified.top5_profit_share) }}{% else %}{{ sim.cagr.reason }}{% endif %}<br>這是歷史樣本的統計不確定性，不是未來勝率。</p></section>
+    </div>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="scenario-sensitivity"><h3 class="font-semibold">區塊長度敏感度與壓力情境</h3>
+        <table class="mt-1 w-full min-w-[480px]"><thead class="text-left text-muted"><tr><th class="p-1">區塊</th><th class="p-1">回撤中位數</th><th class="p-1">較差 5%</th><th class="p-1">CENSORED</th></tr></thead><tbody>
+        <tr><td class="num p-1">{{ sim.block }}（預設）</td><td class="p-1">{{ iu.pct(sim.drawdown.median) }}</td><td class="p-1">{{ iu.pct(sim.drawdown.p05) }}</td><td class="p-1">{{ iu.pct(sim.underwater.censored_share) }}</td></tr>
+        {% for b, s in sim.sensitivity.items() %}<tr class="border-t border-line"><td class="num p-1">{{ b }}</td><td class="p-1">{{ iu.pct(s.drawdown_median) }}</td><td class="p-1">{{ iu.pct(s.drawdown_p05) }}</td><td class="p-1">{{ iu.pct(s.censored_share) }}</td></tr>{% endfor %}</tbody></table>
+        <h3 class="mt-3 font-semibold">最深的 10 次歷史回撤（VERIFIED 期間）</h3>
+        <table class="mt-1 w-full min-w-[560px]"><thead class="text-left text-muted"><tr><th class="p-1">前高</th><th class="p-1">谷底</th><th class="p-1">回復</th><th class="p-1">跌幅</th><th class="p-1">水下交易日</th></tr></thead><tbody>
+        {% for e in sc.historical.drawdown_episodes %}<tr class="border-t border-line"><td class="num p-1">{{ e.peak_date }}</td><td class="num p-1">{{ e.trough_date }}</td><td class="num p-1">{{ e.recovery_date or '未回復' }}</td><td class="p-1">{{ iu.pct(e.depth) }}</td><td class="num p-1">{{ e.underwater_sessions }}</td></tr>{% endfor %}
+        </tbody></table>
+        {% set bw = sc.stress.benchmark_worst_252 %}<p class="mt-2">大盤最差 252 日（{% if bw.start %}<span class="num">{{ bw.start }}～{{ bw.end }}</span>，大盤 {{ iu.pct(bw.benchmark_return) }}）期間策略報酬 {{ iu.pct(bw.strategy_return) }}、最大回撤 {{ iu.pct(bw.strategy_max_drawdown) }}{% else %}{{ bw.reason }}）{% endif %}。</p>
+    </section>
+    {% else %}
+    <section class="quant-card p-4 text-xs" data-testid="scenario-insufficient">
+        <p class="text-amber-200"><strong>{{ sc.status }}</strong>：{% if sc.status == 'IDENTITY_STALE' %}Run 身份與目前程式不一致，不輸出模擬機率。{% elif sc.status == 'INSUFFICIENT_SAMPLE' %}完整可信年度 {{ sc.check.span|join('～') }} 內只有 {{ sc.check.closed_trades_in_span }} 筆平倉交易，少於樣本規則 {{ sc.check.min_closed_trades }} 筆{% if act and act.invested_session_share is not none %}（期間投入交易日 {{ iu.pct(act.invested_session_share) }}）{% endif %}，交易樣本不足以代表策略，所以不輸出模擬機率。{% else %}VERIFIED 軌沒有三個相連的完整可信交易年度（規則 {{ sc.check.rule.id }}：{{ sc.check.rule.definition }}），不輸出模擬機率。{% endif %}</p>
+        <table class="mt-2 w-full min-w-[520px]"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">可信度</th><th class="p-1">官方交易日</th><th class="p-1">NAV 日數</th><th class="p-1">完整</th><th class="p-1">缺日／多餘日</th></tr></thead><tbody>
+        {% for y in sc.check.years %}<tr class="border-t border-line"><td class="num p-1">{{ y.year }}</td><td class="p-1">{{ iu.badge(y.trust) }}</td><td class="num p-1">{{ y.official_sessions }}</td><td class="num p-1">{{ y.nav_sessions }}</td><td class="p-1">{{ '是' if y.complete else '否' }}</td><td class="num p-1">{{ (y.missing + y.extra)|join(', ') or '—' }}</td></tr>{% endfor %}
+        </tbody></table>
+        <h3 class="mt-3 font-semibold">真實歷史風險事件（{{ sc.historical.track }}）</h3>
+        <table class="mt-1 w-full min-w-[560px]"><thead class="text-left text-muted"><tr><th class="p-1">前高</th><th class="p-1">谷底</th><th class="p-1">回復</th><th class="p-1">跌幅</th><th class="p-1">水下交易日</th></tr></thead><tbody>
+        {% for e in sc.historical.drawdown_episodes|sort(attribute='depth') %}<tr class="border-t border-line"><td class="num p-1">{{ e.peak_date }}</td><td class="num p-1">{{ e.trough_date }}</td><td class="num p-1">{{ e.recovery_date or '未回復' }}</td><td class="p-1">{{ iu.pct(e.depth) }}</td><td class="num p-1">{{ e.underwater_sessions }}</td></tr>{% endfor %}
+        </tbody></table>
+        {% set st = sc.stress or sc.historical.stress %}{% if st and st.strategy_worst_252 and st.strategy_worst_252.start %}<p class="mt-2">策略最差 252 日報酬：<span class="num">{{ st.strategy_worst_252.start }}～{{ st.strategy_worst_252.end }}</span> {{ iu.pct(st.strategy_worst_252.return) }}；任一 252 日最深回撤 {{ iu.pct(st.worst_window_max_drawdown.value) }}（<span class="num">{{ st.worst_window_max_drawdown.start }}～{{ st.worst_window_max_drawdown.end }}</span>）（PROVISIONAL）。</p>{% endif %}
+    </section>
+    {% endif %}
+{% endif %}
+</div>
+
+<div x-show="tab === 'card'" x-cloak data-testid="panel-card">
+    {% set dfn = r.definition %}
+    <section class="quant-card p-4 text-xs">
+        <p class="text-muted">每一欄都對應到程式符號與其原始碼雜湊；點開可查看來源。程式改動後該欄自動標為「程式已變更」。Definition <span class="num">{{ dfn.definition_id }}</span></p>
+        <div class="mt-3 grid gap-2">
+        {% for key, f in dfn.fields.items() %}
+            <details class="rounded border border-line p-2" data-testid="card-field-{{ key }}">
+                <summary class="flex cursor-pointer flex-wrap items-center gap-2"><strong>{{ {'hypothesis':'靠什麼賺錢（策略假設）','factors':'因子與公式','selection':'選股條件','entry':'進場','exit':'出場','rebalance':'換股頻率','holdings':'持股數量','weighting':'權重與單檔上限','risk_controls':'停損、停利與其他風控','cost_model':'交易成本模型','benchmark':'Benchmark','data_requirements':'所需資料','pit_dependencies':'PIT 依賴'}[key] }}</strong>{{ iu.badge(f.status) }}</summary>
+                <p class="mt-1 whitespace-pre-line">{{ f.text or '沒有可引用的程式依據（UNVERIFIED_DEFINITION）。' }}</p>
+                {% if f.sources %}<ul class="mt-1 space-y-0.5 text-xs text-muted">{% for s in f.sources %}<li class="break-all"><span class="num">{{ s.path }}</span>::{{ s.symbol }} 第 {{ s.lines|join('–') }} 行・sha256 <span class="num">{{ s.sha256[:12] }}</span>{% if s.recorded_sha256 != s.sha256 %} <span class="text-amber-200">（撰寫時 {{ (s.recorded_sha256 or '未記錄')[:12] }}）</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+            </details>
+        {% endfor %}
+        </div>
+        {% if dfn.numeric %}<p class="mt-3">引擎與風控數值（建置時從程式讀取）：{% for k, v in dfn.numeric.items() %}<span class="num">{{ k }}={{ v }}</span>{% if not loop.last %}・{% endif %}{% endfor %}</p>{% endif %}
+    </section>
+    <section class="quant-card p-4 text-xs" data-testid="card-implementation-notes">
+        <h2 class="text-sm font-semibold text-white">實作與說明差異（{{ notes.strategy|length }} 項策略、{{ notes.engine|length }} 項引擎共通）</h2>
+        <p class="mt-1 text-muted">{{ notes.source }}</p>
+        {% for n in notes.strategy %}<div class="mt-2 rounded border border-amber-500/40 p-2"><span class="num">{{ n.id }}</span> {{ n.text }}<div class="mt-1 text-muted break-all">{{ n.refs|join('、') }}</div></div>{% else %}<p class="mt-2">此策略沒有發現程式與說明不一致之處。</p>{% endfor %}
+        {% for n in notes.engine %}<div class="mt-2 rounded border border-line p-2"><span class="num">{{ n.id }}</span> {{ n.text }}<div class="mt-1 text-muted break-all">{{ n.refs|join('、') }}</div></div>{% endfor %}
+    </section>
+    <section class="quant-card p-4 text-xs" data-testid="card-profile">
+        <h2 class="text-sm font-semibold text-white">評估設定（{{ r.profile.profile_id }}，在新結果前凍結）</h2>
+        <p class="mt-1">類型：{{ r.profile.type.label }}（依據：{{ r.profile.type_evidence }}）</p>
+        <p class="mt-1">核心問題：{{ r.profile.type.questions|join('；') }}</p>
+        <p class="mt-1">主要指標：{{ r.profile.type.primary_metrics|join('、') }}；輔助：{{ r.profile.type.auxiliary_metrics|join('、') or '—' }}</p>
+        <p class="mt-1">主要風險：{{ r.profile.type.main_risks|join('；') }}</p>
+        <p class="mt-1">適用環境（類型假設）：{{ r.profile.type.suitable_regimes|join('、') }}；弱勢環境：{{ r.profile.type.unsuitable_regimes|join('、') }}</p>
+        <p class="mt-1">獲利目標：成本後 CAGR ≥ {{ iu.pct(r.profile.targets.cagr_basic) }}（基本）、≥ {{ iu.pct(r.profile.targets.cagr_priority) }}（優先）。風險預算：{{ r.profile.risk_budget.status }}（{{ r.profile.risk_budget.source }}）</p>
+        <p class="mt-1">逐年資料可信度：{% for y, s in r.year_status.items() %}<span class="num">{{ y }}</span> {{ iu.badge(s) }} {% endfor %}</p>
+    </section>
+</div>
+{% endif %}
+</div>
+{% if r and r.performance %}
+<script>
+(() => {
+    const s = {{ r.performance.series|tojson }};
+    const sim = {{ (r.scenarios.simulation if r.scenarios and r.scenarios.simulation else none)|tojson }};
+    const css = getComputedStyle(document.documentElement);
+    const layout = (extra) => Object.assign({paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: '#cbd5e1', size: 11},
+        margin: {l: 48, r: 12, t: 10, b: 36}, legend: {orientation: 'h', y: 1.08}}, extra);
+    const cfg = {responsive: true, displayModeBar: false};
+    const traces = [
+        {x: s.date, y: s.nav_base, name: '策略（基礎成本）', line: {color: '#3b82f6', width: 2}},
+        {x: s.date, y: s.nav_stress, name: '策略（兩倍成本）', line: {color: '#93c5fd', width: 1, dash: 'dot'}},
+        {x: s.date, y: s.drawdown, name: '水下回撤', yaxis: 'y2', fill: 'tozeroy', line: {color: '#ef4444', width: 1}}];
+    if (s.benchmark_total_return) traces.splice(2, 0, {x: s.date, y: s.benchmark_total_return, name: '加權報酬指數', line: {color: '#94a3b8', width: 1.5}});
+    Plotly.newPlot('nav-chart', traces, layout({yaxis: {domain: [0.35, 1], title: '淨值'}, yaxis2: {domain: [0, 0.28], tickformat: '.0%', title: '回撤'}}), cfg);
+    window.siRange = (start) => Plotly.relayout('nav-chart', {'xaxis.range': [start || s.date[0], s.date[s.date.length - 1]]});
+    const hist = (id, h, fmt, color, extra) => {
+        if (!document.getElementById(id) || !h || !h.counts.length) return;
+        const mids = h.counts.map((_, i) => (h.edges[i] + h.edges[i + 1]) / 2);
+        Plotly.newPlot(id, [{x: mids, y: h.counts, type: 'bar', marker: {color}, name: '路徑數'}].concat(extra || []), layout({xaxis: {tickformat: fmt}, yaxis: {title: '路徑數'}, bargap: 0.05, showlegend: !!extra}), cfg);
+    };
+    if (sim) {
+        hist('sc-dd', sim.drawdown.histogram, '.0%', '#ef4444');
+        const c = sim.underwater.censored_histogram;
+        const cens = c.counts.length ? [{x: c.counts.map((_, i) => (c.edges[i] + c.edges[i + 1]) / 2), y: c.counts, type: 'bar', marker: {color: '#f59e0b'}, name: 'CENSORED（年底仍在水下）'}] : [];
+        hist('sc-uw', sim.underwater.recovered_histogram, 'd', '#3b82f6', cens);
+        if (sim.cagr.histogram) hist('sc-cagr', sim.cagr.histogram, '.0%', '#10b981');
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}

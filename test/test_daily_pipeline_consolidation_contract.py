@@ -90,11 +90,9 @@ def test_legacy_compatibility_launchers_point_to_official_scheduler():
         '1_update_database.py',
         '2_rundaily.py',
         '3_train_model.py',
-        '6_optimize_params.py',
-    ]
-    remaining_launcher_paths = [
         '4_run_backtest.py',
         '5_push_to_line.py',
+        '6_optimize_params.py',
     ]
     batch_paths = [
         'execution/daily_run.bat',
@@ -105,12 +103,6 @@ def test_legacy_compatibility_launchers_point_to_official_scheduler():
 
     for relative_path in removed_launcher_paths:
         assert not (REPO_ROOT / relative_path).exists()
-
-    for relative_path in remaining_launcher_paths:
-        text = (REPO_ROOT / relative_path).read_text(encoding='utf-8')
-        assert 'compatibility-only' in text.lower()
-        assert 'jobs/scheduler.py' in text
-        assert 'Do not remove' in text
 
     for relative_path in batch_paths:
         text = (REPO_ROOT / relative_path).read_text(encoding='utf-8')
@@ -136,6 +128,8 @@ def test_removed_numeric_wrappers_are_not_active_supported_commands():
         'python 1_update_database.py',
         'python 2_rundaily.py',
         'python 3_train_model.py',
+        'python 4_run_backtest.py',
+        'python 5_push_to_line.py',
         'python 6_optimize_params.py',
     ]
     active_guidance_paths = [

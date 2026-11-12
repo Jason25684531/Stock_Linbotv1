@@ -1,0 +1,269 @@
+{
+ "fields": {
+  "benchmark": {
+   "sources": [],
+   "text": ""
+  },
+  "cost_model": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::FrozenStrategyLoader.load",
+     "sha256": "15826092272ed4425dc33c7c46bcf6f5b36613c610adeebd211851a6453da377"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::run_cost_tracks",
+     "sha256": "98eb0780b81a480353cc5a0a7bcfdd3e866085805a66150149d6d3ac7d3bf5d4"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::SearchPolicy",
+     "sha256": "8b21bad6e4ac500f9c804c611df34e381457be82920b496505a0e1cb3795432c"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::_cost_for",
+     "sha256": "240d7dac69fbaf43db9b18b59d52aba5587c85677f06687ece12b3717860f762"
+    },
+    {
+     "ref": "config/settings.py::Config.FEE_RATE",
+     "sha256": "374f0729c9561d394600e47af4c07c6c2c67d075ce521bd227a8564815abc740"
+    },
+    {
+     "ref": "config/settings.py::Config.TAX_RATE",
+     "sha256": "80959a4712023079115b7b3d9cb9d0e3c04a50845b59c5db623c5c48cbf76cd2"
+    },
+    {
+     "ref": "config/settings.py::Config.SLIPPAGE_RATE",
+     "sha256": "81351103546748494417689fd8ff2bfcf2f06c9392111c1add60b0317cdcaeb0"
+    }
+   ],
+   "text": "凍結規格必須包含 BASE_COST 與 STRESS_COST 兩條成本軌道。研究驗證程式的成本軌道為：GROSS 無成本；BASE_COST 手續費 Config.FEE_RATE（0.001425）、賣出證交稅 Config.TAX_RATE（0.003）、滑價 Config.SLIPPAGE_RATE（0.001）；STRESS_COST 費率相同、滑價加倍。費用為成交金額 × 費率，賣出另加成交金額 × 稅率；成本設定含 minimum_fee 時改用專案 CostModel。Shadow 執行本身不計算成本。"
+  },
+  "data_requirements": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.__init__",
+     "sha256": "cb7125320b81b7fe4fad90b605e9a6ebfa0226215552b09edd0b894412f15d72"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.health",
+     "sha256": "ae89a00e1f6f86b75127e25e7855359fd97502d467013a5f2fbfca585ac08548"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::PIT_ROOT",
+     "sha256": "7c4740a548790fbc2de43e28ee2987e37ba8765ee599f7ff90e50c5535b5a0ad"
+    },
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::load_universe",
+     "sha256": "c555060cef300b7ef71a0182b65d2c408b06692680797525f3cab06359689a99"
+    },
+    {
+     "ref": "core/research/reference/catalog.py::capabilities",
+     "sha256": "1845aa6344c9a329f2e2110c8d8ae5a9e6e075a096629ce4c02ec74b37b1bd41"
+    }
+   ],
+   "text": "需要 data/processed/fundamental_pit_v3 的 fundamental_matrix.parquet（asof_date、ticker、operating_income_yoy、eps_yoy）、fundamental_manifest.json 與 publication_mapping.csv，以及含 asof_date、asset_id、member、is_tradable_t1、execution_date、entry_price 的宇宙檔。目錄登錄的資料需求為 financial_statements 與 publication_dates。"
+  },
+  "entry": {
+   "sources": [
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::build_target_weights",
+     "sha256": "668b54ddc0bb32cbae912e819d9fda2a4e0a7206b1f07c955bcef3cfd01522e6"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::validate_targets",
+     "sha256": "4ea4f02c33aada32af089762443c35147a5ccaeeb4595ff62d0476607ae23a07"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::run_shadow",
+     "sha256": "a2af026f49131d7a70d0f275f30ceccdbf0ae0f7c559841df4cd85b7240262d1"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::registration",
+     "sha256": "f129eaf27a605a4cdd4c6ef641406b6abc02187cb5cab2d99647a5defbe9f4e8"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::simulate_target_weights",
+     "sha256": "5ccb2b14a31c501e47ef1c7d835cab7268e5d75f0db259363e8bd0e5d428d6de"
+    }
+   ],
+   "text": "換股訊號日選出的股票，其目標權重在宇宙提供的 execution_date 執行，execution_date 必須嚴格晚於訊號日，否則拋出錯誤。Shadow 執行不送出任何券商委託（BROKER_ORDER_SUBMISSION 為 DISABLED），只寫出選股與目標權重檔。研究重播在執行日以該日價格加上滑價買進；提供日線時套用共用的成交規則與 5% 參與上限，缺價則延後。"
+  },
+  "exit": {
+   "sources": [
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::build_target_weights",
+     "sha256": "668b54ddc0bb32cbae912e819d9fda2a4e0a7206b1f07c955bcef3cfd01522e6"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::simulate_target_weights",
+     "sha256": "5ccb2b14a31c501e47ef1c7d835cab7268e5d75f0db259363e8bd0e5d428d6de"
+    }
+   ],
+   "text": "沒有停損、停利或持有天數規則。上一次換股持有、但這次未入選前 5 名的股票，目標權重設為 0。研究重播在每個執行日先以當日價格賣出所有持股，再依新的目標權重買進；缺價或被成交規則拒絕的賣單保留持股，留待下一個執行日。"
+  },
+  "factors": {
+   "sources": [
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::load_scores",
+     "sha256": "55c745395d6ceb57d1558672be38b36b67408cfb05d6b8dd79fb1e9067f0f1a1"
+    },
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::composite_scores",
+     "sha256": "d19bb69de5caf689b5951bb2e2780760304d6179cca77d0eed6c937ce5b23da5"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.__init__",
+     "sha256": "cb7125320b81b7fe4fad90b605e9a6ebfa0226215552b09edd0b894412f15d72"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::ACCEPTED_FACTOR_IDS",
+     "sha256": "9b0cd0eb381672166cc24683ec7b2942a0b07484392be6282713a9231f250e23"
+    }
+   ],
+   "text": "G2_OPERATING_INCOME_YOY 取 fundamental_matrix 的 operating_income_yoy，G3_EPS_YOY 取 eps_yoy。每個因子在同一 asof_date 的宇宙列中轉成百分位排名（平均名次，無限值視為缺值）。綜合分數 = 兩個排名各乘 0.5 後相加，再除以有值因子的權重和；只有一個因子有值時，分數即為該因子的排名。"
+  },
+  "holdings": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::TOP_N",
+     "sha256": "3a2e3eba958b6f4a49c6265057d181f1ff4c79eb3349ffeced6f5d29bddc3037"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::build_target_weights",
+     "sha256": "668b54ddc0bb32cbae912e819d9fda2a4e0a7206b1f07c955bcef3cfd01522e6"
+    }
+   ],
+   "text": "每次換股持有分數最高的 5 檔（TOP_N）。"
+  },
+  "hypothesis": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.__init__",
+     "sha256": "cb7125320b81b7fe4fad90b605e9a6ebfa0226215552b09edd0b894412f15d72"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::FrozenStrategyLoader.load",
+     "sha256": "15826092272ed4425dc33c7c46bcf6f5b36613c610adeebd211851a6453da377"
+    },
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::load_scores",
+     "sha256": "55c745395d6ceb57d1558672be38b36b67408cfb05d6b8dd79fb1e9067f0f1a1"
+    },
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::composite_scores",
+     "sha256": "d19bb69de5caf689b5951bb2e2780760304d6179cca77d0eed6c937ce5b23da5"
+    }
+   ],
+   "text": "以營業利益年增率（G2）與 EPS 年增率（G3）的橫截面百分位排名等權平均為分數，買進分數最高的 5 檔，並依分數加權。兩個因子的方向都設定為 1（數值越高越好），其經濟想法是：近期獲利成長較強的公司，股價在之後一段期間傾向上漲。"
+  },
+  "pit_dependencies": {
+   "sources": [
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::load_scores",
+     "sha256": "55c745395d6ceb57d1558672be38b36b67408cfb05d6b8dd79fb1e9067f0f1a1"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::DATASET_VERSION",
+     "sha256": "a00ebbf9da41eda1495b712d4dbbb37653eaf33bf2bad08d0b5f0244665ff4b9"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.health",
+     "sha256": "ae89a00e1f6f86b75127e25e7855359fd97502d467013a5f2fbfca585ac08548"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::validate_targets",
+     "sha256": "4ea4f02c33aada32af089762443c35147a5ccaeeb4595ff62d0476607ae23a07"
+    }
+   ],
+   "text": "因子值只取 asof_date 等於訊號日的 PIT 矩陣列；資料集版本必須是 fundamental-pit-v3，manifest 的標的數與雜湊必須相符，且 publication_mapping.csv 必須存在。執行日必須晚於訊號日。"
+  },
+  "rebalance": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::REBALANCE_DAYS",
+     "sha256": "8194f233c4fa1334f3d66ce267c3e08646591ce386a8fb7cd2161b0c727505ac"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::build_target_weights",
+     "sha256": "668b54ddc0bb32cbae912e819d9fda2a4e0a7206b1f07c955bcef3cfd01522e6"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::FrozenStrategyLoader.load",
+     "sha256": "15826092272ed4425dc33c7c46bcf6f5b36613c610adeebd211851a6453da377"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.selection",
+     "sha256": "81f74117d84bf9b7940d884d1bf5ce7d245a3bf55ba58a20dc44a3ae62b94b9e"
+    }
+   ],
+   "text": "每 60 個合格訊號日換股一次（REBALANCE_DAYS，從第一個合格日起每隔 60 個取一個）；非換股日不調整目標（凍結規格要求 non_rebalance_policy 為 NO_RETARGET），Shadow 在非換股日回報 NO_REBALANCE_ACTION。"
+  },
+  "risk_controls": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.health",
+     "sha256": "ae89a00e1f6f86b75127e25e7855359fd97502d467013a5f2fbfca585ac08548"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::MIN_FACTOR_COVERAGE",
+     "sha256": "db3830f1b0af508e997293924fc3a89cfec7191bb4336da03115f2891b5c7d5b"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::validate_selection",
+     "sha256": "8408bc804edae882fef6a9781d2c2e3deb190dafaf26a478721131d27e8cb299"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::run_shadow",
+     "sha256": "a2af026f49131d7a70d0f275f30ceccdbf0ae0f7c559841df4cd85b7240262d1"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::flags",
+     "sha256": "fb7b3495e51db58f091ee24f8a677ae80855dbe214001a49823a04829e4c3139"
+    }
+   ],
+   "text": "沒有個股停損。資料健康檢查：兩個因子同時有值的合格股比例低於 0.90（MIN_FACTOR_COVERAGE）為 LOW_FACTOR_COVERAGE；訊號日晚於因子矩陣最新日期為 STALE_DATA；宇宙或因子為空為 INCOMPLETE_DATA；資料集版本、標的雜湊或 publication_mapping.csv 不符為 PIT_CONTRACT_MISMATCH。任一原因成立時不產生選股、狀態為 BLOCKED 且 kill switch 為 ACTIVE。選股另檢查重複標的、無效分數、名次不一致與無效權重。功能旗標 FUNDAMENTAL_STRATEGY_ENABLED 預設關閉，SHADOW_ONLY 預設開啟，關閉 SHADOW_ONLY 時回傳 LIVE_MODE_FORBIDDEN。"
+  },
+  "selection": {
+   "sources": [
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.__init__",
+     "sha256": "cb7125320b81b7fe4fad90b605e9a6ebfa0226215552b09edd0b894412f15d72"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::CanonicalSelectionAdapter.selection",
+     "sha256": "81f74117d84bf9b7940d884d1bf5ce7d245a3bf55ba58a20dc44a3ae62b94b9e"
+    },
+    {
+     "ref": "jobs/run_fundamental_strategy_validation.py::load_universe",
+     "sha256": "c555060cef300b7ef71a0182b65d2c408b06692680797525f3cab06359689a99"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::rank_cross_section",
+     "sha256": "b7f0bf0875939a8e4863badd3695b9f287ed7305ca029144dffcb0c0433bda4d"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::TOP_N",
+     "sha256": "3a2e3eba958b6f4a49c6265057d181f1ff4c79eb3349ffeced6f5d29bddc3037"
+    }
+   ],
+   "text": "宇宙來自 runtime_universe.parquet；檔案不存在時讀 d3 研究資料集的 momentum_20d 分割檔，只保留 asof_date ≥ 2023-01-03 且 execution_date 晚於 asof_date 的列。合格條件為 member 為真、is_tradable_t1 為真且分數不缺值。合格股依分數由高到低、asset_id 由小到大排序，取前 5 名（TOP_N）。"
+  },
+  "weighting": {
+   "sources": [
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::build_target_weights",
+     "sha256": "668b54ddc0bb32cbae912e819d9fda2a4e0a7206b1f07c955bcef3cfd01522e6"
+    },
+    {
+     "ref": "core/runtime/fundamental_shadow.py::validate_selection",
+     "sha256": "8408bc804edae882fef6a9781d2c2e3deb190dafaf26a478721131d27e8cb299"
+    },
+    {
+     "ref": "core/research/fundamental_strategy_validation.py::simulate_target_weights",
+     "sha256": "5ccb2b14a31c501e47ef1c7d835cab7268e5d75f0db259363e8bd0e5d428d6de"
+    }
+   ],
+   "text": "權重為分數加權（SCORE_WEIGHTED）：先把分數下限截在 0，權重 = 分數 ÷ 入選股分數總和；總和為 0 時改為等權。換股時權重必須有限、非負且總和為 1（rtol 1e-9、atol 1e-12）。程式中沒有單檔權重上限。研究重播的買進金額 = 執行前權益 × 目標權重。"
+  }
+ },
+ "strategy_id": "fundamental_g2g3_top5_reb60_score_weighted_v1"
+}

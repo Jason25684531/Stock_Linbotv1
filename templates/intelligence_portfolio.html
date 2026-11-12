@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}策略組合分析 - Stock Linbot{% endblock %}
+{% block page_heading %}策略組合分析{% endblock %}
+{% block extra_head %}{% if folio and folio.status == 'OK' %}<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>{% endif %}{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="intelligence-portfolio">
+{{ iu.labels_banner('結果僅限研究用途；示範組合不是新的策略，也沒有搜尋最佳權重。') }}
+{% if not folio %}
+    <section class="quant-card p-4" data-testid="no-portfolio">尚無組合分析結果。管理員可在 <a class="text-blue-300" href="{{ url_for('intelligence_index') }}">分析工作</a> 啟動分析。</section>
+{% else %}
+    <section class="quant-card p-4 text-xs" data-testid="portfolio-meta">
+        <p>比較條件：同一 Snapshot（<span class="num">{{ folio.snapshot_id }}</span>）、帳務 POSITION_LEDGER_CA_V1、Run 身份與目前程式一致、共同 VERIFIED 交易日至少 252 日。</p>
+        <p class="mt-1">納入：{{ folio.eligible|join('、') or '無' }}；共同期間 <span class="num">{{ (folio.common_period or [])|join('～') or '—' }}</span>（{{ folio.common_sessions }} 日）；狀態 <strong>{{ folio.status }}</strong></p>
+        <details class="mt-1"><summary class="cursor-pointer">未納入的策略與原因（{{ folio.excluded|length }}）</summary><ul class="mt-1 list-disc pl-5">{% for sid, why in folio.excluded.items() %}<li><span class="num">{{ sid }}</span>：{{ why }}</li>{% endfor %}</ul></details>
+    </section>
+    {% if folio.status == 'OK' %}
+    {% set ids = folio.eligible %}
+    <section class="quant-card p-4" data-testid="correlation"><h2 class="text-sm font-semibold text-white">日報酬相關係數</h2><div id="pf-corr" class="h-[420px]"></div>
+        <p class="text-xs text-muted">越接近 1 越會一起漲跌，分散效果越小。</p></section>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="joint-loss"><h2 class="text-sm font-semibold text-white">同時虧損</h2>
+        <p class="text-muted">「同時重大損失」＝兩策略同一天都出現各自最差 5% 且為虧損的日報酬；若彼此獨立約為 {{ iu.pct(folio.joint_tail_independent_reference) }}。「同時回撤」＝兩者同時低於各自前高的日數比例。</p>
+        <table class="mt-2 w-full min-w-[640px]"><thead class="text-left text-muted"><tr><th class="p-1">策略 A</th><th class="p-1">策略 B</th><th class="p-1">相關係數</th><th class="p-1">回撤相關</th><th class="p-1">同時回撤</th><th class="p-1">同時重大損失</th><th class="p-1">持股重疊</th></tr></thead><tbody>
+        {% for a in ids %}{% for b in ids %}{% if ids.index(a) < ids.index(b) %}
+            <tr class="border-t border-line"><td class="p-1">{{ a }}</td><td class="p-1">{{ b }}</td><td class="p-1">{{ iu.num(folio.correlation[a][b]) }}</td><td class="p-1">{{ iu.num(folio.drawdown_correlation[a][b]) }}</td>
+            <td class="p-1">{{ iu.pct(folio.joint_drawdown_share[a][b]) }}</td><td class="p-1">{{ iu.pct(folio.joint_tail_loss[a][b]) }}</td>
+            <td class="p-1">{% if folio.holding_overlap[a][b] is none %}<span class="text-muted">不可驗證</span>{% else %}{{ iu.pct(folio.holding_overlap[a][b]) }}{% endif %}</td></tr>
+        {% endif %}{% endfor %}{% endfor %}</tbody></table>
+        <p class="mt-2 text-muted">持股重疊只對持倉能逐日對帳的策略計算；不可驗證：{% for sid, why in folio.holding_overlap_reason.items() if why %}{{ sid }}（{{ why }}）{% if not loop.last %}、{% endif %}{% else %}無{% endfor %}；原因明細見各策略頁的交易可行性。產業集中度：{{ folio.industry_concentration.reason }}。</p>
+    </section>
+    {% set demo = folio.equal_weight_demo %}
+    <section class="quant-card p-4 text-xs" data-testid="demo"><h2 class="text-sm font-semibold text-white">等權示範組合（{{ demo.label }}）</h2>
+        <p class="mt-1">成員 {{ demo.members|length }} 個、{{ demo.rebalance }}。CAGR {{ iu.pct(demo.cagr) }}、最大回撤 {{ iu.pct(demo.max_drawdown) }}（成員平均 {{ iu.pct(demo.average_member_max_drawdown) }}）、波動 {{ iu.pct(demo.volatility) }}（成員平均 {{ iu.pct(demo.average_member_volatility) }}）、分散比 {{ iu.num(demo.diversification_ratio) }}。</p>
+        <p class="mt-1 text-muted">分散比＝成員平均波動／組合波動；大於 1 表示合在一起的波動小於個別平均。這不是可交易的策略，也未經認證。</p>
+        <div id="pf-demo" class="mt-2 h-72"></div>
+        <p class="mt-1">對大盤 beta：{% for sid, b in folio.beta.items() %}<span class="num">{{ sid }}</span> {{ iu.num(b) }}{% if not loop.last %}・{% endif %}{% endfor %}</p>
+    </section>
+    <script>
+    (() => {
+        const ids = {{ ids|tojson }}, corr = {{ folio.correlation|tojson }}, demo = {{ demo.curve|tojson }};
+        const z = ids.map(a => ids.map(b => corr[a][b]));
+        const base = {paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: '#cbd5e1', size: 10}, margin: {l: 150, r: 10, t: 10, b: 120}};
+        Plotly.newPlot('pf-corr', [{z, x: ids, y: ids, type: 'heatmap', zmin: -1, zmax: 1, colorscale: 'RdBu', reversescale: true, text: z.map(r => r.map(v => v === null ? '' : v.toFixed(2))), texttemplate: '%{text}'}], base, {responsive: true, displayModeBar: false});
+        Plotly.newPlot('pf-demo', [{x: demo.map(p => p[0]), y: demo.map(p => p[1]), line: {color: '#10b981'}, name: '等權示範'}], Object.assign({}, base, {margin: {l: 48, r: 10, t: 10, b: 36}}), {responsive: true, displayModeBar: false});
+    })();
+    </script>
+    {% else %}
+    <section class="quant-card p-4 text-xs text-amber-200" data-testid="portfolio-refused">不做相關性比較：{{ folio.status }}{% if folio.minimum %}（共同 VERIFIED 交易日 {{ folio.common_sessions }}，需要 {{ folio.minimum }}）{% endif %}。</section>
+    {% endif %}
+{% endif %}
+</div>
+{% endblock %}

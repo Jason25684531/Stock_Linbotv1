@@ -1,0 +1,42 @@
+{% set status_text = {
+    'GOOD': ('良好', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'CAUTION': ('注意', 'text-amber-200 border-amber-500/50 bg-amber-500/10'),
+    'RISK': ('風險', 'text-red-300 border-red-500/50 bg-red-500/10'), 'INSUFFICIENT_DATA': ('資料不足', 'text-slate-300 border-slate-500/50 bg-slate-500/10'),
+    'NOT_APPLICABLE': ('僅供參考', 'text-slate-300 border-slate-600/50 bg-slate-700/20'), 'PASS': ('通過', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'),
+    'FAIL': ('未通過', 'text-red-300 border-red-500/50 bg-red-500/10'), 'ABOVE': ('高於大盤', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'),
+    'BELOW': ('低於大盤', 'text-red-300 border-red-500/50 bg-red-500/10'), 'RETURN_TARGET_PRIORITY': ('達 10% 優先目標', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'),
+    'RETURN_TARGET_BASIC': ('達 5% 基本目標', 'text-amber-200 border-amber-500/50 bg-amber-500/10'), 'RETURN_TARGET_NOT_MET': ('未達 5% 目標', 'text-red-300 border-red-500/50 bg-red-500/10'),
+    'INSUFFICIENT_VERIFIED_HISTORY': ('可信歷史不足', 'text-slate-300 border-slate-500/50 bg-slate-500/10'), 'ADEQUATE': ('樣本足夠', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'),
+    'INSUFFICIENT': ('樣本不足', 'text-slate-300 border-slate-500/50 bg-slate-500/10'), 'RESEARCH_THRESHOLD_UNSET': ('未設門檻', 'text-slate-300 border-slate-600/50 bg-slate-700/20'),
+    'DEFENSIVE_VALUE': ('具防禦價值', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'NO_DEFENSIVE_VALUE': ('無防禦價值', 'text-red-300 border-red-500/50 bg-red-500/10'),
+    'VERIFIED_TRACK': ('有 VERIFIED 期間', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'PROVISIONAL_ONLY': ('僅 PROVISIONAL', 'text-amber-200 border-amber-500/50 bg-amber-500/10'),
+    'ANALYZED': ('已分析', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'PROVISIONAL_IDENTITY_STALE': ('身份過期・暫定', 'text-amber-200 border-amber-500/50 bg-amber-500/10'),
+    'DATA_BLOCKED': ('資料阻擋', 'text-red-300 border-red-500/50 bg-red-500/10'), 'GOVERNED_ONLY': ('治理流程管理', 'text-slate-300 border-slate-500/50 bg-slate-500/10'),
+    'TRACED': ('已追溯', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'STALE_DEFINITION': ('程式已變更', 'text-amber-200 border-amber-500/50 bg-amber-500/10'),
+    'UNVERIFIED_DEFINITION': ('無程式依據', 'text-slate-300 border-slate-500/50 bg-slate-500/10'), 'RECONCILED': ('已對帳', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'),
+    'POSITIONS_UNVERIFIABLE': ('持倉不可驗證', 'text-amber-200 border-amber-500/50 bg-amber-500/10'), 'INSUFFICIENT_SAMPLE': ('樣本不足', 'text-slate-300 border-slate-500/50 bg-slate-500/10'), 'SUFFICIENT': ('樣本足夠', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'),
+    'CURRENT': ('身份一致', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'IDENTITY_STALE': ('身份過期', 'text-amber-200 border-amber-500/50 bg-amber-500/10'),
+    'VERIFIED': ('VERIFIED', 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'), 'PARTIAL': ('PARTIAL', 'text-amber-200 border-amber-500/50 bg-amber-500/10'),
+    'PROVISIONAL': ('PROVISIONAL', 'text-amber-200 border-amber-500/50 bg-amber-500/10'), 'ACCESS_BLOCKED': ('ACCESS_BLOCKED', 'text-red-300 border-red-500/50 bg-red-500/10')
+} %}
+{% macro badge(code) -%}
+{%- set e = status_text.get(code, (code or '無', 'text-slate-300 border-slate-600/50 bg-slate-700/20')) -%}
+<span class="inline-block whitespace-nowrap rounded border px-1.5 py-0.5 text-xs {{ e[1] }}" title="{{ code }}">{{ e[0] }}</span>
+{%- endmacro %}
+{% macro pct(v, signed=False) -%}{% if v is none %}<span class="text-muted">—</span>{% else %}<span class="num">{{ ('%+.1f%%' if signed else '%.1f%%')|format(v * 100) }}</span>{% endif %}{%- endmacro %}
+{% macro num(v, digits=2) -%}{% if v is none %}<span class="text-muted">—</span>{% else %}<span class="num">{{ ('%.' ~ digits ~ 'f')|format(v) }}</span>{% endif %}{%- endmacro %}
+{% macro money(v) -%}{% if v is none %}<span class="text-muted">—</span>{% else %}<span class="num">{{ '{:,.0f}'.format(v) }}</span>{% endif %}{%- endmacro %}
+{% macro mv(m, kind='pct') -%}
+{%- if m is mapping -%}{% set v = m.value %}{% else %}{% set v = m %}{% endif -%}
+{%- if v is none -%}<span class="text-muted" title="{{ m.reason if m is mapping else '' }}">— <span class="text-xs">{{ m.reason if m is mapping and m.reason else '' }}</span></span>
+{%- elif kind == 'pct' -%}{{ pct(v) }}{%- elif kind == 'signed' -%}{{ pct(v, True) }}{%- elif kind == 'int' -%}<span class="num">{{ v|int }}</span>{%- elif kind == 'money' -%}{{ money(v) }}{%- else -%}{{ num(v) }}{%- endif -%}
+{%- endmacro %}
+{% set health_kind = {'CAGR（成本後）':'pct','累積淨報酬':'pct','相對 Benchmark 年化超額':'signed','最差年度':'pct','最大回撤':'pct','最長回本時間（交易日）':'int',
+    '目前未回本交易日':'int','平均回撤':'pct','Sharpe':'num','Sortino':'num','Calmar':'num','兩倍成本 CAGR':'pct','成本拖累（年化）':'pct',
+    '兩倍成本正報酬年份比例':'pct','勝率':'pct','Profit Factor':'num','盈虧比':'num','滾動 12 個月正報酬比例':'pct','進場參與率 P90':'pct',
+    '持有期間無成交日':'int','進場受 5% 上限限制的比例':'pct','持有期間一價到底日':'int','平均單檔最高權重':'pct','研究用資金容量':'money'} %}
+{% macro labels_banner(extra='') -%}
+<section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-100">
+    <p class="font-semibold">REFERENCE_ONLY · RESEARCH_ONLY · NOT_CERTIFIED · NOT_A_TRIAL · 已看過的歷史結果，非樣本外證據</p>
+    <p class="mt-1">所有數字來自已存檔的歷史回測 Run 與分析結果；不是投資建議，也不是未來預測。{{ extra }}</p>
+</section>
+{%- endmacro %}

@@ -1,4 +1,5 @@
 import ast
+from collections import Counter
 from pathlib import Path
 
 
@@ -51,7 +52,7 @@ DYNAMIC_IMPORTS = {
 
 
 def test_layer_import_ratchet():
-    edges, dynamic = set(), set()
+    edges, dynamic = set(), Counter()
     for folder in ('core', 'services', 'app'):
         for path in (ROOT / folder).rglob('*.py'):
             rel = path.relative_to(ROOT).as_posix()
@@ -68,8 +69,24 @@ def test_layer_import_ratchet():
                     or isinstance(node.func, ast.Attribute) and node.func.attr == 'import_module'
                 ):
                     call = ast.unparse(node)
-                    dynamic.add((rel, call))
+                    dynamic[(rel, call)] += 1
                     if (rel, call) == ('core/research/condition_pool.py', "importlib.import_module('scripts.' + 'offic' + 'ial_data_recovery')"):
                         edges.add((rel, 'scripts.official_data_recovery'))
     assert edges == ALLOWED, f'新增倒置依賴：{sorted(edges - ALLOWED)}；請移除過期項目：{sorted(ALLOWED - edges)}'
-    assert dynamic == DYNAMIC_IMPORTS, f'新增動態匯入：{sorted(dynamic - DYNAMIC_IMPORTS)}；請移除過期項目：{sorted(DYNAMIC_IMPORTS - dynamic)}'
+    expected = Counter({call: 1 for call in DYNAMIC_IMPORTS})
+    assert dynamic == expected, f'新增動態匯入：{dynamic - expected}；請移除過期項目：{expected - dynamic}'
+
+
+def test_duplicate_dynamic_import_is_rejected(monkeypatch):
+    original_parse = ast.parse
+
+    def duplicate(source, filename, *args, **kwargs):
+        tree = original_parse(source, filename, *args, **kwargs)
+        if Path(filename).as_posix().endswith('core/research/condition_pool.py'):
+            tree.body.append(original_parse("importlib.import_module('scripts.' + 'offic' + 'ial_data_recovery')").body[0])
+        return tree
+
+    monkeypatch.setattr(ast, 'parse', duplicate)
+    import pytest
+    with pytest.raises(AssertionError, match='新增動態匯入'):
+        test_layer_import_ratchet()

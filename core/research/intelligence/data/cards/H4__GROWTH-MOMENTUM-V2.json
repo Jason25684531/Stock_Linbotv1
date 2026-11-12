@@ -1,0 +1,216 @@
+{
+ "fields": {
+  "benchmark": {
+   "sources": [],
+   "text": ""
+  },
+  "cost_model": {
+   "sources": [],
+   "text": ""
+  },
+  "data_requirements": {
+   "sources": [
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    },
+    {
+     "ref": "core/research/h4_signal.py::dev_context",
+     "sha256": "0c47908125307c11e1610730aa8e282e4cd3b023deba4f8ba758fd03348e3b96"
+    },
+    {
+     "ref": "scripts/prepare_h4_signals.py::FUNDAMENTAL",
+     "sha256": "ad36074e2f4690b8fa35d6d5d8f917112e9b32c6ec65fd3409230393356e20ee"
+    },
+    {
+     "ref": "scripts/prepare_h4_signals.py::FACTOR_RESULT",
+     "sha256": "c300bf53fc7fffe8da162bce237d7243613162d824cf04367ebf3c53b08efabd"
+    },
+    {
+     "ref": "core/research/reference/catalog.py::capabilities",
+     "sha256": "1845aa6344c9a329f2e2110c8d8ae5a9e6e075a096629ce4c02ec74b37b1bd41"
+    }
+   ],
+   "text": "規格需要 operating_income_yoy、eps_yoy 與 near_high_252d。開發輸入為 prepared_v6 的 bars.json、universe.json、actions.json，fundamental_pit_v3_2_verified 的 fundamental_matrix.parquet 與 fundamental_records.parquet，以及 G2/G3 因子結果 factor_result.json。"
+  },
+  "entry": {
+   "sources": [
+    {
+     "ref": "core/research/strategy_signal.py::standardize",
+     "sha256": "bca026c66b3d29b80d91ba305aa1ce571f97fbb4988041f038473edfc858c5bf"
+    },
+    {
+     "ref": "core/research/strategy_signal.py::rebalance",
+     "sha256": "eb8aa33c01f0e038904b36f60954ab471182f53a35114e3061c256e61551ba62"
+    },
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    }
+   ],
+   "text": "入選前 10 名的股票在訊號日得到目標權重；相對上一期目標由 0 變正者標為 BUY。此程式只產生模擬的權重變化，不建立任何委託，發布為 DISABLED 且僅供研究；成交時點不在此程式中定義。"
+  },
+  "exit": {
+   "sources": [
+    {
+     "ref": "core/research/strategy_signal.py::rebalance",
+     "sha256": "eb8aa33c01f0e038904b36f60954ab471182f53a35114e3061c256e61551ba62"
+    }
+   ],
+   "text": "沒有停損、停利或持有天數規則。上一期持有、本期目標權重為 0 的股票標為 SELL。"
+  },
+  "factors": {
+   "sources": [
+    {
+     "ref": "scripts/prepare_h4_signals.py::score_components",
+     "sha256": "0020b888760a6fb6fee50f6295bb7e37b395acd2b2fe1e1e18995e30cfaa2079"
+    },
+    {
+     "ref": "scripts/prepare_h4_signals.py::_winsor_rank",
+     "sha256": "59f6cfa8918c8869fd4644986d4327ee69a52f0c6054c8fcbddc983be655162c"
+    },
+    {
+     "ref": "scripts/prepare_h4_signals.py::GROWTH",
+     "sha256": "e1f1f7b24ac7377a96ffce2d841871de68927cc7d2d9de6e695b505660e62394"
+    },
+    {
+     "ref": "core/research/h4_signal.py::dev_context",
+     "sha256": "0c47908125307c11e1610730aa8e282e4cd3b023deba4f8ba758fd03348e3b96"
+    },
+    {
+     "ref": "core/research/h4_signal.py::_momentum",
+     "sha256": "1e5af5bb08b28ea4052c308dd0c57b8e7f06a073542fa4155b80d31b9d9f4800"
+    },
+    {
+     "ref": "core/research/d5_research_variant.py::raw_factor_panels",
+     "sha256": "e457ab6dce0cee0a5cd3247ca37e9dd335d9279f6695ab7ba485fe6d36d0c1fb"
+    },
+    {
+     "ref": "core/research/factors/definitions.py::_near_high_252d",
+     "sha256": "098d14b418f838bcbd817a3e9ff3ad0ea18c88d02015cc23fa0613da33aa00df"
+    },
+    {
+     "ref": "core/research/h4_signal.py::H4Executor.execute",
+     "sha256": "bf80bf20c0438920a3bf128a338115e75c2bdf52278040eea0bf2e711b7727ce"
+    }
+   ],
+   "text": "成長分數：對 factor_result 中判定為 READY_FOR_STRATEGY_TEST 的指標（G2 對應 operating_income_yoy、G3 對應 eps_yoy），在有值的成員中先截在第 1 與第 99 百分位，再轉為百分位排名（平均名次），成長分數為各指標排名的平均。動能分數：near_high_252d = 收盤 ÷ 252 日最高收盤 − 1，以未還原的原始日線計算，在成員中轉為百分位排名。最終分數 = 0.5 × 成長分數 + 0.5 × 動能分數，只對兩者都有值的股票計算。"
+  },
+  "holdings": {
+   "sources": [
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    },
+    {
+     "ref": "core/research/strategy_signal.py::standardize",
+     "sha256": "bca026c66b3d29b80d91ba305aa1ce571f97fbb4988041f038473edfc858c5bf"
+    }
+   ],
+   "text": "每次持有前 10 名（top_n = 10）。"
+  },
+  "hypothesis": {
+   "sources": [
+    {
+     "ref": "core/research/h4_signal.py::H4Executor.execute",
+     "sha256": "bf80bf20c0438920a3bf128a338115e75c2bdf52278040eea0bf2e711b7727ce"
+    },
+    {
+     "ref": "scripts/prepare_h4_signals.py::score_components",
+     "sha256": "0020b888760a6fb6fee50f6295bb7e37b395acd2b2fe1e1e18995e30cfaa2079"
+    },
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    }
+   ],
+   "text": "同時看獲利成長（營業利益年增率、EPS 年增率的排名）與價格動能（接近 252 日高點的程度排名），各占一半，買進綜合分數最高的 10 檔。其經濟想法是：獲利正在成長且股價已接近一年高點的公司，成長與動能會延續而推升股價。"
+  },
+  "pit_dependencies": {
+   "sources": [
+    {
+     "ref": "core/research/h4_signal.py::dev_context",
+     "sha256": "0c47908125307c11e1610730aa8e282e4cd3b023deba4f8ba758fd03348e3b96"
+    },
+    {
+     "ref": "core/research/h4_signal.py::_momentum",
+     "sha256": "1e5af5bb08b28ea4052c308dd0c57b8e7f06a073542fa4155b80d31b9d9f4800"
+    },
+    {
+     "ref": "core/research/strategy_signal.py::check_window",
+     "sha256": "66220db9ceb45cfe525de446925ceee2d53e1d34bc6cca43a9397fa3f0a27198"
+    }
+   ],
+   "text": "成長值只取 fundamental_matrix 中 asof_date 等於訊號日的列，且矩陣最大 asof_date 不得晚於 2025-12-31；動能取訊號日當天的面板值；公司事件排除以訊號日 15:00（+08:00）為已知時點；並記錄訊號日以前最新的財報可用日。"
+  },
+  "rebalance": {
+   "sources": [
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    },
+    {
+     "ref": "core/research/h4_signal.py::H4Executor.execute",
+     "sha256": "bf80bf20c0438920a3bf128a338115e75c2bdf52278040eea0bf2e711b7727ce"
+    }
+   ],
+   "text": "策略規格宣告每 60 天換股（rebalance_days = 60）；h4_signal.py 每次只計算一個訊號日的選股，換股日程不在此檔案中執行。"
+  },
+  "risk_controls": {
+   "sources": [
+    {
+     "ref": "core/research/strategy_signal.py::check_window",
+     "sha256": "66220db9ceb45cfe525de446925ceee2d53e1d34bc6cca43a9397fa3f0a27198"
+    },
+    {
+     "ref": "core/research/h4_signal.py::dev_context",
+     "sha256": "0c47908125307c11e1610730aa8e282e4cd3b023deba4f8ba758fd03348e3b96"
+    },
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    }
+   ],
+   "text": "沒有個股停損。訊號日或輸入資料晚於 2025-12-31 時拒絕執行（OOS_OR_INPUT_WINDOW_BLOCKED），早於 2023-01-03 時拒絕（BEFORE_DEVELOPMENT_WINDOW）；輸入檔雜湊與 manifest 不符時拒絕（INPUT_CHECKPOINT_UNVERIFIED）；因子准入不是 PASS 或沒有 READY 指標時拒絕（H4_RUN_CONDITION_NOT_MET）。規格標示僅供研究、不發布。"
+  },
+  "selection": {
+   "sources": [
+    {
+     "ref": "core/research/h4_signal.py::H4Executor.execute",
+     "sha256": "bf80bf20c0438920a3bf128a338115e75c2bdf52278040eea0bf2e711b7727ce"
+    },
+    {
+     "ref": "core/research/h4_signal.py::dev_context",
+     "sha256": "0c47908125307c11e1610730aa8e282e4cd3b023deba4f8ba758fd03348e3b96"
+    },
+    {
+     "ref": "core/research/strategy_signal.py::standardize",
+     "sha256": "bca026c66b3d29b80d91ba305aa1ce571f97fbb4988041f038473edfc858c5bf"
+    },
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    }
+   ],
+   "text": "只考慮訊號日宇宙中 member 為真的股票；沒有成長分數標為 NO_GROWTH，沒有動能分數標為 NO_MOMENTUM，訊號日 15:00 前已知的未解決公司事件標為 EVENT_EXCLUDED。其餘 ELIGIBLE 且分數不缺值的股票依最終分數由高到低、代碼由小到大排名，取前 10 名（top_n）。"
+  },
+  "weighting": {
+   "sources": [
+    {
+     "ref": "core/research/strategy_signal.py::standardize",
+     "sha256": "bca026c66b3d29b80d91ba305aa1ce571f97fbb4988041f038473edfc858c5bf"
+    },
+    {
+     "ref": "core/research/strategy_signal.py::target_portfolio",
+     "sha256": "06a14eb49e0157873d3c40cb84a20ae7e1ade8999f74832d7d02be657941368f"
+    },
+    {
+     "ref": "core/research/h4_signal.py::SPEC",
+     "sha256": "8d580b146ebd2cc8f48ea2a78f2176b3c9d7a994831f55edc4f1ac3854de5595"
+    }
+   ],
+   "text": "入選股等權，各為 1 ÷ 入選檔數；規格宣告單檔上限 0.1。目標組合檢查權重總和為 1，給定上限時檢查單檔不超過上限。"
+  }
+ },
+ "strategy_id": "H4:GROWTH-MOMENTUM-V2"
+}

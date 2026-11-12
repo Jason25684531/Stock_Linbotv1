@@ -1,0 +1,429 @@
+{
+ "version": 2,
+ "created": "2026-11-11",
+ "labels": [
+  "REFERENCE_ONLY",
+  "RESEARCH_ONLY",
+  "NOT_CERTIFIED",
+  "NOT_A_TRIAL"
+ ],
+ "targets": {
+  "cagr_basic": 0.05,
+  "cagr_priority": 0.1,
+  "source": "OWNER_TARGET 2026-11-11: net CAGR over the complete comparable VERIFIED period after costs"
+ },
+ "risk_budget": {
+  "status": "RESEARCH_THRESHOLD_UNSET",
+  "source": "OWNER_DECISION OD-1 2026-11-11: no fixed maximum drawdown threshold; show the value and the benchmark"
+ },
+ "regime_note": "suitable and unsuitable regimes are the type hypothesis; the regime table shows what actually happened",
+ "sample_rules": {
+  "scenarios": {
+   "id": "SR1",
+   "version": 1,
+   "complete_trusted_years": 3,
+   "definition": "at least 3 consecutive years whose trust is VERIFIED and whose NAV dates equal the official calendar sessions of that year exactly"
+  },
+  "min_closed_trades_for_trade_statistics": 30,
+  "min_common_sessions_portfolio": 252,
+  "note": "methodology constants fixed before any new-run result; not performance thresholds. 30 closed trades: the common minimum for a normal approximation of a mean; it only decides whether trade statistics are called ADEQUATE, never a performance verdict"
+ },
+ "auxiliary": [
+  "positive_year_share_stress: the former 50 percent rule, shown as an observation only",
+  "participation: the engine enforces the 5 percent fill cap, so it is reported (P90, cap-binding share) and never judged"
+ ],
+ "types": {
+  "trend_momentum": {
+   "label": "趨勢／動能",
+   "questions": [
+    "能否抓住大波段？",
+    "假突破造成多少損失？",
+    "是否靠少數關鍵交易獲利？",
+    "成本增加後是否仍有正期望值？"
+   ],
+   "primary_metrics": [
+    "payoff_ratio",
+    "profit_factor",
+    "expectancy",
+    "mfe_median",
+    "mae_median",
+    "cagr_stress",
+    "max_drawdown"
+   ],
+   "auxiliary_metrics": [
+    "win_rate",
+    "top5_profit_share"
+   ],
+   "main_risks": [
+    "盤整與空頭時假突破連續停損",
+    "獲利集中在少數交易"
+   ],
+   "suitable_regimes": [
+    "BULL"
+   ],
+   "unsuitable_regimes": [
+    "SIDEWAYS",
+    "BEAR"
+   ],
+   "edge_checks": [
+    {
+     "metric": "profit_factor",
+     "op": ">",
+     "value": 1,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "expectancy",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "cagr_stress",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "excess_cagr",
+     "op": ">",
+     "value": "benchmark",
+     "source": "BENCHMARK_SAME_PERIOD"
+    }
+   ]
+  },
+  "mean_reversion": {
+   "label": "均值回歸／反轉",
+   "questions": [
+    "超跌反彈的優勢是否存在？",
+    "勝率與平均盈虧能否形成正期望值？",
+    "遇到持續單邊行情會虧多少？"
+   ],
+   "primary_metrics": [
+    "win_rate",
+    "avg_win",
+    "avg_loss",
+    "profit_factor",
+    "expectancy",
+    "avg_hold_days",
+    "max_consecutive_losses",
+    "forward_return_5"
+   ],
+   "auxiliary_metrics": [
+    "mae_median",
+    "worst_year"
+   ],
+   "main_risks": [
+    "單邊下跌時連續接刀",
+    "尾部虧損吃掉多次小賺"
+   ],
+   "suitable_regimes": [
+    "SIDEWAYS",
+    "LOW_VOL"
+   ],
+   "unsuitable_regimes": [
+    "BEAR",
+    "HIGH_VOL"
+   ],
+   "edge_checks": [
+    {
+     "metric": "expectancy",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "profit_factor",
+     "op": ">",
+     "value": 1,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "forward_return_5_net",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "cagr_stress",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "excess_cagr",
+     "op": ">",
+     "value": "benchmark",
+     "source": "BENCHMARK_SAME_PERIOD"
+    }
+   ]
+  },
+  "defensive": {
+   "label": "低波動／防禦",
+   "questions": [
+    "是否有效降低回撤？",
+    "大盤下跌時是否具備保護能力？",
+    "犧牲多少報酬換取較低風險？"
+   ],
+   "primary_metrics": [
+    "max_drawdown",
+    "downside_capture",
+    "sortino",
+    "calmar",
+    "annualized_volatility",
+    "longest_recovery_sessions"
+   ],
+   "auxiliary_metrics": [
+    "excess_cagr"
+   ],
+   "main_risks": [
+    "多頭時大幅落後大盤",
+    "低價股集中"
+   ],
+   "suitable_regimes": [
+    "BEAR",
+    "HIGH_VOL"
+   ],
+   "unsuitable_regimes": [
+    "BULL"
+   ],
+   "edge_checks": [
+    {
+     "metric": "max_drawdown",
+     "op": ">",
+     "value": "benchmark",
+     "source": "BENCHMARK_SAME_PERIOD"
+    },
+    {
+     "metric": "downside_capture",
+     "op": "<",
+     "value": "benchmark",
+     "source": "BENCHMARK_SAME_PERIOD"
+    },
+    {
+     "metric": "sortino",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "cagr_stress",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    }
+   ]
+  },
+  "fundamental": {
+   "label": "基本面／成長／PEG",
+   "questions": [
+    "企業成長是否能轉化為股票報酬？",
+    "估值是否合理？",
+    "是否使用了尚未公布的資訊？"
+   ],
+   "primary_metrics": [
+    "cagr",
+    "excess_cagr",
+    "top5_profit_share",
+    "avg_max_weight",
+    "turnover_annual",
+    "pit"
+   ],
+   "auxiliary_metrics": [
+    "forward_return_20"
+   ],
+   "main_risks": [
+    "財報或營收公告時間不明造成前視",
+    "持股集中"
+   ],
+   "suitable_regimes": [
+    "BULL",
+    "SIDEWAYS"
+   ],
+   "unsuitable_regimes": [
+    "BEAR"
+   ],
+   "edge_checks": [
+    {
+     "metric": "excess_cagr",
+     "op": ">",
+     "value": "benchmark",
+     "source": "BENCHMARK_SAME_PERIOD"
+    },
+    {
+     "metric": "forward_return_20_net",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "cagr_stress",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    }
+   ]
+  },
+  "institutional_flow": {
+   "label": "法人／籌碼",
+   "questions": [
+    "資金流訊號是否具有後續報酬優勢？",
+    "訊號多久會失效？",
+    "換手率是否吃掉獲利？"
+   ],
+   "primary_metrics": [
+    "forward_return_5",
+    "forward_return_10",
+    "forward_return_20",
+    "win_rate",
+    "turnover_annual",
+    "cost_drag"
+   ],
+   "auxiliary_metrics": [],
+   "main_risks": [
+    "訊號衰減快、換手成本高"
+   ],
+   "suitable_regimes": [
+    "BULL"
+   ],
+   "unsuitable_regimes": [
+    "BEAR"
+   ],
+   "edge_checks": [
+    {
+     "metric": "forward_return_5_net",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "expectancy",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "cagr_stress",
+     "op": ">",
+     "value": 0,
+     "source": "DEFINITIONAL"
+    },
+    {
+     "metric": "excess_cagr",
+     "op": ">",
+     "value": "benchmark",
+     "source": "BENCHMARK_SAME_PERIOD"
+    }
+   ]
+  }
+ },
+ "strategies": {
+  "hybrid_trend_rank": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "defensive_low_volatility": {
+   "primary_type": "defensive",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=defensive"
+  },
+  "growth_momentum_breakout": {
+   "primary_type": "fundamental",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=growth"
+  },
+  "quality_growth": {
+   "primary_type": "fundamental",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=quality"
+  },
+  "institutional_flow_confirmation": {
+   "primary_type": "institutional_flow",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=flow"
+  },
+  "mean_reversion": {
+   "primary_type": "mean_reversion",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=reversion"
+  },
+  "quality_value_low_volatility": {
+   "primary_type": "fundamental",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=value"
+  },
+  "macd_cross": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "kd_oversold": {
+   "primary_type": "mean_reversion",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=reversion"
+  },
+  "mad_distance": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "bias_reversion": {
+   "primary_type": "mean_reversion",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=reversion"
+  },
+  "bollinger_reversion": {
+   "primary_type": "mean_reversion",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=reversion"
+  },
+  "regression_momentum": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "volume_surge": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "aroon_trend": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "trend_following": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "contrarian_pullback": {
+   "primary_type": "mean_reversion",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=reversion"
+  },
+  "long_term_trend": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "volatility_adjusted_momentum": {
+   "primary_type": "trend_momentum",
+   "secondary_types": [],
+   "evidence": "core/strategy_manager.py::StrategyManager category=trend"
+  },
+  "fundamental_g2g3_top5_reb60_score_weighted_v1": {
+   "primary_type": "fundamental",
+   "secondary_types": [],
+   "evidence": "core/runtime/fundamental_shadow.py: G2/G3 fundamental factor score"
+  },
+  "H4:GROWTH-MOMENTUM-V2": {
+   "primary_type": "fundamental",
+   "secondary_types": [
+    "trend_momentum"
+   ],
+   "evidence": "core/research/h4_signal.py: growth factor and price momentum, weights 0.5/0.5"
+  }
+ }
+}
