@@ -699,6 +699,7 @@ def main() -> int:
 from . import web_server as _web_server  # noqa: E402,F401
 from . import platform_routes as _platform_routes  # noqa: E402,F401
 from . import intelligence_routes as _intelligence_routes  # noqa: E402,F401
+from . import platform_v2_routes as _platform_v2_routes  # noqa: E402,F401
 from .line_bot import callback, handle_message, postback_handler, reply_message  # noqa: E402
 
 

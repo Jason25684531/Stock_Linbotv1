@@ -10,6 +10,14 @@ from scripts import strategy_intelligence as si
 YEARS = range(2017, 2021)
 
 
+@pytest.fixture(autouse=True)
+def no_database_in_the_shell(monkeypatch):
+    """The shared page header reads MySQL for its status badge; these tests never need a database (patch the module, never app.services)."""
+    from app import web_server
+    monkeypatch.setattr(web_server, '_build_system_status_payload', lambda *a, **k: ({'status': 'ok'}, 200))
+    monkeypatch.setattr(web_server, '_latest_ui_market_date', lambda *a, **k: None)
+
+
 def _ctx(tmp_path):
     days = pd.bdate_range('2016-12-30', '2020-12-31')
     rng = np.random.default_rng(3)
@@ -97,6 +105,27 @@ def test_report_tables_come_from_the_stored_results(stored, monkeypatch):
     assert f"{result['performance']['verified']['cagr']['value']:.1%}" in text
     assert '| blocked |' in text and 'NO_PIT' in text
     assert _client().get('/intelligence/reports/REPORT_TABLES.md').status_code == 200
+
+
+def test_the_page_renders_neutral_fact_labels_not_quality_grades(stored):
+    latest = json.loads((stored / 'LATEST.json').read_text())
+    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text())
+    page = _client().get('/intelligence/syn').get_data(as_text=True)
+    sharpe = next(i for i in result['health']['efficiency'] if i['name'] == 'Sharpe')
+    assert sharpe.get('neutral') and sharpe['neutral'] in page  # e.g. 平均日報酬為正, never 良好 for a sign check
+    checks = result['dimensions']['type_edge']['checks']
+    if any(c['status'] in ('PASS', 'FAIL') for c in checks):
+        assert '成立' in page and '通過' not in page
+
+
+def test_a_defensive_value_without_data_renders(stored):
+    latest = json.loads((stored / 'LATEST.json').read_text())
+    path = stored / 'results' / latest['strategies']['syn'] / 'syn.json'
+    data = json.loads(path.read_text())
+    data['dimensions']['type_edge']['defensive_value'] = {'status': 'INSUFFICIENT_DATA'}
+    path.write_text(json.dumps(data), encoding='utf-8')
+    page = _client().get('/intelligence/syn')
+    assert page.status_code == 200 and '不判定' in page.get_data(as_text=True)
 
 
 def test_final_report_has_every_section_per_strategy(stored, monkeypatch):

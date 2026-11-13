@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}策略回測研究 - Stock Linbot{% endblock %}
+{% block page_heading %}策略回測研究{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="platform-backtest">
+{{ iu.labels_banner('Fill Ledger V2：每筆成交、每日持倉與現金都存檔並逐日對帳；對不上的 Run 標為不可發布、不顯示績效。') }}
+{% if is_admin() %}
+<section class="quant-card p-4 text-xs" data-testid="backtest-form"><h2 class="text-sm font-semibold text-white">送出回測（背景工作）</h2>
+    <form method="post" action="{{ url_for('platform_backtest_submit') }}" class="mt-2 grid gap-2 md:grid-cols-3">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label>策略<select name="strategy_id" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1" required>{% for sid, r in runnable.items() %}<option value="{{ sid }}">{{ sid }}（{{ r.backtest_window|join('～') }}）</option>{% endfor %}</select></label>
+        <label>起日<input type="date" name="start" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1" min="2015-01-05" max="2025-12-31" required></label>
+        <label>迄日<input type="date" name="end" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1" min="2015-01-05" max="2025-12-31" value="2025-12-31" required></label>
+        <label>起始資金（元）<input type="number" name="capital" value="{{ defaults.capital }}" min="{{ bounds.capital[0] }}" max="{{ bounds.capital[1] }}" step="1000" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>手續費率<input type="number" name="fee_rate" value="{{ defaults.fee_rate }}" min="0" max="{{ bounds.fee_rate[1] }}" step="0.000001" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>證交稅率<input type="number" name="tax_rate" value="{{ defaults.tax_rate }}" min="0" max="{{ bounds.tax_rate[1] }}" step="0.0001" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>最低手續費（元）<input type="number" name="minimum_fee" value="{{ defaults.minimum_fee }}" min="0" max="{{ bounds.minimum_fee[1] }}" step="1" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>滑價上限<input type="number" name="slippage_max" value="{{ defaults.slippage_max }}" min="0" max="{{ bounds.slippage_max[1] }}" step="0.0001" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>交易規則<select name="rule" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1">{% for r in rules %}<option value="{{ r }}">{{ r }}</option>{% endfor %}</select></label>
+        <p class="md:col-span-3 text-muted">LOT_ENGINE_V1＝與 V1 相同（預設）；LOT_BOARD_1000＝只買整張；LOT_ODD＝預算不足一張也可買零股。非預設規則會改變滑價亂數序列，結果不可與 V1 逐日比較。期間限於該策略的可回測期間且不晚於 2025-12-31；相同參數直接重用既有 Run。兩倍成本軌一併計算。</p>
+        <div class="md:col-span-3"><button class="rounded border border-blue-400 px-3 py-1 text-blue-200" {% if slot.status == 'RUNNING' %}disabled{% endif %}>送出</button>{% if slot.status == 'RUNNING' %}<span class="ml-2 text-amber-200">批次槽位使用中（{{ slot.kind }}），完成後再送出</span>{% endif %}</div>
+    </form></section>
+{% else %}<p class="text-xs text-muted">訪客為唯讀，只能查看已存的 Run；送出回測需管理員登入。</p>{% endif %}
+<section class="quant-card overflow-x-auto p-4" data-testid="run-list"><h2 class="text-sm font-semibold text-white">已存 Run（{{ runs|length }}）</h2>
+    <table class="mt-2 w-full min-w-[820px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">Run</th><th class="p-1">策略</th><th class="p-1">期間</th><th class="p-1">規則</th><th class="p-1">資金</th><th class="p-1">對帳</th><th class="p-1">績效</th></tr></thead><tbody>
+    {% for r in runs %}<tr class="border-t border-line"><td class="num p-1">{% if r.status == 'SUCCESS' %}<a class="text-blue-300" href="{{ url_for('platform_run', run_id=r.run_id) }}">{{ r.run_id }}</a>{% else %}{{ r.run_id }} <span class="text-red-300">{{ r.status }}</span>{% endif %}</td>
+        <td class="p-1">{{ r.strategy_id }}</td><td class="num p-1">{{ (r.period or [])|join('～') }}</td><td class="p-1">{{ r.rule_version }}</td><td class="p-1">{{ iu.money((r.parameters or {}).capital) }}</td>
+        <td class="p-1">{% if r.publishable %}<span class="text-emerald-300">PUBLISHABLE</span>{% elif r.status == 'SUCCESS' %}<span class="text-red-300">NOT_PUBLISHABLE</span>{% else %}—{% endif %}</td>
+        <td class="p-1">{% if r.publishable %}<span class="text-muted">見報告</span>{% else %}<span class="text-muted">不顯示（無法驗證）</span>{% endif %}</td></tr>
+    {% else %}<tr><td class="p-1 text-muted" colspan="7">尚無 V2 Run。基準批次完成後會出現 16 個策略的預設規則 Run。</td></tr>{% endfor %}</tbody></table>
+    <p class="mt-2 text-xs text-muted">策略可執行與否見 STRATEGY_READINESS_21：DATA_BLOCKED 與 GOVERNED_ONLY 不可執行，沒有 VERIFIED 軌的策略也不開放 Web 回測。</p>
+</section>
+<section class="quant-card overflow-x-auto p-4 text-xs" data-testid="readiness"><h2 class="text-sm font-semibold text-white">21 個策略的可執行狀態</h2>
+    <table class="mt-2 w-full min-w-[640px]"><thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">V1 狀態</th><th class="p-1">可回測期間</th><th class="p-1">VERIFIED 年度</th><th class="p-1">Web 可執行</th><th class="p-1">原因</th></tr></thead><tbody>
+    {% for sid, r in readiness.items() %}<tr class="border-t border-line"><td class="p-1">{{ sid }}</td><td class="p-1">{{ iu.badge(r.state) }}</td><td class="num p-1">{{ (r.backtest_window or [])|join('～') or '—' }}</td>
+        <td class="num p-1">{{ r.trusted_years|join(', ') or '—' }}</td><td class="p-1">{{ '可' if r.data_eligible else '否' }}</td><td class="p-1">{{ '' if r.web_runnable else r.reason }}</td></tr>{% endfor %}</tbody></table>
+</section>
+</div>
+{% endblock %}

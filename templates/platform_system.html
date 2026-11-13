@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}系統排程與驗證中心 - Stock Linbot{% endblock %}
+{% block page_heading %}系統排程與驗證中心{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="platform-system">
+<section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-100"><p class="font-semibold">RESEARCH_ONLY</p>
+    <p class="mt-1">研究管線只寫 outputs/platform_v2，不寫 MySQL、不發 LINE，也不建立 Windows 排程；它登記在 jobs/scheduler.py 的 research 管線（支援 dry-run），不屬於 daily、evening、morning 或 push 管線。</p></section>
+<section class="quant-card p-4 text-xs" data-testid="slot"><h2 class="text-sm font-semibold text-white">批次槽位</h2>
+    <p class="mt-1">狀態 <strong>{{ slot.status }}</strong>{% if slot.kind %}・種類 {{ slot.kind }}{% endif %}{% if slot.started_at %}・開始 <span class="num">{{ slot.started_at }}</span>{% endif %}{% if slot.pids %}・程序 <span class="num">{{ slot.pids|join(', ') }}</span>{% endif %}</p>
+    {% if slot.log_tail %}<pre class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded border border-line p-2">{% for line in slot.log_tail %}{{ line }}
+{% endfor %}</pre>{% endif %}
+    {% if is_admin() %}<div class="mt-2 flex flex-wrap gap-2">
+        <form method="post" action="{{ url_for('platform_system_action', action='pipeline') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="rounded border border-blue-400 px-2 py-1 text-blue-200" {% if slot.status == 'RUNNING' %}disabled{% endif %}>啟動研究管線</button></form>
+        <form method="post" action="{{ url_for('platform_system_action', action='cancel') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="rounded border border-red-400 px-2 py-1 text-red-200">取消平台工作</button></form>
+        <form method="post" action="{{ url_for('platform_system_action', action='retry') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="rounded border border-amber-400 px-2 py-1 text-amber-200">重試上一個平台工作</button></form>
+    </div>{% else %}<p class="mt-1 text-muted">訪客為唯讀。</p>{% endif %}</section>
+<section class="quant-card overflow-x-auto p-4 text-xs" data-testid="pipeline"><h2 class="text-sm font-semibold text-white">研究管線最近一次執行</h2>
+    {% if pipeline %}<p class="mt-1">工作 <span class="num">{{ pipeline.job_id }}</span>・狀態 <strong>{{ pipeline.status }}</strong>・結束碼 <span class="num">{{ pipeline.exit_code }}</span>・更新 <span class="num">{{ pipeline.updated_at }}</span></p>
+    <table class="mt-2 w-full min-w-[720px]"><thead class="text-left text-muted"><tr><th class="p-1">步驟</th><th class="p-1">狀態</th><th class="p-1">失敗分類</th><th class="p-1">嘗試次數</th><th class="p-1">原因</th><th class="p-1">完成時間</th></tr></thead><tbody>
+    {% for name, s in pipeline.steps.items() %}<tr class="border-t border-line"><td class="p-1">{{ name }}</td><td class="p-1">{{ s.status }}</td><td class="p-1">{{ s.failure_class or '' }}</td><td class="num p-1">{{ s.attempts }}</td><td class="p-1 break-all">{{ s.reason or '' }}</td><td class="num p-1">{{ s.finished_at or '' }}</td></tr>{% endfor %}</tbody></table>
+    {% else %}<p class="mt-1 text-muted">研究管線尚未執行。</p>{% endif %}</section>
+<section class="quant-card p-4 text-xs" data-testid="governance"><h2 class="text-sm font-semibold text-white">治理對帳</h2>
+    {% if governance %}<p class="mt-1">檢查時間 <span class="num">{{ governance.checked_at }}</span>・結果 {% if governance.status == 'MATCH' %}<span class="text-emerald-300">MATCH</span>{% else %}<span class="text-red-300">{{ governance.status }}：平台結果不視為已驗收</span>{% endif %}</p>
+    <p class="mt-1">effective_trials <span class="num">{{ governance.current.effective_trials }}</span>・Trial Ledger {{ governance.current.trial_ledger_verify }}・Registry {{ governance.current.registry_verify }}・H4 檔案 <span class="num">{{ governance.current.h4_files }}</span></p>
+    {% if governance.differences %}<ul class="mt-1 list-disc pl-5 text-red-200" data-testid="governance-differences">{% for d in governance.differences %}<li class="break-all">{{ d }}</li>{% endfor %}</ul>{% endif %}
+    {% else %}<p class="mt-1 text-muted">尚未執行治理對帳（研究管線的健康報告步驟會執行）。</p>{% endif %}</section>
+<section class="quant-card overflow-x-auto p-4 text-xs" data-testid="trust"><h2 class="text-sm font-semibold text-white">資料可信度摘要（21 個策略）</h2>
+    {% set states = {} %}{% for r in readiness.values() %}{% set _ = states.update({r.state: states.get(r.state, 0) + 1}) %}{% endfor %}
+    <p class="mt-1">{% for k, v in states.items() %}{{ iu.badge(k) }} <span class="num">{{ v }}</span>{% if not loop.last %}・{% endif %}{% endfor %}・有 VERIFIED 年度 <span class="num">{{ readiness.values()|selectattr('trusted_years')|list|length }}</span></p></section>
+<section class="quant-card overflow-x-auto p-4 text-xs" data-testid="production"><h2 class="text-sm font-semibold text-white">正式管線狀態（唯讀，pipeline_runs）</h2>
+    {% if production.error %}<p class="mt-1 text-amber-200">DATA_MISSING：{{ production.error }}</p>
+    {% else %}<p class="mt-1">整體 <strong>{{ production.status }}</strong>・資料日 <span class="num">{{ production.as_of_date }}</span></p>
+    <table class="mt-2 w-full min-w-[560px]"><thead class="text-left text-muted"><tr><th class="p-1">步驟</th><th class="p-1">狀態</th><th class="p-1">執行日</th><th class="p-1">錯誤</th></tr></thead><tbody>
+    {% for s in (production.data or {}).get('steps', []) %}<tr class="border-t border-line"><td class="p-1">{{ s.label or s.step }}</td><td class="p-1">{{ s.status }}</td><td class="num p-1">{{ s.run_date or '' }}</td><td class="p-1 break-all">{{ s.error_summary or '' }}</td></tr>{% endfor %}</tbody></table>
+    {% for w in production.warnings or [] %}<p class="mt-1 text-amber-200 break-all">{{ w }}</p>{% endfor %}{% endif %}</section>
+{% if reports %}<section class="quant-card p-4 text-xs"><h2 class="text-sm font-semibold text-white">報告</h2><p class="mt-1">{% for n in reports %}<a class="text-blue-300" href="{{ url_for('platform_report', name=n) }}">{{ n }}</a>{% if not loop.last %}・{% endif %}{% endfor %}</p></section>{% endif %}
+</div>
+{% endblock %}

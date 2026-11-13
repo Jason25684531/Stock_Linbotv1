@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}AI 預測與追蹤 - Stock Linbot{% endblock %}
+{% block page_heading %}AI 預測與追蹤{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="platform-predictions">
+<section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-100">
+    <p class="font-semibold">RESEARCH_ONLY · NOT_CERTIFIED · 開發視窗內的 walk-forward，非獨立樣本外</p>
+    <p class="mt-1">模型只用 2015～2025 快照的價量特徵；逐年擴展訓練、訓練期末與測試期初之間 purge 20 個交易日；評估門檻在任何評估前凍結。不可能得到 VALIDATED 或 CERTIFIED（2026 樣本外資料封存）。</p>
+</section>
+<section class="quant-card p-4 text-xs" data-testid="today-blocked"><h2 class="text-sm font-semibold text-white">今日預測</h2>
+    <p class="mt-1"><strong>GOVERNANCE_BLOCKED</strong>：OD-2 封存 2026 年資料，研究模型不讀 2025-12-31 以後的資料，因此不產生今日或未來的預測。</p></section>
+{% for m in registry %}{% set e = m.evaluation %}{% set yearly, rows = history[m.model_version] %}
+<section class="quant-card p-4 text-xs" data-testid="model-{{ m.horizon }}">
+    <h2 class="text-sm font-semibold text-white">{{ m.horizon }} 交易日模型 <span class="num">{{ m.model_version }}</span> {{ iu.badge(m.status) }}</h2>
+    <p class="mt-1 text-muted">規格雜湊 <span class="num">{{ m.spec_hash[:16] }}</span>・評估 <span class="num">{{ m.evidence.evaluation_id }}</span>・快照 <span class="num">{{ m.snapshot_id }}</span>・測試列數 <span class="num">{{ e.rows }}</span>・事件排除視窗 <span class="num">{{ m.excluded_event_windows }}</span></p>
+    {% if m.status != 'DEV_WINDOW_SKILL' %}<p class="mt-2 rounded border border-amber-500/50 p-2 text-amber-200" data-testid="not-validated">NOT_VALIDATED：{{ e.reasons|join('；') }}。未通過凍結門檻，因此本頁不顯示任何個股預測值。</p>{% endif %}
+    <div class="mt-2 grid gap-3 lg:grid-cols-2">
+        <table class="w-full"><tbody>
+            <tr><td class="p-1 text-muted">Brier（M1 邏輯迴歸）</td><td class="num p-1">{{ '%.5f'|format(e.brier_m1) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">Brier（B0 歷史上漲比率）</td><td class="num p-1">{{ '%.5f'|format(e.brier_b0) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">Brier skill（95% 區間，日期區塊 bootstrap）</td><td class="num p-1">{% if e.brier_skill is none %}不可計算：{{ (e.undefined_reasons or {}).get('brier_skill') }}{% else %}{{ '%.4f'|format(e.brier_skill) }}{% endif %}（{% if e.brier_skill_ci95[0] is none or e.brier_skill_ci95[1] is none %}不可計算：{{ (e.undefined_reasons or {}).get('brier_skill_ci95') }}{% else %}{{ '%.4f'|format(e.brier_skill_ci95[0]) }}～{{ '%.4f'|format(e.brier_skill_ci95[1]) }}{% endif %}）</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">skill 為正的測試年比例</td><td class="p-1">{{ iu.pct(e.positive_skill_year_share) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">校準斜率（1 為完美）</td><td class="p-1">{{ iu.num(e.calibration_slope) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">80% 報酬區間覆蓋率（門檻 75%～85%）</td><td class="p-1">{{ iu.pct(e.coverage_80) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">報酬中位數絕對誤差</td><td class="p-1">{{ iu.pct(e.median_abs_error) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">機率最高十分位、扣一次來回成本後平均報酬（不重疊 {{ e.net_top_decile_periods }} 期）</td><td class="p-1">{{ iu.pct(e.net_top_decile_mean, True) }}</td></tr>
+            <tr class="border-t border-line"><td class="p-1 text-muted">測試期上漲比率</td><td class="p-1">{{ iu.pct(e.up_rate_test) }}</td></tr>
+        </tbody></table>
+        <svg class="calibration-chart" viewBox="0 0 320 220" role="img" aria-label="{{ m.horizon }} 日預測校準圖">
+            <line x1="40" y1="180" x2="280" y2="20" stroke="#64748b" stroke-dasharray="4 4" />
+            <line x1="40" y1="180" x2="280" y2="180" stroke="#64748b" />
+            <line x1="40" y1="20" x2="40" y2="180" stroke="#64748b" />
+            <text x="38" y="198" fill="#91a7ba" font-size="10">0</text><text x="274" y="198" fill="#91a7ba" font-size="10">1</text>
+            <text x="8" y="24" fill="#91a7ba" font-size="10">1</text><text x="8" y="184" fill="#91a7ba" font-size="10">0</text>
+            <text x="112" y="216" fill="#91a7ba" font-size="10">預測機率</text>
+            <polyline fill="none" stroke="#38bdf8" stroke-width="2" points="{% for c in e.calibration %}{{ '%.1f'|format(40 + c.predicted * 240) }},{{ '%.1f'|format(180 - c.observed * 160) }}{% if not loop.last %} {% endif %}{% endfor %}" />
+            {% for c in e.calibration %}<circle cx="{{ '%.1f'|format(40 + c.predicted * 240) }}" cy="{{ '%.1f'|format(180 - c.observed * 160) }}" r="3" fill="#38bdf8"><title>預測 {{ c.predicted }}；實際 {{ c.observed }}；{{ c.n }} 筆</title></circle>{% endfor %}
+        </svg>
+    </div>
+    <p class="mt-1">各測試年 Brier skill：{% for y, v in e.yearly_skill.items() %}<span class="num">{{ y }}</span> {% if v is none %}不可計算：{{ ((e.undefined_reasons or {}).get('yearly_skill') or {}).get(y, '資料不足') }}{% else %}{{ '%+.4f'|format(v) }}{% endif %}{% if not loop.last %}・{% endif %}{% endfor %}</p>
+    <details class="mt-1"><summary class="cursor-pointer text-blue-300">逐年訓練視窗與係數</summary><div class="overflow-x-auto"><table class="mt-1 w-full min-w-[640px]"><thead class="text-left text-muted"><tr><th class="p-1">測試年</th><th class="p-1">訓練截止</th><th class="p-1">測試起日</th><th class="p-1">訓練列數</th><th class="p-1">B0</th><th class="p-1">係數</th></tr></thead><tbody>
+        {% for f in m.training.folds %}<tr class="border-t border-line"><td class="num p-1">{{ f.year }}</td><td class="num p-1">{{ f.train_end }}</td><td class="num p-1">{{ f.test_start }}</td><td class="num p-1">{{ f.train_rows }}</td><td class="p-1">{{ iu.pct(f.base_rate) }}</td><td class="num p-1">{% for k, v in (f.coefficients or {}).items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>{% endfor %}</tbody></table></div></details>
+    {% if m.status == 'DEV_WINDOW_SKILL' and yearly %}
+    <div class="mt-3" data-testid="history-{{ m.horizon }}"><h3 class="font-semibold text-white">歷史預測與事後實績（截至 2025-12-31，開發視窗內 walk-forward，非獨立樣本外）</h3>
+        <div class="overflow-x-auto"><table class="mt-1 w-full min-w-[420px]"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">預測筆數</th><th class="p-1">命中率（機率 0.5 為界）</th><th class="p-1">實際上漲比率</th></tr></thead><tbody>
+        {% for y in yearly %}<tr class="border-t border-line"><td class="num p-1">{{ y.year }}</td><td class="num p-1">{{ y.rows }}</td><td class="p-1">{{ iu.pct(y.hit_rate) }}</td><td class="p-1">{{ iu.pct(y.up_rate) }}</td></tr>{% endfor %}</tbody></table></div>
+        <form class="mt-2 flex gap-2" method="get"><input class="rounded border border-line bg-transparent px-2 py-1" name="stock" value="{{ stock }}" placeholder="2330" maxlength="4" aria-label="stock id"><button class="rounded border border-blue-400 px-2 py-1 text-blue-200">查詢個股歷史預測</button></form>
+        {% if rows %}<div class="overflow-x-auto"><table class="mt-2 w-full min-w-[640px]"><thead class="text-left text-muted"><tr><th class="p-1">日期</th><th class="p-1">上漲機率</th><th class="p-1">報酬區間 10%～90%</th><th class="p-1">中位數</th><th class="p-1">實際報酬</th><th class="p-1">命中</th></tr></thead><tbody>
+            {% for r in rows %}<tr class="border-t border-line"><td class="num p-1">{{ r.date[:10] }}</td><td class="p-1">{{ iu.pct(r.p_m1) }}</td><td class="p-1">{{ iu.pct(r.q10, True) }}～{{ iu.pct(r.q90, True) }}</td><td class="p-1">{{ iu.pct(r.q50, True) }}</td><td class="p-1">{{ iu.pct(r.forward, True) }}</td><td class="p-1">{{ 'O' if r.hit else 'X' }}</td></tr>{% endfor %}</tbody></table></div>
+        {% elif stock %}<p class="mt-1 text-muted">查無 {{ stock }} 的歷史預測（不在研究範圍或無完整標籤）。</p>{% endif %}
+    </div>{% endif %}
+</section>
+{% else %}
+{% if stale_model_count %}<section class="quant-card p-4" data-testid="stale-models"><strong>MODEL_STALE</strong>：偵測到 {{ stale_model_count }} 個不同程式身份的舊評估；檔案保留但不顯示。完成目前凍結規格的評估後才會列出。</section>
+{% else %}<section class="quant-card p-4" data-testid="no-models">尚無符合目前程式身份與凍結規格的模型評估。管理員可在系統排程與驗證中心啟動研究管線。</section>{% endif %}
+{% endfor %}
+<section class="quant-card p-4 text-xs text-muted"><h2 class="text-sm font-semibold text-white">既有模型稽核</h2>
+    <p class="mt-1">既有 7 個 XGBoost 模型（ML_Data/pkl）的標的是未來 N 日最高價是否超過 X%，以 80／20 時間切分、沒有 purge、只記錄 accuracy 與 precision，依規格為 MODEL_BLOCKED，本平台不沿用；每日流程仍照舊載入它們。詳見 MODEL_VALIDATION_REPORT.md。</p></section>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}研究平台 - Stock Linbot{% endblock %}
+{% block page_heading %}研究平台{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="platform-index">
+{{ iu.labels_banner('五個入口都只讀已存檔的結果或既有每日推薦；不下單、不寫正式資料庫、不發 LINE。') }}
+{% set runnable = readiness.values()|selectattr('web_runnable')|list %}
+<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <a class="quant-card block p-4 hover:border-blue-400" href="{{ url_for('platform_selection') }}" data-testid="entry-selection">
+        <h2 class="text-base font-semibold text-white">1. 每日智慧選股</h2>
+        <p class="mt-1 text-xs text-muted">既有每日推薦（唯讀）＋訊號日、預計可交易日、選股條件、可行性與策略驗證狀態</p>
+        <p class="mt-2 text-xs">共識分兩欄：可信資料訊號數／未驗證訊號</p></a>
+    <a class="quant-card block p-4 hover:border-blue-400" href="{{ url_for('platform_predictions') }}" data-testid="entry-predictions">
+        <h2 class="text-base font-semibold text-white">2. AI 預測與追蹤</h2>
+        <p class="mt-1 text-xs text-muted">5／20 交易日上漲機率與報酬區間；逐年 walk-forward，門檻評估前凍結</p>
+        <p class="mt-2 text-xs">{% for m in models %}<span class="num">{{ m.model_version }}</span> {{ iu.badge(m.status) }}{% if not loop.last %}<br>{% endif %}{% else %}尚無模型評估{% endfor %}</p></a>
+    <a class="quant-card block p-4 hover:border-blue-400" href="{{ url_for('platform_backtest') }}" data-testid="entry-backtest">
+        <h2 class="text-base font-semibold text-white">3. 策略回測研究</h2>
+        <p class="mt-1 text-xs text-muted">Fill Ledger V2：逐筆成交、每日持倉與現金、逐日對帳；可設定期間、資金、成本與交易規則</p>
+        <p class="mt-2 text-xs">已存 Run <span class="num">{{ runs|length }}</span>・可執行策略 <span class="num">{{ runnable|length }}</span>／{{ readiness|length }}</p></a>
+    <a class="quant-card block p-4 hover:border-blue-400" href="{{ url_for('platform_portfolio') }}" data-testid="entry-portfolio">
+        <h2 class="text-base font-semibold text-white">4. 策略組合分析</h2>
+        <p class="mt-1 text-xs text-muted">共同資金、一本帳：資金競爭、持股不重複、再平衡規則版本化</p>
+        <p class="mt-2 text-xs">已存組合 <span class="num">{{ folios|length }}</span></p></a>
+    <a class="quant-card block p-4 hover:border-blue-400" href="{{ url_for('platform_system') }}" data-testid="entry-system">
+        <h2 class="text-base font-semibold text-white">5. 系統排程與驗證中心</h2>
+        <p class="mt-1 text-xs text-muted">研究管線步驟、失敗分類與重試、批次槽位、資料可信度、治理對帳、正式管線（唯讀）</p>
+        <p class="mt-2 text-xs">批次槽位 <strong>{{ slot.status }}</strong>{% if slot.kind %}（{{ slot.kind }}）{% endif %}</p></a>
+</div>
+{% if reports %}<section class="quant-card p-4 text-xs" data-testid="reports"><h2 class="text-sm font-semibold text-white">驗收報告</h2>
+    <ul class="mt-1 list-disc pl-5">{% for name in reports %}<li><a class="text-blue-300" href="{{ url_for('platform_report', name=name) }}">{{ name }}</a></li>{% endfor %}</ul></section>{% endif %}
+</div>
+{% endblock %}

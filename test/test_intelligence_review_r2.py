@@ -7,6 +7,14 @@ from core.research.intelligence import evaluate, jobstate, profile, scenarios
 from scripts import strategy_intelligence as si
 
 
+@pytest.fixture(autouse=True)
+def no_database_in_the_shell(monkeypatch):
+    """The shared page header reads MySQL for its status badge; these tests never need a database (patch the module, never app.services)."""
+    from app import web_server
+    monkeypatch.setattr(web_server, '_build_system_status_payload', lambda *a, **k: ({'status': 'ok'}, 200))
+    monkeypatch.setattr(web_server, '_latest_ui_market_date', lambda *a, **k: None)
+
+
 def test_a_load_error_in_one_strategy_is_isolated_and_counted_across_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(si, 'OUT', tmp_path)
     monkeypatch.setattr(si, 'RESULTS', tmp_path / 'results')

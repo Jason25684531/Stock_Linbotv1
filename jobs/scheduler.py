@@ -55,6 +55,8 @@ JOBS: dict[str, JobSpec] = {
     'fundamental_shadow_operation': JobSpec('jobs/operate_fundamental_shadow.py', 'Operate Fundamental shadow/OOS'),
     # Explicit-only gap repair; never part of named pipelines.
     'backfill': JobSpec('jobs/backfill_pipeline.py', 'Backfill market/recommendation gaps'),
+    # Research platform V2 (change 2026-11-12): outputs/platform_v2 only; no MySQL, no LINE, never an OS schedule.
+    'research_platform': JobSpec('jobs/run_research_platform.py', 'Research platform pipeline'),
 }
 
 DRY_RUN_SUPPORTED_JOBS = {
@@ -62,6 +64,7 @@ DRY_RUN_SUPPORTED_JOBS = {
     'run_backtest',
     'push_to_line',
     'backfill',
+    'research_platform',
 }
 
 PIPELINES: dict[str, tuple[ScheduledStep, ...]] = {
@@ -82,6 +85,9 @@ PIPELINES: dict[str, tuple[ScheduledStep, ...]] = {
     ),
     'push_evening': (
         ScheduledStep('push_to_line', ('--time', 'evening')),
+    ),
+    'research': (
+        ScheduledStep('research_platform'),
     ),
 }
 

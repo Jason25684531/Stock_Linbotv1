@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}每日智慧選股 - Stock Linbot{% endblock %}
+{% block page_heading %}每日智慧選股{% endblock %}
+{% set feas = {'FEASIBLE': ('可行', 'text-emerald-300'), 'LIMITED': ('受限', 'text-amber-200'), 'NOT_TRADABLE': ('不可成交', 'text-red-300'), 'UNKNOWN': ('未知', 'text-slate-300')} %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="platform-selection">
+<section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-100">
+    <p class="font-semibold">RESEARCH_ONLY · NOT_CERTIFIED · 不是投資建議</p>
+    <p class="mt-1">資料來源：既有每日推薦流程寫入的 daily_recommendations（唯讀，不改產生邏輯）。有訊號不等於買得到；ai_score 是未驗證的排序分數，不是上漲機率。</p>
+</section>
+{% if view.status != 'OK' %}
+    <section class="quant-card p-4" data-testid="selection-blocked"><p><strong>{{ view.status }}</strong>：{{ view.reason }}</p>
+    {% if view.status == 'GOVERNANCE_BLOCKED' %}<p class="mt-1 text-xs text-muted">無法驗證既有正式 Web 權限（OD-V2-2），依規定 fail-closed，不顯示任何推薦。</p>{% endif %}</section>
+{% else %}
+    <section class="quant-card p-4 text-xs" data-testid="selection-meta">
+        <p>訊號日 <span class="num">{{ view.signal_date }}</span>・預計可交易日 {% set s = view.rows[0].expected_session if view.rows else none %}{% if s and s.date %}<span class="num">{{ s.date }}</span>（{{ s.calendar }}）{% else %}<span class="text-amber-200">NEXT_SESSION_UNKNOWN</span>{% endif %}・讀取時間 <span class="num">{{ view.evidence.read_time }}</span>・權限依據 <span class="num">{{ view.evidence.authorization }}</span></p>
+        <p class="mt-1">{{ view.feasibility_note }}</p>
+        {% if view.no_pick_strategies %}<p class="mt-1 text-muted">當日執行但沒有選出股票的策略：{{ view.no_pick_strategies|join('、') }}</p>{% endif %}
+    </section>
+    <section class="quant-card overflow-x-auto p-4" data-testid="consensus"><h2 class="text-sm font-semibold text-white">多策略共識</h2>
+        <p class="text-xs text-muted">可信資料訊號數只計入 V1 有 VERIFIED 軌且樣本足夠的策略，代表資料可信，不代表獲利認證；其餘計入未驗證訊號。兩欄分開，不相加。</p>
+        <table class="mt-2 w-full min-w-[560px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">代碼</th><th class="p-1">名稱</th><th class="p-1">可信資料訊號數</th><th class="p-1">未驗證訊號</th><th class="p-1">策略</th></tr></thead><tbody>
+        {% for c in view.consensus if c.trusted_data_signals + c.unvalidated_signals > 1 %}<tr class="border-t border-line"><td class="num p-1">{{ c.stock_id }}</td><td class="p-1">{{ c.stock_name or '' }}</td>
+            <td class="num p-1" data-testid="trusted-{{ c.stock_id }}">{{ c.trusted_data_signals }}</td><td class="num p-1" data-testid="unvalidated-{{ c.stock_id }}">{{ c.unvalidated_signals }}</td><td class="p-1">{{ c.strategies|join('、') }}</td></tr>
+        {% else %}<tr><td class="p-1 text-muted" colspan="5">沒有被兩個以上策略同時選中的股票</td></tr>{% endfor %}</tbody></table>
+    </section>
+    <section class="quant-card overflow-x-auto p-4" data-testid="candidates"><h2 class="text-sm font-semibold text-white">候選股票（{{ view.rows|length }}）</h2>
+        <table class="mt-2 w-full min-w-[900px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">排名</th><th class="p-1">代碼</th><th class="p-1">名稱</th><th class="p-1">可行性</th><th class="p-1">策略驗證</th><th class="p-1">風險</th><th class="p-1">選股條件</th></tr></thead><tbody>
+        {% for r in view.rows %}{% set f = feas.get(r.feasibility.status, (r.feasibility.status, '')) %}
+        <tr class="border-t border-line align-top" data-testid="row-{{ r.strategy_id }}-{{ r.stock_id }}"><td class="p-1">{{ r.strategy_id }}</td><td class="num p-1" title="{{ r.rank_basis }}">{{ r.rank }}</td><td class="num p-1">{{ r.stock_id }}</td><td class="p-1">{{ r.stock_name or '' }}</td>
+            <td class="p-1 {{ f[1] }}" data-testid="feasibility">{{ f[0] }}{% if r.feasibility.reason %}<br><span class="text-muted">{{ r.feasibility.reason }}</span>{% endif %}</td>
+            <td class="p-1" data-testid="validation">{{ iu.badge(r.validation.data_trust or r.validation.status) }} {{ iu.badge(r.validation.sample) }}<br>{{ iu.badge(r.validation.return_target) }}</td>
+            <td class="p-1">{% for x in r.risks %}{{ x }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+            <td class="p-1"><details><summary class="cursor-pointer text-blue-300">條件與排序依據</summary><p class="mt-1">{{ (r.conditions.selection or {}).text or '規格卡無此策略' }}</p><p class="mt-1 text-muted">排序：{{ r.rank_basis }}</p><p class="mt-1 text-muted">出處：{{ r.provenance.table }} {{ r.provenance.trade_date }} {{ r.provenance.strategy_key }}</p></details></td></tr>
+        {% endfor %}</tbody></table>
+    </section>
+{% endif %}
+</div>
+{% endblock %}

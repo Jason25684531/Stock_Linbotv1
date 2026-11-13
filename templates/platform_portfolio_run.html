@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}組合報告 {{ record.run_id }} - Stock Linbot{% endblock %}
+{% block page_heading %}組合報告{% endblock %}
+{% block content %}
+{% set p = record.parameters %}{% set a = record.analysis %}
+<div class="space-y-4 text-sm" data-testid="platform-portfolio-run">
+{{ iu.labels_banner('示範組合是研究情境，不是策略，也未經認證；沒有搜尋權重。') }}
+<section class="quant-card p-4 text-xs" data-testid="portfolio-meta">
+    <p>成員：{% for sid in p.members %}<span class="num">{{ sid }}</span> {{ iu.pct(p.weights[loop.index0]) }}{% if not loop.last %}、{% endif %}{% endfor %}・期間 <span class="num">{{ record.period|join('～') }}</span>・資金 {{ iu.money(p.capital) }} 元</p>
+    <p class="mt-1">規則 {{ record.rules.allocation }}・{{ record.rules.contention }}・{{ record.rules.rebalance }}・{{ record.rules.lot }}・身份 <span class="num">{{ record.run_identity }}</span></p>
+    {% for track, c in record.reconciliation.items() %}<p class="mt-1">{{ track }}：{% if c.status == 'PUBLISHABLE' %}<span class="text-emerald-300">PUBLISHABLE</span>（{{ c.days_checked }} 日）{% else %}<span class="text-red-300">NOT_PUBLISHABLE</span> {{ c.first_mismatch }} {{ c.reason }}{% endif %}</p>{% endfor %}
+</section>
+{% if not record.publishable or not a %}
+    <section class="quant-card p-4 text-red-200" data-testid="not-publishable"><strong>NOT_PUBLISHABLE</strong>：{{ record.not_publishable_reasons|join('；') }}。不顯示績效。</section>
+{% else %}
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="portfolio-performance"><h2 class="text-sm font-semibold text-white">組合與成員、大盤比較</h2>
+        <table class="mt-2 w-full min-w-[640px]"><thead class="text-left text-muted"><tr><th class="p-1">對象</th><th class="p-1">累積報酬</th><th class="p-1">CAGR</th><th class="p-1">最大回撤</th><th class="p-1">Sharpe</th></tr></thead><tbody>
+        {% for name, m in [('組合（基礎成本）', a.portfolio.base), ('組合（兩倍成本）', a.portfolio.stress)] %}<tr class="border-t border-line"><td class="p-1">{{ name }}</td><td class="p-1">{{ iu.mv(m.total_return) }}</td><td class="p-1">{{ iu.mv(m.cagr) }}</td><td class="p-1">{{ iu.mv(m.max_drawdown) }}</td><td class="p-1">{{ iu.mv(m.sharpe, 'num') }}</td></tr>{% endfor %}
+        {% for sid, m in a.members.items() %}<tr class="border-t border-line"><td class="p-1">{{ sid }}（單獨 V2 Run）</td><td class="p-1">{{ iu.mv(m.total_return) }}</td><td class="p-1">{{ iu.mv(m.cagr) }}</td><td class="p-1">{{ iu.mv(m.max_drawdown) }}</td><td class="p-1">{{ iu.mv(m.sharpe, 'num') }}</td></tr>{% endfor %}
+        <tr class="border-t border-line"><td class="p-1">大盤含息（同期）</td><td class="p-1">{{ iu.pct(a.benchmark_total_return.total_return) }}</td><td class="p-1" colspan="3">{{ a.benchmark_total_return.reason or '' }}</td></tr>
+        </tbody></table>
+        <p class="mt-1 text-muted">成員列為各策略獨立資金的 V2 基準 Run 在同期間的表現，與組合內的 sleeve 不同（組合內有資金競爭與重疊跳過）。</p></section>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="portfolio-risk"><h2 class="text-sm font-semibold text-white">分散與資金競爭</h2>
+        {% if a.correlation %}<table class="mt-2 w-full min-w-[480px]"><thead class="text-left text-muted"><tr><th class="p-1">日報酬相關</th>{% for b in p.members %}<th class="p-1">{{ b }}</th>{% endfor %}</tr></thead><tbody>
+            {% for x in p.members %}<tr class="border-t border-line"><td class="p-1">{{ x }}</td>{% for y in p.members %}<td class="num p-1">{{ iu.num(a.correlation[x][y]) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>{% else %}<p>單一成員，不計算相關。</p>{% endif %}
+        <p class="mt-2">持股重疊（成員單獨執行時同日持有同一股票）：<span class="num">{{ a.overlap.standalone_overlap_days }}</span>／{{ a.overlap.sessions }} 個交易日。{{ a.overlap.note }}</p>
+        <p class="mt-1">共同重大損失：<span class="num">{{ a.common_large_losses.count }}</span> 日（{{ a.common_large_losses.rule }}）</p>
+        <p class="mt-1">資金競爭：{% for k, v in a.contention.items() %}{{ k }} <span class="num">{{ v }}</span>{% if not loop.last %}・{% endif %}{% else %}無{% endfor %}</p>
+        <p class="mt-1">成本與換手：費用與稅 {{ iu.money(a.costs.fees_and_tax_paid) }} 元・成交金額 {{ iu.money(a.costs.traded_value) }} 元・年化換手 {{ iu.num(a.costs.turnover_annual) }} 倍</p>
+        <p class="mt-1" data-testid="industry">產業集中度：{{ a.industry_concentration.reason }}</p></section>
+{% endif %}
+<section class="quant-card p-4 text-xs" data-testid="downloads"><h2 class="text-sm font-semibold text-white">計算證據下載</h2>
+    <p class="mt-1">{% for f in files %}<a class="text-blue-300" href="{{ url_for('platform_file', kind='portfolio', run_id=record.run_id, name=f) }}">{{ f }}</a>{% if not loop.last %}・{% endif %}{% endfor %}</p></section>
+</div>
+{% endblock %}

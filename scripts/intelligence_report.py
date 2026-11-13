@@ -140,7 +140,7 @@ def strategy_section(i, r, notes, folio) -> list[str]:
         '- 最深三次回撤：' + ('；'.join(f"{e['peak_date']}→{e['trough_date']} {p(e['depth'])}（{'回復於 ' + e['recovery_date'] if e['recovery_date'] else '未回復'}）" for e in s['drawdown_episodes'][:3]) or '無'), '',
         '**3. 市場環境**', ''] + regime_lines(perf, d['activity'].get('note')) + ['', '**4. 未來一年歷史情境**', ''] + scenario_lines(r) + ['', '**5. 交易可行性與組合分散**', ''] + feasibility_lines(r, folio) + [
         '', f"**6. {d['type_edge']['label']}專屬優勢（{d['type_edge']['track']}）**", '',
-        '- ' + '；'.join(f"{c['metric']} {n(c['measured'], 4)} {c['op']} {c['reference']}（{c['source']}）→ {c['status']}" for c in d['type_edge']['checks']),
+        '- ' + '；'.join(f"{c['metric']} {n(c['measured'], 4)} {c['op']} {n(c['reference'], 4) if isinstance(c['reference'], (int, float)) else c['reference']}（{c['source']}）→ {c['status']}" for c in d['type_edge']['checks']),
         f"- 樣本：平倉 {d['sample']['closed_trades']} 筆（最低 {d['sample']['min_closed_trades']}）→ {d['sample']['status']}。" +
         (f" 防禦價值：{d['type_edge']['defensive_value']['status']}。" if d['type_edge']['defensive_value']['status'] != 'NOT_APPLICABLE' else ''), '',
         '**7. 實作與說明差異**', ''] + impl + ['']

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}回測報告 {{ record.run_id }} - Stock Linbot{% endblock %}
+{% block page_heading %}回測報告{% endblock %}
+{% block content %}
+{% set p = record.parameters %}
+<div class="space-y-4 text-sm" data-testid="platform-run">
+{{ iu.labels_banner('研究情境，非未來預測；已看過的歷史結果不是樣本外證據。') }}
+<section class="quant-card p-4 text-xs" data-testid="run-meta">
+    <p><strong class="text-white">{{ record.strategy_id }}</strong>・Run <span class="num">{{ record.run_id }}</span>・期間 <span class="num">{{ record.period|join('～') }}</span>・規則 <span class="num">{{ record.rule_version }}</span>{% if not record.comparable_with_v1 %} <span class="text-amber-200">（非預設規則：不可與 V1 逐日比較）</span>{% endif %}</p>
+    <p class="mt-1">起始資金 {{ iu.money(p.capital) }} 元・手續費率 <span class="num">{{ p.costs.fee_rate }}</span>・稅率 <span class="num">{{ p.costs.tax_rate }}</span>・最低手續費 <span class="num">{{ p.costs.minimum_fee }}</span>・滑價上限 <span class="num">{{ p.costs.slippage_max }}</span>・兩倍成本軌同時計算</p>
+    <p class="mt-1 text-muted">身份 <span class="num">{{ record.run_identity }}</span>・快照 <span class="num">{{ record.snapshot_id }}</span>・引擎 <span class="num">{{ record.engine_version }}</span>・帳務 <span class="num">{{ record.accounting }}</span>・資料可信度 {{ iu.badge(record.evidence.data_trust) }}{% if result %}・分析身份 {{ iu.badge(result.identity_status) }}{% endif %}</p>
+</section>
+<section class="quant-card p-4 text-xs" data-testid="reconciliation"><h2 class="text-sm font-semibold text-white">對帳狀態</h2>
+    {% for track, c in record.reconciliation.items() %}<p class="mt-1">{{ '基礎成本' if track == 'base' else '兩倍成本' }}：{% if c.status == 'PUBLISHABLE' %}<span class="text-emerald-300">PUBLISHABLE</span>（{{ c.days_checked }} 個交易日的現金、持股與 NAV 全部由成交列重算相符）{% else %}<span class="text-red-300">NOT_PUBLISHABLE</span>：第一個不符日 <span class="num">{{ c.first_mismatch }}</span>，{{ c.reason }}{% endif %}</p>{% endfor %}
+</section>
+{% if not record.publishable %}
+    <section class="quant-card p-4 text-red-200" data-testid="not-publishable"><strong>NOT_PUBLISHABLE</strong>：{{ record.not_publishable_reasons|join('；') }}。帳本無法驗證，不顯示任何績效數字。</section>
+{% elif not result or not result.performance %}
+    <section class="quant-card p-4 text-amber-200" data-testid="data-missing"><strong>DATA_MISSING</strong>：這個 Run 的分析檔尚未產生（研究管線的分析步驟會補上），因此暫不顯示績效。</section>
+{% else %}
+    {% set perf = result.performance %}{% set prov = perf.provisional %}{% set ver = perf.verified %}
+    <section class="quant-card p-4 text-xs" data-testid="kpi">
+        <h2 class="text-sm font-semibold text-white">策略體檢</h2>
+        {% if not trades %}<p class="mt-1 text-amber-200" data-testid="no-trades">NO_TRADES：整段期間沒有任何已平倉交易；報酬為現金狀態，不是策略表現。</p>{% endif %}
+        <div class="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded border border-line p-2"><div class="text-muted">年化報酬 CAGR（全期，PROVISIONAL）</div><div class="text-lg" data-testid="kpi-cagr">{{ iu.mv(prov.cagr) }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">累積報酬</div><div class="text-lg" data-testid="kpi-total">{{ iu.mv(prov.total_return) }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">最大回撤</div><div class="text-lg" data-testid="kpi-mdd">{{ iu.mv(prov.max_drawdown) }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">最長回本（交易日）</div><div class="text-lg">{{ iu.mv(prov.longest_recovery_sessions, 'int') }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">大盤含息 CAGR</div><div class="text-lg">{{ iu.mv(prov.benchmark_cagr_total_return) }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">相對大盤年化超額</div><div class="text-lg">{{ iu.mv(prov.excess_cagr, 'signed') }}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">VERIFIED 期間 CAGR</div><div class="text-lg" data-testid="kpi-verified-cagr">{% if ver %}{{ iu.mv(ver.cagr) }}<span class="text-xs text-muted"> {{ (perf.verified_span or [])|join('～') }}</span>{% else %}<span class="text-muted">無 VERIFIED 期間</span>{% endif %}</div></div>
+            <div class="rounded border border-line p-2"><div class="text-muted">5%／10% 目標</div><div>{{ iu.badge(result.dimensions.return_target.status) }}</div></div>
+        </div>
+        <p class="mt-2 text-muted">年度可信度：{% for y, s in result.year_status.items() %}<span class="num">{{ y }}</span> {{ iu.badge(s) }} {% endfor %}</p>
+        {% for group, items in result.health.items() %}<details class="mt-2"><summary class="cursor-pointer text-blue-300">{{ group }}（{{ items|length }} 項）</summary><table class="mt-1 w-full min-w-[560px]"><tbody>
+            {% for it in items %}<tr class="border-t border-line"><td class="p-1">{{ it.name }}</td><td class="p-1">{{ iu.mv(it.value, iu.health_kind.get(it.name, 'num')) }}</td><td class="p-1">{{ iu.badge(it.status) }}</td><td class="p-1 text-muted">{{ it.explanation }}</td></tr>{% endfor %}</tbody></table></details>{% endfor %}
+    </section>
+    <section class="quant-card p-4" data-testid="equity-chart"><h2 class="text-sm font-semibold text-white">累積報酬與大盤含息</h2>
+        <div class="chart-shell"><svg id="run-equity" viewBox="0 0 800 300" role="img" aria-label="策略、兩倍成本與大盤含息淨值"><polyline id="nav-base" fill="none" stroke="#f43f5e" stroke-width="2"/><polyline id="nav-stress" fill="none" stroke="#fb923c" stroke-width="2" stroke-dasharray="5 4"/><polyline id="nav-benchmark" fill="none" stroke="#94a3b8" stroke-width="2"/></svg></div>
+        <p class="text-xs text-muted">紅：基礎成本・橘虛線：兩倍成本・灰：大盤含息</p>
+        <h3 class="mt-3 text-sm font-semibold text-white">水下回撤</h3><div class="chart-shell"><svg id="run-dd" viewBox="0 0 800 220" role="img" aria-label="策略水下回撤"><polyline id="drawdown" fill="none" stroke="#22c55e" stroke-width="2"/></svg></div>
+    </section>
+    {% set sc = result.scenarios %}
+    <section class="rounded-lg border border-blue-500/40 bg-blue-500/5 p-3 text-xs text-blue-100" data-testid="scenario-notice">{{ sc.notice or '歷史情境模擬，非未來價格或投資報酬預測。' }}</section>
+    {% if sc.status == 'SUFFICIENT' %}{% set sim = sc.simulation %}
+    <div class="grid gap-3 lg:grid-cols-3" data-testid="scenarios">
+        <section class="quant-card p-3 text-xs"><h3 class="text-sm font-semibold text-white">未來一年可能跌多深？</h3><p class="mt-1">回撤中位數 {{ iu.pct(sim.drawdown.median) }}・較差 5% {{ iu.pct(sim.drawdown.p05) }}</p></section>
+        <section class="quant-card p-3 text-xs"><h3 class="text-sm font-semibold text-white">未來一年多久回不到高點？</h3><p class="mt-1">最長水下中位數 {{ iu.num(sim.underwater.longest_median, 0) }} 日・一年後仍未回到高點 {{ iu.pct(sim.underwater.censored_share) }}</p></section>
+        <section class="quant-card p-3 text-xs"><h3 class="text-sm font-semibold text-white">一年報酬的歷史重抽樣</h3><p class="mt-1">{% if sim.cagr.median is defined %}中位數 {{ iu.pct(sim.cagr.median) }}・95% 區間 {{ iu.pct(sim.cagr.interval_95[0]) }}～{{ iu.pct(sim.cagr.interval_95[1]) }}・低於 0 {{ iu.pct(sim.cagr.share_below_zero) }}・低於 5% {{ iu.pct(sim.cagr.share_below_5pct) }}{% else %}{{ sim.cagr.reason }}{% endif %}</p></section>
+    </div>
+    {% else %}<section class="quant-card p-4 text-xs text-amber-200" data-testid="scenario-insufficient"><strong>{{ sc.status }}</strong>：沒有三個相連的完整可信年度或交易樣本不足，不輸出未來一年情境機率。</section>{% endif %}
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="monthly"><h2 class="text-sm font-semibold text-white">每月報酬（基礎成本）</h2>
+        <table class="mt-2 w-full min-w-[760px] text-center"><thead class="text-muted"><tr><th class="p-1 text-left">年</th>{% for m in range(1, 13) %}<th class="p-1">{{ m }} 月</th>{% endfor %}<th class="p-1">全年</th></tr></thead><tbody>
+        {% for year, row in result.monthly.items() %}<tr class="border-t border-line"><td class="num p-1 text-left">{{ year }}</td>
+            {% for m in range(1, 13) %}{% set c = row.months[m|string] %}
+            {% if c.value is none %}<td class="p-1 text-muted" title="{{ c.reason }}" data-testid="month-{{ year }}-{{ m }}">{{ '無交易日' if c.reason == 'NO_SESSIONS' else c.reason }}</td>
+            {% else %}{% set v = c.value %}<td class="num p-1 {{ 'bg-red-500/20 text-red-200' if v > 0 else 'bg-emerald-500/20 text-emerald-200' if v < 0 else '' }}" data-testid="month-{{ year }}-{{ m }}" title="{{ c.sessions }} sessions, {{ c.holding_sessions }} with holdings">{{ '%+.1f%%'|format(v * 100) }}{% if c.holding_sessions == 0 %}<br><span class="text-muted">無持股</span>{% endif %}</td>{% endif %}
+            {% endfor %}<td class="num p-1">{{ '%+.1f%%'|format(row.year * 100) }}</td></tr>{% endfor %}</tbody></table>
+        <p class="mt-1 text-muted">台股慣例：紅色為上漲、綠色為下跌。無交易日＝該月不在回測期間（留白，不是 0%）；無持股＝整月空手，0.0% 是真實結果。</p>
+    </section>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="trades"><h2 class="text-sm font-semibold text-white">交易紀錄（{{ trades|length }} 筆已平倉）</h2>
+        {% if trades %}<table class="mt-2 w-full min-w-[760px]" id="trade-table"><thead class="text-left text-muted"><tr>
+            {% for key, label in [('stock_id', '代碼'), ('buy_date', '買進日'), ('buy_price', '買進價'), ('sell_date', '賣出日'), ('sell_price', '賣出價'), ('shares', '股數'), ('cost', '費用與稅'), ('profit_pct', '報酬%'), ('reason', '出場原因')] %}<th class="cursor-pointer p-1" data-key="{{ key }}">{{ label }}</th>{% endfor %}</tr></thead><tbody></tbody></table>
+        <div class="mt-2 flex items-center gap-2"><button class="rounded border border-line px-2" id="trade-prev" type="button">上一頁</button><span id="trade-page" class="num"></span><button class="rounded border border-line px-2" id="trade-next" type="button">下一頁</button></div>
+        {% else %}<p class="mt-1 text-amber-200">NO_TRADES</p>{% endif %}
+    </section>
+    <section class="quant-card overflow-x-auto p-4 text-xs" data-testid="ledger"><h2 class="text-sm font-semibold text-white">每日持倉、現金與 NAV（最近 20 個交易日；完整見下載）</h2>
+        <table class="mt-2 w-full min-w-[560px]"><thead class="text-left text-muted"><tr><th class="p-1">日期</th><th class="p-1">現金</th><th class="p-1">持股市值</th><th class="p-1">NAV</th><th class="p-1">持股數</th></tr></thead><tbody>
+        {% for r in ledger[-20:] %}<tr class="border-t border-line"><td class="num p-1">{{ r.date }}</td><td class="p-1">{{ iu.money(r.cash) }}</td><td class="p-1">{{ iu.money(r.positions_value) }}</td><td class="p-1">{{ iu.money(r.nav) }}</td><td class="num p-1">{{ r.holdings }}</td></tr>{% endfor %}</tbody></table>
+    </section>
+    <script>
+    (() => {
+        const s = {{ perf.series|tojson }};
+        const navLines = [s.nav_base || [], s.nav_stress || [], s.benchmark_total_return || []].filter(x => x.length);
+        const navValues = navLines.flat(), navMin = Math.min(...navValues), navMax = Math.max(...navValues);
+        const points = (values, min, max, bottom, height) => values.map((v, i) => `${40 + i * 720 / Math.max(values.length - 1, 1)},${bottom - (v - min) / (max - min || 1) * height}`).join(' ');
+        document.getElementById('nav-base').setAttribute('points', points(s.nav_base || [], navMin, navMax, 270, 230));
+        document.getElementById('nav-stress').setAttribute('points', points(s.nav_stress || [], navMin, navMax, 270, 230));
+        if (s.benchmark_total_return) document.getElementById('nav-benchmark').setAttribute('points', points(s.benchmark_total_return, navMin, navMax, 270, 230));
+        const dd = s.drawdown || [];
+        document.getElementById('drawdown').setAttribute('points', points(dd, Math.min(0, ...dd), 0, 190, 150));
+        const rows = {{ (trades or [])|tojson }}, table = document.querySelector('#trade-table tbody');
+        if (!table) return;
+        let page = 0, key = 'sell_date', dir = -1;
+        const size = 25, fmt = v => v === null || v === undefined ? '' : (typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(2)) : v);
+        const keys = ['stock_id', 'buy_date', 'buy_price', 'sell_date', 'sell_price', 'shares', 'cost', 'profit_pct', 'reason'];
+        const draw = () => {
+            const sorted = rows.slice().sort((a, b) => (a[key] > b[key] ? 1 : a[key] < b[key] ? -1 : 0) * dir);
+            const pages = Math.max(1, Math.ceil(sorted.length / size));
+            page = Math.min(Math.max(page, 0), pages - 1);
+            table.innerHTML = '';
+            sorted.slice(page * size, page * size + size).forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-t border-line';
+                keys.forEach(k => { const td = document.createElement('td'); td.className = 'p-1'; td.textContent = fmt(r[k]); tr.appendChild(td); });
+                table.appendChild(tr);
+            });
+            document.getElementById('trade-page').textContent = (page + 1) + ' / ' + pages;
+        };
+        document.querySelectorAll('#trade-table th').forEach(th => th.addEventListener('click', () => { dir = key === th.dataset.key ? -dir : 1; key = th.dataset.key; draw(); }));
+        document.getElementById('trade-prev').onclick = () => { page -= 1; draw(); };
+        document.getElementById('trade-next').onclick = () => { page += 1; draw(); };
+        draw();
+    })();
+    </script>
+{% endif %}
+<section class="quant-card p-4 text-xs" data-testid="downloads"><h2 class="text-sm font-semibold text-white">計算證據下載</h2>
+    <p class="mt-1">{% for f in files %}<a class="text-blue-300" href="{{ url_for('platform_file', kind='backtest', run_id=record.run_id, name=f) }}">{{ f }}</a>{% if not loop.last %}・{% endif %}{% endfor %}</p>
+    <p class="mt-1 text-muted">manifest.json 記錄每個檔案的 SHA256；fills.csv 為逐筆成交（股數、成交價、費用、稅、滑價、成交後現金），daily_ledger.csv 為每日現金、持股市值與 NAV。</p></section>
+</div>
+{% endblock %}

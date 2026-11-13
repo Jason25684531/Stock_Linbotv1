@@ -18,6 +18,9 @@ MODULE = 'core.research.reference.runner'
 HISTORY = 'scripts.historical_foundation'  # change 2026-11-10-historical-data-foundation-v1: one job slot shared by every kind
 INTELLIGENCE = 'scripts.strategy_intelligence'  # change 2026-11-11-strategy-intelligence-platform-v1: same single slot
 KINDS = {'reference': [MODULE], 'history_refresh': [HISTORY, 'refresh'], 'history_run': [HISTORY, 'run'], 'intelligence': [INTELLIGENCE, 'run']}
+PLATFORM, PIPELINE = 'scripts.platform_v2', 'jobs.run_research_platform'  # change 2026-11-12-integrated-research-platform-v2: same single slot
+KINDS |= {'platform_backtest': [PLATFORM, 'run'], 'platform_portfolio': [PLATFORM, 'portfolio'], 'platform_baseline': [PLATFORM, 'baseline'],
+          'platform_pipeline': [PIPELINE]}
 DONE = '"status": "DONE"'  # last line a history command prints when it completes
 PARTIAL = '"status": "PARTIAL"'  # an intelligence job where some strategies failed: never shown as FINISHED
 
@@ -44,12 +47,17 @@ def runner_pids() -> list:
     found = []
     for proc in psutil.process_iter(['pid', 'cmdline']):
         cmdline = proc.info.get('cmdline') or []
-        if MODULE in cmdline or HISTORY in cmdline or INTELLIGENCE in cmdline:
+        if MODULE in cmdline or HISTORY in cmdline or INTELLIGENCE in cmdline or PLATFORM in cmdline or PIPELINE in cmdline:
             found.append(proc.info['pid'])
     return found
 
 
-def planned() -> int:
+def planned(kind=None) -> int:
+    if kind == 'platform_baseline':
+        from core.research.platform.params import readiness
+        return sum(row.get('state') in ('RUN', 'REUSE') and bool(row.get('backtest_window')) for row in readiness().values())
+    if kind and kind.startswith('platform_'):
+        return 1
     return sum(1 for cap in catalog.capabilities() if cap.engine is not None and not cap.governance and not cap.static_block)
 
 
@@ -57,9 +65,18 @@ def state() -> dict:
     job, alive = _read(), runner_pids()
     if not job:
         return {'status': 'RUNNING_ELSEWHERE' if alive else 'IDLE', 'pids': alive, 'planned': planned()}
+    kind = job.get('kind', 'reference')
     started = job['started_at']
-    saved = sorted(p.name for p in runner._runs().glob('*') if p.is_dir() and
-                   datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat() >= started) if runner._runs().is_dir() else []
+    if kind.startswith('platform_'):
+        from core.research.platform.params import OUT
+        roots = (OUT / 'runs', OUT / 'portfolios') if kind == 'platform_pipeline' else (
+            OUT / 'portfolios',) if kind == 'platform_portfolio' else (OUT / 'runs',)
+        saved = sorted({p.name for root in roots for p in root.glob('*') if p.is_dir() and p.name != 'latest' and
+                        datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat() >= started})
+    else:
+        root = runner._runs()
+        saved = sorted(p.name for p in root.glob('*') if p.is_dir() and
+                       datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat() >= started) if root.is_dir() else []
     report = runner.latest_report()
     try:
         tail = Path(job['log']).read_text(encoding='utf-8', errors='replace').splitlines()[-5:]
@@ -75,19 +92,19 @@ def state() -> dict:
         status, job['batch_id'] = 'FINISHED', report['batch_id']
     else:
         status = 'FAILED'
-    return {**job, 'status': status, 'pids': alive, 'saved_runs': len(saved), 'planned': planned(), 'log_tail': tail}
+    return {**job, 'status': status, 'pids': alive, 'saved_runs': len(saved), 'planned': planned(kind), 'log_tail': tail}
 
 
-def start(workers=6, popen=subprocess.Popen, kind='reference') -> dict:
+def start(workers=6, popen=subprocess.Popen, kind='reference', args=()) -> dict:
     """Check, spawn and record under one cross-process lock, so a double click handled by two threads starts one runner."""
     from core.research.sources.twse import _exclusive
     if kind not in KINDS:
         raise ValueError(f'UNKNOWN_JOB_KIND: {kind}')
     with _exclusive(runner.OUT / 'jobs' / 'start.lock', timeout=30):
-        return _start_locked(workers, popen, kind)
+        return _start_locked(workers, popen, kind, args)
 
 
-def _start_locked(workers, popen, kind='reference') -> dict:
+def _start_locked(workers, popen, kind='reference', args=()) -> dict:
     alive = runner_pids()
     if alive:
         return {'status': 'RUN_IN_PROGRESS', 'pids': alive}
@@ -97,9 +114,10 @@ def _start_locked(workers, popen, kind='reference') -> dict:
     job_id = f'{stamp:%Y%m%dT%H%M%SZ}-{kind}'
     extra = ['--job-id', job_id] if kind == 'intelligence' else []
     with log.open('w', encoding='utf-8') as handle:
-        proc = popen([sys.executable, '-X', 'utf8', '-m', *KINDS[kind], '--workers', str(int(workers)), *extra], cwd=str(runner.ROOT),
+        proc = popen([sys.executable, '-X', 'utf8', '-m', *KINDS[kind], '--workers', str(int(workers)), *extra, *args], cwd=str(runner.ROOT),
                      stdout=handle, stderr=subprocess.STDOUT)
-    job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED', 'kind': kind, 'job_id': job_id}
+    job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED', 'kind': kind, 'job_id': job_id,
+           'args': list(args)}
     _write(job)
     return job
 

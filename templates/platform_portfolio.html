@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import '_intelligence_ui.html' as iu %}
+{% block title %}策略組合分析 V2 - Stock Linbot{% endblock %}
+{% block page_heading %}策略組合分析（共同資金）{% endblock %}
+{% block content %}
+<div class="space-y-4 text-sm" data-testid="platform-portfolio">
+{{ iu.labels_banner('研究情境：組合不是新的策略，也沒有搜尋最佳權重。一本帳、一個現金帳戶，各策略只提出委託。') }}
+<section class="quant-card p-4 text-xs" data-testid="portfolio-rules"><h2 class="text-sm font-semibold text-white">規則（版本化）</h2>
+    <ul class="mt-1 list-disc pl-5"><li>ALLOC_V1：每個策略的單檔預算＝組合資金 × 權重 × 20%，每個策略最多 3 檔。</li>
+        <li>CONTEND_V1：同一天多個策略要買而現金不足時，依策略目錄順序成交；現金不足的委託記為 CASH_CONTENTION；已被其他策略持有的股票不重複買進，記為 OVERLAP_SKIPPED。</li>
+        <li>REBAL_NONE（預設）或 REBAL_ANNUAL_V1：每年第一個交易日以前一日 NAV × 權重重設預算基準，不強制賣出。</li>
+        <li>成員資格：V1 有 VERIFIED 軌，且 V2 基準 Run 可發布。權重總和 1、每個至少 5%；留空為等權。產業集中度 NOT_AVAILABLE（快照沒有產業分類）。</li></ul></section>
+{% if is_admin() %}
+<section class="quant-card p-4 text-xs" data-testid="portfolio-form"><h2 class="text-sm font-semibold text-white">送出組合回測（背景工作）</h2>
+    <form method="post" action="{{ url_for('platform_portfolio_submit') }}" class="mt-2 grid gap-2 md:grid-cols-3">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <fieldset class="md:col-span-3"><legend class="text-muted">成員（依目錄順序成交）</legend>
+            <div class="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-4">{% for sid, r in eligible.items() %}<label class="flex items-center gap-1"><input type="checkbox" name="members" value="{{ sid }}"> {{ sid }}</label>{% endfor %}</div></fieldset>
+        <label class="md:col-span-3">權重（逗號分隔，依上面勾選順序；留空＝等權）<input name="weights" placeholder="0.5,0.3,0.2" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>起日<input type="date" name="start" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1" min="2015-01-05" max="2025-12-31" required></label>
+        <label>迄日<input type="date" name="end" value="2025-12-31" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1" min="2015-01-05" max="2025-12-31" required></label>
+        <label>起始資金（元）<input type="number" name="capital" value="{{ defaults.capital }}" min="100000" max="100000000" step="1000" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>手續費率<input type="number" name="fee_rate" value="{{ defaults.fee_rate }}" step="0.000001" min="0" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>證交稅率<input type="number" name="tax_rate" value="{{ defaults.tax_rate }}" step="0.0001" min="0" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>最低手續費<input type="number" name="minimum_fee" value="{{ defaults.minimum_fee }}" step="1" min="0" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>滑價上限<input type="number" name="slippage_max" value="{{ defaults.slippage_max }}" step="0.0001" min="0" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"></label>
+        <label>交易規則<select name="rule" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1">{% for r in rules %}<option value="{{ r }}">{{ r }}</option>{% endfor %}</select></label>
+        <label>再平衡<select name="rebalance" class="mt-1 w-full rounded border border-line bg-primary px-2 py-1"><option value="REBAL_NONE">REBAL_NONE</option><option value="REBAL_ANNUAL_V1">REBAL_ANNUAL_V1</option></select></label>
+        <div class="md:col-span-3"><button class="rounded border border-blue-400 px-3 py-1 text-blue-200" {% if slot.status == 'RUNNING' %}disabled{% endif %}>送出</button>{% if slot.status == 'RUNNING' %}<span class="ml-2 text-amber-200">批次槽位使用中（{{ slot.kind }}）</span>{% endif %}</div>
+    </form></section>
+{% else %}<p class="text-xs text-muted">訪客為唯讀；送出組合回測需管理員登入。</p>{% endif %}
+<section class="quant-card overflow-x-auto p-4" data-testid="portfolio-list"><h2 class="text-sm font-semibold text-white">已存組合 Run（{{ folios|length }}）</h2>
+    <table class="mt-2 w-full min-w-[720px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">Run</th><th class="p-1">成員與權重</th><th class="p-1">期間</th><th class="p-1">再平衡</th><th class="p-1">對帳</th></tr></thead><tbody>
+    {% for r in folios %}{% set fp = r.parameters or {} %}<tr class="border-t border-line"><td class="num p-1">{% if r.status == 'SUCCESS' %}<a class="text-blue-300" href="{{ url_for('platform_portfolio_run', run_id=r.run_id) }}">{{ r.run_id }}</a>{% else %}{{ r.run_id }} {{ r.status }}{% endif %}</td>
+        <td class="p-1">{% for sid in fp.members or [] %}{{ sid }} {{ iu.pct(fp.weights[loop.index0]) }}{% if not loop.last %}、{% endif %}{% endfor %}</td><td class="num p-1">{{ (r.period or [])|join('～') }}</td><td class="p-1">{{ fp.rebalance }}</td>
+        <td class="p-1">{{ 'PUBLISHABLE' if r.publishable else 'NOT_PUBLISHABLE' }}</td></tr>
+    {% else %}<tr><td class="p-1 text-muted" colspan="5">尚無組合 Run。</td></tr>{% endfor %}</tbody></table></section>
+</div>
+{% endblock %}
