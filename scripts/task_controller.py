@@ -24,7 +24,6 @@ MAX_RETRIES = 2
 RETRY_BACKOFF_MINUTES = 15
 PRIORITIES = ('P0', 'P1', 'P2', 'P3', 'P4')
 AUTO = ('PENDING', 'FAILED_RETRYABLE', 'WAITING_DATA')  # the only states the scheduler picks up by itself
-LOCK_STALE_SECONDS = 6 * 3600  # ponytail: wall-clock staleness; a heartbeat if runs ever exceed hours
 
 
 def now() -> str:
@@ -98,6 +97,21 @@ def set_status(task_id, status, root=STATE, **fields) -> dict:
     return _update(task_id, root, change)
 
 
+def _lock_active(path):
+    """Called under the acquisition guard. Only a confirmed dead PID is recoverable."""
+    import psutil
+    try:
+        owner = json.loads(path.read_text(encoding='utf-8'))['pid']
+        if type(owner) is not int or owner <= 0 or psutil.pid_exists(owner):
+            return True  # includes PID reuse: never steal a live process's lock
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError, KeyError, TypeError):
+        return True  # unknown ownership needs diagnosis, never time-based deletion
+    path.unlink()
+    return False
+
+
 class Lock:
     """Exclusive per-task lock (O_EXCL create). A second trigger fails fast instead of running in parallel."""
 
@@ -105,15 +119,14 @@ class Lock:
         self.path = Path(root) / f'{task_id}.lock'
 
     def __enter__(self):
+        from core.research.sources.twse import _exclusive
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if self.path.is_file() and datetime.now().timestamp() - self.path.stat().st_mtime > LOCK_STALE_SECONDS:
-            self.path.unlink(missing_ok=True)  # owner died long ago; partial work is recovered from done_steps. ponytail: two racers can both see it stale, use a heartbeat if that matters
-        try:
+        with _exclusive(self.path.with_suffix('.claim')):
+            if _lock_active(self.path):
+                raise RuntimeError(f'{self.path.name} is held: another run of this task is active')
             fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            raise RuntimeError(f'{self.path.name} is held: another run of this task is active') from None
-        os.write(fd, json.dumps({'pid': os.getpid(), 'at': now()}).encode())
-        os.close(fd)
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                json.dump({'pid': os.getpid(), 'at': now()}, stream)
         return self
 
     def __exit__(self, *exc):
@@ -384,9 +397,13 @@ def runnable(handlers, root=STATE, at=None) -> list:
     out = []
     for p in sorted(Path(root).glob('*.json')):
         t = json.loads(p.read_text(encoding='utf-8'))
-        if not (isinstance(t, dict) and 'task_id' in t) or t['status'] not in AUTO or t.get('handler') not in handlers:
+        if not (isinstance(t, dict) and 'task_id' in t) or t['status'] not in (*AUTO, 'RUNNING') or t.get('handler') not in handlers:
             continue
-        if deps_done(t, root) or (Path(root) / f"{t['task_id']}.lock").exists():
+        from core.research.sources.twse import _exclusive
+        lock = Path(root) / f"{t['task_id']}.lock"
+        with _exclusive(lock.with_suffix('.claim')):
+            active = _lock_active(lock)
+        if deps_done(t, root) or active:
             continue
         if t.get('check_after') and datetime.fromisoformat(t['check_after']) > at:
             continue
@@ -410,6 +427,10 @@ def run_once(handlers, root=STATE, at=None, max_tasks=20) -> dict:
         task_id = task['task_id']
         try:
             with Lock(task_id, root):
+                current = load(task_id, root)  # runnable() is a snapshot; another runner may have completed it
+                if (current['status'] not in (*AUTO, 'RUNNING') or deps_done(current, root)
+                        or (current.get('check_after') and datetime.fromisoformat(current['check_after']) > (at or datetime.now(timezone.utc)))):
+                    continue
                 set_status(task_id, 'RUNNING', root, run_id=now())
                 try:
                     handlers[task['handler']](load(task_id, root), root)

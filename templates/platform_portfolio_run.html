@@ -7,7 +7,9 @@
 <div class="space-y-4 text-sm" data-testid="platform-portfolio-run">
 {{ iu.labels_banner('示範組合是研究情境，不是策略，也未經認證；沒有搜尋權重。') }}
 <section class="quant-card p-4 text-xs" data-testid="portfolio-meta">
-    <p>成員：{% for sid in p.members %}<span class="num">{{ sid }}</span> {{ iu.pct(p.weights[loop.index0]) }}{% if not loop.last %}、{% endif %}{% endfor %}・期間 <span class="num">{{ record.period|join('～') }}</span>・資金 {{ iu.money(p.capital) }} 元</p>
+    <p>成員：{% for sid in p.members %}<span class="num">{{ sid }}</span> {{ ('%.4f%%'|format(p.weights[loop.index0]*100)) }}{% if not loop.last %}、{% endif %}{% endfor %}・期間 <span class="num">{{ record.period|join('～') }}</span>・資金 {{ iu.money(p.capital) }} 元</p>
+    <p class="mt-1">Snapshot {{ record.snapshot_id }} · 費率 {{ p.costs }} · Run {{ record.run_id }} · 精確權重 {{ p.weights }}</p>
+    <p>百分比顯示至小數四位；合計可能受四捨五入影響。相同權重但不同期間／規則／成本不是相同實驗，請逐一核對。</p>
     <p class="mt-1">規則 {{ record.rules.allocation }}・{{ record.rules.contention }}・{{ record.rules.rebalance }}・{{ record.rules.lot }}・身份 <span class="num">{{ record.run_identity }}</span></p>
     {% for track, c in record.reconciliation.items() %}<p class="mt-1">{{ track }}：{% if c.status == 'PUBLISHABLE' %}<span class="text-emerald-300">PUBLISHABLE</span>（{{ c.days_checked }} 日）{% else %}<span class="text-red-300">NOT_PUBLISHABLE</span> {{ c.first_mismatch }} {{ c.reason }}{% endif %}</p>{% endfor %}
 </section>

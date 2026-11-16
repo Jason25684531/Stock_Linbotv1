@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}策略優化研究 V4{% endblock %}
+{% block page_heading %}策略優化研究 V4{% endblock %}
+{% block content %}
+<div class="web-v3" data-testid="strategy-v4">
+<section class="v3-card"><h2>策略優化研究 · V4</h2><p>RESEARCH_ONLY / NOT_CERTIFIED · 已看過歷史資料的研究，並非樣本外證據。</p>
+<p>排序修正與獲利目標分別驗收。原始策略、正式每日推薦與凍結評估門檻保留。</p>
+<p><a href="{{ url_for('strategy_v4_index') }}">兩策略總覽</a> · <a href="{{ url_for('web_strategies') }}">V3 策略中心</a></p></section>
+{% for row in rows %}
+<section class="v3-card" data-strategy-id="{{ row.strategy_id }}"><h2><a href="{{ url_for('strategy_v4_detail',sid=row.strategy_id) }}">{{ row.name }}</a></h2>
+{% if row.status != 'COMPARABLE' %}<p class="v3-error" data-testid="v4-blocked">BLOCKED：{{ row.reason }}</p><p>缺少可發布證據；尚無可信比較績效。</p>
+{% else %}
+<p>{{ row.conclusion }} · 排序修正：PASS（ranking-only-v1）</p><p>公平比較：共同 VERIFIED 年度 {{ row.common_verified_span|join(' ～ ') }}；切片沿用連續回測持倉，不是重新從零持倉起跑。</p>
+<div class="v3-scroll"><table><thead><tr><th>指標</th><th>原版</th><th>V4 排序修正版</th></tr></thead><tbody>
+{% for key,label in [('cagr','CAGR'),('total_return','累積淨報酬'),('max_drawdown','MDD'),('cagr_stress','兩倍成本 CAGR'),('benchmark_cagr_total_return','同期含息大盤 CAGR'),('excess_cagr','超額 CAGR'),('win_rate','勝率'),('expectancy','Expectancy')] %}
+<tr><th>{{ label }}</th>{% for version in ['original','fixed'] %}<td data-metric="{{ row.strategy_id }}-{{ version }}-{{ key }}">{{ pct((row[version].summary or {}).get(key)) }}</td>{% endfor %}</tr>{% endfor %}
+<tr><th>CAGR 差距（V4 − 原版）</th><td colspan="2">{{ pct(row.cagr_delta) }}</td></tr>
+<tr><th>距離 5% / 10% 目標</th><td colspan="2">{{ pct(row.gap_5) }} / {{ pct(row.gap_10) }}（百分點，負值代表超過目標）</td></tr>
+</tbody></table></div>
+{% if detail %}
+<h3>A. 修正前後比較</h3><p>曲線以共同可信切片第一日 = 1；基礎成本與兩倍成本各自成交。</p>
+<label>曲線成本 <select id="v4-cost"><option value="base">基礎成本</option><option value="stress">兩倍成本</option></select></label>
+<svg id="v4-curve" viewBox="0 0 720 240" role="img" aria-label="原版、V4 與含息大盤累積報酬曲線" style="width:100%;height:auto"></svg>
+<p>藍色：原版 · 綠色：V4 · 灰色：同期含息大盤</p><script id="v4-chart-data" type="application/json">{{ {'original':row.original.series,'fixed':row.fixed.series}|tojson }}</script>
+<h3>B. 選股正確性</h3><p>MAD 原版入選集合按代碼回傳；VAM 排名在共用 isin filter 後轉回輸入順序。V4 保留分數降冪、同分代碼升冪，於資格篩選後再取前三檔；不可成交時沿用原引擎規則，不額外遞補。</p>
+<p>合成反例、排序到實際成交的自動測試與真實訊號追溯見保存排名證據；研究 adapter 不改正式策略。</p>
+{% if row.get('ranking_evidence') %}<details open><summary>候選排名、實際委託與成交</summary><pre>{{ row.ranking_evidence|tojson(indent=2) }}</pre></details>{% else %}<p>真實排名逐筆證據：NOT_AVAILABLE；不可把合成測試當成真實交易證據。</p>{% endif %}
+<h3>C. 交易與風險</h3>
+{% for version in ['original','fixed'] %}<details><summary>{{ version }} · 交易、流動性、成本與風險</summary>
+<p>年化換手（完整回測）：{{ row[version].annual_turnover_full_window.value }}；交易次數：{{ (row[version].summary or {}).get('closed_trades','無法計算') }}</p>
+<p>Profit Factor：{{ (row[version].summary or {}).get('profit_factor',{})|tojson }}；回本交易日：{{ (row[version].summary or {}).get('longest_recovery_sessions',{})|tojson }}</p>
+<p>未成交原因</p><pre>{{ row[version].unfilled_reasons|tojson(indent=2) }}</pre><p>流動性</p><pre>{{ row[version].liquidity|tojson(indent=2) }}</pre><p>成本（全期間）</p><pre>{{ row[version].costs|tojson(indent=2) }}</pre>
+<p>完整期間 PROVISIONAL 指標（不可與上方可信切片混用）</p><pre>{{ row[version].full_window|tojson(indent=2) }}</pre></details>{% endfor %}
+<h3>D. 通關檢查</h3><p>OD-1 未設最大回撤固定門檻。原評估 Profile 門檻原封保留；少於 30 筆平倉不判通過。</p>
+<div class="v3-scroll"><table><thead><tr><th>版本</th><th>檢查</th><th>原始門檻</th><th>實際值</th><th>判定與原因</th></tr></thead><tbody>
+{% for version in ['original','fixed'] %}{% for check in row[version].checks %}<tr><td>{{ version }}</td><th>{{ check.name }}</th><td>{{ check.threshold|tojson }}</td><td>{{ check.value|tojson }}</td><td>{{ check.status }}：{{ check.reason }}</td></tr>{% endfor %}{% endfor %}
+</tbody></table></div>
+<h3>E. 研究結論與出處</h3><p>{{ row.conclusion }}。不進行無限參數搜尋；未達標及成本、風險權衡均保留。</p>
+{% for version in ['original','fixed'] %}<details><summary>{{ version }} 證據身份</summary><pre>{{ {'strategy_id':row.strategy_id,'variant_id':row[version].variant_id,'run_id':row[version].run_id,'run_identity':row[version].run_identity,'snapshot_id':row[version].snapshot_id,'rule_version':row[version].rule_version,'evaluation_id':row[version].evaluation_id,'data_trust':row[version].data_trust,'parameters':row[version].parameters,'source':row[version].source,'manifest_sha256':row[version].manifest_sha256,'cost_track':['base','stress'],'research_version':'V4'}|tojson(indent=2) }}</pre></details>{% endfor %}
+{% endif %}{% endif %}</section>{% endfor %}
+</div>
+{% if detail %}<script src="{{ url_for('static', filename='strategy_v4.js') }}" defer></script>{% endif %}
+{% endblock %}

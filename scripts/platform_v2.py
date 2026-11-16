@@ -102,6 +102,7 @@ def build_record(params, rid, run_id, snapshot_id, result) -> tuple[dict, dict]:
               'daily_ledger': pd.DataFrame(daily_ledger(base['nav'], base['positions_daily'])),
               'daily_ledger_stress': pd.DataFrame(daily_ledger(stress['nav'], stress['positions_daily'])),
               'corporate_actions': frame(base['corporate_action_events'], ['date', 'stock_id', 'event_id', 'kind', 'status']),
+              'corporate_actions_stress': frame(stress['corporate_action_events'], ['date', 'stock_id', 'event_id', 'kind', 'status']),
               'open_positions': base['open_positions'], 'open_positions_stress': stress['open_positions'],
               'costs': {'parameters': params['costs'], 'base': base['cost_summary'], 'stress': stress['cost_summary']},
               'valuation_events': {'base': base['valuation_events'], 'stress': stress['valuation_events']},
@@ -109,14 +110,15 @@ def build_record(params, rid, run_id, snapshot_id, result) -> tuple[dict, dict]:
     return record, frames
 
 
-def run_one(params, snapshot_id, root=None) -> str:
+def run_one(params, snapshot_id, root=None, *, force=False) -> str:
     """Reuse an identical run, else execute and store (a failure is stored as FAILED and re-raised)."""
     from core.backtest import run_store
     from scripts.platform_v2_engine import execute
     root = Path(root or RUNS)
     rid = identity(params, snapshot_id)
-    if existing := lookup(rid, root):
-        return existing
+    if not force:
+        if existing := lookup(rid, root):
+            return existing
     run_id = run_store.new_run_id()
     try:
         result = execute(params['strategy_id'], snapshot_id, params['start'], params['end'], params['capital'], params['costs'], params['rule'])
@@ -262,7 +264,7 @@ def characterize(strategy_id, start, end) -> dict:
 
 
 ANALYSIS = OUT / 'analysis'
-ANALYSIS_FILES = ('core/research/platform/analysis.py', 'scripts/strategy_intelligence.py', 'core/research/intelligence/performance.py',
+ANALYSIS_FILES = ('scripts/platform_v2.py', 'core/research/platform/analysis.py', 'scripts/strategy_intelligence.py', 'core/research/intelligence/performance.py',
                   'core/research/intelligence/scenarios.py', 'core/research/intelligence/evaluate.py', 'core/research/intelligence/feasibility.py',
                   'scripts/historical_report.py')
 
@@ -291,6 +293,11 @@ def _positions_rebuilt(positions, nav, publishable) -> dict:
                       'hhi': float((weights ** 2).sum()) if len(held) else None,
                       'cash_share': float(cash.iloc[0] / total) if total and len(cash) else None, 'holdings': held.stock_id.tolist()})
     return {'status': 'RECONCILED' if publishable else 'POSITIONS_UNVERIFIABLE', 'daily': daily}
+
+
+def _trade_schema_blockers(trades: pd.DataFrame) -> list[str]:
+    """Old V2 runs may predate the saved per-trade return field required for trade statistics."""
+    return ['TRADE_SCHEMA_MISSING_PROFIT_PCT'] if len(trades) and 'profit_pct' not in trades.columns else []
 
 
 def analyze(run_id, ctx=None, root=None) -> Path:
@@ -323,7 +330,11 @@ def analyze(run_id, ctx=None, root=None) -> Path:
     out = {'run_id': run_id, 'strategy_id': sid, 'analysis_code': analysis_code(), 'identity_status': stale, 'publishable': record['publishable'],
            'not_publishable_reasons': record['not_publishable_reasons'], 'year_status': {str(k): v for k, v in status.items()},
            'trust_adjustments': adjustments, 'labels': LABELS}
-    if record['publishable']:
+    blockers = _trade_schema_blockers(trades)
+    if blockers:
+        out.update({'analysis_status': 'BLOCKED', 'analysis_blockers': blockers, 'publishable': False,
+                    'not_publishable_reasons': list(record['not_publishable_reasons']) + blockers})
+    elif record['publishable']:
         prof = ctx['profile']
         performance = si._performance(ctx, run, status)
         scenario = si._scenarios(ctx, run, status, not current)
@@ -513,7 +524,7 @@ def portfolio_analysis(params, result, snapshot_id) -> dict:
             'industry_concentration': {'value': None, 'reason': 'NOT_AVAILABLE: the snapshot has no industry classification'}}
 
 
-def portfolio_run(params, snapshot_id, root=None) -> str:
+def portfolio_run(params, snapshot_id, root=None, *, force=False) -> str:
     """Reuse an identical portfolio run, else execute, reconcile, analyse and store under outputs/platform_v2/portfolios."""
     from core.backtest import run_store
     from core.backtest.run_store import canonical_hash
@@ -522,8 +533,9 @@ def portfolio_run(params, snapshot_id, root=None) -> str:
     from core.research.platform.ledger_v2 import daily_ledger, reconcile
     root = Path(root or PORTFOLIOS)
     pid = portfolio_identity(params, snapshot_id)
-    if existing := lookup(pid, root):
-        return existing
+    if not force:
+        if existing := lookup(pid, root):
+            return existing
     run_id = run_store.new_run_id()
     result = portfolio_execute(params, snapshot_id)
     checks = {name: reconcile(params['capital'], t['nav'], t['fills'], t['corporate_action_events'], t['positions_daily'], t['open_positions'])
@@ -548,11 +560,15 @@ def portfolio_run(params, snapshot_id, root=None) -> str:
               'holdings': frame([r for r in base['positions_daily'] if r['stock_id'] != 'CASH'], ['date', 'stock_id', 'shares', 'value', 'sleeve']),
               'picks': pd.DataFrame(columns=['date', 'stock_id']), 'metrics': _metrics(nav, params['capital']),
               'positions_daily': frame(base['positions_daily'], ['date', 'stock_id', 'shares', 'value', 'sleeve']),
+              'positions_daily_stress': frame(stress['positions_daily'], ['date', 'stock_id', 'shares', 'value', 'sleeve']),
               'fills': frame(base['fills'], ['fill_id']), 'fills_stress': frame(stress['fills'], ['fill_id']),
               'daily_ledger': pd.DataFrame(daily_ledger(base['nav'], base['positions_daily'])),
+              'daily_ledger_stress': pd.DataFrame(daily_ledger(stress['nav'], stress['positions_daily'])),
               'rejections': frame(base['rejections'], ['date', 'sleeve', 'stock_id', 'reason']),
               'corporate_actions': frame(base['corporate_action_events'], ['date', 'stock_id', 'event_id', 'kind', 'status']),
-              'open_positions': base['open_positions'], 'valuation_events': {'base': base['valuation_events'], 'stress': stress['valuation_events']}}
+              'corporate_actions_stress': frame(stress['corporate_action_events'], ['date', 'stock_id', 'event_id', 'kind', 'status']),
+              'open_positions': base['open_positions'], 'open_positions_stress': stress['open_positions'],
+              'valuation_events': {'base': base['valuation_events'], 'stress': stress['valuation_events']}}
     return run_store.save_run(record, frames, root=root, run_id=run_id)
 
 

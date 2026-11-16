@@ -1,0 +1,12 @@
+{% macro histogram(hist, label, pct=false) %}
+{% if hist and hist.get('counts') %}{% set top=hist.counts|max %}
+<svg viewBox="0 0 600 200" role="img" aria-label="{{ label }}" data-testid="scenario-histogram"><title>{{ label }}：已保存的 counts／edges</title>
+{% for count in hist.counts %}<rect x="{{ 20+loop.index0*560/(hist.counts|length) }}" y="{{ 170-count*145/(top or 1) }}" width="{{ 550/(hist.counts|length) }}" height="{{ count*145/(top or 1) }}" fill="#38bdf8"><title>{{ hist.edges[loop.index0] }} ～ {{ hist.edges[loop.index0+1] }}：{{ count }}</title></rect>{% endfor %}
+<text x="20" y="192" fill="#91a7ba" font-size="11">{{ '%.1f'|format(hist.edges[0]*(100 if pct else 1)) }}{{ '%' if pct else ' 日' }}</text><text x="490" y="192" fill="#91a7ba" font-size="11">{{ '%.1f'|format(hist.edges[-1]*(100 if pct else 1)) }}{{ '%' if pct else ' 日' }}</text></svg>
+{% else %}<p>DATA_MISSING：沒有保存分布</p>{% endif %}
+{% endmacro %}
+{% if result.scenarios.status=='SUFFICIENT' %}{% set sim=result.scenarios.simulation %}
+<section class="web-v3 v3-card"><p>歷史重抽樣 · {{ sim.paths }} paths · {{ sim.horizon }} 交易日 · block {{ sim.block }} · sample {{ sim.sample_sessions }} · seed {{ sim.seed }}</p><p>{{ sim.notice }}</p>
+<div class="v3-grid"><div><h3>一年最大回撤</h3>{{ histogram(sim.drawdown.get('histogram'),'歷史一年最大回撤',true) }}</div><div><h3>回到高點所需時間（已回復樣本）</h3>{{ histogram(sim.underwater.get('recovered_histogram'),'已回復樣本時間') }}<p>未回復比例 {{ iu.pct(sim.underwater.censored_share) }}，未回復樣本為右設限，不假定必定回復。</p></div><div><h3>歷史重抽樣報酬</h3>{{ histogram(sim.cagr.get('histogram'),'歷史重抽樣報酬',true) }}</div></div>
+<details><summary>保存分布與敏感度／方法</summary><pre>{{ {'drawdown':sim.drawdown,'underwater':sim.underwater,'return':sim.cagr,'sensitivity':sim.get('sensitivity')}|tojson(indent=2) }}</pre></details></section>
+{% endif %}

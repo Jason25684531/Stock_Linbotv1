@@ -59,7 +59,9 @@ def test_every_step_failing_exits_one(pipeline):
 
 @pytest.mark.parametrize('error, cls', [(ValueError('OD-2: late'), 'GOVERNANCE'), (AssertionError(), 'TEST'), (MemoryError(), 'ENVIRONMENT'),
                                         (OSError('INSUFFICIENT_DISK: 0.5 GB free'), 'ENVIRONMENT'),
-                                        (KeyError('x'), 'DATA'), (ZeroDivisionError(), 'CODE')])
+                                        (KeyError('x'), 'DATA'), (ZeroDivisionError(), 'CODE'),
+                                        (RuntimeError('SLOT_CONFLICT: occupied'), 'ENVIRONMENT'),
+                                        (RuntimeError('CHARACTERIZATION_FAILED'), 'TEST')])
 def test_classification(error, cls):
     assert rp.classify(error) == cls
 
@@ -114,7 +116,49 @@ def test_missing_checkpoint_input_fails_as_data_instead_of_being_ignored(pipelin
     assert latest['steps']['data_trust']['failure_class'] == 'DATA'
 
 
-def test_baseline_preflight_requires_matching_characterizations_resources_and_pipeline_slot(monkeypatch):
+def test_interrupted_step_recovers_and_persists_checkpoint_inputs(pipeline):
+    calls, make, out = pipeline
+    steps = make()
+    interrupted = {'once': True}
+
+    def baseline():
+        calls.append('baseline')
+        if interrupted['once']:
+            interrupted['once'] = False
+            raise KeyboardInterrupt()
+        return {'run_id': 'RID2-stable'}
+
+    steps['baseline'] = (('data_trust',), (), baseline)
+    with pytest.raises(KeyboardInterrupt):
+        rp.run('first', steps)
+    assert not (out / 'steps/baseline.json').exists()
+    calls.clear()
+    assert rp.run('resumed', steps) == 0
+    assert calls.count('baseline') == 1
+    state = json.loads((out / 'steps/baseline.json').read_text(encoding='utf-8'))
+    assert state['outputs']['run_id'] == 'RID2-stable'
+    assert state['input_identity'] and state['dependencies']['data_trust']
+    calls.clear()
+    assert rp.run('again', steps) == 0
+    assert 'baseline' not in calls
+
+
+def test_checkpoint_write_is_atomic_on_replace_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(rp, 'OUT', tmp_path / 'pipeline')
+    rp._save('data_trust', {'status': 'COMPLETE'})
+    before = rp._state('data_trust')
+
+    def interrupted_replace(src, dst):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(rp.os, 'replace', interrupted_replace)
+    with pytest.raises(KeyboardInterrupt):
+        rp._save('data_trust', {'status': 'FAILED'})
+    assert rp._state('data_trust') == before
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_baseline_preflight_requires_matching_characterizations_resources_and_pipeline_slot(monkeypatch, wrapped):
     import os
     import psutil
     import shutil
@@ -122,7 +166,9 @@ def test_baseline_preflight_requires_matching_characterizations_resources_and_pi
     from core.research.reference import batch_job
     from scripts import platform_v2 as p2
 
-    monkeypatch.setattr(batch_job, 'state', lambda: {'kind': 'platform_pipeline', 'status': 'RUNNING', 'pid': os.getpid()})
+    owner = 101 if wrapped else os.getpid()
+    monkeypatch.setattr(batch_job, 'state', lambda: {'kind': 'platform_pipeline', 'status': 'RUNNING', 'pid': owner})
+    monkeypatch.setattr(psutil, 'Process', lambda _: SimpleNamespace(parents=lambda: [SimpleNamespace(pid=101)]))
     monkeypatch.setattr(psutil, 'virtual_memory', lambda: SimpleNamespace(available=32 * 2 ** 30))
     monkeypatch.setattr(shutil, 'disk_usage', lambda _: SimpleNamespace(free=2 * 2 ** 30))
     calls = []
@@ -160,6 +206,20 @@ def test_baseline_preflight_rejects_a_conflicting_slot(monkeypatch):
     from scripts import platform_v2 as p2
 
     monkeypatch.setattr(batch_job, 'state', lambda: {'kind': 'platform_backtest', 'status': 'RUNNING', 'pid': 1})
+    with pytest.raises(RuntimeError, match='SLOT_CONFLICT'):
+        rp._baseline_preflight(p2)
+
+
+def test_baseline_preflight_rejects_unrelated_pipeline_in_global_pid_list(monkeypatch):
+    import os
+    import psutil
+    from types import SimpleNamespace
+    from core.research.reference import batch_job
+    from scripts import platform_v2 as p2
+
+    monkeypatch.setattr(psutil, 'Process', lambda _: SimpleNamespace(parents=lambda: [SimpleNamespace(pid=101)]))
+    monkeypatch.setattr(batch_job, 'state', lambda: {'kind': 'platform_pipeline', 'status': 'RUNNING',
+                                                    'pid': 202, 'pids': [202, os.getpid()]})
     with pytest.raises(RuntimeError, match='SLOT_CONFLICT'):
         rp._baseline_preflight(p2)
 

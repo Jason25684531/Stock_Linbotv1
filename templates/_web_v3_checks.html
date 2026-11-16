@@ -1,0 +1,15 @@
+{% if result and result.performance %}
+<section class="v3-card" data-testid="type-edge"><h2>5. 策略專屬驗證 · {{ result.dimensions.type_edge.label }}</h2>
+<p>檢查期間 {{ result.dimensions.type_edge.track }} · {{ (result.performance.verified_span or [])|join(' ～ ') }} · {{ result.dimensions.type_edge.sample_note or '' }}</p>
+<p>Definition／Profile 原始版本參見上方 V1 卡與來源；下表為此 Run 保存的 Evaluation checks，不重新判定。</p>
+{% for c in result.dimensions.type_edge.checks %}<details open><summary>{{ c.metric }} · {{ c.status }}</summary>
+<p>實際值 {{ iu.mv(c.measured,'num') }} · 原始門檻 {{ c.op }} {{ c.value }} · 同期參考值 {{ iu.mv(c.reference,'num') }}</p>
+<p>定義／來源：{{ c.metric }} · {{ c.source }} · {{ report_meta.get('Source Files','DATA_MISSING') }}</p>
+<p>{% if c.status=='FAIL' %}未通過：保存的實際值不符合上列原始比較條件。{% elif c.status not in ['PASS','FAIL'] %}樣本／指標／可信期間不足，沿用 {{ c.status }}。{% else %}符合此項研究條件；不代表正式交易認證。{% endif %}</p></details>{% endfor %}</section>
+<section class="v3-card"><h2>歷史環境、成本與回撤證據</h2><details><summary>市場環境保存結果（非新計算）</summary><pre>{{ result.performance.get('regime',{})|tojson(indent=2) }}</pre></details><details><summary>歷史重大回撤及成本壓力</summary><pre>{{ {'historical':result.scenarios.get('historical'), 'stress':result.scenarios.get('stress'),'cost_summary':result.performance.get('cost_summary')}|tojson(indent=2) }}</pre></details></section>
+<section class="v3-card" data-testid="fill-evidence"><h2>逐筆成交／未成交、每日持股及成本</h2>
+<p>資料口徑：基礎成本；切換主圖不改變此帳務明細。完整 base／stress 檔案與 SHA256 見下載。</p>
+{% for name,rows,filename,empty in [('成交及未成交／費稅／滑價',fills,'fills.csv','NO_EXECUTIONS'),('逐日持股股數與市值',positions,'positions_daily.csv','NO_POSITION_ROWS')] %}<details><summary>{{ name }} · {{ rows|length }} 列（顯示最近 250 列，頁碼只涵蓋此視窗，完整資料見下載）</summary>{% if rows %}<div class="v3-scroll"><table data-v3-page><thead><tr>{% for k in rows[0] %}<th>{{ k }}</th>{% endfor %}</tr></thead><tbody>{% for row in rows[-250:] %}<tr>{% for v in row.values() %}<td>{{ v if v is not none else 'DATA_MISSING' }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div><button type="button" data-v3-prev>上一頁</button> <output data-v3-page-label></output> <button type="button" data-v3-next>下一頁</button>{% else %}<p>{{ empty if filename in (files or []) else 'DATA_MISSING' }}：{{ filename }} {{ '存在但沒有資料列' if filename in (files or []) else '未提供保存檔案' }}，不推論為 0% 報酬。</p>{% endif %}</details>{% endfor %}</section>
+<script id="v3-report-data" type="application/json">{{ {'series':result.performance.series, 'base':result.performance.provisional, 'stress_metrics':(saved_metrics or {}).get('x2',{}), 'edge':result.dimensions.type_edge}|tojson }}</script>
+<script src="{{ url_for('static',filename='web_v3_report.js') }}" defer></script>
+{% endif %}

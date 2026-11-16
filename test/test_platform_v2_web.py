@@ -29,6 +29,12 @@ def stored(tmp_path, monkeypatch):
     ctx, run = _ctx(tmp_path)
     nav = run['nav']
     out = tmp_path / 'p2'
+    audit = out / 'acceptance/ledger/independent_ledger_audit.json'
+    audit.parent.mkdir(parents=True)
+    audit.write_text('{"runs": []}', encoding='utf-8')
+    baseline = out / 'acceptance/phase_b/baseline_verification.json'
+    baseline.parent.mkdir(parents=True)
+    baseline.write_text('{"status": "PASS", "rows": []}', encoding='utf-8')
     for name, value in (('OUT', out), ('RUNS', out / 'runs'), ('PORTFOLIOS', out / 'portfolios'), ('ANALYSIS', out / 'analysis'),
                         ('MODELS', out / 'models'), ('REQUESTS', out / 'requests')):
         monkeypatch.setattr(routes, name, value)
@@ -94,6 +100,23 @@ def client():
     return app.test_client()
 
 
+def test_legacy_trade_schema_blocks_analysis_without_changing_saved_run(stored, monkeypatch):
+    from core.backtest import run_store
+    from scripts import platform_v2 as p2, strategy_intelligence as si
+
+    original = run_store.read_frame
+    monkeypatch.setattr(run_store, 'read_frame', lambda loaded, name: original(loaded, name).drop(columns=['profit_pct'])
+                        if name == 'trades' else original(loaded, name))
+    monkeypatch.setattr(p2, 'analysis_path', lambda _: stored['out'] / 'analysis' / 'legacy-blocked.json')
+    monkeypatch.setattr(si, '_performance', lambda *args: pytest.fail('incomplete trade rows reached performance calculation'))
+    path = p2.analyze(PUB, ctx=stored['ctx'], root=stored['out'] / 'runs')
+    result = json.loads(path.read_text(encoding='utf-8'))['result']
+    assert result['analysis_status'] == 'BLOCKED' and not result['publishable']
+    assert result['analysis_blockers'] == ['TRADE_SCHEMA_MISSING_PROFIT_PCT']
+    assert 'performance' not in result
+    assert run_store.load_run(PUB, root=stored['out'] / 'runs')['run']['publishable'] is True
+
+
 def test_unreviewed_model_report_is_not_served_as_current(stored):
     path = stored['out'] / 'MODEL_VALIDATION_REPORT.md'
     path.write_text('DEV_WINDOW_SKILL', encoding='utf-8')
@@ -109,7 +132,10 @@ def approve_run(out, kind, run_id):
              'engine_v2.py': routes.ROOT / 'core/research/platform/engine_v2.py',
              'ledger_v2.py': routes.ROOT / 'core/research/platform/ledger_v2.py',
              'platform_v2_engine.py': routes.ROOT / 'scripts/platform_v2_engine.py',
-             'platform_v2.py': routes.ROOT / 'scripts/platform_v2.py'}
+             'platform_v2_ledger_audit.py': routes.ROOT / 'scripts/platform_v2_ledger_audit.py',
+             'platform_v2.py': routes.ROOT / 'scripts/platform_v2.py',
+             'ledger_audit.json': out / 'acceptance/ledger/independent_ledger_audit.json',
+             'baseline_verification.json': out / 'acceptance/phase_b/baseline_verification.json'}
     if kind == 'portfolio':
         paths['portfolio_v2.py'] = routes.ROOT / 'core/research/platform/portfolio_v2.py'
     marker = out / 'acceptance' / 'publication' / kind / f'{run_id}.json'
@@ -138,7 +164,7 @@ def test_report_numbers_equal_the_stored_result(stored):
     month = stored['analysis']['monthly']['2017']['months']['3']['value']
     assert re.search(r'data-testid="month-2017-3"[^>]*>([^<]+)<', page)[1] == '%+.1f%%' % (month * 100)
     assert 'data-testid="month-2016-1"' in page and re.search(r'data-testid="month-2016-1">([^<]+)<', page)[1] == '無交易日'
-    assert 'NO_TRADES' not in page and 'fills.csv' in page
+    assert 'data-testid="no-trades"' not in page and 'fills.csv' in page
 
 
 def test_unverifiable_run_shows_no_performance_and_states_are_distinct(stored):
@@ -242,6 +268,27 @@ def test_review_marker_must_match_artifacts(stored):
     data['sha256']['run.json'] = '0' * 64
     marker.write_text(json.dumps(data), encoding='utf-8')
     assert not routes._run_reviewed(stored['out'] / 'runs', PUB)
+
+
+def test_review_marker_binds_audit_and_baseline_evidence(stored):
+    from app import platform_v2_routes as routes
+    approve_run(stored['out'], 'backtest', PUB)
+    audit = stored['out'] / 'acceptance/ledger/independent_ledger_audit.json'
+    audit.write_text('{"runs": ["changed"]}', encoding='utf-8')
+    assert not routes._run_reviewed(stored['out'] / 'runs', PUB)
+
+
+def test_admin_retry_preserves_repair_worker_count(stored, monkeypatch):
+    from app import platform_routes
+    from core.research.reference import batch_job
+    monkeypatch.setattr(platform_routes, '_require_admin_write', lambda: None)
+    monkeypatch.setattr(batch_job, 'state', lambda: {'status': 'CANCELLED', 'kind': 'platform_ledger_repair',
+                                                     'workers': 4, 'args': ['--remaining']})
+    calls = []
+    monkeypatch.setattr(batch_job, 'start', lambda **kwargs: calls.append(kwargs) or {'status': 'STARTED', 'pid': 42})
+    response = client().post('/platform/system/retry')
+    assert response.status_code == 302
+    assert calls == [{'workers': 4, 'kind': 'platform_ledger_repair', 'args': ['--remaining']}]
 
 
 def test_unreviewed_model_never_displays_stock_predictions(stored):

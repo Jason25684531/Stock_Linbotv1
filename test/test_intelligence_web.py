@@ -78,8 +78,8 @@ def _client():
 
 
 def test_pages_show_stored_numbers_and_provenance(stored):
-    latest = json.loads((stored / 'LATEST.json').read_text())
-    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text())
+    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
+    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
     page = _client().get('/intelligence/syn').get_data(as_text=True)
     cagr = result['performance']['verified']['cagr']['value']
     assert f'{cagr * 100:.1f}%' in page
@@ -99,8 +99,8 @@ def test_report_tables_come_from_the_stored_results(stored, monkeypatch):
     monkeypatch.setattr(rep, 'OUT', stored)
     path = rep.tables()
     text = path.read_text(encoding='utf-8')
-    latest = json.loads((stored / 'LATEST.json').read_text())
-    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text())
+    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
+    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
     assert latest['job_id'] in text and result['identity'] in text
     assert f"{result['performance']['verified']['cagr']['value']:.1%}" in text
     assert '| blocked |' in text and 'NO_PIT' in text
@@ -108,8 +108,8 @@ def test_report_tables_come_from_the_stored_results(stored, monkeypatch):
 
 
 def test_the_page_renders_neutral_fact_labels_not_quality_grades(stored):
-    latest = json.loads((stored / 'LATEST.json').read_text())
-    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text())
+    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
+    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
     page = _client().get('/intelligence/syn').get_data(as_text=True)
     sharpe = next(i for i in result['health']['efficiency'] if i['name'] == 'Sharpe')
     assert sharpe.get('neutral') and sharpe['neutral'] in page  # e.g. 平均日報酬為正, never 良好 for a sign check
@@ -119,9 +119,9 @@ def test_the_page_renders_neutral_fact_labels_not_quality_grades(stored):
 
 
 def test_a_defensive_value_without_data_renders(stored):
-    latest = json.loads((stored / 'LATEST.json').read_text())
+    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
     path = stored / 'results' / latest['strategies']['syn'] / 'syn.json'
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding='utf-8'))
     data['dimensions']['type_edge']['defensive_value'] = {'status': 'INSUFFICIENT_DATA'}
     path.write_text(json.dumps(data), encoding='utf-8')
     page = _client().get('/intelligence/syn')
@@ -135,16 +135,16 @@ def test_final_report_has_every_section_per_strategy(stored, monkeypatch):
     text = rep.build().read_text(encoding='utf-8')
     for heading in ('**1. 年化淨報酬目標**', '**2. 最大回撤與回本時間', '**3. 市場環境**', '**4. 未來一年歷史情境**', '**5. 交易可行性與組合分散**', '**7. 實作與說明差異**'):
         assert heading in text
-    result = json.loads((stored / 'results' / json.loads((stored / 'LATEST.json').read_text())['strategies']['syn'] / 'syn.json').read_text())
+    result = json.loads((stored / 'results' / json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
     assert result['run']['run_id'] in text and result['identity'] in text and 'HS1-syn' in text
     assert '`blocked`' in text and 'NO_PIT' in text and '未執行' in text  # missing acceptance evidence is stated, never assumed
 
 
 def test_an_older_result_is_marked_superseded(stored):
-    latest = json.loads((stored / 'LATEST.json').read_text())
+    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
     current = latest['strategies']['syn']
     older = 'SI1-' + 'a' * 16
-    data = json.loads((stored / 'results' / current / 'syn.json').read_text())
+    data = json.loads((stored / 'results' / current / 'syn.json').read_text(encoding='utf-8'))
     si.write_json(stored / 'results' / older / 'syn.json', data | {'identity': older})
     assert 'superseded-warning' in _client().get(f'/intelligence/syn?result={older}').get_data(as_text=True)
     assert 'superseded-warning' not in _client().get('/intelligence/syn').get_data(as_text=True)
@@ -213,8 +213,8 @@ def test_stale_identity_shows_no_verdict_or_probability(tmp_path, monkeypatch):
     monkeypatch.setattr(si, 'risk_numbers', lambda sid, settings: {})
     monkeypatch.setattr(si, 'code_hashes', lambda: ctx['code'])
     si.run_job('jstale')
-    latest = json.loads((tmp_path / 'si' / 'LATEST.json').read_text())
-    r = json.loads((tmp_path / 'si' / 'results' / latest['strategies']['syn'] / 'syn.json').read_text())
+    latest = json.loads((tmp_path / 'si' / 'LATEST.json').read_text(encoding='utf-8'))
+    r = json.loads((tmp_path / 'si' / 'results' / latest['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
     assert r['status'] == 'PROVISIONAL_IDENTITY_STALE' and r['performance']['verified'] is None and r['performance']['verified_span'] is None
     assert set(r['year_status'].values()) == {'IDENTITY_STALE'} and all(v.get('label') != 'VERIFIED' for v in r['performance']['ranges'].values())
     regimes = r['performance']['regime']['regimes']

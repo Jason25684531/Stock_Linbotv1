@@ -5,6 +5,7 @@
 {% block content %}
 <div class="space-y-4 text-sm" data-testid="platform-index">
 {{ iu.labels_banner('五個入口都只讀已存檔的結果或既有每日推薦；不下單、不寫正式資料庫、不發 LINE。') }}
+{% if overview is defined %}{% include '_web_v3_overview.html' %}{% endif %}
 {% set runnable = readiness.values()|selectattr('web_runnable')|list %}
 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
     <a class="quant-card block p-4 hover:border-blue-400" href="{{ url_for('platform_selection') }}" data-testid="entry-selection">

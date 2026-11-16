@@ -12,10 +12,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
+import tempfile
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+from sqlalchemy.exc import OperationalError
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -33,9 +36,9 @@ def classify(error: BaseException) -> str:
     text = f'{type(error).__name__}: {error}'
     if any(k in text for k in ('OD-2', 'GOVERNANCE', 'NOT_FROZEN', 'MEMBER_NOT')):
         return 'GOVERNANCE'
-    if isinstance(error, AssertionError):
+    if isinstance(error, AssertionError) or 'CHARACTERIZATION_FAILED' in text or 'CHARACTERIZATION_SNAPSHOT_MISMATCH' in text:
         return 'TEST'
-    if isinstance(error, (MemoryError, PermissionError, TimeoutError)) or any(k in text for k in ('GB_FREE', 'INSUFFICIENT_DISK')):
+    if isinstance(error, (MemoryError, PermissionError, TimeoutError, ConnectionError, OperationalError)) or any(k in text for k in ('GB_FREE', 'INSUFFICIENT_DISK', 'SLOT_CONFLICT')):
         return 'ENVIRONMENT'
     if isinstance(error, (FileNotFoundError, KeyError)) or any(k in text for k in ('DATA', 'MISSING', 'SNAPSHOT')):
         return 'DATA'
@@ -60,8 +63,10 @@ def _baseline_preflight(p2):
 
     def check_slot():
         state = batch_job.state()
+        owner = state.get('pid')
+        owns_slot = owner == os.getpid() or owner in [p.pid for p in psutil.Process(os.getpid()).parents()]
         if (state.get('kind') != 'platform_pipeline' or state.get('status') != 'RUNNING'
-                or state.get('pid') != os.getpid()):
+                or not owns_slot):
             raise RuntimeError(f"SLOT_CONFLICT: pipeline does not own the active work slot: {state}")
         return {'kind': state['kind'], 'pid': state['pid']}
 
@@ -128,11 +133,18 @@ def _steps():
         return {'analyzed': done}
 
     def models():
-        existing = sorted(p2.MODELS.glob('PRED1-*/model.json')) if p2.MODELS.is_dir() else []
+        from scripts import historical_foundation
         from core.research.platform import prediction as pr
         frozen = pr.check_frozen(p2.MODEL_FREEZE)
-        if len([p for p in existing if json.loads(p.read_text(encoding='utf-8'))['spec_hash'] == frozen]) == len(pr.SPEC['labels']['horizons']):
-            return {'reused': [p.parent.name for p in existing]}
+        evaluation = historical_foundation.latest_evaluation()
+        from scripts.research_workflow import sha256
+        code = {name: sha256(p2.ROOT / name) for name in ('core/research/platform/prediction.py', 'scripts/platform_v2.py')}
+        expected = [p2.model_version(h, frozen, evaluation['snapshot_id'], code) for h in pr.SPEC['labels']['horizons']]
+        existing = {p.parent.name: json.loads(p.read_text(encoding='utf-8'))
+                    for p in p2.MODELS.glob('PRED1-*/model.json')} if p2.MODELS.is_dir() else {}
+        if all(existing.get(version, {}).get('model_version') == version
+               and existing[version].get('spec_hash') == frozen for version in expected):
+            return {'reused': expected}
         return {'evaluated': p2.models()}
 
     def prediction_tracking():
@@ -176,7 +188,8 @@ def _steps():
                             'outputs/historical_foundation/evaluations/LATEST.json', 'jobs/run_research_platform.py'), data_trust),
         'baseline': (('data_trust',), code + ('jobs/run_research_platform.py', 'outputs/platform_v2/STRATEGY_READINESS_21.json'), baseline),
         'analysis': (('baseline',), ('scripts/platform_v2.py', 'core/research/platform/analysis.py'), analysis),
-        'models': (('data_trust',), ('core/research/platform/prediction.py', 'outputs/platform_v2/model_profile_freeze.json'), models),
+        'models': (('data_trust',), ('core/research/platform/prediction.py', 'scripts/platform_v2.py',
+                                     'outputs/platform_v2/model_profile_freeze.json'), models),
         'prediction_tracking': (('models',), ('core/research/platform/prediction.py',), prediction_tracking),
         'portfolio': (('baseline',), code + ('core/research/platform/portfolio_v2.py',), portfolio),
         'health': ((), ('outputs/platform_v2/baseline.json',), health),
@@ -188,14 +201,33 @@ STEP_NAMES = ('data_trust', 'baseline', 'analysis', 'models', 'prediction_tracki
 
 def _state(name) -> dict:
     try:
-        return json.loads((OUT / 'steps' / f'{name}.json').read_text(encoding='utf-8'))
-    except (OSError, ValueError):
+        value = json.loads((OUT / 'steps' / f'{name}.json').read_text(encoding='utf-8'))
+    except FileNotFoundError:
         return {}
+    except (OSError, ValueError) as error:
+        raise ValueError(f'CHECKPOINT_INVALID: {name}: {type(error).__name__}') from error
+    if (not isinstance(value, dict) or value.get('status') not in ('COMPLETE', 'REUSED', 'FAILED')
+            or type(value.get('attempts', 0)) is not int or value.get('attempts', 0) < 0):
+        raise ValueError(f'CHECKPOINT_INVALID: {name}: invalid structure')
+    return value
 
 
 def _save(name, value):
-    (OUT / 'steps').mkdir(parents=True, exist_ok=True)
-    (OUT / 'steps' / f'{name}.json').write_text(json.dumps(value, ensure_ascii=False, indent=1, default=str), encoding='utf-8')
+    directory = OUT / 'steps'
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f'{name}.json'
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=directory,
+                                         prefix=f'.{name}.', suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(value, stream, ensure_ascii=False, indent=1, default=str)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def run(job_id, steps=None, dry_run=False) -> int:
@@ -203,6 +235,12 @@ def run(job_id, steps=None, dry_run=False) -> int:
     if dry_run:
         print(json.dumps({'command': 'research_pipeline', 'dry_run': True, 'steps': list(STEP_NAMES), 'writes': 'nothing'}), flush=True)
         return 0
+    # Validate every saved checkpoint before any step can produce side effects.
+    previous_states = {name: _state(name) for name in STEP_NAMES}
+    for name, previous in previous_states.items():
+        if previous and (not isinstance(previous.get('key'), str) or not previous['key']
+                         or type(previous.get('attempts')) is not int or previous['attempts'] < 1):
+            raise ValueError(f'CHECKPOINT_INVALID: {name}: missing identity or attempts')
     results = {}
     for name in STEP_NAMES:
         deps, inputs, fn = steps[name]
@@ -214,7 +252,7 @@ def run(job_id, steps=None, dry_run=False) -> int:
             input_identity = hashlib.sha256(f'{type(error).__name__}:{error}'.encode('utf-8')).hexdigest()[:16]
         dependencies = {dep: results.get(dep, {}).get('key') for dep in deps}
         key = hashlib.sha256(json.dumps({'inputs': input_identity, 'dependencies': dependencies}, sort_keys=True).encode('utf-8')).hexdigest()[:16]
-        previous = _state(name)
+        previous = previous_states[name]
         blocked = [d for d in deps if results.get(d, {}).get('status') not in ('COMPLETE', 'REUSED')]
         if blocked:
             results[name] = {'status': 'SKIPPED', 'reason': f'DEPENDENCY_FAILED: {blocked}', 'attempts': previous.get('attempts', 0) if previous.get('key') == key else 0}
@@ -233,7 +271,8 @@ def run(job_id, steps=None, dry_run=False) -> int:
             except Exception as error:
                 results[name] = {'status': 'FAILED', 'attempts': attempts, 'failure_class': classify(error), 'reason': f'{type(error).__name__}: {str(error)[:400]}',
                                  'traceback': traceback.format_exc()[-2000:]}
-            results[name] |= {'key': key, 'started_at': started, 'finished_at': now(), 'job_id': job_id}
+            results[name] |= {'key': key, 'input_identity': input_identity, 'dependencies': dependencies,
+                              'started_at': started, 'finished_at': now(), 'job_id': job_id}
             _save(name, results[name])
         print(json.dumps({'step': name, **{k: results[name].get(k) for k in ('status', 'failure_class', 'attempts', 'reason')}}, default=str), flush=True)
     done = [n for n, r in results.items() if r['status'] in ('COMPLETE', 'REUSED')]

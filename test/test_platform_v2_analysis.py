@@ -4,6 +4,7 @@ import pytest
 
 from core.research.intelligence.performance import _yearly
 from core.research.platform.analysis import monthly_table
+from scripts.platform_v2 import _trade_schema_blockers
 
 
 def nav():
@@ -34,3 +35,10 @@ def test_cash_month_has_zero_holding_sessions():
     table = monthly_table(frame, ledger)
     assert table['2020']['months']['4']['holding_sessions'] == 0
     assert table['2020']['months']['5']['holding_sessions'] > 0
+
+
+def test_old_trade_rows_without_profit_are_blocked_from_per_trade_statistics():
+    assert _trade_schema_blockers(pd.DataFrame({'stock_id': ['2330'], 'buy_date': ['2024-01-02'],
+                                                'sell_date': ['2024-01-03']})) == ['TRADE_SCHEMA_MISSING_PROFIT_PCT']
+    assert _trade_schema_blockers(pd.DataFrame(columns=['stock_id', 'buy_date', 'sell_date'])) == []
+    assert _trade_schema_blockers(pd.DataFrame({'profit_pct': [1.0]})) == []

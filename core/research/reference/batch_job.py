@@ -7,8 +7,10 @@ started; runs already saved stay in the run store and the next batch REUSEs them
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,7 +22,7 @@ INTELLIGENCE = 'scripts.strategy_intelligence'  # change 2026-11-11-strategy-int
 KINDS = {'reference': [MODULE], 'history_refresh': [HISTORY, 'refresh'], 'history_run': [HISTORY, 'run'], 'intelligence': [INTELLIGENCE, 'run']}
 PLATFORM, PIPELINE = 'scripts.platform_v2', 'jobs.run_research_platform'  # change 2026-11-12-integrated-research-platform-v2: same single slot
 KINDS |= {'platform_backtest': [PLATFORM, 'run'], 'platform_portfolio': [PLATFORM, 'portfolio'], 'platform_baseline': [PLATFORM, 'baseline'],
-          'platform_pipeline': [PIPELINE]}
+          'platform_pipeline': [PIPELINE], 'platform_ledger_repair': ['scripts.platform_v2_ledger_repair']}
 DONE = '"status": "DONE"'  # last line a history command prints when it completes
 PARTIAL = '"status": "PARTIAL"'  # an intelligence job where some strategies failed: never shown as FINISHED
 
@@ -37,8 +39,20 @@ def _read() -> dict:
 
 
 def _write(job) -> None:
-    _job_path().parent.mkdir(parents=True, exist_ok=True)
-    _job_path().write_text(json.dumps(job, ensure_ascii=False, indent=1), encoding='utf-8')
+    path = _job_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                         prefix='.current.', suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(job, stream, ensure_ascii=False, indent=1)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def runner_pids() -> list:
@@ -47,7 +61,7 @@ def runner_pids() -> list:
     found = []
     for proc in psutil.process_iter(['pid', 'cmdline']):
         cmdline = proc.info.get('cmdline') or []
-        if MODULE in cmdline or HISTORY in cmdline or INTELLIGENCE in cmdline or PLATFORM in cmdline or PIPELINE in cmdline:
+        if MODULE in cmdline or HISTORY in cmdline or INTELLIGENCE in cmdline or PLATFORM in cmdline or PIPELINE in cmdline or 'scripts.platform_v2_ledger_repair' in cmdline:
             found.append(proc.info['pid'])
     return found
 
@@ -118,7 +132,11 @@ def _start_locked(workers, popen, kind='reference', args=()) -> dict:
                      stdout=handle, stderr=subprocess.STDOUT)
     job = {'pid': proc.pid, 'started_at': stamp.isoformat(), 'workers': int(workers), 'log': str(log), 'status': 'STARTED', 'kind': kind, 'job_id': job_id,
            'args': list(args)}
-    _write(job)
+    try:
+        _write(job)
+    except Exception:
+        proc.terminate()
+        raise
     return job
 
 

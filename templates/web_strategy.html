@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% import '_intelligence_ui.html' as iu %}
+{% block title %}{{ row.name }} · 策略規格{% endblock %}{% block page_heading %}策略規格與研究狀態{% endblock %}
+{% block content %}<div class="web-v3" data-testid="web-strategy">
+{{ iu.labels_banner() }}<section class="v3-card"><h2>{{ row.name }}</h2><p>{{ row.strategy_id }} · {{ row.type_label }} · {{ iu.badge(row.trust) }} · NOT_CERTIFIED</p>
+<p>可回測期間 {{ (row.readiness.get('backtest_window') or [])|join(' ～ ') or 'DATA_MISSING' }} · 可信年度 {{ row.readiness.get('trusted_years',[])|join(', ') or '無 VERIFIED 年度' }}</p>
+{% if row.reason %}<p class="v3-error">{{ row.state }}：{{ row.reason }}</p>{% endif %}<p>Definition {{ row.card.get('definition',{}).get('definition_id','DATA_MISSING') }} · Profile {{ row.card.get('profile',{}).get('profile_id','DATA_MISSING') }}</p>
+<p><a href="{{ url_for('intelligence_strategy',sid=row.strategy_id) }}">V1 原始研究與歷史版本</a> · <a href="{{ url_for('web_strategies') }}">全部策略</a></p></section>
+<section class="v3-card" data-testid="spec-card"><h2>策略卡 · {{ row.fields_present }}/{{ row.fields_total }} 規格欄位</h2>
+{% for key,field in row.card.get('definition',{}).get('fields',{}).items() %}<details open><summary>{{ labels.get(key,key) }} · {{ field.status }}</summary><p>{{ field.text }}</p>{% for s in field.get('sources',[]) %}<p class="v3-muted">{{ s.path }} :: {{ s.symbol }} · lines {{ s.lines }} · SHA256 {{ s.sha256 }} {{ s.status }}</p>{% endfor %}</details>{% else %}<p>DATA_MISSING：策略規格來源缺漏</p>{% endfor %}
+<details><summary>數值參數與原 Profile</summary><pre>{{ row.card.get('definition',{}).get('numeric',{})|tojson(indent=2) }}</pre><pre>{{ row.card.get('profile',{})|tojson(indent=2) }}</pre></details></section>
+<section class="v3-card"><h2>已知實作與說明差異</h2><pre>{{ notes|tojson(indent=2) }}</pre></section>
+<section class="v3-card"><h2>研究 Run 與報告</h2><p>報酬未達 5% 或 10% 仍可閱讀經審查的可信報告；目標不等於認證。</p>
+{% if row.selected %}<p><a href="{{ url_for('platform_run',run_id=row.selected.run_id) }}">最新完整報告 {{ row.selected.run_id }}</a> · {{ row.target.status }}</p>{% endif %}
+{% for run in row.runs %}<p><a href="{{ url_for('platform_run',run_id=run.run_id) }}">{{ run.run_id }}</a> · {{ run.period|join(' ～ ') }} · {{ run.rule_version }} · {{ 'PUBLISHABLE' if run.publishable else 'NOT_PUBLISHABLE' }}</p>{% else %}<p>{{ row.reason or 'DATA_MISSING：沒有保存 Run' }}</p>{% endfor %}</section></div>{% endblock %}

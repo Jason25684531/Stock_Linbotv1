@@ -17,10 +17,7 @@ import pandas as pd
 from config import Config
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
-import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 
 class PerformanceVisualizer:

@@ -3,6 +3,19 @@ import json
 from scripts import platform_v2_report
 
 
+def test_portfolio_report_hides_returns_without_native_two_track_audit(tmp_path, monkeypatch):
+    monkeypatch.setattr(platform_v2_report, 'OUT', tmp_path)
+    row = {'run_id': 'legacy', 'status': 'SUCCESS', 'publishable': True, 'analysis': {'legacy_return': 99},
+           'parameters': {'members': ['s'], 'weights': [1], 'rebalance': 'REBAL_NONE', 'rule': 'LOT_ENGINE_V1'},
+           'period': ['2020-01-02', '2020-01-03'], 'reconciliation': {}}
+    monkeypatch.setattr(platform_v2_report, '_runs', lambda _: [row])
+    assert platform_v2_report._publishable_portfolios() == []
+    platform_v2_report.portfolio_report()
+    text = (tmp_path / 'PORTFOLIO_VALIDATION_REPORT.md').read_text(encoding='utf-8')
+    assert 'NOT_PUBLISHABLE' in text and '績效不予發布' in text
+    assert 'CAGR' not in text
+
+
 def test_model_report_preserves_undefined_reasons(tmp_path, monkeypatch):
     monkeypatch.setattr(platform_v2_report, 'OUT', tmp_path)
     folder = tmp_path / 'models' / 'PRED1-20d-test'

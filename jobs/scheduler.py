@@ -201,6 +201,15 @@ def run_pipeline(name: str, *, stop_on_error: bool, dry_run: bool = False) -> in
         print('[DRY-RUN] Scheduler preview mode enabled')
     print('=' * 60)
 
+    if not dry_run and name != 'research':
+        from core.research.sources.twse import _exclusive
+        try:
+            # Shared across daily/evening/morning aliases; OS releases on process death.
+            with _exclusive(REPO_ROOT / 'outputs/scheduler/production_pipeline.lock', timeout=0):
+                return _run_pipeline_steps(name, stop_on_error=stop_on_error, dry_run=dry_run)
+        except TimeoutError:
+            print('PIPELINE_ALREADY_RUNNING: no job started')
+            return 75
     return _run_pipeline_steps(name, stop_on_error=stop_on_error, dry_run=dry_run)
 
 

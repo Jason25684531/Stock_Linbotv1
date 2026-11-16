@@ -1,0 +1,14 @@
+<section class="v3-card" data-testid="report-provenance"><h2>證據與計算口徑</h2>
+<p>Strategy {{ record.strategy_id }} · Run {{ record.run_id }} · Snapshot {{ record.snapshot_id }}</p>
+<p>Engine {{ record.engine_version }} · Rule {{ record.rule_version }} · Data Trust {{ record.evidence.data_trust }} · Publication {{ 'PUBLISHABLE' if record.publishable else 'NOT_PUBLISHABLE' }}</p>
+{% for label,value in (report_meta or {}).items() %}<p>{{ label }}：{{ value if value is not none else 'DATA_MISSING' }}</p>{% endfor %}
+<p>V1 卡片的版本資訊只說明規格來源；下方體檢與專屬檢查使用此 V2 Run 的保存分析，不將兩者冒充同一次評估。正式認證：NOT_CERTIFIED。</p></section>
+{% if result and result.performance %}
+<section class="v3-card" data-testid="cost-controls"><h2>1. 績效總覽 · 全期 PROVISIONAL</h2>
+<p>曲線／主 KPI 期間 {{ result.performance.provisional.period|join(' ～ ') }} · 基準日 {{ result.performance.provisional.base_date }}；VERIFIED 指標另外標示可信期間 {{ (result.performance.verified_span or [])|join(' ～ ') or 'INSUFFICIENT_VERIFIED_HISTORY' }}。</p>
+{% if record.reconciliation.get('base',{}).get('status')=='PUBLISHABLE' and record.reconciliation.get('stress',{}).get('status')=='PUBLISHABLE' and result.performance.series.get('nav_stress') %}
+<label>顯示成本軌 <select id="report-cost"><option value="base">基礎成本</option><option value="stress">兩倍成本</option></select></label>
+<p id="cost-basis">基礎成本 · 全期 PROVISIONAL</p><p class="v3-muted">兩倍成本使用此 Run metrics.json 的 x2 累積報酬／MDD 與保存分析的 stress CAGR／淨值；缺少 stress 水下曲線時顯示 DATA_MISSING，不另行計算。體檢、情境、月份及帳本各自保留原標示口徑。</p><p id="stress-dd-missing" hidden>DATA_MISSING：未保存兩倍成本水下曲線。</p>
+{% else %}<p>成本切換不可用：缺少兩軌完整發布及曲線證據。</p>{% endif %}
+<output id="chart-inspect" aria-live="polite">將指標移至淨值線圖可查看日期與原值。</output></section>
+{% endif %}

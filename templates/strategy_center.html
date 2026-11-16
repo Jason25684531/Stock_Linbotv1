@@ -12,6 +12,7 @@
     @media (max-width:720px){.strategy-layout{display:flex;flex-direction:column;} .selection-panel{display:contents;} .strategy-results{order:-1;width:100%;} .strategy-catalog{width:100%;} .strategy-center{padding-bottom:230px;} .strategy-actions{position:fixed;bottom:calc(56px + env(safe-area-inset-bottom));left:0;right:0;z-index:35;} .strategy-actions [aria-live]{display:none;} .selection-tags{flex-wrap:nowrap;overflow-x:auto;max-height:38px;} .selection-tags>span{flex-shrink:0;} .selection-identity,.selection-reason{display:none;} .strategy-actions button{font-size:12px;} .strategy-actions form+button{flex:1;} .strategy-actions .flex-col.gap-2{flex-direction:row;}}
 </style>{% endblock %}
 {% block content %}
+<p><a class="text-blue-300" href="{{ url_for('web_strategies') }}">Web V3 · 21 策略規格與研究結果</a></p>
 <div
     x-data='strategyCenter({{ strategy_catalog|tojson }})'
     class="space-y-5 strategy-center"

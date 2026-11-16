@@ -35,7 +35,14 @@ def _runs(root):
 
 
 def _publishable_portfolios():
-    return [r for r in _runs(OUT / 'portfolios') if r.get('status') == 'SUCCESS' and r.get('publishable') and r.get('analysis')]
+    from scripts.platform_v2_publication import native_two_track_verified
+    from scripts import platform_v2
+    from core.backtest.run_store import file_hash
+    audits = {r['run_id']: r for r in (_read(OUT / 'acceptance/ledger/independent_ledger_audit.json') or {}).get('runs', [])}
+    return [r for r in _runs(OUT / 'portfolios') if r.get('status') == 'SUCCESS' and r.get('publishable') and r.get('analysis')
+            and native_two_track_verified(audits.get(r['run_id'], {}))
+            and audits[r['run_id']].get('manifest_sha256') == file_hash(OUT / 'portfolios' / r['run_id'] / 'manifest.json')
+            and platform_v2.portfolio_identity(r['parameters'], r['snapshot_id']) == r['run_identity']]
 
 
 def _page_status(route):
@@ -91,6 +98,15 @@ def reconciliation_report():
               '- 由 `fills.csv` 與 BOOKED 公司行動逐日重算現金與持股；容許誤差 0.01 + 1e-9 x NAV（`core/research/platform/ledger_v2.py`）',
               '- 任何一日不符，或期末持股與 `open_positions` 不同，即 NOT_PUBLISHABLE，Web 只顯示原因',
               '- 比對容許 rtol 1e-9、atol 1e-12；交易日期、代碼、順序與數量必須完全相同（`scripts/platform_v2.compare`）']
+    audit = _read(OUT / 'acceptance/ledger/independent_ledger_audit.json') or {}
+    lines += ['', '## 保存帳本獨立重播（含保留的歷史失敗）', '',
+              '來源 `acceptance/ledger/independent_ledger_audit.json`；舊 Run 的失敗證據保留，不能以新 Run 的通過覆蓋。', '',
+              '| Run | 成本軌 | 重播狀態 | 證據模式 | 首錯日期 | 原因／缺檔 |', '|---|---|---|---|---|---|']
+    for row in audit.get('runs', []):
+        for track, check in row.get('tracks', {}).items():
+            cells = [row['run_id'], track, check['status'], check.get('evidence_mode', ''), check.get('first_mismatch') or '',
+                     str(check.get('reason') or '') + ' ' + ', '.join(check.get('missing_files') or [])]
+            lines.append('| ' + ' | '.join(str(v).replace('|', '/') for v in cells) + ' |')
     return _write('BACKTEST_RECONCILIATION_REPORT.md', lines)
 
 
@@ -150,6 +166,7 @@ def model_report():
 
 def portfolio_report():
     lines = ['# PORTFOLIO_VALIDATION_REPORT', '', LABEL, '', '規則 ALLOC_V1、CONTEND_V1、REBAL_NONE／REBAL_ANNUAL_V1（`core/research/platform/portfolio_v2.py`）；組合是研究情境，不是策略', '']
+    accepted = {r['run_id'] for r in _publishable_portfolios()}
     for row in _runs(OUT / 'portfolios'):
         if row.get('status') != 'SUCCESS':
             continue
@@ -158,6 +175,9 @@ def portfolio_report():
         recon = ', '.join(k + ' ' + v['status'] for k, v in row['reconciliation'].items())
         lines += ['## `' + row['run_id'] + '`', '', '- members ' + members + ' / period ' + ' ~ '.join(row['period']) + ' / rebalance ' + p['rebalance'] + ' / rule ' + p['rule'],
                   '- reconciliation ' + recon + ' / publishable ' + str(row['publishable'])]
+        if row['run_id'] not in accepted:
+            lines += ['- NOT_PUBLISHABLE：目前缺少與 manifest 相符的原生雙成本獨立帳本稽核，或程式身份已失效；績效不予發布。', '']
+            continue
         if a:
             b, s = a['portfolio']['base'], a['portfolio']['stress']
             turnover = '%.2f 倍' % a['costs']['turnover_annual'] if a['costs']['turnover_annual'] is not None else '不可計算：NO_SESSIONS'
@@ -202,7 +222,8 @@ def matrix():
     accepted_folios = _publishable_portfolios()
     verify = _read(OUT / 'acceptance/phase_b/baseline_verification.json') or {}
     model_text = ', '.join(str(m['horizon']) + 'd ' + m['status'] for m in models) or 'none'
-    admin = _read(OUT / 'acceptance/phase_f/web_admin_actions.json') or {}
+    admin = (_read(OUT / 'acceptance/phase_f/admin_actions_full.json')
+             or _read(OUT / 'acceptance/phase_f/web_admin_actions.json') or {})
     guest = _read(OUT / 'acceptance/phase_f/web_guest_posts.json') or {}
     guest_status = 'guest POST 403 PASS' if guest.get('status') == 'PASS' else 'guest POST not verified'
     action_status = 'PASS' if admin.get('status') == 'PASS' else 'BLOCKED: no authorized-action evidence; ' + guest_status
@@ -224,7 +245,10 @@ def _task_rows():
     by_id = {r['id']: r for r in override.get('tasks', []) if r.get('id')}
     rows = []
     pattern = re.compile(r'- \[([ xX])\] \[[^]]+\] ([A-Z0-9]+\.[0-9]+)\s+(.*)')
-    for line in (ROOT / 'openspec/changes/2026-11-12-integrated-research-platform-v2/tasks.md').read_text(encoding='utf-8').splitlines():
+    name = '2026-11-12-integrated-research-platform-v2'
+    change = ROOT / 'openspec/changes' / name  # archived changes move to archive/<date>-<name>
+    change = change if change.exists() else next((ROOT / 'openspec/changes/archive').glob('*-' + name), change)
+    for line in (change / 'tasks.md').read_text(encoding='utf-8').splitlines():
         match = pattern.match(line)
         if not match:
             continue

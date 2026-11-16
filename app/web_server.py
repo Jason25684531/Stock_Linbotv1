@@ -1238,13 +1238,21 @@ def _format_pipeline_status(status: str | None) -> str:
     }.get(normalized, 'Unknown')
 
 
+@app.context_processor
+def _operations_acceptance_context():
+    if request.path == '/platform/system':
+        from services.web_dashboard import operations_status
+        return {'operations': operations_status()}
+    return {}
+
+
 def _build_system_status_payload(*, include_freshness: bool = True) -> tuple[dict[str, object], int]:
     step_map = [('1_update', 'update_database'), ('2_run', 'run_daily'), ('5_push', 'push_to_line')]
     warnings: list[str] = []
     rows_by_step: dict[str, dict[str, object]] = {}
     try:
         engine = db_helper.get_db_engine()
-        db_helper.ensure_pipeline_run_state_schema(engine)
+        # Status reads never initialize schema; missing tables are reported below.
         with engine.connect() as conn:
             run = conn.execute(
                 text(

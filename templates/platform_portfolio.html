@@ -32,7 +32,7 @@
 <section class="quant-card overflow-x-auto p-4" data-testid="portfolio-list"><h2 class="text-sm font-semibold text-white">已存組合 Run（{{ folios|length }}）</h2>
     <table class="mt-2 w-full min-w-[720px] text-xs"><thead class="text-left text-muted"><tr><th class="p-1">Run</th><th class="p-1">成員與權重</th><th class="p-1">期間</th><th class="p-1">再平衡</th><th class="p-1">對帳</th></tr></thead><tbody>
     {% for r in folios %}{% set fp = r.parameters or {} %}<tr class="border-t border-line"><td class="num p-1">{% if r.status == 'SUCCESS' %}<a class="text-blue-300" href="{{ url_for('platform_portfolio_run', run_id=r.run_id) }}">{{ r.run_id }}</a>{% else %}{{ r.run_id }} {{ r.status }}{% endif %}</td>
-        <td class="p-1">{% for sid in fp.members or [] %}{{ sid }} {{ iu.pct(fp.weights[loop.index0]) }}{% if not loop.last %}、{% endif %}{% endfor %}</td><td class="num p-1">{{ (r.period or [])|join('～') }}</td><td class="p-1">{{ fp.rebalance }}</td>
+        <td class="p-1">{% for sid in fp.members or [] %}{{ sid }} {{ ('%.4f%%'|format(fp.weights[loop.index0]*100)) }}{% if not loop.last %}、{% endif %}{% endfor %}</td><td class="num p-1">{{ (r.period or [])|join('～') }}</td><td class="p-1">{{ fp.rebalance }}</td>
         <td class="p-1">{{ 'PUBLISHABLE' if r.publishable else 'NOT_PUBLISHABLE' }}</td></tr>
     {% else %}<tr><td class="p-1 text-muted" colspan="5">尚無組合 Run。</td></tr>{% endfor %}</tbody></table></section>
 </div>

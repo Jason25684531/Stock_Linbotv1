@@ -7,6 +7,7 @@
     <title>{% block title %}Stock Linbot{% endblock %}</title>
     {% if request.path.startswith('/platform') %}
     <link rel="stylesheet" href="{{ url_for('static', filename='platform.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='web_v3.css') }}">
     {% else %}
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -108,7 +109,8 @@
                 </div>
                 {% endfor %}
             </div>
-            <main class="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">{% block content %}{% endblock %}</main>
+            <main class="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">{% if request.path.startswith('/platform') %}{% include '_web_v3_nav.html' %}{% endif %}
+{% block content %}{% endblock %}</main>
         </div>
     </div>
     <nav class="mobile-tabs" aria-label="手機主要導覽">

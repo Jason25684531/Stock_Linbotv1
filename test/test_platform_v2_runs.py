@@ -61,7 +61,9 @@ def test_identical_identity_is_reused_and_any_change_is_a_new_run(tmp_path, engi
     record = json.loads((tmp_path / first / 'run.json').read_text(encoding='utf-8'))
     assert record['publishable'] is True and record['platform_evidence_version'] == 2
     assert record['comparison_group'].startswith('PLATFORM_V2:') and record['evidence']['run_id'] == first
-    assert {'fills.csv', 'daily_ledger.csv', 'positions_daily.csv', 'trades_stress.csv'} <= {f.name for f in (tmp_path / first).iterdir()}
+    assert {'fills.csv', 'fills_stress.csv', 'daily_ledger.csv', 'daily_ledger_stress.csv',
+            'positions_daily.csv', 'positions_daily_stress.csv', 'corporate_actions.csv',
+            'corporate_actions_stress.csv', 'trades_stress.csv'} <= {f.name for f in (tmp_path / first).iterdir()}
 
 
 def test_unreconciled_run_is_stored_not_publishable(tmp_path):

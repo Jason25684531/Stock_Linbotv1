@@ -14,8 +14,9 @@ echo ============================================================
 echo.
 echo [%time%] 正在執行新聞彙整與推播...
 %PYTHON% -X utf8 jobs\scheduler.py morning
+set "SCHEDULER_EXIT=%ERRORLEVEL%"
 
-if %errorlevel% neq 0 (
+if not "%SCHEDULER_EXIT%"=="0" (
     echo.
     echo [%time%] ❌ 執行失敗，請檢查網路或 Gemini API Key。
 ) else (
@@ -27,3 +28,4 @@ echo.
 echo ============================================================
 echo  視窗將於 10 秒後自動關閉...
 timeout /t 10 >nul
+exit /b %SCHEDULER_EXIT%

@@ -4,6 +4,13 @@
 {% block page_heading %}系統排程與驗證中心{% endblock %}
 {% block content %}
 <div class="space-y-4 text-sm" data-testid="platform-system">
+<section class="quant-card p-4 text-xs" data-testid="operations-acceptance"><h2 class="text-sm font-semibold text-white">營運驗收紀錄（非即時監控）</h2>
+    <p class="mt-1">{{ operations.status }} · {{ operations.scope }}</p>
+    <dl class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 break-words">
+    {% for key, label in [('captured_at','擷取時間'), ('last_success','最後測試成功'), ('last_failure','最後測試失敗'), ('next_run','正式下次預定（擷取時）'), ('recent_error','最近測試錯誤'), ('retry_count','已驗證重試上限'), ('recovery','恢復驗證'), ('backup','備份驗證'), ('attention','待處理限制')] %}
+        <div><dt class="text-slate-400">{{ label }}</dt><dd class="break-all">{{ operations.get(key) if operations.get(key) is not none else 'UNAVAILABLE' }}</dd></div>
+    {% endfor %}</dl>
+</section>
 <section class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-100"><p class="font-semibold">RESEARCH_ONLY</p>
     <p class="mt-1">研究管線只寫 outputs/platform_v2，不寫 MySQL、不發 LINE，也不建立 Windows 排程；它登記在 jobs/scheduler.py 的 research 管線（支援 dry-run），不屬於 daily、evening、morning 或 push 管線。</p></section>
 <section class="quant-card p-4 text-xs" data-testid="slot"><h2 class="text-sm font-semibold text-white">批次槽位</h2>
@@ -34,6 +41,7 @@
     <table class="mt-2 w-full min-w-[560px]"><thead class="text-left text-muted"><tr><th class="p-1">步驟</th><th class="p-1">狀態</th><th class="p-1">執行日</th><th class="p-1">錯誤</th></tr></thead><tbody>
     {% for s in (production.data or {}).get('steps', []) %}<tr class="border-t border-line"><td class="p-1">{{ s.label or s.step }}</td><td class="p-1">{{ s.status }}</td><td class="num p-1">{{ s.run_date or '' }}</td><td class="p-1 break-all">{{ s.error_summary or '' }}</td></tr>{% endfor %}</tbody></table>
     {% for w in production.warnings or [] %}<p class="mt-1 text-amber-200 break-all">{{ w }}</p>{% endfor %}{% endif %}</section>
+{% if resources is defined %}<section class="quant-card p-4 text-xs" data-testid="resources"><h2>Workers／資源／快取（唯讀）</h2><p>可用記憶體 {{ resources.available_memory_gib }} GiB · 磁碟 {{ resources.free_disk_gib }} GiB · logical CPUs {{ resources.logical_cpus }}</p><p>Feature cache {{ 'PRESENT' if resources.cache_present else 'DATA_MISSING' }} · Worker PIDs {{ slot.pids or [] }}</p><p>Snapshot 狀態與身份見各 Run 證據；上述資源是讀取當下狀態，不代表已授權啟動研究。</p></section>{% endif %}
 {% if reports %}<section class="quant-card p-4 text-xs"><h2 class="text-sm font-semibold text-white">報告</h2><p class="mt-1">{% for n in reports %}<a class="text-blue-300" href="{{ url_for('platform_report', name=n) }}">{{ n }}</a>{% if not loop.last %}・{% endif %}{% endfor %}</p></section>{% endif %}
 </div>
 {% endblock %}

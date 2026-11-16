@@ -225,3 +225,31 @@ Change：`openspec/changes/2026-11-11-architecture-boundary-and-dead-code-cleanu
 | `/api/daily-signals` | 排程、研究驗證腳本及主規格引用 | KEEP／SPEC |
 
 舊表狀態補充：`tmp_probe/`、`tool/**`、`doc/**`、`stop` 的已不存在對象為 CLOSED，並非允許移除其他現存文件。2026-11-02 的 `write_factor_charts` 與 `core/research/d5_research_variant.py` 三個符號已有呼叫者，撤回候選（WITHDRAWN）；歷史行保留供稽核。
+
+## 2026-11-16 unused imports: verified code sections, no file removal
+
+Change: `2026-11-16-architecture-audit-and-safe-import-cleanup`.
+Evidence: `outputs/architecture_audit_20261116/` (initial baseline, pyflakes,
+87-file `pinned-before.json`, historical JSON reference lists and current tests).
+
+| Candidate | Complete scoped evidence | Decision |
+|---|---|---|
+| `core/viz_helper.py` imports `plotly.express as px`, `plotly.subplots.make_subplots`, `json`, `typing.List` | pyflakes reports each unused; repository search of qualified/from-import consumers across source, tests, hidden files, deployment and documents finds none. Module has no `__all__`, getattr/import_module/globals dispatch. Actual callers use `generate_report_from_csv` / `get_backtest_summary`, and keep their existing pandas/numpy/graph_objects dependencies. Dynamic research-entrypoint probe excludes this module from the observed 87-file identity closure. 22 JSON mentions are source snapshots, backup member hashes or class discovery; those records remain unchanged. | SAFE_TO_REMOVE imported names only; keep module/functions. Replacement: nothing. |
+| `scripts/diagnose_strategies.py` import `datetime.datetime` | pyflakes reports unused; no qualified/from-import consumers, export or dynamic lookup. CLI and contract test retain the file. Probe excludes it from the identity closure. 13 JSON mentions are source inventories and backup snapshots, not run identity declarations. | SAFE_TO_REMOVE import only; keep CLI. Replacement: nothing. |
+
+Searches used `rg -n` over the repository including hidden files (excluding
+.git, environment, raw/generated datasets) and `rg -l -F --hidden --no-ignore
+-g '*.json' -g '*.jsonl'` over outputs/data/artifacts for each target path.
+JSON matches were parsed to inspect their key context, rather than treating
+all audit snapshots as runtime identity dependencies. AST/pyflakes checks
+verify the names are never loaded within their modules. No facade re-export,
+strategy alias, non-cache file, dependency or trading logic is removed.
+The observed dynamic closure covers the same eleven legacy/reference/history
+entrypoints as the prior cleanup; it does not claim arbitrary external code
+cannot import incidental module attributes.
+
+Retain the apparent zero-reference `run_validation`,
+`build_metric_matrices_v3`, `research_budget.charge` and `save_pit`: historical
+research APIs/contracts, dynamic usage or identity/evidence impact has not
+been cleared for removal. Do not infer whole-file deletions from grep alone.
+Rollback: reverse only these import edits, preserving the initial workspace.

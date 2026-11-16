@@ -35,6 +35,39 @@ def test_cancel_stops_only_the_recorded_process(out, monkeypatch):
     assert batch_job.state()['status'] == 'CANCELLED'
 
 
+def test_job_record_replace_failure_preserves_previous_state(out, monkeypatch):
+    batch_job._write({'pid': 7, 'started_at': '2026-11-13T00:00:00+00:00'})
+    before = batch_job._read()
+
+    def fail_replace(src, dst):
+        raise OSError('simulated interrupted replace')
+
+    monkeypatch.setattr(batch_job.os, 'replace', fail_replace)
+    with pytest.raises(OSError, match='interrupted replace'):
+        batch_job._write({'pid': 8})
+    assert batch_job._read() == before
+    assert not list((out / 'jobs').glob('*.tmp'))
+
+
+def test_failed_job_record_terminates_new_process(out, monkeypatch):
+    monkeypatch.setattr(batch_job, 'runner_pids', lambda: [])
+    stopped = []
+
+    class TerminatingProc:
+        pid = 4242
+
+        def terminate(self):
+            stopped.append(self.pid)
+
+    def fail_write(job):
+        raise OSError('cannot record worker')
+
+    monkeypatch.setattr(batch_job, '_write', fail_write)
+    with pytest.raises(OSError, match='cannot record worker'):
+        batch_job.start(popen=lambda *a, **k: TerminatingProc(), kind='platform_pipeline')
+    assert stopped == [4242]
+
+
 def _admin_client(monkeypatch):
     from app import app, platform_routes
     monkeypatch.setattr(platform_routes, 'is_admin', lambda: True)

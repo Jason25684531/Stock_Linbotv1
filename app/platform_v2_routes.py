@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import hashlib
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,10 +23,24 @@ OUT = ROOT / 'outputs/platform_v2'
 RUNS, PORTFOLIOS, ANALYSIS, MODELS, REQUESTS = OUT / 'runs', OUT / 'portfolios', OUT / 'analysis', OUT / 'models', OUT / 'requests'
 RUN_ID = re.compile(r'^\d{8}T\d{6}Z-[0-9a-f]{8}$')
 MODEL_ID = re.compile(r'^PRED1-\d+d-[0-9a-f]{10}$')
-PLATFORM_KINDS = ('platform_backtest', 'platform_portfolio', 'platform_baseline', 'platform_pipeline')
+PLATFORM_KINDS = ('platform_backtest', 'platform_portfolio', 'platform_baseline', 'platform_pipeline', 'platform_ledger_repair')
 REPORTS = ('PLATFORM_V2_FINAL_ACCEPTANCE_REPORT.md', 'FEATURE_COMPLETION_MATRIX.md', 'STRATEGY_READINESS_21.json', 'MODEL_VALIDATION_REPORT.md',
            'BACKTEST_RECONCILIATION_REPORT.md', 'PORTFOLIO_VALIDATION_REPORT.md', 'DAILY_PIPELINE_HEALTH_REPORT.md', 'BLOCKERS_AND_DEFERRED.md',
            'OPERATION_GUIDE.md')
+
+
+@app.get('/platform/research/v4')
+def strategy_v4_index():
+    from services import strategy_v4 as research
+    return render_template('strategy_v4.html', rows=[research.load(sid) for sid in research.NAMES], detail=False, pct=research.percentage)
+
+
+@app.get('/platform/research/v4/<sid>')
+def strategy_v4_detail(sid):
+    from services import strategy_v4 as research
+    if sid not in research.NAMES:
+        abort(404)
+    return render_template('strategy_v4.html', rows=[research.load(sid)], detail=True, pct=research.percentage)
 
 
 def _read(path: Path):
@@ -57,7 +72,10 @@ def _run_reviewed(root, run_id):
                  'engine_v2.py': ROOT / 'core/research/platform/engine_v2.py',
                  'ledger_v2.py': ROOT / 'core/research/platform/ledger_v2.py',
                  'platform_v2_engine.py': ROOT / 'scripts/platform_v2_engine.py',
-                 'platform_v2.py': ROOT / 'scripts/platform_v2.py'}
+                 'platform_v2_ledger_audit.py': ROOT / 'scripts/platform_v2_ledger_audit.py',
+                 'platform_v2.py': ROOT / 'scripts/platform_v2.py',
+                 'ledger_audit.json': OUT / 'acceptance/ledger/independent_ledger_audit.json',
+                 'baseline_verification.json': OUT / 'acceptance/phase_b/baseline_verification.json'}
     if kind == 'portfolio':
         artifacts['portfolio_v2.py'] = ROOT / 'core/research/platform/portfolio_v2.py'
     return _validated(kind, run_id, artifacts)
@@ -147,9 +165,46 @@ def _readiness():
 
 @app.route('/platform')
 def platform_index():
+    from app import intelligence_routes
+    from services import smart_selection, web_dashboard
     runs, folios = _runs(RUNS), _runs(PORTFOLIOS)
-    return render_template('platform_index.html', runs=runs, folios=folios, models=models(), slot=slot(), readiness=_readiness(),
+    registry = models()
+    rows = web_dashboard.strategies(sys.modules[__name__], intelligence_routes)
+    return render_template('platform_index.html', runs=runs, folios=folios, models=registry, slot=slot(), readiness=_readiness(),
+                           overview=web_dashboard.overview(rows, runs, registry), daily=smart_selection.load(app),
+                           governance=_read(OUT / 'governance/LATEST.json') or {},
                            reports=[n for n in REPORTS if (OUT / n).is_file()], active_nav='platform_index')
+
+
+@app.get('/platform/strategies')
+def web_strategies():
+    from app import intelligence_routes
+    from services import web_dashboard
+    rows = web_dashboard.strategies(sys.modules[__name__], intelligence_routes)
+    total = len(rows)
+    types = sorted({r['type'] for r in rows})
+    reasons = sorted({r['reason'] for r in rows if r['reason']})
+    query = request.args.get('q', '').strip().casefold()
+    rows = [r for r in rows if query in f"{r['name']} {r['strategy_id']}".casefold()
+            and all(not request.args.get(k) or r[field] == request.args[k]
+                    for k, field in (('type', 'type'), ('trust', 'trust'), ('blocked', 'reason')))
+            and (not request.args.get('target') or r['target']['status'] == request.args['target'])]
+    if request.args.get('sort') in ('name', 'id'):
+        rows.sort(key=lambda r: r['name'] if request.args['sort'] == 'name' else r['strategy_id'])
+    return render_template('web_strategies.html', rows=rows, total=total, types=types, reasons=reasons, active_nav='platform_index')
+
+
+@app.get('/platform/strategies/<sid>')
+def web_strategy(sid):
+    from app import intelligence_routes
+    from services import web_dashboard
+    if sid not in intelligence_routes._catalog():
+        abort(404)
+    row = next(r for r in web_dashboard.strategies(sys.modules[__name__], intelligence_routes) if r['strategy_id'] == sid)
+    return render_template('web_strategy.html', row=row, notes=intelligence_routes.implementation_notes(sid),
+                           labels={'selection': '選股條件', 'entry': '進場規則', 'exit': '出場與停損', 'risk_controls': '風險控制',
+                                   'factors': '使用指標', 'holdings': '持股配置', 'rebalance': '再平衡', 'pit_dependencies': 'PIT 相依'},
+                           active_nav='platform_index')
 
 
 @app.route('/platform/selection')
@@ -202,15 +257,24 @@ def _defaults():
 @app.route('/platform/backtest/<run_id>')
 def platform_run(run_id):
     from core.backtest import run_store
+    from app import intelligence_routes
+    from services import web_dashboard
     loaded = _loaded(RUNS, run_id)
     record = loaded['run']
+    envelope = analysis(run_id)
+    result = web_dashboard.linked_analysis(record, envelope)
     trades = None
-    if record.get('publishable'):
+    if record.get('publishable') and result:
         frame = run_store.read_frame(loaded, 'trades')
         trades = frame.where(frame.notna(), None).to_dict('records')
-    ledger = run_store.read_frame(loaded, 'daily_ledger').to_dict('records') if 'daily_ledger.csv' in loaded['files'] else []
-    return render_template('platform_run.html', record=record, files=loaded['files'], result=(analysis(run_id) or {}).get('result'),
-                           trades=trades, ledger=ledger, active_nav='platform_index')
+    def rows(name):
+        return web_dashboard.clean(run_store.read_frame(loaded, name).to_dict('records')) if result and f'{name}.csv' in loaded['files'] else []
+    card = intelligence_routes.result(record['strategy_id']) or {}
+    return render_template('platform_run.html', record=record, files=loaded['files'], result=web_dashboard.clean(result),
+                           report_meta=web_dashboard.report_meta(record, envelope, card),
+                           saved_metrics=web_dashboard.clean(run_store.read_frame(loaded, 'metrics')) if result else {},
+                           trades=web_dashboard.clean(trades), ledger=rows('daily_ledger'), fills=rows('fills'),
+                           positions=rows('positions_daily'), active_nav='platform_index')
 
 
 @app.route('/platform/<kind>/<run_id>/files/<name>')
@@ -245,11 +309,13 @@ def _pipeline():
 @app.route('/platform/system')
 def platform_system():
     from app import web_server
+    from services import web_dashboard
     try:
         production = web_server._build_system_status_payload(include_freshness=False)[0]  # the existing read-only /system summary
     except Exception as error:  # the read-only production view must never break the page
         production = {'error': f'{type(error).__name__}: {str(error)[:200]}'}
     return render_template('platform_system.html', slot=slot(), pipeline=_pipeline(), governance=_read(OUT / 'governance' / 'LATEST.json'),
+                           resources=web_dashboard.resources(),
                            readiness=_readiness(), production=production, reports=[n for n in REPORTS if (OUT / n).is_file()],
                            active_nav='platform_index')
 
@@ -280,9 +346,11 @@ def _request_file(kind, payload) -> Path:
     return path
 
 
-def _start(kind, args=()):
+def _start(kind, args=(), workers=None):
     from core.research.reference import batch_job
-    outcome = batch_job.start(workers=4 if kind in ('platform_baseline', 'platform_pipeline') else 1, kind=kind, args=args)
+    if workers is None:
+        workers = 4 if kind in ('platform_baseline', 'platform_pipeline', 'platform_ledger_repair') else 1
+    outcome = batch_job.start(workers=workers, kind=kind, args=args)
     if outcome['status'] == 'RUN_IN_PROGRESS':
         return jsonify(outcome | {'reason': 'another batch job is running; nothing was started'}), 409
     return None
@@ -360,7 +428,7 @@ def platform_system_action(action):
     if action == 'retry':
         if state.get('kind') not in PLATFORM_KINDS or state.get('status') not in ('FAILED', 'CANCELLED', 'PARTIAL'):
             return jsonify({'status': 'NOTHING_TO_RETRY', 'reason': 'the last job is not a failed or cancelled platform job'}), 409
-        busy = _start(state['kind'], state.get('args') or [])
+        busy = _start(state['kind'], state.get('args') or [], workers=state.get('workers', 4))
     else:
         busy = _start('platform_pipeline')
     if busy:

@@ -3,6 +3,7 @@
 {% block title %}策略研究與風險分析 - Stock Linbot{% endblock %}
 {% block page_heading %}策略研究與風險分析{% endblock %}
 {% block content %}
+<p><a class="text-blue-300" href="{{ url_for('web_strategies') }}">Web V3 · 21 策略搜尋、篩選與報告</a></p>
 <div class="space-y-5 text-sm" data-testid="intelligence-index">
     {{ iu.labels_banner('依策略目錄順序列出，不排名。') }}
     {% set p = panel %}
