@@ -14,7 +14,7 @@
     <div class="overflow-x-auto"><table class="w-full" data-testid="cross-regime-overview"><thead class="text-left text-muted"><tr><th class="p-1">策略</th><th class="p-1">狀態</th><th class="p-1">視窗</th><th class="p-1">逐年 Data Trust</th>
         <th class="p-1">2019-2021 基礎 / 2x</th><th class="p-1">2022-2025 基礎 / 2x</th><th class="p-1">研究判定</th><th class="p-1">優先順序建議</th></tr></thead>
         <tbody>{% for s in cross.strategies %}{% set a = s.analysis %}<tr class="align-top" data-testid="cross-regime-row">
-            <td class="p-1">{% if a %}<a class="text-blue-300" href="{{ url_for('reference_comparison', history=s.strategy_id) }}#cross-regime">{{ s.strategy_id }}</a>{% else %}{{ s.strategy_id }}{% endif %}</td>
+            <td class="p-1">{% if a %}<a class="text-blue-300" href="{{ url_for('web_strategy', sid=s.strategy_id) }}#cross-regime">{{ s.strategy_id }}</a>{% else %}{{ s.strategy_id }}{% endif %}</td>
             <td class="p-1">{{ s.state }}{% if not a %}（{{ s.reason }}）{% endif %}</td><td class="num p-1">{{ (s.window or ['-'])|join('～') }}</td>
             <td class="p-1 whitespace-nowrap">{% for y, st in s.trust_years.items() %}{{ trust_cell(st, y) }}{% endfor %}</td>
             <td class="num p-1">{% if a %}{{ pct(a.segments.VERIFIED_ONLY['2019-2021'].base.cumulative_return) }} / {{ pct(a.segments.VERIFIED_ONLY['2019-2021'].x2.cumulative_return) }}{% else %}-{% endif %}</td>
@@ -56,8 +56,6 @@
                 <tbody>{% for r in op.get('rows') %}<tr><td class="num p-1">{{ r.get('stock_id') }}</td><td class="num p-1">{{ r.get('shares') }}</td><td class="num p-1">{{ r.get('entry_price') }}</td><td class="num p-1">{{ r.get('last_mark_value') }}</td><td class="num p-1">{{ r.get('distributions') }}</td><td class="num p-1">{{ r.get('buy_date') }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
             <p data-testid="action-impact">公司行動影響：入帳事件 {{ ca.get('events_booked', '-') }} · 入帳現金 {{ ca.get('cash_credited') if ca.get('cash_credited') is not none else '-' }} · 假定條件 {{ ca.get('assumed_stock_events', '-') }} · 未解決 {{ ca.get('unresolved_events', '-') }} · 重複抑制 {{ ca.get('duplicate_suppressed', '-') }} · 假定條件年份 {{ (ca.get('years_with_assumed_terms') or [])|join(', ') or '-' }}</p>
         </div>
-        <div id="history-nav" class="h-72 w-full" data-testid="history-nav-chart"></div>
-        <div id="history-drawdown" class="h-56 w-full" data-testid="history-drawdown-chart"></div>
         <div class="overflow-x-auto"><table class="w-full" data-testid="cross-regime-years"><thead class="text-left text-muted"><tr><th class="p-1">年</th><th class="p-1">Data Trust</th><th class="p-1">基礎</th><th class="p-1">2x</th><th class="p-1">Sharpe</th><th class="p-1">MDD</th><th class="p-1">報酬指數</th><th class="p-1">交易數</th><th class="p-1">勝率</th><th class="p-1">平均持有</th></tr></thead>
             <tbody>{% for y, r in a.years.items() %}<tr><td class="num p-1">{{ y }}</td><td class="p-1">{{ trust_cell(r.trust) }}</td><td class="num p-1">{{ pct(r.base.cumulative_return) }}</td><td class="num p-1">{{ pct(r.x2.cumulative_return) }}</td>
                 <td class="num p-1">{{ num(r.base.sharpe) }}</td><td class="num p-1">{{ pct(r.base.max_drawdown) }}</td><td class="num p-1">{{ pct((r.benchmark_total_return or {}).cumulative_return) }}</td>
@@ -71,18 +69,6 @@
         {% endfor %}
         <p>研究判定 <strong>{{ sel.decision.state }}</strong> · 優先順序建議 {{ sel.decision.priority }}（{{ sel.decision.reason }}）· CERTIFIED：NO。* 表示該切片排除了非 VERIFIED 年份。</p>
     </div>
-    <script>
-    (function () {
-        const d = {{ history_chart|safe }};
-        if (!d || !window.Plotly) return;
-        const layout = (title) => ({title: {text: title, font: {size: 12}}, margin: {t: 30, r: 10, b: 30, l: 50}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: '#cbd5e1'}, legend: {orientation: 'h'}});
-        Plotly.newPlot('history-nav', [
-            {x: d.dates, y: d.base, name: 'base cost', type: 'scatter'}, {x: d.dates, y: d.x2, name: '2x cost', type: 'scatter'},
-            {x: d.dates, y: d.benchmark, name: 'TWSE total return index', type: 'scatter', line: {dash: 'dot'}}], layout('NAV (rebased) vs benchmark'), {displayModeBar: false, responsive: true});
-        Plotly.newPlot('history-drawdown', [{x: d.dates, y: d.base_drawdown, name: 'base', fill: 'tozeroy'}, {x: d.dates, y: d.x2_drawdown, name: '2x'}],
-            layout('Drawdown'), {displayModeBar: false, responsive: true});
-    })();
-    </script>
     {% endif %}
     {% if history and history.downloads %}<p>下載：{% for name in history.downloads %}<a class="mr-3 text-blue-300" href="{{ url_for('historical_download', evaluation_id=history.evaluation.evaluation_id, name=name) }}">{{ name }}</a>{% endfor %}
         {% for name in (engine_fix or {}).get('downloads', []) %}<a class="mr-3 text-blue-300" href="{{ url_for('engine_fix_download', name=name) }}">{{ name }}</a>{% endfor %}</p>{% endif %}

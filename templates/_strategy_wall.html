@@ -1,0 +1,33 @@
+{% import '_viz.html' as vz %}
+<section class="vf space-y-3" data-testid="strategy-wall">
+  <div class="vf-spread" style="flex-wrap:wrap">
+    <p class="vf-muted vf-small">{{ wall.total }} 個策略。每張卡片：淨值走勢、年化報酬、最大回撤與五項體檢。</p>
+    <form method="get" class="vf-row" data-testid="wall-filters">
+      <a class="vf-chip" href="{{ url_for('strategy_center', sort=wall.sort or None) }}" {% if not request.args.get('type') and not request.args.get('trust') %}aria-current="true"{% endif %}>全部</a>
+      {% for t in wall.types %}<a class="vf-chip" href="{{ url_for('strategy_center', type=t, sort=wall.sort or None) }}" {% if request.args.get('type') == t %}aria-current="true"{% endif %}>{{ t }}</a>{% endfor %}
+      <a class="vf-chip" href="{{ url_for('strategy_center', trust='VERIFIED', sort=wall.sort or None) }}" {% if request.args.get('trust') == 'VERIFIED' %}aria-current="true"{% endif %}>只看可信資料</a>
+      {% for k in ('type', 'trust') %}{% if request.args.get(k) %}<input type="hidden" name="{{ k }}" value="{{ request.args.get(k) }}">{% endif %}{% endfor %}
+      <label class="vf-small vf-muted">排序 <select name="sort" onchange="this.form.submit()" data-testid="wall-sort">
+        {% for key, label in (('', '目錄順序'), ('cagr', '年化報酬高到低'), ('mdd', '回撤小到大'), ('name', '名稱')) %}<option value="{{ key }}" {% if wall.sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <noscript><button class="vf-chip">套用</button></noscript>
+    </form>
+  </div>
+  {% if wall.sort in ('cagr', 'mdd') %}<p class="vf-small" style="color:#fcd34d" data-testid="sort-notice">目前依績效排序。這只是 21 組歷史設定的比較，不是證據，也不代表未來表現。</p>{% endif %}
+  <div class="vf-grid vf-wall">
+  {% for c in wall.cards %}
+    {% if c.cagr is none %}
+    <div class="vf-card vf-blocked" data-strategy-id="{{ c.strategy_id }}"><div class="vf-spread"><strong>{{ c.name }}</strong><span class="vf-tag">{{ c.type_label }}</span></div>
+      <p class="num vf-small vf-muted">{{ c.strategy_id }}</p><p class="vf-muted" style="min-height:44px">— {{ vz.tag(c.trust) }} <span class="num vf-small">{{ c.reason or 'DATA_MISSING' }}</span></p>
+      {{ vz.strip(c.health) }}<p class="vf-small" style="margin-top:.5rem"><a href="{{ url_for('web_strategy', sid=c.strategy_id) }}">規格與原因</a></p></div>
+    {% else %}
+    <a class="vf-card" href="{{ url_for('web_strategy', sid=c.strategy_id) }}" data-strategy-id="{{ c.strategy_id }}"><div class="vf-spread"><strong>{{ c.name }}</strong><span class="vf-tag">{{ c.type_label }}</span></div>
+      <p class="num vf-small vf-muted">{{ c.strategy_id }}</p>
+      {{ vz.line(c.spark, 240, 44, 'vf-line-up' if c.rising else 'vf-line-down', '淨值走勢') }}
+      <div class="vf-spread"><span><span class="vf-small vf-muted">年化</span> <strong>{{ vz.pct(c.cagr) }}</strong></span><span><span class="vf-small vf-muted">最大回撤</span> {{ vz.pct({'value': c.mdd, 'reason': c.mdd_reason}) }}</span></div>
+      <div class="vf-spread vf-small vf-muted"><span>{{ vz.tag(c.trust) }}</span><span>{{ 'VERIFIED 期間' if c.track == 'VERIFIED' else '全期暫定' }}</span></div>
+      {{ vz.strip(c.health) }}</a>
+    {% endif %}
+  {% else %}<p class="vf-muted">沒有符合篩選的策略，<a href="{{ url_for('strategy_center') }}">清除篩選</a></p>{% endfor %}
+  </div>
+  <p class="vf-small vf-muted">色條依序為：賺多少、跌多深、划算嗎、常贏嗎、買得到嗎。藍＝良好，黃＝尚可，斜紋＝留意，灰＝資料不足或僅供參考。紅綠只代表漲跌。</p>
+</section>

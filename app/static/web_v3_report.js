@@ -43,3 +43,24 @@
         draw();
     });
 })();
+(() => {
+    const node = document.getElementById('vf-report-data'), chart = document.getElementById('vf-equity');
+    if (!node || !chart) return;
+    const {dates, nav} = JSON.parse(node.textContent), first = nav.find(v => v != null);
+    const ret = document.getElementById('vf-hero-ret'), day = document.getElementById('vf-hero-date'), cursor = document.getElementById('vf-cursor');
+    const original = [ret.innerHTML, day.textContent, ret.className];
+    const show = i => {
+        const v = nav[i];
+        day.textContent = dates[i];
+        if (v == null || !first) { ret.textContent = '—'; return; }
+        const r = v / first - 1;
+        ret.textContent = `${r > 0 ? '+' : ''}${(r * 100).toFixed(1)}%`;
+        ret.className = `vf-ret num ${r > 0 ? 'vf-up' : r < 0 ? 'vf-down' : ''}`;
+    };
+    chart.addEventListener('pointermove', event => {
+        const box = chart.getBoundingClientRect(), x = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+        show(Math.round(x * (dates.length - 1)));
+        cursor.setAttribute('x1', x * 900); cursor.setAttribute('x2', x * 900); cursor.setAttribute('opacity', 0.5);
+    });
+    chart.addEventListener('pointerleave', () => { [ret.innerHTML, day.textContent, ret.className] = original; cursor.setAttribute('opacity', 0); });
+})();

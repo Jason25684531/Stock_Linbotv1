@@ -6,6 +6,7 @@ outputs/backtest_runs/latest/reference/    last registered baseline (RESEARCH / 
 A run is written to a staging directory, hashed, re-verified and renamed; pointers move only after that. A failure writes FAILED + error.json.
 """
 from datetime import datetime, timezone
+import functools
 import hashlib
 import json
 import os
@@ -43,6 +44,14 @@ def canonical_hash(value):
 
 
 def file_hash(path):
+    stat = os.stat(path)
+    return _content_hash(str(path), stat.st_size, stat.st_mtime_ns)
+
+
+@functools.lru_cache(maxsize=8192)
+def _content_hash(path, size, mtime_ns):
+    # ponytail: a rewrite is re-hashed when its size or mtime changes; one that restores both is caught only after a restart.
+    # Run artifacts are written once with mode 'x', and hashing them on every page view cost 4 s on the container's bind mount.
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 

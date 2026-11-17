@@ -28,11 +28,12 @@
         <div class="sm:col-span-2 xl:col-span-4 text-xs" data-testid="publish-line">LINE 推送：{% for item in publish.line %}<span class="num mr-3">{{ item.key }} {{ item.state }}</span>{% else %}尚無推送紀錄{% endfor %}</div>
     </section>
     {% endif %}
+    {% if selection is defined %}{% include '_stock_cards.html' %}{% endif %}
     <div class="flex items-center justify-end gap-3 text-xs text-muted"><span x-show="lastRefresh" x-text="'最後檢查：' + lastRefresh"></span><button type="button" @click="refresh().then(() => $dispatch('notify', '已完成資料檢查'))" :disabled="refreshing" class="rounded border border-strong px-3 py-2" x-text="refreshing ? '更新中…' : '重新整理資料'"></button></div>
     <div x-show="!recommendationLoading && recommendationMessage()" class="rounded border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200" x-text="recommendationMessage()"></div>
     <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section class="quant-card min-w-0 overflow-hidden">
-            <div class="flex items-center justify-between border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">今日推薦</h2><a href="{{ url_for('strategy_center') }}" class="text-xs text-blue-300">查看策略 →</a></div>
+            <div class="flex items-center justify-between border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">各策略今日名單</h2><a href="{{ url_for('strategy_center') }}" class="text-xs text-blue-300">查看策略 →</a></div>
             <div x-show="recommendationLoading" class="p-5 text-sm text-muted">載入推薦資料…</div><p x-show="recommendationError" class="p-5 text-sm text-amber-300" x-text="recommendationError"></p>
             <div class="recommendation-table overflow-x-auto" x-show="!recommendationLoading"><table class="w-full text-sm">
                 <thead class="bg-secondary text-left text-xs text-muted"><tr><th class="px-5 py-3">股票</th><th class="px-5 py-3 text-right">收盤價</th><th class="px-5 py-3 text-right">AI 分數</th><template x-if="hasField('reason')"><th class="px-5 py-3">推薦原因</th></template><template x-if="hasField('direction')"><th class="px-5 py-3">方向</th></template></tr></thead>

@@ -1,8 +1,9 @@
 {
   "version": "3.0",
-  "last_updated": "2026-10-19T20:36:40.565519",
+  "last_updated": "2026-11-17T10:32:13.600101",
   "active_strategies": [
-    "bollinger_reversion"
+    "macd_cross",
+    "mad_distance"
   ],
   "random_strategy_pool": [
     "v35_innovation",

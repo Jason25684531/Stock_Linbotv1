@@ -12,17 +12,16 @@
     @media (max-width:720px){.strategy-layout{display:flex;flex-direction:column;} .selection-panel{display:contents;} .strategy-results{order:-1;width:100%;} .strategy-catalog{width:100%;} .strategy-center{padding-bottom:230px;} .strategy-actions{position:fixed;bottom:calc(56px + env(safe-area-inset-bottom));left:0;right:0;z-index:35;} .strategy-actions [aria-live]{display:none;} .selection-tags{flex-wrap:nowrap;overflow-x:auto;max-height:38px;} .selection-tags>span{flex-shrink:0;} .selection-identity,.selection-reason{display:none;} .strategy-actions button{font-size:12px;} .strategy-actions form+button{flex:1;} .strategy-actions .flex-col.gap-2{flex-direction:row;}}
 </style>{% endblock %}
 {% block content %}
-<p><a class="text-blue-300" href="{{ url_for('web_strategies') }}">Web V3 · 21 策略規格與研究結果</a></p>
+{% if wall is defined %}{% include '_strategy_wall.html' %}{% endif %}
+<details class="vf" style="margin-top:1.5rem" data-testid="daily-settings"><summary>每日篩選設定與選股快照</summary>
 <div
     x-data='strategyCenter({{ strategy_catalog|tojson }})'
     class="space-y-5 strategy-center"
     data-testid="strategy-center"
 >
-    <p class="text-xs"><a class="text-blue-300" href="{{ url_for('intelligence_index') }}" data-testid="intelligence-link">策略研究與風險分析 &rarr;</a>・<a class="text-blue-300" href="{{ url_for('platform_index') }}" data-testid="platform-link">研究平台（選股・預測・回測・組合・排程） &rarr;</a></p>
     <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <p class="mt-1 text-sm text-muted">點選策略名稱或勾選框，查看已完成的選股快照；套用到每日篩選 可更新每日篩選設定，組合回測可帶入所選策略。</p>
-            <p class="mt-1 text-xs text-muted">每日篩選／回測可用表示系統支援執行，並非績效驗收通過。</p>
+            <p class="mt-1 text-sm text-muted">勾選策略可查看最近一次選股快照、套用到每日篩選，或帶入組合回測。標示可用代表系統支援執行，不代表績效驗收通過。</p>
         </div>
         <span class="status-badge status-unknown"><span x-text="catalog.length"></span> 個策略</span>
     </div>
@@ -70,6 +69,7 @@
                         <td class="px-4 py-4 align-top">
                             <label :for="'strategy-desktop-' + item.strategy_id" class="cursor-pointer font-medium text-white hover:text-blue-300" x-text="item.display_name_zh || item.display_name_en"></label>
                             <div class="mt-1 break-all num text-xs text-blue-300" x-text="item.strategy_id"></div>
+                            <details class="mt-2 text-xs" data-testid="row-details"><summary class="cursor-pointer text-blue-300" title="參考回測、歷年可信度、門檻與基準">細節</summary>
                             <p class="mt-2 text-xs text-muted" x-show="item.source === 'tquant'" x-text="'來源：' + item.source_notebook"></p>
                             <p class="mt-1 text-xs text-amber-200" x-show="item.source === 'tquant'">持股數、再平衡和出場規則依本專案引擎，績效和原 notebook 不同。</p>
                             <p class="mt-1 text-xs" style="overflow-wrap:anywhere" data-testid="reference-status" x-show="item.reference" x-text="referenceText(item)"></p><div class="mt-1 flex flex-wrap items-center gap-0.5 text-xs" data-testid="history-trust" x-show="item.history"><template x-for="cell in (item.history ? item.history.cells : [])" :key="cell.year"><span class="rounded px-1 num" :class="trustClass(cell.status)" :title="cell.year + &quot; &quot; + cell.status" x-text="String(cell.year).slice(2)"></span></template><a class="ml-1 text-blue-300 hover:text-blue-200" :href="&quot;/strategies/&quot; + encodeURIComponent(item.strategy_id) + &quot;/data-trust&quot;">2015-2025 data trust</a><span class="ml-1 text-muted" x-text="historyText(item)"></span><span class="basis-full text-muted" style="overflow-wrap:anywhere" data-testid="engine-compare" x-text="compareText(item)"></span></div>
@@ -92,13 +92,14 @@
                             <div class="mt-1 text-xs text-muted" x-show="item.aliases.length">
                                 相容 ID： <span x-text="item.aliases.join(', ')"></span>
                             </div>
+                            </details>
                         </td>
                         <td class="px-4 py-4 align-top">
                             <span class="status-badge status-unknown" x-text="item.category"></span>
                         </td>
                         <td class="px-4 py-4 align-top text-xs">
                             <div x-text="statusLabel(item.lifecycle)"></div>
-                            <div class="mt-1 text-muted" x-text="statusLabel(item.eligibility)"></div>
+                            <div class="mt-1 text-muted" x-show="statusLabel(item.eligibility) !== statusLabel(item.lifecycle)" x-text="statusLabel(item.eligibility)"></div>
                             <div class="mt-1 max-w-xs text-amber-300" x-show="item.eligibility_reason" x-text="item.eligibility_reason"></div>
                         </td>
                         <td class="px-4 py-4 align-top">
@@ -139,6 +140,7 @@
                     <div>每日篩選 <span class="block" :class="item.available_for_daily ? 'status-ok' : 'text-amber-300'" x-text="statusLabel(item.available_for_daily ? 'AVAILABLE' : 'UNAVAILABLE')"></span></div>
                     <div>回測 <span class="block" :class="item.available_for_backtest ? 'status-ok' : 'text-amber-300'" x-text="statusLabel(item.available_for_backtest ? 'AVAILABLE' : 'UNAVAILABLE')"></span></div>
                 </div>
+                <details class="mt-2 text-xs" data-testid="row-details"><summary class="cursor-pointer text-blue-300" title="參考回測、歷年可信度、門檻與基準">細節</summary>
                 <p class="mt-2 text-xs text-muted" x-text="'相容 ID：' + (item.aliases.join('、') || '無') + (item.gate_result ? '｜門檻：' + item.gate_result : '') + (item.factor_summary ? '｜因子：' + item.factor_summary : '')"></p>
                 <p class="mt-1 text-xs text-amber-200" x-show="item.gate_result" x-text="'資料：' + item.data_health + '｜模型：' + item.model_status + '｜研究建議：' + item.recommendation + '｜非認證' "></p>
                 <template x-for="[label, result] in [['原始基準', item.original_baseline], ['OD-29 補跑', item.recovery_baseline]]" :key="label">
@@ -153,6 +155,7 @@
                 </div></template>
                 <p class="mt-2 text-xs text-muted" x-show="item.source === 'tquant'" x-text="'來源：' + item.source_notebook"></p>
                 <p class="mt-1 text-xs text-amber-200" x-show="item.source === 'tquant'">持股數、再平衡和出場規則依本專案引擎，績效和原 notebook 不同。</p>
+                </details>
                 <p class="mt-3 text-xs text-amber-300" x-show="!item.available_for_daily" x-text="'每日篩選：' + item.daily_reason"></p>
                 <p class="mt-2 text-xs text-amber-300" x-show="!item.available_for_backtest" x-text="'回測：' + item.backtest_reason"></p>
             </article>
@@ -225,6 +228,7 @@
         <div class="mt-5 flex gap-3"><button type="button" class="rounded border border-strong px-4 py-2" @click="$refs.confirmDaily.close()">取消</button><button type="button" class="rounded bg-blue-600 px-4 py-2 text-white" :disabled="!dailyAllowed" @click="if (dailyAllowed) $refs.dailyForm.submit()">確認套用</button></div>
     </dialog>
 </div>
+</details>
 
 <script>
 function strategyCenter(catalog) {
@@ -265,7 +269,9 @@ function strategyCenter(catalog) {
             return `引擎狀態 ${h.final_state || '-'}｜帳務 ${h.accounting || 'LEGACY_ACCOUNTING/PROVISIONAL'}｜可用年份 ${years}${cmp}${h.governed_validation ? '｜需治理驗證（GOVERNED_VALIDATION_REQUIRED）' : ''}`;
         },
         referenceText(item) {
-            const r = item.reference, pct = (m) => m && m.value !== null ? (m.value * 100).toFixed(2) + '%' : `None (${m ? m.reason : '-'})`;
+            const r = item.reference;
+            if (!r) return '';
+            const pct = (m) => m && m.value !== null ? (m.value * 100).toFixed(2) + '%' : `None (${m ? m.reason : '-'})`;
             const levels = Object.entries(r.levels || {}).map(([k, ok]) => `${k} ${ok ? 'YES' : 'NO'}`).join('、');
             const metrics = r.metrics ? `｜報酬 ${pct(r.metrics.base.total_return)}／兩倍成本 ${pct(r.metrics.x2.total_return)}` : '';
             return `參考回測：${r.state}（${r.reason}）${metrics}｜${levels}｜資料：${(r.data_needs || []).join(', ') || '-'}｜TEJ：${r.tej_required ? '需要' : '不需要'}`;

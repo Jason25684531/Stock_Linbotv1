@@ -1,0 +1,24 @@
+{% if report %}
+    <p class="text-xs" data-testid="reference-downloads">下載（固定順序，未排名）：
+        <a class="text-blue-300" href="{{ url_for('reference_download', batch_id=report.batch_id, name='report.md') }}">比較報告 report.md</a> ·
+        <a class="text-blue-300" href="{{ url_for('reference_download', batch_id=report.batch_id, name='gap_report.md') }}">資料缺口 gap_report.md</a></p>
+    {% endif %}
+    <section class="rounded-lg border border-line p-4 text-sm" data-testid="reference-job">
+        <h2 class="font-semibold">批次執行</h2>
+        <p class="mt-1">狀態：<strong data-testid="reference-job-status">{{ job.status }}</strong>
+            {% if job.started_at %}· 開始 {{ job.started_at }} · pid {{ job.pid }}{% endif %}
+            · 已存回測 <span data-testid="reference-job-progress">{{ job.saved_runs or 0 }} / {{ job.planned }}</span>
+            {% if job.batch_id %}· 批次 {{ job.batch_id }}{% endif %}</p>
+        {% if job.status == 'RUNNING_ELSEWHERE' %}<p class="text-amber-300">另一個參考批次程序正在執行（pid {{ job.pids|join(', ') }}），不可重複啟動。</p>{% endif %}
+        {% if job.log_tail %}<pre class="mt-2 overflow-x-auto text-xs text-muted" data-testid="reference-job-log">{{ job.log_tail|join('\n') }}</pre>{% endif %}
+        <p class="mt-1 text-xs text-muted">相同資料、程式、參數與成本的策略直接重用（REUSE），不重跑；取消只停止此頁啟動的程序，已完成的回測保留。</p>
+        {% if admin %}
+        <div class="mt-2 flex gap-3">
+            <form method="post" action="{{ url_for('admin_reference', action='start') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <button class="rounded bg-blue-600 px-4 py-2 text-white" data-testid="reference-start" {% if job.pids %}disabled{% endif %}>啟動參考批次</button></form>
+            <form method="post" action="{{ url_for('admin_reference', action='cancel') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                <button class="rounded border border-strong px-4 py-2" data-testid="reference-cancel" {% if job.status != 'RUNNING' %}disabled{% endif %}>取消</button></form>
+        </div>
+        {% elif admin_enabled %}<p class="mt-2 text-xs">需要<a class="text-blue-300" href="{{ url_for('admin_login') }}">管理員登入</a>才能啟動或取消批次。</p>
+        {% else %}<p class="mt-2 text-xs text-muted">管理功能未啟用（未設定管理 token），本頁唯讀。</p>{% endif %}
+    </section>

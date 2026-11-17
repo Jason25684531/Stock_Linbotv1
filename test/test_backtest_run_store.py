@@ -216,3 +216,15 @@ def test_copied_or_mismatched_admission_is_not_verified(tmp_path, change, reason
     change(loaded['run'], row)
     status = run_store.evidence_status(loaded, row, True)
     assert status['status'] == 'POST_RUN_NOT_ADMISSION_VERIFIED' and reason in status['reasons']
+
+
+def test_file_hash_is_reused_only_while_the_file_is_unchanged(tmp_path):
+    import hashlib
+    import os
+    path = tmp_path / 'nav.csv'
+    path.write_bytes(b'date,nav\n1,1.0\n')
+    assert run_store.file_hash(path) == hashlib.sha256(b'date,nav\n1,1.0\n').hexdigest()
+    stat = os.stat(path)
+    path.write_bytes(b'date,nav\n1,9.0\n')  # same size, different content
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+    assert run_store.file_hash(path) == hashlib.sha256(b'date,nav\n1,9.0\n').hexdigest()

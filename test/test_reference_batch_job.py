@@ -98,7 +98,7 @@ def test_page_shows_job_state_and_downloads_only_stored_markdown(out, monkeypatc
              'counts': {s: 0 for s in runner.STATES}, 'rows': [], 'created_at': 'now', 'plan_only': False}
     runner.write_report(batch)
     client = app.test_client()
-    html = client.get('/reference').get_data(as_text=True)
+    html = client.get('/platform/system').get_data(as_text=True)  # the reference batch panel lives on the System research jobs tab
     assert 'data-testid="reference-job-status">RUNNING_ELSEWHERE<' in html and 'report.md' in html
     reply = client.get('/reference/batches/20261109T000000Z-aaaaaaaa/report.md')
     assert reply.status_code == 200 and b'20261109T000000Z-aaaaaaaa' in reply.data

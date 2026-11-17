@@ -7,7 +7,7 @@
 <div class="space-y-4 text-sm" data-testid="intelligence-portfolio">
 {{ iu.labels_banner('結果僅限研究用途；示範組合不是新的策略，也沒有搜尋最佳權重。') }}
 {% if not folio %}
-    <section class="quant-card p-4" data-testid="no-portfolio">尚無組合分析結果。管理員可在 <a class="text-blue-300" href="{{ url_for('intelligence_index') }}">分析工作</a> 啟動分析。</section>
+    <section class="quant-card p-4" data-testid="no-portfolio">尚無組合分析結果。管理員可在 <a class="text-blue-300" href="{{ url_for('platform_system') }}">分析工作</a> 啟動分析。</section>
 {% else %}
     <section class="quant-card p-4 text-xs" data-testid="portfolio-meta">
         <p>比較條件：同一 Snapshot（<span class="num">{{ folio.snapshot_id }}</span>）、帳務 POSITION_LEDGER_CA_V1、Run 身份與目前程式一致、共同 VERIFIED 交易日至少 252 日。</p>

@@ -1,0 +1,10 @@
+{% import '_viz.html' as vz %}
+<section class="vf vf-grid vf-two" data-testid="stock-strategies">
+  <div class="vf-card"><div class="vf-spread"><h2>哪些策略今天選了 <span class="num">{{ stock_id }}</span></h2><span class="vf-small vf-muted num">{{ selection.signal_date or '' }}</span></div>
+    {% if selection.status != 'OK' %}<p class="vf-muted vf-small"><span class="num">{{ selection.status }}</span>：{{ selection.reason }}</p>
+    {% elif not stock_picks %}<p class="vf-muted vf-small">今日沒有策略選出這檔股票</p>
+    {% else %}{% for r in stock_picks %}<div class="vf-spread" style="padding:.35rem 0;border-top:1px solid #1c3a50"><a href="{{ url_for('web_strategy', sid=r.strategy_id) }}">{{ strategy_names.get(r.strategy_id, r.strategy_id) }}</a><span class="vf-row"><span class="vf-small vf-muted">第 {{ r.rank }} 名</span>{{ vz.tag(r.feasibility.status) }}</span></div>{% endfor %}{% endif %}
+  </div>
+  <div class="vf-card"><h2>AI 預測（研究）</h2><p class="vf-small vf-muted">5 與 20 個交易日的研究模型；模型未通過治理時只顯示原因，不顯示機率。</p>
+    <p style="margin-top:.5rem"><a class="vf-chip" href="{{ url_for('platform_predictions', stock=stock_id) }}">查看這檔股票的預測紀錄 →</a></p></div>
+</section>

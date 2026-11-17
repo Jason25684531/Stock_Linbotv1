@@ -80,18 +80,15 @@ def _client():
 def test_pages_show_stored_numbers_and_provenance(stored):
     latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
     result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
-    page = _client().get('/intelligence/syn').get_data(as_text=True)
-    cagr = result['performance']['verified']['cagr']['value']
-    assert f'{cagr * 100:.1f}%' in page
-    for token in (result['run']['run_id'], result['run']['run_identity'], 'HS1-syn', 'EV1-syn', result['identity'], 'POSITION_LEDGER_CA_V1'):
-        assert token in page
-    assert '歷史情境模擬，非未來價格或投資報酬預測' in page
+    c = _client()
+    assert c.get('/intelligence/syn').headers['Location'].endswith('/platform/strategies/syn')  # retired tab page (2026-11-16)
+    page = c.get('/platform/strategies/syn').get_data(as_text=True)
+    assert result['identity'] in page and 'buy strength' in page  # the V1 result and its card stay in the report's evidence
     assert result['scenarios']['status'] == 'SUFFICIENT' and result['scenarios']['check']['span'] == [2017, 2020]
     official_2017_2020 = len(pd.bdate_range('2017-01-01', '2020-12-31'))
     assert result['scenarios']['simulation']['sample_sessions'] == official_2017_2020  # the PARTIAL 2016 session is never sampled
     assert 'score' not in json.dumps(result['dimensions'])
-    index = _client().get('/intelligence').get_data(as_text=True)
-    assert index.index('row-syn') < index.index('row-blocked')
+    assert c.get('/intelligence').headers['Location'].endswith('/strategies')
 
 
 def test_report_tables_come_from_the_stored_results(stored, monkeypatch):
@@ -105,27 +102,6 @@ def test_report_tables_come_from_the_stored_results(stored, monkeypatch):
     assert f"{result['performance']['verified']['cagr']['value']:.1%}" in text
     assert '| blocked |' in text and 'NO_PIT' in text
     assert _client().get('/intelligence/reports/REPORT_TABLES.md').status_code == 200
-
-
-def test_the_page_renders_neutral_fact_labels_not_quality_grades(stored):
-    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
-    result = json.loads((stored / 'results' / latest['strategies']['syn'] / 'syn.json').read_text(encoding='utf-8'))
-    page = _client().get('/intelligence/syn').get_data(as_text=True)
-    sharpe = next(i for i in result['health']['efficiency'] if i['name'] == 'Sharpe')
-    assert sharpe.get('neutral') and sharpe['neutral'] in page  # e.g. 平均日報酬為正, never 良好 for a sign check
-    checks = result['dimensions']['type_edge']['checks']
-    if any(c['status'] in ('PASS', 'FAIL') for c in checks):
-        assert '成立' in page and '通過' not in page
-
-
-def test_a_defensive_value_without_data_renders(stored):
-    latest = json.loads((stored / 'LATEST.json').read_text(encoding='utf-8'))
-    path = stored / 'results' / latest['strategies']['syn'] / 'syn.json'
-    data = json.loads(path.read_text(encoding='utf-8'))
-    data['dimensions']['type_edge']['defensive_value'] = {'status': 'INSUFFICIENT_DATA'}
-    path.write_text(json.dumps(data), encoding='utf-8')
-    page = _client().get('/intelligence/syn')
-    assert page.status_code == 200 and '不判定' in page.get_data(as_text=True)
 
 
 def test_final_report_has_every_section_per_strategy(stored, monkeypatch):
@@ -146,22 +122,22 @@ def test_an_older_result_is_marked_superseded(stored):
     older = 'SI1-' + 'a' * 16
     data = json.loads((stored / 'results' / current / 'syn.json').read_text(encoding='utf-8'))
     si.write_json(stored / 'results' / older / 'syn.json', data | {'identity': older})
-    assert 'superseded-warning' in _client().get(f'/intelligence/syn?result={older}').get_data(as_text=True)
-    assert 'superseded-warning' not in _client().get('/intelligence/syn').get_data(as_text=True)
+    assert 'superseded-warning' in _client().get(f'/platform/strategies/syn?result={older}').get_data(as_text=True)
+    assert 'superseded-warning' not in _client().get('/platform/strategies/syn').get_data(as_text=True)
     assert _client().get(f'/intelligence/syn/evidence.json?result={older}').status_code == 200
 
 
 def test_blocked_strategy_has_a_card_and_no_numbers(stored):
-    page = _client().get('/intelligence/blocked').get_data(as_text=True)
-    assert 'NO_PIT' in page and 'card-field-hypothesis' in page and 'nav-chart' not in page
+    page = _client().get('/platform/strategies/blocked').get_data(as_text=True)
+    assert 'NO_PIT' in page and 'report-blocked' in page and 'vf-equity' not in page
     assert 'buy strength' in page
 
 
 def test_unknown_strategy_identity_and_report_names(stored):
     c = _client()
-    assert c.get('/intelligence/nope').status_code == 404
-    assert c.get('/intelligence/syn?result=SI1-0000000000000000').status_code == 404
-    assert c.get('/intelligence/syn?result=../../etc').status_code == 404
+    assert c.get('/platform/strategies/nope').status_code == 404
+    assert c.get('/platform/strategies/syn?result=SI1-0000000000000000').status_code == 404
+    assert c.get('/platform/strategies/syn?result=../../etc').status_code == 404
     assert c.get('/intelligence/reports/..%2F..%2Fapp.py').status_code == 404
     assert c.get('/intelligence/reports/STRATEGY_INTELLIGENCE_FINAL_ACCEPTANCE_REPORT.md').status_code == 404
     assert c.get('/intelligence/syn/evidence.json').status_code == 200
@@ -171,10 +147,10 @@ def test_get_never_starts_a_job_and_guests_cannot_post(stored, monkeypatch):
     from core.research.reference import batch_job
     monkeypatch.setattr(batch_job, 'start', lambda **k: pytest.fail('started from a GET or by a guest'))
     c = _client()
-    for path in ('/intelligence', '/intelligence/syn', '/intelligence/portfolio', '/intelligence/forward'):
+    for path in ('/platform/strategies/syn', '/platform/system', '/intelligence/portfolio', '/intelligence/forward'):
         assert c.get(path).status_code == 200
     assert c.post('/admin/intelligence/start').status_code == 403
-    assert 'admin-controls' not in c.get('/intelligence').get_data(as_text=True)
+    assert 'admin-controls' not in c.get('/platform/system').get_data(as_text=True)
     forward = c.get('/intelligence/forward').get_data(as_text=True)
     assert 'GOVERNANCE_BLOCKED' in forward and 'ticker' not in forward and 'stock_id' not in forward
 
@@ -194,7 +170,7 @@ def test_admin_start_needs_csrf_and_cancel_only_targets_intelligence(stored, mon
     assert c.post('/admin/intelligence/start', data={'csrf': 'bad'}).status_code == 403 and not calls
     assert c.post('/admin/intelligence/start', data={'csrf': 'tok'}).status_code == 302 and calls == [{'workers': 1, 'kind': 'intelligence'}]
     assert c.post('/admin/intelligence/cancel', data={'csrf': 'tok'}).status_code == 409
-    assert 'admin-controls' in c.get('/intelligence').get_data(as_text=True)
+    assert 'admin-controls' in c.get('/platform/system').get_data(as_text=True)  # the job panel moved to the System research jobs tab
 
 
 def test_stale_identity_shows_no_verdict_or_probability(tmp_path, monkeypatch):

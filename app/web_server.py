@@ -104,7 +104,11 @@ def index():
 def dashboard():
     """Dashboard 主頁面。"""
     from .platform_routes import publish_overview
-    return render_template('dashboard.html', publish=publish_overview())
+    from services import smart_selection
+    selection = smart_selection.load(app)
+    return render_template('dashboard.html', publish=publish_overview(), selection=selection,
+                           stock_cards=smart_selection.stock_cards(selection, smart_selection.price_history),
+                           picking_strategies=len({r['strategy_id'] for r in selection.get('rows', [])}))
 
 
 FUNDAMENTAL_STRATEGY_ID = 'fundamental_g2g3_top5_reb60_score_weighted_v1'
@@ -297,7 +301,14 @@ def _build_strategy_catalog() -> list[dict[str, object]]:
 @app.route('/stock-analysis')
 def stock_analysis():
     """Render the dedicated stock analysis workspace."""
-    return render_template('stock_analysis.html', stock_id=str(request.args.get('id') or '').strip())
+    stock_id = str(request.args.get('id') or '').strip()
+    if not stock_id:
+        return render_template('stock_analysis.html', stock_id=stock_id)
+    from services import smart_selection
+    selection = smart_selection.load(app)
+    names = {s['strategy_id']: s.get('display_name') or s['strategy_id'] for s in _build_strategy_catalog()}
+    return render_template('stock_analysis.html', stock_id=stock_id, selection=selection, strategy_names=names,
+                           stock_picks=[r for r in selection.get('rows', []) if r['stock_id'] == stock_id])
 
 
 @app.route('/strategies')
@@ -312,9 +323,10 @@ def strategy_center():
         row = rows.get(item['strategy_id'])
         item['reference'] = row and {key: row.get(key) for key in ('state', 'reason', 'levels', 'metrics', 'run_id')} | {
             'data_needs': needs.get(item['strategy_id'], []), 'tej_required': False}
-    from app.platform_routes import strategy_history
+    from app.platform_routes import historical_state, strategy_history
+    state = historical_state()
     for item in catalog:  # 2015-2025 data trust per year (change 2026-11-10-historical-data-foundation-v1), stored evaluation only
-        info = strategy_history(item['strategy_id'])
+        info = strategy_history(item['strategy_id'], state)
         cross = (info or {}).get('cross_regime') or {}
         compare = cross.get('legacy_comparison') or None  # new engine (POSITION_LEDGER_CA_V1) vs the stored legacy raw-price run
         decision = (cross.get('decision') or {}).get('state')
@@ -325,7 +337,10 @@ def strategy_center():
                                     'governed_validation': decision == 'GOVERNED_VALIDATION_REQUIRED',
                                     'compare': compare and {**{k: ((compare.get(k) or {}).get('common_years_return')) for k in ('legacy', 'new', 'delta')},
                                                             'years': compare.get('common_years') or []}}
-    return render_template('strategy_center.html', strategy_catalog=catalog)
+    from app import intelligence_routes, platform_v2_routes
+    from services import web_dashboard
+    wall = web_dashboard.wall(web_dashboard.strategies(platform_v2_routes, intelligence_routes), request.args)
+    return render_template('strategy_center.html', strategy_catalog=catalog, wall=wall)
 
 
 @app.route('/strategies/research')
@@ -333,8 +348,8 @@ def research_strategy():
     """Read-only research strategy detail: configuration, validation status and archived signals."""
     sid = str(request.args.get('id') or '').strip().upper()
     if not research_payloads.is_research(sid):
-        return render_template('research_strategy.html', info=None, active_nav='strategy_center'), 404
-    return render_template('research_strategy.html', info=research_payloads.overview(sid), active_nav='strategy_center',
+        return render_template('research_strategy.html', info=None), 404
+    return render_template('research_strategy.html', info=research_payloads.overview(sid),
                            periods=research_payloads.PERIOD_LABELS)
 
 

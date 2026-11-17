@@ -147,6 +147,36 @@ def authorization(app) -> tuple[bool, str]:
     return False, 'EXISTING_WEB_AUTHORIZATION_NOT_VERIFIED'
 
 
+def stock_cards(view, history) -> list:
+    """Dashboard cards for the most-selected stocks: close, change against the previous stored close and a price line.
+    history(stock_id, signal_date) returns closes in date order; a failure leaves the price fields empty, never zero."""
+    from services.web_dashboard import segments
+    if view.get('status') != 'OK':
+        return []
+    out = []
+    for entry in view['consensus'][:8]:
+        try:
+            closes = [float(c) for c in history(entry['stock_id'], view['signal_date'])]
+        except Exception:  # a missing price history must not hide the selection itself
+            closes = []
+        rows = [r for r in view['rows'] if r['stock_id'] == entry['stock_id']]
+        out.append({**entry, 'count': entry['trusted_data_signals'] + entry['unvalidated_signals'],
+                    'close': closes[-1] if closes else None,
+                    'change': closes[-1] / closes[-2] - 1 if len(closes) > 1 and closes[-2] else None,
+                    'spark': segments(closes, 230, 44), 'feasibility': rows[0]['feasibility']['status'] if rows else 'UNKNOWN'})
+    return out
+
+
+def price_history(stock_id, signal_date):
+    from core import db_helper
+    frame = db_helper.get_stock_history(stock_id, limit=40, end_date=signal_date)
+    if frame is None or frame.empty:
+        return []
+    days = pd.to_datetime(frame.trade_date)
+    frame = frame[days.dt.dayofweek < 5].drop_duplicates('trade_date').sort_values('trade_date')  # 2026 rows include weekend copies
+    return frame.close_price.dropna().tail(40).tolist()
+
+
 def load(app) -> dict:
     """The live view; any source error is DATA_MISSING with its reason, never an empty success."""
     from core import db_helper

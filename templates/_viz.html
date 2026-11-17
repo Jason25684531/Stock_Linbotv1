@@ -1,0 +1,40 @@
+{# Visual-first building blocks. Status tones never use the red/green reserved for price movement. #}
+{% set status_tags = {
+    'VERIFIED': ('資料可信', 'good'), 'PROVISIONAL': ('資料暫定', 'mid'), 'DATA_BLOCKED': ('資料不足', 'none'),
+    'GOVERNED_ONLY': ('治理管理中', 'none'), 'DATA_MISSING': ('資料不足', 'none'), 'NOT_CERTIFIED': ('研究用，未認證', 'none'),
+    'GOOD': ('良好', 'good'), 'CAUTION': ('尚可', 'mid'), 'RISK': ('留意', 'risk'), 'INSUFFICIENT_DATA': ('資料不足', 'none'),
+    'NOT_APPLICABLE': ('僅供參考', 'none'), 'FEASIBLE': ('可買進', 'good'), 'LIMITED': ('受限', 'mid'),
+    'NOT_TRADABLE': ('不可成交', 'risk'), 'UNKNOWN': ('未知', 'none'), 'PUBLISHABLE': ('對帳相符', 'good'),
+    'NOT_PUBLISHABLE': ('帳務未通過', 'risk'), 'RETURN_TARGET_PRIORITY': ('達 10% 目標', 'good'),
+    'RETURN_TARGET_BASIC': ('達 5% 目標', 'mid'), 'RETURN_TARGET_NOT_MET': ('未達 5% 目標', 'risk')
+} %}
+{% set regime_tags = {'VERIFIED_ONLY': '只用可信年度', 'VERIFIED_AND_PARTIAL': '含暫定年度'} %}
+
+{% macro tag(code) -%}
+{%- set e = status_tags.get(code, (code or '—', 'none')) -%}
+<span class="vf-tag vf-{{ e[1] }}" title="{{ code }}" data-code="{{ code }}">{{ e[0] }}</span>
+{%- endmacro %}
+
+{% macro pct(m, signed=True) -%}
+{%- set v = m.value if m is mapping else m -%}
+{%- if v is none %}<span class="vf-muted" title="{{ m.reason if m is mapping else '' }}">—{% if m is mapping and m.reason %} <span class="vf-small num">{{ m.reason }}</span>{% endif %}</span>{% else %}<span class="num {{ 'vf-up' if v > 0 else 'vf-down' if v < 0 else '' }}">{{ ('%+.1f%%' if signed else '%.1f%%')|format(v * 100) }}</span>{% endif -%}
+{%- endmacro %}
+
+{% macro line(segs, w, h, cls='vf-line-up', label='') -%}
+{%- if segs %}<svg class="vf-spark" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none" role="img" aria-label="{{ label }}">{% for s in segs %}<polyline class="{{ cls }}" points="{{ s }}"/>{% endfor %}</svg>{% endif -%}
+{%- endmacro %}
+
+{% macro strip(health) -%}
+<div class="vf-strip" role="img" aria-label="{% for h in health %}{{ h.question }}{{ status_tags.get(h.status, ('無資料',))[0] }}{% if not loop.last %}，{% endif %}{% endfor %}">
+{%- for h in health %}<span class="vf-seg vf-{{ status_tags.get(h.status, ('', 'none'))[1] }}" title="{{ h.question }} {{ status_tags.get(h.status, ('無資料',))[0] }}"></span>{% endfor -%}
+</div>
+{%- endmacro %}
+
+{% macro hist(h, pct_axis=true, label='') -%}
+{%- if h and h.get('counts') %}{% set top = h.counts|max or 1 %}{% set n = h.counts|length %}
+<svg class="vf-hist" viewBox="0 0 400 120" role="img" aria-label="{{ label }}">
+{%- for c in h.counts %}<rect x="{{ (loop.index0 * 400 / n)|round(1) }}" y="{{ (102 - c * 96 / top)|round(1) }}" width="{{ (400 / n - 2)|round(1) }}" height="{{ (c * 96 / top)|round(1) }}" rx="1.5"><title>{{ '%.3f'|format(h.edges[loop.index0]) }} ～ {{ '%.3f'|format(h.edges[loop.index0 + 1]) }}：{{ c }}</title></rect>{% endfor %}
+<text x="2" y="117">{{ ('%.0f%%'|format(h.edges[0] * 100)) if pct_axis else ('%.0f 日'|format(h.edges[0])) }}</text>
+<text x="398" y="117" text-anchor="end">{{ ('%.0f%%'|format(h.edges[-1] * 100)) if pct_axis else ('%.0f 日'|format(h.edges[-1])) }}</text></svg>
+{%- else %}<p class="vf-muted">沒有保存的分布</p>{% endif -%}
+{%- endmacro %}

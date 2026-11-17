@@ -5,7 +5,7 @@
 <div class="web-v3" data-testid="strategy-v4">
 <section class="v3-card"><h2>策略優化研究 · V4</h2><p>RESEARCH_ONLY / NOT_CERTIFIED · 已看過歷史資料的研究，並非樣本外證據。</p>
 <p>排序修正與獲利目標分別驗收。原始策略、正式每日推薦與凍結評估門檻保留。</p>
-<p><a href="{{ url_for('strategy_v4_index') }}">兩策略總覽</a> · <a href="{{ url_for('web_strategies') }}">V3 策略中心</a></p></section>
+<p><a href="{{ url_for('strategy_v4_index') }}">兩策略總覽</a> · <a href="{{ url_for('strategy_center') }}">V3 策略中心</a></p></section>
 {% for row in rows %}
 <section class="v3-card" data-strategy-id="{{ row.strategy_id }}"><h2><a href="{{ url_for('strategy_v4_detail',sid=row.strategy_id) }}">{{ row.name }}</a></h2>
 {% if row.status != 'COMPARABLE' %}<p class="v3-error" data-testid="v4-blocked">BLOCKED：{{ row.reason }}</p><p>缺少可發布證據；尚無可信比較績效。</p>

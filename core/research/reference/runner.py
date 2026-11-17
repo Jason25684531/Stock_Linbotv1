@@ -244,7 +244,8 @@ def write_report(report) -> Path:
 def latest_report() -> dict | None:
     try:
         pointer = json.loads((OUT / 'LATEST.json').read_text(encoding='utf-8'))
-        return json.loads(Path(pointer['path']).read_text(encoding='utf-8'))
+        # the stored 'path' is absolute on the writing host (a Windows path is unreadable in the Linux container); resolve by batch_id
+        return json.loads((OUT / 'batches' / pointer['batch_id'] / 'report.json').read_text(encoding='utf-8'))
     except (OSError, ValueError, KeyError):
         return None
 

@@ -127,6 +127,13 @@ class _ApplicationServices:
         except KeyError as exc:
             raise AttributeError(name) from exc
 
+    # The proxy keeps no state: a patch and its undo both land on the module, so an undone patch cannot shadow it.
+    def __setattr__(self, name, value):
+        globals()[name] = value
+
+    def __delattr__(self, name):
+        globals().pop(name, None)
+
 
 services = _ApplicationServices()
 
@@ -692,6 +699,10 @@ def main() -> int:
         except Exception as exc:
             print(f'[WARN] Rich Menu 自動綁定失敗: {exc}')
 
+    from app import intelligence_routes, platform_v2_routes
+    from services import web_dashboard
+    # verify the stored runs once at start, so the first Strategy Center visit does not wait for it
+    threading.Thread(target=web_dashboard.strategies, args=(platform_v2_routes, intelligence_routes), daemon=True).start()
     app.run(host='0.0.0.0', port=1688, debug=False)
     return 0
 

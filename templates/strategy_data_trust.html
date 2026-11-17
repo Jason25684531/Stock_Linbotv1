@@ -29,6 +29,6 @@
     <section class="quant-card overflow-x-auto p-4"><h2 class="text-sm font-semibold text-white">逐類別 × 年份</h2>
         <table class="mt-2 w-full"><thead class="text-left text-muted"><tr><th class="p-1">類別</th>{% for c in info.cells %}<th class="num p-1">{{ c.year }}</th>{% endfor %}</tr></thead>
         <tbody>{% for cat in categories %}<tr><td class="p-1">{{ cat.label }}</td>{% for c in info.cells %}<td class="p-1">{{ trust_cell(c.by_category[cat.id]) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></section>
-    <p><a class="text-blue-300" href="{{ url_for('strategy_center') }}">回策略中心</a>{% if info.cross_regime and info.cross_regime.analysis %} · <a class="text-blue-300" href="{{ url_for('reference_comparison', history=strategy_id) }}#cross-regime">跨市場環境結果</a>{% endif %}</p>
+    <p><a class="text-blue-300" href="{{ url_for('strategy_center') }}">回策略中心</a>{% if info.cross_regime and info.cross_regime.analysis %} · <a class="text-blue-300" href="{{ url_for('web_strategy', sid=strategy_id) }}#cross-regime">跨市場環境結果</a>{% endif %}</p>
 </div>
 {% endblock %}

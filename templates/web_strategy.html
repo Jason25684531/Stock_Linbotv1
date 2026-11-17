@@ -1,14 +1,112 @@
-{% extends 'base.html' %}{% import '_intelligence_ui.html' as iu %}
-{% block title %}{{ row.name }} · 策略規格{% endblock %}{% block page_heading %}策略規格與研究狀態{% endblock %}
-{% block content %}<div class="web-v3" data-testid="web-strategy">
-{{ iu.labels_banner() }}<section class="v3-card"><h2>{{ row.name }}</h2><p>{{ row.strategy_id }} · {{ row.type_label }} · {{ iu.badge(row.trust) }} · NOT_CERTIFIED</p>
-<p>可回測期間 {{ (row.readiness.get('backtest_window') or [])|join(' ～ ') or 'DATA_MISSING' }} · 可信年度 {{ row.readiness.get('trusted_years',[])|join(', ') or '無 VERIFIED 年度' }}</p>
-{% if row.reason %}<p class="v3-error">{{ row.state }}：{{ row.reason }}</p>{% endif %}<p>Definition {{ row.card.get('definition',{}).get('definition_id','DATA_MISSING') }} · Profile {{ row.card.get('profile',{}).get('profile_id','DATA_MISSING') }}</p>
-<p><a href="{{ url_for('intelligence_strategy',sid=row.strategy_id) }}">V1 原始研究與歷史版本</a> · <a href="{{ url_for('web_strategies') }}">全部策略</a></p></section>
-<section class="v3-card" data-testid="spec-card"><h2>策略卡 · {{ row.fields_present }}/{{ row.fields_total }} 規格欄位</h2>
-{% for key,field in row.card.get('definition',{}).get('fields',{}).items() %}<details open><summary>{{ labels.get(key,key) }} · {{ field.status }}</summary><p>{{ field.text }}</p>{% for s in field.get('sources',[]) %}<p class="v3-muted">{{ s.path }} :: {{ s.symbol }} · lines {{ s.lines }} · SHA256 {{ s.sha256 }} {{ s.status }}</p>{% endfor %}</details>{% else %}<p>DATA_MISSING：策略規格來源缺漏</p>{% endfor %}
-<details><summary>數值參數與原 Profile</summary><pre>{{ row.card.get('definition',{}).get('numeric',{})|tojson(indent=2) }}</pre><pre>{{ row.card.get('profile',{})|tojson(indent=2) }}</pre></details></section>
-<section class="v3-card"><h2>已知實作與說明差異</h2><pre>{{ notes|tojson(indent=2) }}</pre></section>
-<section class="v3-card"><h2>研究 Run 與報告</h2><p>報酬未達 5% 或 10% 仍可閱讀經審查的可信報告；目標不等於認證。</p>
-{% if row.selected %}<p><a href="{{ url_for('platform_run',run_id=row.selected.run_id) }}">最新完整報告 {{ row.selected.run_id }}</a> · {{ row.target.status }}</p>{% endif %}
-{% for run in row.runs %}<p><a href="{{ url_for('platform_run',run_id=run.run_id) }}">{{ run.run_id }}</a> · {{ run.period|join(' ～ ') }} · {{ run.rule_version }} · {{ 'PUBLISHABLE' if run.publishable else 'NOT_PUBLISHABLE' }}</p>{% else %}<p>{{ row.reason or 'DATA_MISSING：沒有保存 Run' }}</p>{% endfor %}</section></div>{% endblock %}
+{% extends 'base.html' %}{% import '_viz.html' as vz %}{% import '_intelligence_ui.html' as iu %}
+{% block title %}{{ row.name }} · 策略報告{% endblock %}{% block page_heading %}策略報告{% endblock %}
+{% block content %}{% set p = view.prov %}
+<div class="vf vf-max space-y-4" data-testid="web-strategy">
+<section class="vf-spread" data-testid="report-header">
+  <div><h1 class="vf-big">{{ row.name }}</h1>
+    <p class="vf-row vf-small vf-muted"><span class="num">{{ row.strategy_id }}</span><span>{{ row.type_label }}</span>{{ vz.tag(row.trust) }}{{ vz.tag('NOT_CERTIFIED') }}{% if row.report %}{{ vz.tag((row.report.dimensions.return_target or {}).status) }}{% endif %}</p></div>
+  <a class="vf-chip" href="{{ url_for('strategy_center') }}">← 全部策略</a>
+</section>
+{% if superseded %}<p class="vf-card vf-small" data-testid="superseded-warning">正在檢視較舊的分析版本 <span class="num">{{ card.identity }}</span>；<a href="{{ url_for('web_strategy', sid=row.strategy_id) }}">回到最新版本</a></p>{% endif %}
+
+{% if not row.report %}
+<section class="vf-card" data-testid="report-blocked"><h2>目前沒有可發布的回測報告</h2>
+  <p class="vf-muted">{{ vz.tag(row.state) }} 原因：<span class="num">{{ row.reason or 'DATA_MISSING' }}</span>。沒有通過帳務審查的結果，因此不顯示任何績效數字或圖表。</p></section>
+{% else %}
+<section class="vf-card vf-hero" data-testid="report-hero">
+  <div class="vf-spread"><div>
+    <p class="vf-muted"><span id="vf-hero-date">{{ p.period[-1] if p.period else '' }}</span> 累計報酬</p>
+    <p class="vf-ret num {{ 'vf-up' if (p.total_return.value or 0) > 0 else 'vf-down' }}" id="vf-hero-ret" data-testid="hero-total">{{ vz.pct(p.total_return) }}</p>
+    <p class="vf-muted">{{ view.years|length }} 個年度中 {{ view.winning_years }} 個賺錢，最大回撤 {{ vz.pct(p.max_drawdown) }}。全期年化 {{ vz.pct(p.cagr) }}，同期大盤含息年化 {{ vz.pct(p.benchmark_cagr_total_return) }}。</p>
+    <p class="vf-small vf-muted" data-testid="hero-basis">{% if view.verified %}可信期間 <span class="num">{{ view.verified_span|join('～') }}</span> 年化 {{ vz.pct(view.verified.cagr) }}；體檢與報酬目標用這段期間判定。{% else %}全期含暫定年度，沒有可信期間；體檢不做判定。{% endif %}</p></div>
+    <span class="vf-chip num">{{ (p.period or [])|join(' ～ ') }}</span></div>
+  <svg class="vf-chart" id="vf-equity" viewBox="0 0 900 240" preserveAspectRatio="none" role="img" aria-label="{{ '策略淨值與大盤含息淨值' }}" style="height:240px;margin-top:.75rem">
+    {% for s in view.bench_line %}<polyline class="vf-line-bench" points="{{ s }}"/>{% endfor %}
+    {% for s in view.nav_line %}<polyline class="vf-line-up" stroke-width="2" points="{{ s }}"/>{% endfor %}
+    <line id="vf-cursor" x1="0" x2="0" y1="0" y2="240" stroke="#e5eef7" opacity="0" vector-effect="non-scaling-stroke"/></svg>
+  <svg class="vf-chart" viewBox="0 0 900 60" preserveAspectRatio="none" role="img" aria-label="{{ '水下回撤' }}" style="height:60px">{% for s in view.dd_line %}<polyline class="vf-line-dd" points="{{ s }}"/>{% endfor %}</svg>
+  <p class="vf-small vf-muted">紅線：策略（基礎成本）・灰虛線：大盤含息・下方綠線：距前高的跌幅</p>
+  <div class="vf-years" data-testid="year-strip">{% for y in view.years %}{% set v = y.value %}
+    <div title="{{ y.year }}：{{ ('%+.1f%%'|format(v * 100)) if v is not none else y.reason }}" {% if v is not none %}style="background:{{ 'rgba(244,63,94,%.2f)'|format([0.95, 0.25 + v * 1.6]|min) if v > 0 else 'rgba(34,197,94,%.2f)'|format([0.95, 0.25 - v * 2.5]|min) }}"{% endif %}>{{ y.year }}</div>{% endfor %}</div>
+</section>
+<script id="vf-report-data" type="application/json">{{ {'dates': view.dates, 'nav': view.nav}|tojson }}</script>
+
+<div class="vf-grid vf-two">
+  <section class="vf-card" data-testid="health"><div class="vf-spread"><h2>策略體檢</h2><span class="vf-small vf-muted num">{{ 'VERIFIED ' ~ view.verified_span|join('～') if view.verified else '全期暫定' }}</span></div>
+    {% for h in view.health %}<div class="vf-check" data-testid="health-{{ h.key }}"><div><strong>{{ h.question }}</strong>
+      <p class="vf-small vf-muted">{% if h.lead %}{{ h.lead.name }} {{ iu.mv(h.lead.value, iu.health_kind.get(h.lead.name, 'num')) }}{% else %}沒有保存的項目{% endif %}</p></div>{{ vz.tag(h.status) }}</div>{% endfor %}
+  </section>
+  <div class="vf-grid">
+    <section class="vf-card" data-testid="report-picks"><div class="vf-spread"><h2>今天這個策略選了哪些股票</h2><span class="vf-small vf-muted num">{{ selection.signal_date or '' }}</span></div>
+      {% if selection.status != 'OK' %}<p class="vf-muted">{{ selection.status }}：{{ selection.reason }}</p>
+      {% elif not picks %}<p class="vf-muted">今日沒有符合條件的股票</p>
+      {% else %}{% for r in picks[:10] %}<div class="vf-spread" style="padding:.3rem 0;border-top:1px solid #1c3a50"><a class="vf-ticker" href="{{ url_for('stock_analysis', id=r.stock_id) }}"><span class="num vf-muted">{{ r.rank }}</span> {{ r.stock_name or '' }} <span class="num">{{ r.stock_id }}</span></a>{{ vz.tag(r.feasibility.status) }}</div>{% endfor %}
+      {% if picks|length > 10 %}<p class="vf-small vf-muted">另有 {{ picks|length - 10 }} 檔，見總覽</p>{% endif %}{% endif %}
+    </section>
+    <section class="vf-card" data-testid="regimes"><h2>不同市場環境</h2><p class="vf-small vf-muted">年化報酬，{{ vz.regime_tags.get(view.regime_track) }}</p>
+      {% set top = (view.regimes|map(attribute='value')|reject('none')|map('abs')|max) or 1 %}
+      {% for r in view.regimes %}<div class="vf-row" style="margin-top:.5rem"><span style="width:3em">{{ r.label }}</span>
+        {% if r.value is none %}<span class="vf-muted vf-small">— {{ r.reason }}</span>{% else %}
+        <span style="flex:1;display:flex"><span style="width:50%;display:flex;justify-content:flex-end">{% if r.value < 0 %}<span class="vf-bar" style="width:{{ (r.value|abs / top * 100)|round(1) }}%;background:#22c55e"></span>{% endif %}</span><span style="width:50%;border-left:1px solid #28516d">{% if r.value > 0 %}<span class="vf-bar" style="display:block;width:{{ (r.value / top * 100)|round(1) }}%;background:#f43f5e"></span>{% endif %}</span></span>
+        <span style="width:4.5em;text-align:right">{{ vz.pct(r.value) }}</span>{% endif %}</div>{% endfor %}
+    </section>
+  </div>
+</div>
+
+{% set sc = view.scenarios %}
+<section data-testid="scenarios"><h2 style="margin:.5rem 0">未來一年可能多慘 <span class="vf-small vf-muted">用過去的資料重抽樣試算，不代表未來會一樣</span></h2>
+{% if sc.status == 'SUFFICIENT' %}{% set sim = sc.simulation %}
+  <div class="vf-grid vf-three">
+    <div class="vf-card"><div class="vf-spread"><div><h3>一年內最深會跌多少</h3><p class="vf-small vf-muted">一般跌 {{ vz.pct(sim.drawdown.median) }}，20 次有 1 次跌超過 {{ vz.pct(sim.drawdown.p05) }}</p></div><span class="vf-big num vf-down">{{ '%.1f%%'|format(sim.drawdown.p05 * 100) }}</span></div>{{ vz.hist(sim.drawdown.histogram, true, '一年最大回撤分布') }}</div>
+    <div class="vf-card"><div class="vf-spread"><div><h3>多久回不到高點</h3><p class="vf-small vf-muted">一般最長水下 {{ '%.0f'|format(sim.underwater.longest_median) }} 個交易日；{{ '%.0f%%'|format(sim.underwater.censored_share * 100) }} 的試算到期末仍未回到高點</p></div><span class="vf-big num">{{ '%.0f'|format(sim.underwater.longest_median) }}<span class="vf-small"> 日</span></span></div>{{ vz.hist(sim.underwater.recovered_histogram, false, '已回到高點樣本的水下天數') }}</div>
+    <div class="vf-card"><div class="vf-spread"><div><h3>一年報酬可能落在哪</h3><p class="vf-small vf-muted">{% if sim.cagr.median is defined %}中位數 {{ vz.pct(sim.cagr.median) }}，{{ '%.0f%%'|format(sim.cagr.share_below_zero * 100) }} 的試算是虧損{% else %}{{ sim.cagr.reason }}{% endif %}</p></div>
+      {% if sim.cagr.interval_95 is defined %}<span class="vf-big num">{{ '%+.0f%%'|format(sim.cagr.interval_95[0] * 100) }}～{{ '%+.0f%%'|format(sim.cagr.interval_95[1] * 100) }}</span>{% endif %}</div>{{ vz.hist(sim.cagr.histogram, true, '一年報酬分布') }}</div>
+  </div>
+  <p class="vf-small vf-muted">{{ sim.notice }}</p>
+{% else %}<p class="vf-card vf-muted" data-testid="scenario-insufficient">{{ sc.status or 'DATA_MISSING' }}：沒有連續三個完整可信年度，不畫分布。</p>{% endif %}
+</section>
+
+<section class="vf-card" data-testid="monthly"><div class="vf-spread"><h2>每月報酬</h2><span class="vf-small vf-muted">紅漲綠跌；空白是不在回測期間</span></div>
+  <div class="vf-scroll"><div class="vf-month vf-muted" style="margin-top:.5rem"><div></div>{% for m in range(1, 13) %}<div>{{ m }}月</div>{% endfor %}</div>
+  {% for year, yr in view.monthly.items() %}<div class="vf-month" style="margin-top:2px"><div class="num vf-muted">{{ year }}</div>
+    {% for m in range(1, 13) %}{% set c = yr.months[m|string] %}{% set v = c.value %}<div title="{{ year }}-{{ m }}：{{ ('%+.1f%%'|format(v * 100)) if v is not none else c.reason }}" data-testid="month-{{ year }}-{{ m }}" {% if v is not none %}style="background:{{ 'rgba(244,63,94,%.2f)'|format([0.9, 0.12 + v * 7]|min) if v > 0 else 'rgba(34,197,94,%.2f)'|format([0.9, 0.12 - v * 9]|min) if v < 0 else '#173246' }}"{% endif %}></div>{% endfor %}</div>{% endfor %}</div>
+</section>
+{% endif %}
+
+<section class="vf-card" data-testid="evidence"><h2>證據與明細</h2><p class="vf-small vf-muted">代碼、版本、雜湊與完整表格</p>
+  <details data-testid="run-identity"><summary>Run 身份與狀態代碼</summary><table>
+    <tr><td>Data Trust</td><td class="num">{{ row.trust }}</td></tr><tr><td>State</td><td class="num">{{ row.state }}</td></tr>
+    <tr><td>Certification</td><td class="num">NOT_CERTIFIED</td></tr>
+    {% if row.selected %}{% set rec = row.selected %}
+    <tr><td>Run</td><td class="num"><a href="{{ url_for('platform_run', run_id=rec.run_id) }}">{{ rec.run_id }}</a>（成交、持股、帳本與下載）</td></tr>
+    <tr><td>Publication</td><td class="num">{{ 'PUBLISHABLE' if rec.publishable else 'NOT_PUBLISHABLE' }}</td></tr>
+    <tr><td>Snapshot / Engine / Rule</td><td class="num">{{ rec.snapshot_id }} · {{ rec.engine_version }} · {{ rec.rule_version }}</td></tr>
+    <tr><td>Period</td><td class="num">{{ (rec.period or [])|join(' ～ ') }}</td></tr>
+    <tr><td>Accounting</td><td class="num">{{ rec.accounting or 'DATA_MISSING' }}</td></tr>
+    {% for track, r in (rec.reconciliation or {}).items() %}<tr><td>Reconciliation {{ track }}</td><td class="num">{{ r.status }}{% if r.days_checked %} · {{ r.days_checked }} sessions{% endif %}{% if r.first_mismatch %} · first mismatch {{ r.first_mismatch }} {{ r.reason }}{% endif %}</td></tr>{% endfor %}{% endif %}
+    {% if row.report %}<tr><td>Analysis</td><td class="num">{{ row.report.analysis_code }} · {{ row.report.identity_status }}</td></tr>
+    <tr><td>Return target</td><td class="num">{{ (row.report.dimensions.return_target or {}).status }}</td></tr>
+    <tr><td>Track</td><td class="num">{{ 'VERIFIED ' ~ (row.report.performance.verified_span or [])|join('～') if row.report.performance.verified else 'PROVISIONAL' }}</td></tr>{% endif %}
+    <tr><td>V1 result</td><td class="num">{{ card.identity or 'DATA_MISSING' }}{% if card.identity %} · <a href="{{ url_for('intelligence_evidence', sid=row.strategy_id, result=card.identity) }}">evidence.json</a>{% endif %}</td></tr>
+  </table>{% if versions|length > 1 %}<p class="vf-small">其他版本：{% for v in versions %}<a class="num" href="{{ url_for('web_strategy', sid=row.strategy_id, result=v) }}">{{ v }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}</details>
+  {% if row.report %}<details data-testid="health-detail"><summary>體檢明細：數值、門檻與來源</summary><div class="vf-scroll"><table>
+    {% for h in view.health %}{% for it in h.entries %}<tr><td>{{ h.question }}</td><td>{{ it.name }}</td><td>{{ iu.mv(it.value, iu.health_kind.get(it.name, 'num')) }}</td><td class="num">{{ it.status }}</td><td class="vf-muted">{{ it.threshold }} · {{ it.source or 'RESEARCH_THRESHOLD_UNSET' }}<br>{{ it.explanation }}</td></tr>{% endfor %}{% endfor %}</table></div></details>{% endif %}
+  <details data-testid="spec-card"><summary>策略規格卡 · {{ row.fields_present }}/{{ row.fields_total }} 欄位</summary>
+    {% for key, field in ((card or {}).get('definition') or {}).get('fields', {}).items() %}<p><strong>{{ labels.get(key, key) }}</strong> <span class="num vf-small vf-muted">{{ field.status }}</span><br>{{ field.text }}</p>
+      {% for s in field.get('sources', []) %}<p class="vf-small vf-muted num">{{ s.path }} :: {{ s.symbol }} · lines {{ s.lines }} · SHA256 {{ s.sha256 }} {{ s.status }}</p>{% endfor %}{% else %}<p class="vf-muted">DATA_MISSING：策略規格來源缺漏</p>{% endfor %}
+    <pre class="vf-small">{{ ((card or {}).get('definition') or {}).get('numeric', {})|tojson(indent=2) }}</pre></details>
+  <details data-testid="reference-row"><summary>參考比較（批次 {{ reference_batch or 'NO_REFERENCE_BATCH' }}）</summary>
+    {% if reference %}<table><tr><td>State</td><td class="num">{{ reference.state }} {{ reference.reason or '' }}</td></tr>
+      {% for track, m in (reference.metrics or {}).items() %}<tr><td>{{ track }}</td><td class="num">{% for k, v in (m or {}).items() %}{{ k }} {{ v.value if v is mapping else v }}{% if v is mapping and v.value is none %} ({{ v.reason }}){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</td></tr>{% endfor %}
+      <tr><td>Levels</td><td class="num">{{ reference.levels|tojson }}</td></tr></table>
+      {% for g in reference_gaps or [] %}<p class="vf-small num">{{ g.field }} · {{ (g.recovery or {}).status }} {{ (g.recovery or {}).reason or '' }}</p>{% endfor %}
+      <p class="vf-small vf-muted">REFERENCE_ONLY · NOT_CERTIFIED · {{ reference_disclosure or '' }}</p>
+      {% if reference_batch %}<p class="vf-small"><a href="{{ url_for('reference_download', batch_id=reference_batch, name='report.md') }}">report.md</a> · <a href="{{ url_for('reference_download', batch_id=reference_batch, name='gap_report.md') }}">gap_report.md</a></p>{% endif %}
+    {% else %}<p class="vf-muted">此策略不在最新參考批次中</p>{% endif %}</details>
+  <details data-testid="cross-regime-section"><summary>跨市場環境驗證 2015～2025（參考研究）</summary>{% include '_cross_regime.html' %}</details>
+  <details><summary>實作與說明差異</summary><pre class="vf-small">{{ notes|tojson(indent=2) }}</pre></details>
+  <details><summary>全部研究 Run</summary>{% for run in row.runs %}<p class="vf-small"><a class="num" href="{{ url_for('platform_run', run_id=run.run_id) }}">{{ run.run_id }}</a> · {{ (run.period or [])|join(' ～ ') }} · {{ run.rule_version }} · {{ 'PUBLISHABLE' if run.publishable else 'NOT_PUBLISHABLE' }}</p>{% else %}<p class="vf-muted">{{ row.reason or 'DATA_MISSING：沒有保存 Run' }}</p>{% endfor %}</details>
+</section>
+</div>
+<script src="{{ url_for('static', filename='web_v3_report.js') }}" defer></script>
+{% endblock %}

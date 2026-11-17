@@ -40,9 +40,9 @@ def test_error_flash_and_strategy_redirect(client, monkeypatch):
     {'weights': '1,'}, {'weights': '0.5,0.5'}, {'strategies': []},
 ])
 def test_invalid_backtest_preserves_input_without_engine(client, monkeypatch, override):
-    import app.web_server as web
     engine = Mock(side_effect=AssertionError('engine must not be called'))
-    monkeypatch.setattr(web.services, '_run_portfolio_backtest', engine)
+    import app as app_module
+    monkeypatch.setattr(app_module, '_run_portfolio_backtest', engine)
     data = {'strategies': ['hybrid_trend_rank'], 'start_date': '2026-01-01', 'end_date': '2026-10-16', 'weights': '1', 'persist': '1', **override}
     response = client.post('/backtest', data=data)
     assert response.status_code == 302
@@ -56,9 +56,9 @@ def test_invalid_backtest_preserves_input_without_engine(client, monkeypatch, ov
 
 
 def test_engine_failure_preserves_input(client, monkeypatch):
-    import app.web_server as web
     engine = Mock(side_effect=RuntimeError('測試引擎失敗'))
-    monkeypatch.setattr(web.services, '_run_portfolio_backtest', engine)
+    import app as app_module
+    monkeypatch.setattr(app_module, '_run_portfolio_backtest', engine)
     response = client.post('/backtest', data={'strategies': ['hybrid_trend_rank'], 'start_date': '2026-01-01', 'end_date': '2026-10-16', 'weights': '1'})
     assert response.status_code == 302
     engine.assert_called_once_with(['hybrid_trend_rank'], start_date='2026-01-01', end_date='2026-10-16', weights=[1.0], persist_to_db=False)
@@ -105,7 +105,8 @@ def test_recommendation_fills_only_missing_names(client, monkeypatch):
         {'stock_id': '2317', 'stock_name': None, 'ai_score': 88, 'close_price': 210},
         {'stock_id': '2454', 'stock_name': '既有名稱', 'ai_score': 85, 'close_price': 1000},
     ])
-    monkeypatch.setattr(web.services, 'get_recommendations_with_market_fallback', lambda **kw: (rows, {'recommendation_date': '2026-10-15', 'resolution_source': 'persisted'}))
+    import app as app_module
+    monkeypatch.setattr(app_module, 'get_recommendations_with_market_fallback', lambda **kw: (rows, {'recommendation_date': '2026-10-15', 'resolution_source': 'persisted'}))
     names = Mock(return_value={'2330': '台積電', '2454': '不應覆寫'})
     monkeypatch.setattr(web.db_helper, 'get_stock_names', names)
     payload = client.get('/api/market/recommendations').get_json()
@@ -123,7 +124,8 @@ def test_stock_name_resolution_preserves_id_path(client, monkeypatch, query, exp
     names = {'2330': '台積電', '1101': '台泥'}
     monkeypatch.setattr(web.db_helper, 'get_stock_names', lambda date, ids=None: names)
     adapter = Mock(return_value={'status': 'ok', 'stock_id': '2330', 'quote': {'close_price': 1050}, 'series': {'candles': [{'time': '2026-10-16'}]}})
-    monkeypatch.setattr(web.services, '_build_dashboard_health_check_payload_local', adapter)
+    import app as app_module  # patch the module itself: undoing a patch on the app.services proxy leaves a shadowing attribute
+    monkeypatch.setattr(app_module, '_build_dashboard_health_check_payload_local', adapter)
     response = client.get('/api/stock-analysis', query_string={'id': query})
     if expected:
         assert response.status_code == 200
@@ -153,3 +155,15 @@ def test_shell_uses_freshness_evidence(client, monkeypatch):
     monkeypatch.setattr(web, '_build_system_status_payload', status)
     assert '▲ 部分降級' in client.get('/dashboard').get_data(as_text=True)
     status.assert_called_once_with()
+
+
+def test_an_undone_patch_on_the_services_proxy_does_not_shadow_the_module():
+    import app as app_module
+    original = app_module.get_recommendations_with_market_fallback
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(app_module.services, 'get_recommendations_with_market_fallback', lambda **kw: 'proxy')
+        assert app_module.get_recommendations_with_market_fallback() == 'proxy'
+    assert app_module.services.get_recommendations_with_market_fallback is original
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(app_module, 'get_recommendations_with_market_fallback', lambda **kw: 'module')
+        assert app_module.services.get_recommendations_with_market_fallback() == 'module'

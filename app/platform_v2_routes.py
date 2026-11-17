@@ -7,7 +7,6 @@ batch_job, behind the existing admin session and CSRF check. Guests are read-onl
 from __future__ import annotations
 
 import json
-import hashlib
 import re
 import sys
 from datetime import datetime, timezone
@@ -52,13 +51,14 @@ def _read(path: Path):
 
 def _validated(kind, identity, artifacts):
     """A publication review must bind the current artifacts and code, not just a saved status."""
+    from core.backtest import run_store
     if not isinstance(identity, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', identity):
         return False
     marker = _read(OUT / 'acceptance' / 'publication' / kind / f'{identity}.json')
     if not isinstance(marker, dict) or marker.get('status') != 'PASS' or marker.get('identity') != identity:
         return False
     try:
-        return all(marker['sha256'].get(name) == hashlib.sha256(path.read_bytes()).hexdigest()
+        return all(marker['sha256'].get(name) == run_store.file_hash(path)
                    for name, path in artifacts.items())
     except (KeyError, TypeError, OSError):
         return False
@@ -134,9 +134,9 @@ def models() -> list:
 def _model_identity_current(model) -> bool:
     """Hide evaluations created from a different model or runner source identity."""
     try:
-        from core.backtest.run_store import canonical_hash
+        from core.backtest.run_store import canonical_hash, file_hash
 
-        code = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+        code = {name: file_hash(ROOT / name)
                 for name in ('core/research/platform/prediction.py', 'scripts/platform_v2.py')}
         identity = canonical_hash({'horizon': model['horizon'], 'spec_hash': model['spec_hash'],
                                    'snapshot_id': model['snapshot_id'], 'code': code})[:10]
@@ -165,52 +165,50 @@ def _readiness():
 
 @app.route('/platform')
 def platform_index():
-    from app import intelligence_routes
-    from services import smart_selection, web_dashboard
-    runs, folios = _runs(RUNS), _runs(PORTFOLIOS)
-    registry = models()
-    rows = web_dashboard.strategies(sys.modules[__name__], intelligence_routes)
-    return render_template('platform_index.html', runs=runs, folios=folios, models=registry, slot=slot(), readiness=_readiness(),
-                           overview=web_dashboard.overview(rows, runs, registry), daily=smart_selection.load(app),
-                           governance=_read(OUT / 'governance/LATEST.json') or {},
-                           reports=[n for n in REPORTS if (OUT / n).is_file()], active_nav='platform_index')
+    """Retired page (2026-11-16-visual-first-web-consolidation): its entries are the five primary pages."""
+    return redirect(url_for('dashboard'))
 
 
 @app.get('/platform/strategies')
 def web_strategies():
-    from app import intelligence_routes
-    from services import web_dashboard
-    rows = web_dashboard.strategies(sys.modules[__name__], intelligence_routes)
-    total = len(rows)
-    types = sorted({r['type'] for r in rows})
-    reasons = sorted({r['reason'] for r in rows if r['reason']})
-    query = request.args.get('q', '').strip().casefold()
-    rows = [r for r in rows if query in f"{r['name']} {r['strategy_id']}".casefold()
-            and all(not request.args.get(k) or r[field] == request.args[k]
-                    for k, field in (('type', 'type'), ('trust', 'trust'), ('blocked', 'reason')))
-            and (not request.args.get('target') or r['target']['status'] == request.args['target'])]
-    if request.args.get('sort') in ('name', 'id'):
-        rows.sort(key=lambda r: r['name'] if request.args['sort'] == 'name' else r['strategy_id'])
-    return render_template('web_strategies.html', rows=rows, total=total, types=types, reasons=reasons, active_nav='platform_index')
+    """Retired page (2026-11-16-visual-first-web-consolidation): the strategy list is the Strategy Center card wall."""
+    return redirect(url_for('strategy_center'))
 
 
 @app.get('/platform/strategies/<sid>')
 def web_strategy(sid):
-    from app import intelligence_routes
-    from services import web_dashboard
-    if sid not in intelligence_routes._catalog():
+    """The one visual strategy report; every figure comes from the stored analysis that the strategy wall also reads."""
+    from app import intelligence_routes as intelligence
+    from core.research.reference import runner
+    from services import smart_selection, web_dashboard
+    if sid not in intelligence._catalog():
         abort(404)
-    row = next(r for r in web_dashboard.strategies(sys.modules[__name__], intelligence_routes) if r['strategy_id'] == sid)
-    return render_template('web_strategy.html', row=row, notes=intelligence_routes.implementation_notes(sid),
+    chosen = request.args.get('result')
+    if chosen and (not intelligence.IDENTITY.fullmatch(chosen) or intelligence.result(sid, chosen) is None):
+        abort(404)
+    row = next(r for r in web_dashboard.strategies(sys.modules[__name__], intelligence) if r['strategy_id'] == sid)
+    card = intelligence.result(sid, chosen) if chosen else row['card']
+    current = intelligence.latest().get('strategies', {}).get(sid)
+    selection = smart_selection.load(app)
+    report = runner.latest_report() or {}
+    history = platform_routes.historical_state()
+    return render_template('web_strategy.html', row=row, card=card, view=web_dashboard.report_view(row),
+                           picks=[r for r in selection.get('rows', []) if r['strategy_id'] == sid], selection=selection,
+                           superseded=bool(chosen and current and card.get('identity') != current), versions=intelligence.identities(sid),
+                           reference=next((r for r in report.get('rows', []) if r.get('strategy_id') == sid), None), reference_batch=report.get('batch_id'),
+                           reference_disclosure=report.get('disclosure'), reference_gaps=report and ((platform_routes._read_json(
+                               runner.OUT / 'batches' / report['batch_id'] / 'gap_report.json', {}) or {}).get('strategies', {}).get(sid) or {}).get('gaps'),
+                           history=history, cross=(history or {}).get('cross_regime'), history_selected=sid,
+                           run_record=platform_routes.history_run_record(sid), engine_fix=platform_routes.engine_fix_state(),
+                           notes=intelligence.implementation_notes(sid), admin=platform_routes.is_admin(),
                            labels={'selection': '選股條件', 'entry': '進場規則', 'exit': '出場與停損', 'risk_controls': '風險控制',
-                                   'factors': '使用指標', 'holdings': '持股配置', 'rebalance': '再平衡', 'pit_dependencies': 'PIT 相依'},
-                           active_nav='platform_index')
+                                   'factors': '使用指標', 'holdings': '持股配置', 'rebalance': '再平衡', 'pit_dependencies': 'PIT 相依'})
 
 
 @app.route('/platform/selection')
 def platform_selection():
-    from services import smart_selection
-    return render_template('platform_selection.html', view=smart_selection.load(app), active_nav='platform_index')
+    """Retired page (2026-11-16-visual-first-web-consolidation): the daily selection is the Dashboard stock cards."""
+    return redirect(url_for('dashboard'))
 
 
 def _hits(model):
@@ -234,7 +232,7 @@ def platform_predictions():
     registry = models()
     history = {m['model_version']: _hits(m) for m in registry}
     return render_template('platform_predictions.html', registry=registry, history=history, stock=request.args.get('stock', ''),
-                           stale_model_count=_stale_model_count(), active_nav='platform_index')
+                           stale_model_count=_stale_model_count())
 
 
 @app.route('/platform/backtest')
@@ -244,7 +242,7 @@ def platform_backtest():
     rows = _readiness()
     runnable = {sid: r for sid, r in rows.items() if r.get('web_runnable')}
     return render_template('platform_backtest.html', runs=_runs(RUNS), readiness=rows, runnable=runnable, rules=list(RULES), bounds=BOUNDS,
-                           slot=slot(), defaults=_defaults(), active_nav='platform_index')
+                           slot=slot(), defaults=_defaults())
 
 
 def _defaults():
@@ -274,7 +272,7 @@ def platform_run(run_id):
                            report_meta=web_dashboard.report_meta(record, envelope, card),
                            saved_metrics=web_dashboard.clean(run_store.read_frame(loaded, 'metrics')) if result else {},
                            trades=web_dashboard.clean(trades), ledger=rows('daily_ledger'), fills=rows('fills'),
-                           positions=rows('positions_daily'), active_nav='platform_index')
+                           positions=rows('positions_daily'))
 
 
 @app.route('/platform/<kind>/<run_id>/files/<name>')
@@ -293,13 +291,13 @@ def platform_portfolio():
     rows = _readiness()
     eligible = {sid: r for sid, r in rows.items() if r.get('web_runnable')}
     return render_template('platform_portfolio.html', folios=_runs(PORTFOLIOS), eligible=eligible, rules=['LOT_ENGINE_V1', 'LOT_BOARD_1000', 'LOT_ODD'],
-                           slot=slot(), defaults=_defaults(), active_nav='platform_index')
+                           slot=slot(), defaults=_defaults())
 
 
 @app.route('/platform/portfolio/<run_id>')
 def platform_portfolio_run(run_id):
     loaded = _loaded(PORTFOLIOS, run_id)
-    return render_template('platform_portfolio_run.html', record=loaded['run'], files=loaded['files'], active_nav='platform_index')
+    return render_template('platform_portfolio_run.html', record=loaded['run'], files=loaded['files'])
 
 
 def _pipeline():
@@ -308,7 +306,8 @@ def _pipeline():
 
 @app.route('/platform/system')
 def platform_system():
-    from app import web_server
+    from app import intelligence_routes, web_server
+    from core.research.reference import batch_job, runner
     from services import web_dashboard
     try:
         production = web_server._build_system_status_payload(include_freshness=False)[0]  # the existing read-only /system summary
@@ -317,7 +316,9 @@ def platform_system():
     return render_template('platform_system.html', slot=slot(), pipeline=_pipeline(), governance=_read(OUT / 'governance' / 'LATEST.json'),
                            resources=web_dashboard.resources(),
                            readiness=_readiness(), production=production, reports=[n for n in REPORTS if (OUT / n).is_file()],
-                           active_nav='platform_index')
+                           panel=intelligence_routes.job_panel(), job=batch_job.state(), report=runner.latest_report(),
+                           admin=platform_routes.is_admin(), admin_enabled=platform_routes.admin_state()[0],
+                           intel_reports=[n for n in intelligence_routes.REPORTS if (intelligence_routes.OUT / n).is_file()])
 
 
 @app.route('/platform/reports/<name>')

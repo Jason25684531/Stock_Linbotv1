@@ -1,4 +1,4 @@
-"""GET /reference (design D9, spec strategy-center-ui): fixed rows, values equal the report, no ranking, banner and disclosure."""
+"""Reference results in each strategy report (formerly GET /reference): values equal the report, no ranking, banner and disclosure."""
 import json
 
 import pytest
@@ -27,14 +27,22 @@ def report(tmp_path, monkeypatch):
     return batch
 
 
-def test_page_shows_fixed_rows_values_banner_and_no_ranking(report):
+def _reference_section(path):
     from app import app
-    html = app.test_client().get('/reference').get_data(as_text=True)
+    html = app.test_client().get(path).get_data(as_text=True)
+    return html[html.index('data-testid="reference-row"'):html.index('data-testid="cross-regime-section"')]
+
+
+def test_report_evidence_shows_the_stored_reference_row_banner_and_no_ranking(report):
+    """/reference is retired (2026-11-16); each strategy report's evidence section shows that strategy's stored row."""
+    from app import app
+    assert app.test_client().get('/reference').headers['Location'].endswith('/strategies')
+    html = _reference_section('/platform/strategies/mean_reversion')
     assert 'REFERENCE_ONLY · NOT_CERTIFIED' in html and runner.DISCLOSURE in html
-    assert html.index('mean_reversion') < html.index('quality_growth')  # catalog order kept
-    assert '0.1234' in html and 'None (ZERO_VARIANCE)' in html and 'MONTHLY_REVENUE_NO_ANNOUNCEMENT_TIME' in html
-    assert 'PIT_UNVERIFIABLE' in html and 'data-testid="reference-levels"' in html
-    lowered = html[html.index('data-testid="reference"'):html.rindex('</table>')].lower()  # the page's own section, not the shared layout
+    assert '0.1234' in html and 'ZERO_VARIANCE' in html and 'ENGINEERING_PASS' in html
+    blocked = _reference_section('/platform/strategies/quality_growth')
+    assert 'MONTHLY_REVENUE_NO_ANNOUNCEMENT_TIME' in blocked and 'PIT_UNVERIFIABLE' in blocked
+    lowered = html.lower()
     assert 'sortable' not in lowered and 'data-sort' not in lowered and '<form' not in lowered
 
 
@@ -48,7 +56,7 @@ def test_no_json_ranking_endpoint():
 def test_without_a_batch_the_page_says_so(tmp_path, monkeypatch):
     from app import app
     monkeypatch.setattr(runner, 'OUT', tmp_path / 'empty')
-    assert 'NO_REFERENCE_BATCH' in app.test_client().get('/reference').get_data(as_text=True)
+    assert 'NO_REFERENCE_BATCH' in app.test_client().get('/platform/strategies/mean_reversion').get_data(as_text=True)
 
 
 def test_admin_data_shows_scope_and_ingestion_authority(monkeypatch, tmp_path):

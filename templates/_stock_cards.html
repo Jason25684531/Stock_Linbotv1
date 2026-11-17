@@ -1,0 +1,23 @@
+{% import '_viz.html' as vz %}
+<section class="vf space-y-3" data-testid="selection-cards">
+  <div class="vf-spread" style="flex-wrap:wrap"><h2>今日選股</h2>
+    <p class="vf-small vf-muted">{% if selection.signal_date %}訊號日 <span class="num">{{ selection.signal_date }}</span>{% endif %}{% if selection.rows %}，{{ selection.rows|length }} 筆訊號來自 {{ picking_strategies }} 個策略{% endif %}</p></div>
+  {% if selection.status != 'OK' %}
+  <p class="vf-card vf-muted" data-testid="selection-blocked"><span class="num">{{ selection.status }}</span>：{{ selection.reason }}</p>
+  {% else %}
+  {% set top_count = stock_cards|map(attribute='count')|max if stock_cards else 1 %}
+  <div class="vf-grid vf-picks">
+  {% for c in stock_cards %}
+    <a class="vf-card" href="{{ url_for('stock_analysis', id=c.stock_id) }}" data-testid="stock-card-{{ c.stock_id }}">
+      <div class="vf-spread"><span><strong>{{ c.stock_name or '' }}</strong> <span class="num vf-muted">{{ c.stock_id }}</span></span>{{ vz.tag(c.feasibility) }}</div>
+      <div class="vf-spread" style="margin:.35rem 0"><span class="vf-big num">{{ '{:,.2f}'.format(c.close) if c.close is not none else '—' }}</span>{{ vz.pct(c.change) }}</div>
+      {{ vz.line(c.spark, 230, 44, 'vf-line-up' if (c.change or 0) >= 0 else 'vf-line-down', '近 40 個交易日收盤價') }}
+      <div class="vf-dots" aria-hidden="true" style="margin-top:.4rem">{% for i in range(top_count) %}<i class="{{ 'on' if i < c.count }}"></i>{% endfor %}</div>
+      <p class="vf-small vf-muted" data-testid="consensus-{{ c.stock_id }}"><strong style="color:#fff">{{ c.count }}</strong> 個策略同選{% if c.unvalidated_signals %}，其中 {{ c.unvalidated_signals }} 個未驗證{% endif %}</p>
+    </a>
+  {% endfor %}
+  </div>
+  <p class="vf-small vf-muted">依同選策略數排序，可信資料訊號優先。卡片只描述訊號日已知的行情，不代表下一個交易日買得到；不是投資建議。</p>
+  {% endif %}
+  <p class="vf-small vf-muted">研究型最新選股目前停用，原因見 <a href="{{ url_for('latest_selection') }}">說明頁</a>。</p>
+</section>

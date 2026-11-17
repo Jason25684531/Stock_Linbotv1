@@ -146,11 +146,14 @@ def approve_run(out, kind, run_id):
 
 def test_five_entries_respond_and_get_starts_nothing(stored):
     c = client()
-    for path in ('/platform', '/platform/selection', '/platform/predictions', '/platform/backtest', '/platform/portfolio', '/platform/system'):
+    for path in ('/platform/predictions', '/platform/backtest', '/platform/portfolio', '/platform/system'):
         response = c.get(path)
         assert response.status_code == 200, path
-    hub = c.get('/platform').get_data(as_text=True)
-    assert all(f'entry-{n}' in hub for n in ('selection', 'predictions', 'backtest', 'portfolio', 'system'))
+    for path in ('/platform', '/platform/selection'):  # retired hub pages: the Dashboard holds selection, the tabs hold the rest
+        assert c.get(path).headers['Location'].endswith('/dashboard'), path
+    tabs = c.get('/platform/backtest').get_data(as_text=True)
+    assert all(f'href="{href}"' in tabs for href in ('/backtest', '/backtest/runs', '/platform/backtest', '/platform/portfolio', '/lab/combinations'))
+    assert all(f'href="{href}"' in c.get('/platform/system').get_data(as_text=True) for href in ('/system', '/admin/data', '/platform/system'))
 
 
 def test_report_numbers_equal_the_stored_result(stored):
@@ -312,8 +315,8 @@ def test_undefined_model_metrics_are_explained(stored):
 
 
 def test_selection_fails_closed_when_authorization_unverified(stored):
-    page = client().get('/platform/selection').get_data(as_text=True)
-    assert 'selection-blocked' in page and 'candidates' not in page
+    page = client().get('/dashboard').get_data(as_text=True)
+    assert 'selection-blocked' in page and 'stock-card-' not in page
 
 
 def test_system_lists_governance_differences(stored):

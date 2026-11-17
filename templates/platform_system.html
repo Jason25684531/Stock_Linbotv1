@@ -43,5 +43,9 @@
     {% for w in production.warnings or [] %}<p class="mt-1 text-amber-200 break-all">{{ w }}</p>{% endfor %}{% endif %}</section>
 {% if resources is defined %}<section class="quant-card p-4 text-xs" data-testid="resources"><h2>Workers／資源／快取（唯讀）</h2><p>可用記憶體 {{ resources.available_memory_gib }} GiB · 磁碟 {{ resources.free_disk_gib }} GiB · logical CPUs {{ resources.logical_cpus }}</p><p>Feature cache {{ 'PRESENT' if resources.cache_present else 'DATA_MISSING' }} · Worker PIDs {{ slot.pids or [] }}</p><p>Snapshot 狀態與身份見各 Run 證據；上述資源是讀取當下狀態，不代表已授權啟動研究。</p></section>{% endif %}
 {% if reports %}<section class="quant-card p-4 text-xs"><h2 class="text-sm font-semibold text-white">報告</h2><p class="mt-1">{% for n in reports %}<a class="text-blue-300" href="{{ url_for('platform_report', name=n) }}">{{ n }}</a>{% if not loop.last %}・{% endif %}{% endfor %}</p></section>{% endif %}
+<section class="space-y-4" data-testid="research-jobs">
+{% include '_intelligence_job.html' %}
+{% include '_reference_job.html' %}
+</section>
 </div>
 {% endblock %}

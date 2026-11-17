@@ -101,12 +101,12 @@ def test_downloads_are_markdown_whitelisted(stored):
     assert c.get('/historical/reports/..%2F..%2Fx/gap_report.md').status_code == 404
 
 
-def test_reference_page_without_history_report_says_so(stored):
-    html = client().get('/reference').get_data(as_text=True)
+def test_strategy_report_without_history_report_says_so(stored):
+    html = client().get('/platform/strategies/defensive_low_volatility').get_data(as_text=True)
     assert 'data-testid="cross-regime-empty"' in html
 
 
-def test_reference_page_cross_regime_in_catalog_order_without_ranking(stored, monkeypatch, tmp_path):
+def test_strategy_report_cross_regime_in_catalog_order_without_ranking(stored, monkeypatch, tmp_path):
     from scripts import historical_foundation as hf
     from scripts import historical_report
     import pandas as pd
@@ -116,7 +116,7 @@ def test_reference_page_cross_regime_in_catalog_order_without_ranking(stored, mo
     fake = lambda row: {'nav': nav, 'trades': trades, 'engine_error': None, 'accounting': hf.ACCOUNTING}
     result = hf.run(execute=fake, evaluation=stored, root=hf.RUNS)
     historical_report.regime_reports(result['rows'], stored, hf.RUNS)
-    html = client().get('/reference').get_data(as_text=True)
+    html = client().get('/platform/strategies/defensive_low_volatility').get_data(as_text=True)
     section = html[html.index('id="cross-regime"'):]
     assert 'NOT_OOS_PREVIOUSLY_VIEWED_STRATEGIES' in section and 'data-testid="cross-regime-overview"' in section
     ids = [s['strategy_id'] for s in json.loads((hf.REPORTS / json.loads((hf.REPORTS / 'LATEST.json').read_text(encoding='utf-8'))['cross_regime']).read_text(encoding='utf-8'))['strategies']]
@@ -246,7 +246,7 @@ def test_pages_show_legacy_vs_new_comparison_only_when_the_report_carries_it(sto
     report = json.loads(path.read_text(encoding='utf-8'))
     assert next(s for s in report['strategies'] if s['strategy_id'] == sid)['analysis']
 
-    before = client().get(f'/reference?history={sid}').get_data(as_text=True)  # whatever the report builder emitted: renders, no crash
+    before = client().get(f'/platform/strategies/{sid}').get_data(as_text=True)  # whatever the report builder emitted: renders, no crash
     assert 'data-testid="legacy-compare"' in before and 'data-testid="compare-table"' in before
     assert 'POSITION_LEDGER_CA_V1' in before  # accounting read from the stored run.json
     html, items = _catalog_items('/strategies')
@@ -271,8 +271,8 @@ def test_pages_show_legacy_vs_new_comparison_only_when_the_report_carries_it(sto
     path.write_text(json.dumps(report), encoding='utf-8')
     platform_routes._stored_json.cache_clear()
 
-    html = client().get(f'/reference?history={sid}').get_data(as_text=True)
-    block = html[html.index('data-testid="legacy-compare"'):html.index('data-testid="history-nav-chart"')]
+    html = client().get(f'/platform/strategies/{sid}').get_data(as_text=True)
+    block = html[html.index('data-testid="legacy-compare"'):html.index('data-testid="cross-regime-years"')]
     assert 'NEW_RUN_COMPLETE' in block and '10.00%' in block and '12.50%' in block and '2.50%' in block and 'DIVIDEND_CASH_CREDITED' in block
     assert '>None<' in block  # x2 of the new run is None, never 0
     assert '2330' in block and '1000.0' in block

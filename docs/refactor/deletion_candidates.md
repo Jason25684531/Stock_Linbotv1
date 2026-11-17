@@ -253,3 +253,27 @@ Retain the apparent zero-reference `run_validation`,
 research APIs/contracts, dynamic usage or identity/evidence impact has not
 been cleared for removal. Do not infer whole-file deletions from grep alone.
 Rollback: reverse only these import edits, preserving the initial workspace.
+
+## 2026-11-16 retired web pages (visual-first web consolidation)
+
+Change: `openspec/changes/2026-11-16-visual-first-web-consolidation`. Owner decision 2026-11-16:
+superseded pages are deleted and their addresses redirect. Search: `git grep -n -F <name>` over
+the whole tracked tree, excluding `openspec/`, `outputs/` and this file, run after the new pages
+and the redirects were in place. Hits inside the deleted files themselves are not counted.
+
+| Candidate | Evidence | Decision |
+|---|---|---|
+| `templates/reference_mode.html` | 0 hits. `/reference` now redirects to the Strategy Center, or with `?history=<id>` to that strategy report. The batch job panel and downloads moved to `templates/_reference_job.html` on the System research jobs tab; the cross-regime section is included in each strategy report. | REMOVED |
+| `templates/intelligence_index.html` | 0 hits. `/intelligence` redirects to the Strategy Center. The analysis job panel moved to `templates/_intelligence_job.html` on the System research jobs tab. | REMOVED |
+| `templates/intelligence_strategy.html` | 0 hits. `/intelligence/<sid>` redirects to `/platform/strategies/<sid>`, keeping `?result=`. | REMOVED |
+| `templates/platform_index.html`, `templates/_web_v3_overview.html` | 0 hits. `/platform` redirects to the Dashboard. | REMOVED |
+| `templates/platform_selection.html` | 0 hits. `/platform/selection` redirects to the Dashboard, which shows the same `smart_selection.load` view as stock cards. | REMOVED |
+| `templates/web_strategies.html` | 1 hit, a file-name list in `test/test_web_v3.py`, migrated in the same change. `/platform/strategies` redirects to the Strategy Center. | REMOVED |
+| `templates/_web_v3_nav.html` | 0 hits. The second navigation bar is replaced by the shell's section tabs. | REMOVED |
+| `app/platform_routes.py::history_chart` | Definition was the only hit after `/reference` became a redirect. It fed the Plotly chart that the strategy report replaces. | REMOVED |
+| `services/web_dashboard.py::overview` | Its only caller was `platform_index`. | REMOVED |
+
+Kept: endpoint names `reference_comparison`, `intelligence_index`, `intelligence_strategy`,
+`platform_index`, `web_strategies` and `platform_selection` remain as redirect handlers so old
+bookmarks and any external `url_for` callers keep working. Admin POST endpoints, JSON APIs and
+downloads are unchanged. Rollback: `git checkout <base> -- <path>` per row.

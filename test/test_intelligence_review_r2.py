@@ -103,5 +103,5 @@ def test_a_strategy_without_a_stored_run_renders(tmp_path, monkeypatch):
     monkeypatch.setattr(ir, 'OUT', tmp_path)
     monkeypatch.setattr(ir, 'RESULTS', tmp_path / 'results')
     monkeypatch.setattr(ir, '_catalog', lambda: ['x'])
-    page = app.test_client().get('/intelligence/x')
-    assert page.status_code == 200 and 'blocked-reason' in page.get_data(as_text=True)
+    page = app.test_client().get('/platform/strategies/x')
+    assert page.status_code == 200 and 'report-blocked' in page.get_data(as_text=True)

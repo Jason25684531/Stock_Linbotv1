@@ -60,8 +60,11 @@ def test_current_catalog_all_cards_and_filters(stored, monkeypatch):
         response = c.get('/platform/strategies/' + row['strategy_id'])
         assert response.status_code == 200
         assert row['strategy_id'] in response.get_data(as_text=True)
-    html = c.get('/platform/strategies?q=H4').get_data(as_text=True)
-    assert html.count('data-strategy-id=') == 1
+    wall = lambda html: html[html.index('data-testid="strategy-wall"'):]
+    assert wall(c.get('/strategies').get_data(as_text=True)).count('data-strategy-id=') == 21
+    verified = wall(c.get('/strategies?trust=VERIFIED').get_data(as_text=True))
+    assert verified.count('data-strategy-id=') == sum(x['trust'] == 'VERIFIED' for x in rows)
+    assert c.get('/platform/strategies').headers['Location'].endswith('/strategies')
     assert c.get('/platform/strategies/not_a_strategy').status_code == 404
 
 
@@ -92,7 +95,7 @@ def test_clean_preserves_zero_and_missing():
 
 def test_no_corrupt_chinese_or_forecast_titles():
     from pathlib import Path
-    for filename in ['platform_run.html', 'platform_system.html', 'web_strategies.html', 'web_strategy.html']:
+    for filename in ['platform_run.html', 'platform_system.html', 'web_strategy.html', '_strategy_wall.html', '_stock_cards.html', '_viz.html']:
         text = (Path('templates') / filename).read_text(encoding='utf-8')
         assert not re.search(r'\?{3,}', text), filename
     text = Path('templates/platform_run.html').read_text(encoding='utf-8')
@@ -111,7 +114,7 @@ def test_get_never_evaluates_or_changes_saved_results(stored, monkeypatch):
     files = list(stored['out'].rglob('*'))
     before = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()}
     c = client()
-    for path in ['/platform', '/platform/strategies', f'/platform/backtest/{PUB}']:
+    for path in ['/strategies', '/platform/strategies/mean_reversion', f'/platform/backtest/{PUB}']:
         assert c.get(path).status_code == 200
     assert before == {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in before}
 

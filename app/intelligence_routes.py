@@ -72,26 +72,22 @@ def job_panel() -> dict:
 
 @app.route('/intelligence')
 def intelligence_index():
-    rows = []
-    for sid in _catalog():
-        r = result(sid)
-        rows.append({'strategy_id': sid, 'result': r, 'failed': latest().get('failed', {}).get(sid)})
-    reports = [name for name in REPORTS if (OUT / name).is_file()]
-    return render_template('intelligence_index.html', rows=rows, panel=job_panel(), reports=reports, active_nav='intelligence_index')
+    """Retired page (2026-11-16-visual-first-web-consolidation): the 21 strategies are cards in the Strategy Center."""
+    return redirect(url_for('strategy_center'))
 
 
 @app.route('/intelligence/portfolio')
 def intelligence_portfolio():
     key = latest().get('portfolio')
     folio = _read(RESULTS / key / 'PORTFOLIO.portfolio.json') if key and IDENTITY.fullmatch(key) else None
-    return render_template('intelligence_portfolio.html', folio=folio, active_nav='intelligence_index')
+    return render_template('intelligence_portfolio.html', folio=folio)
 
 
 @app.route('/intelligence/forward')
 def intelligence_forward():
     from core.research import latest_signal
     state = latest_signal.readiness()
-    return render_template('intelligence_forward.html', state=state, active_nav='intelligence_index')
+    return render_template('intelligence_forward.html', state=state)
 
 
 @app.route('/intelligence/reports/<name>')
@@ -113,18 +109,8 @@ def intelligence_evidence(sid):
 
 @app.route('/intelligence/<sid>')
 def intelligence_strategy(sid):
-    if sid not in _catalog():
-        abort(404)
-    chosen = request.args.get('result')
-    if chosen and not IDENTITY.fullmatch(chosen):
-        abort(404)
-    r = result(sid, chosen)
-    if chosen and r is None:
-        abort(404)
-    current = latest().get('strategies', {}).get(sid)
-    return render_template('intelligence_strategy.html', sid=sid, r=r, chosen=chosen, versions=identities(sid), active_nav='intelligence_index',
-                           superseded=bool(r and current and r['identity'] != current), failed=latest().get('failed', {}).get(sid),
-                           notes=implementation_notes(sid))
+    """Retired page (2026-11-16-visual-first-web-consolidation): one visual strategy report replaces the tabbed page."""
+    return redirect(url_for('web_strategy', sid=sid, result=request.args.get('result')))
 
 
 def implementation_notes(sid: str) -> dict:
@@ -146,4 +132,4 @@ def admin_intelligence(action):
     if outcome['status'] in ('RUN_IN_PROGRESS', 'NOT_RUNNING'):
         return jsonify(outcome), 409
     flash('策略分析工作已開始；相同身份的階段會直接重用，重新整理查看進度' if action == 'start' else '工作已取消；已完成的階段保留，下次會直接重用', 'success')
-    return redirect(url_for('intelligence_index'))
+    return redirect(url_for('platform_system'))

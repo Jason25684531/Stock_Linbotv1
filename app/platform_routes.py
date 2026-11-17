@@ -16,7 +16,7 @@ import threading
 import time
 
 import pandas as pd
-from flask import abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
 
 from core.backtest import run_store
 from core.research import latest_signal
@@ -166,12 +166,15 @@ LEGACY_PINNED = {'benchmark': 'tri_source', 'calendar': 'tri_calendar'}
 
 
 def _ledger():
-    """(verified, {experiment_id: row}) of the trusted trial ledger; core.backtest never imports scripts, the web layer reads it."""
-    from scripts import research_workflow as rw
-    rows = {}
-    for row in rw._trial_rows():
-        rows.setdefault(row['experiment_id'], row)  # the admission (TRIAL) row, not a later REPLAY of it
-    return rw.verify_trials() == 'PASS', rows
+    """(verified, {experiment_id: row}) of the trusted trial ledger; core.backtest never imports scripts, the web layer reads it.
+    Read and verified once per request: the Strategy Center asks for it once per legacy strategy."""
+    if 'trial_ledger' not in g:
+        from scripts import research_workflow as rw
+        rows = {}
+        for row in rw._trial_rows():
+            rows.setdefault(row['experiment_id'], row)  # the admission (TRIAL) row, not a later REPLAY of it
+        g.trial_ledger = (rw.verify_trials() == 'PASS', rows)
+    return g.trial_ledger
 
 
 def evidence_for(loaded, hash_inputs=True):
@@ -297,25 +300,9 @@ def lab_combinations():
 
 @app.route('/reference')
 def reference_comparison():
-    """Fixed 21-row reference comparison (decision.md D3): the latest batch report as stored, grouped by comparison_group in catalog order;
-    no sort, score, ranking or JSON endpoint."""
-    from core.research.reference import runner
-    report = runner.latest_report()
-    gaps = {}
-    if report is not None:
-        gaps = (_read_json(runner.OUT / 'batches' / report['batch_id'] / 'gap_report.json', {}) or {}).get('strategies', {})
-    groups = {}
-    for row in (report or {}).get('rows', []):
-        groups.setdefault(row.get('comparison_group') or 'NOT_EXECUTED', []).append(row)
-    from core.research.reference import batch_job
-    history = historical_state()
-    cross = (history or {}).get('cross_regime')
-    names = [s['strategy_id'] for s in (cross or {}).get('strategies', []) if s.get('analysis')]
-    selected = request.args.get('history') if request.args.get('history') in names else (names[0] if names else None)
-    return render_template('reference_mode.html', report=report, groups=groups, gaps=gaps, active='reference_comparison',
-                           job=batch_job.state(), admin=is_admin(), admin_enabled=admin_state()[0], history=history, cross=cross,
-                           history_selected=selected, history_chart=json.dumps(history_chart(selected)) if selected else 'null',
-                           run_record=history_run_record(selected), engine_fix=engine_fix_state())
+    """Retired page (2026-11-16-visual-first-web-consolidation): reference and cross-regime results are in each strategy report."""
+    sid = request.args.get('history')
+    return redirect(url_for('web_strategy', sid=sid) + '#cross-regime' if sid else url_for('strategy_center'))
 
 
 # ---------------------------------------------------------------- historical data foundation (change 2026-11-10-historical-data-foundation-v1)
@@ -381,8 +368,8 @@ def _history_job():
     return job if job.get('kind', 'reference') != 'reference' or job.get('status') in ('RUNNING_ELSEWHERE', 'IDLE') else {'status': 'IDLE', 'pids': job.get('pids', [])}
 
 
-def strategy_history(strategy_id) -> dict | None:
-    state = historical_state()
+def strategy_history(strategy_id, state=None) -> dict | None:
+    state = state or historical_state()
     if state is None or strategy_id not in state['evaluation']['trust']:
         return None
     ev = state['evaluation']
@@ -398,7 +385,7 @@ def strategy_data_trust(strategy_id):
     info = strategy_history(strategy_id)
     if info is None:
         abort(404)
-    return render_template('strategy_data_trust.html', info=info, strategy_id=strategy_id, categories=cats.CATEGORIES, active_nav='strategy_center')
+    return render_template('strategy_data_trust.html', info=info, strategy_id=strategy_id, categories=cats.CATEGORIES)
 
 
 @app.route('/historical/reports/<evaluation_id>/<name>')
@@ -431,27 +418,6 @@ def admin_history(action):
     flash({'refresh': '歷史資料刷新已開始（快照、評估、缺口、報告）', 'run': '歷史參考回測已開始；相同身份會直接重用',
            'cancel': '背景工作已取消；已保存的回測保留'}[action], 'success')
     return redirect(url_for('admin_data'))
-
-
-def history_chart(strategy_id) -> dict | None:
-    """NAV, drawdown and the total-return index rebased to the run's first session, for the Plotly chart on /reference."""
-    import pandas as pd
-    from scripts import historical_foundation as hf
-    info = strategy_history(strategy_id)
-    run_id = info and info['cross_regime'] and info['cross_regime'].get('run_id')
-    if not run_id:
-        return None
-    nav = pd.read_csv(hf.RUNS / run_id / 'nav.csv', parse_dates=['date'])
-    bench = hf.snapshot(info['snapshot_id']).frame('benchmark').set_index('date').taiex_total_return.reindex(nav.date)
-    out = {'dates': nav.date.dt.strftime('%Y-%m-%d').tolist()}
-    for track, column in (('base', 'nav_base'), ('x2', 'nav_stress')):
-        curve = nav[column] / nav[column].iloc[0]
-        out[track] = curve.round(6).tolist()
-        out[f'{track}_drawdown'] = (curve / curve.cummax() - 1).round(6).tolist()
-    out['benchmark'] = (bench / bench.iloc[0]).round(6).tolist()
-    out['trust'] = {str(c['year']): c['status'] for c in info['cells']}
-    return out
-
 
 # ---------------------------------------------------------------- engine accounting fix round (change 2026-11-10-engine-accounting-and-history-gaps-v1)
 
@@ -532,7 +498,7 @@ def admin_reference(action):
     if result['status'] in ('RUN_IN_PROGRESS', 'NOT_RUNNING'):
         return jsonify(result), 409
     flash('參考批次已開始；重新整理本頁查看進度' if action == 'start' else '參考批次已取消；已完成的回測保留，下次會直接重用', 'success')
-    return redirect(url_for('reference_comparison'))
+    return redirect(url_for('platform_system'))
 
 
 _lab_lock = threading.Lock()
