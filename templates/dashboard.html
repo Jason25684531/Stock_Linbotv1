@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import '_ui.html' as ui %}
+{% import '_viz.html' as vz %}
 {% block title %}總覽 - Stock Linbot{% endblock %}
 {% block page_heading %}總覽{% endblock %}
 {% block extra_head %}<style>
@@ -22,10 +23,10 @@
         <div>推薦日：<span class="num">{{ publish.recommendation_date or '未知' }}</span></div>
         <div>預期交易日：<span class="num">{{ publish.expected_session or '未知' }}</span>
             <strong data-testid="publish-fresh" class="{{ 'text-emerald-300' if publish.fresh else 'text-amber-300' }}">{{ '最新' if publish.fresh else '未更新' }}</strong></div>
-        <div>股票池：<strong data-testid="publish-universe">{{ publish.universe }}</strong>（上櫃 {{ publish.tpex }}）</div>
+        <div>股票池：<span data-testid="publish-universe">{{ vz.tag(publish.universe) }}</span>（上櫃 {{ vz.tag(publish.tpex) }}）</div>
         {% if publish.reason %}<p class="text-xs text-amber-300 sm:col-span-2 xl:col-span-4 break-all">{{ publish.reason }}</p>{% endif %}
         {% if publish.error %}<p class="text-xs text-red-300 sm:col-span-2 xl:col-span-4 break-all">{{ publish.error }}</p>{% endif %}
-        <div class="sm:col-span-2 xl:col-span-4 text-xs" data-testid="publish-line">LINE 推送：{% for item in publish.line %}<span class="num mr-3">{{ item.key }} {{ item.state }}</span>{% else %}尚無推送紀錄{% endfor %}</div>
+        <div class="sm:col-span-2 xl:col-span-4 text-xs" data-testid="publish-line">LINE 推送：{% for item in publish.line %}<span class="mr-3 inline-block whitespace-nowrap" title="{{ item.key }}"><span class="num">{{ item.key.replace('_evening', ' 盤後').replace('_morning', ' 盤前') }}</span> {{ vz.tag(item.state) }}</span>{% else %}尚無推送紀錄{% endfor %}</div>
     </section>
     {% endif %}
     {% if selection is defined %}{% include '_stock_cards.html' %}{% endif %}
@@ -60,7 +61,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('dashboardSummary', () => ({
         summary: {}, recommendations: [], recommendationGroups: [], strategies: {}, system: {}, snapshot: {}, technical: {}, margin: {}, recommendationMeta: {}, recentSearches: [], recommendationLoading: true, recommendationError: '', refreshing: false, lastRefresh: '',
         async init() { this.loadRecentSearches(); await this.refresh(); },
-        async refresh() { this.refreshing = true; this.recommendationError = ''; await Promise.all([this.load('/api/market/summary', 'summary'), this.load('/api/strategies', 'strategies'), this.load('/api/market/system-status', 'system'), this.load('/api/market/snapshot', 'snapshot'), this.load('/api/market/technical', 'technical'), this.load('/api/market/margin', 'margin')]); await this.loadRecommendations(); this.lastRefresh = new Date().toLocaleString(); this.refreshing = false; },
+        async refresh() { this.refreshing = true; this.recommendationError = ''; await Promise.all([this.load('/api/market/summary', 'summary'), this.load('/api/strategies', 'strategies'), this.load('/api/market/system-status', 'system'), this.load('/api/market/snapshot', 'snapshot'), this.load('/api/market/technical', 'technical'), this.load('/api/market/margin', 'margin')]); await this.loadRecommendations(); this.lastRefresh = new Date().toLocaleString('sv-SE'); this.refreshing = false; },
         async load(url, key) { try { const response = await fetch(url); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || response.statusText); this[key] = payload || {}; } catch (error) { this[key] = { status: 'error', error: error.message }; } },
         async fetchRecommendation(id) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 10000); try { const response = await fetch('/api/market/recommendations?strategy=' + encodeURIComponent(id) + '&top_n=6', { signal: controller.signal }); const data = await response.json(); if (!response.ok) throw new Error(data.error || response.statusText); return {...data, strategy_id: id}; } catch (error) { return {strategy_id: id, error: controller.signal.aborted ? '查詢逾時' : (error.message || '資料無法載入')}; } finally { clearTimeout(timer); } },
         async loadRecommendations() { this.recommendationLoading = true; this.recommendationError = ''; const active = this.strategies.active || []; this.recommendationGroups = await Promise.all(active.map(id => this.fetchRecommendation(id))); this.updateRecommendations(); this.recommendationLoading = false; },
@@ -74,7 +75,7 @@ document.addEventListener('alpine:init', () => {
         number(value) { return value === null || value === undefined || value === '' ? '資料不可用' : Number(value).toLocaleString('zh-TW'); },
         strategyName(id) { const item = this.strategies.strategies?.find(item => item.strategy_id === id); return item ? (item.display_name_zh || item.display_name_en || id) : id; },
         stepName(alias) { return {'1_update':'更新資料', '2_run':'策略選股', '5_push':'推播通知'}[alias] || alias; },
-        breadthValue() { if (this.snapshot.error) return '資料載入失敗'; const data = this.snapshot.data?.breadth; return data ? `${data.up_ratio ?? '—'}% 上漲 / ${data.down_ratio ?? '—'}% 下跌` : 'UNKNOWN'; },
+        breadthValue() { if (this.snapshot.error) return '資料載入失敗'; const data = this.snapshot.data?.breadth; return data ? `${data.up_ratio ?? '—'}% 上漲 / ${data.down_ratio ?? '—'}% 下跌` : '未檢查'; },
         institutionalValue() { if (this.summary.error) return '資料載入失敗'; const state = this.summary.data?.institutional_sync; return state?.label || state?.state || '未檢查'; },
         marketApiStatus(payload) { if (payload?.error) return 'ERROR'; const status = String(payload?.status || 'unknown').toLowerCase(); return status === 'ok' ? 'NORMAL' : status === 'degraded' ? 'DEGRADED' : status === 'empty' ? 'EMPTY' : 'UNKNOWN'; },
         recommendationCount() { return this.recommendationLoading ? '載入中…' : this.recommendationError || this.recommendationMeta?.status === 'error' ? '資料暫不可用' : this.recommendationMeta?.freshness_status === 'stale' ? '資料已過期' : this.recommendations.length ? `${this.recommendations.length} 檔` : this.recommendationMeta?.status === 'empty' ? '無可用推薦' : '0 檔'; },
@@ -83,7 +84,7 @@ document.addEventListener('alpine:init', () => {
         recommendationStatus() { return this.recommendationMeta?.freshness_status === 'stale' ? 'STALE' : this.recommendationFallback() || this.recommendationMeta?.status === 'degraded' ? 'DEGRADED' : this.recommendationMeta?.status === 'error' ? 'ERROR' : this.recommendationMeta?.status === 'ok' ? 'NORMAL' : String(this.recommendationMeta?.status || 'UNKNOWN').toUpperCase(); },
         recommendationMessage() { return this.recommendationMeta?.freshness_status === 'stale' ? `推薦資料已過期；最新紀錄為 ${this.recommendationDate()}，目前不視為今日訊號。` : this.recommendationFallback() ? `顯示 ${this.recommendationDate()} 的回退資料，請勿視為最新訊號。` : this.recommendationMeta?.status === 'error' ? this.recommendationMeta?.warnings?.join('；') || '推薦資料暫時無法載入。' : this.recommendationMeta?.status === 'empty' ? `截至市場日 ${this.recommendationMeta?.as_of_date || '未知'}，尚無可用推薦資料。` : ''; },
         recommendationSource() { return this.recommendationFallback() ? '本機備援' : (this.recommendationMeta?.source || []).join(', ') || '資料來源不明'; },
-        strategyCount() { return this.strategies.active?.length ?? this.strategies.count ?? 'UNKNOWN'; },
+        strategyCount() { return this.strategies.active?.length ?? this.strategies.count ?? '—'; },
         systemLabel() { return this.system.status === 'ok' ? 'NORMAL' : this.system.status === 'degraded' ? 'DEGRADED' : 'UNKNOWN'; },
         pipelineSteps() { return this.system.data?.steps || []; },
         directionClass(direction) { return String(direction || '').includes('▼') || String(direction || '').toLowerCase().includes('sell') ? 'text-down' : direction ? 'text-up' : 'text-muted'; },

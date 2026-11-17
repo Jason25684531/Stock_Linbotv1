@@ -119,7 +119,7 @@ def test_dashboard_card_uses_the_push_gate_and_shows_line_states(monkeypatch, tm
     assert card['fresh'] is False and 'recommendations=2026-11-06' in card['reason'] and card['line'][0]['state'] == 'SENT'
     monkeypatch.setattr(platform_routes, 'publish_overview', lambda: card)
     html = app.test_client().get('/dashboard').get_data(as_text=True)
-    assert 'data-testid="publish-universe">TWSE_LISTED_ONLY<' in html and '2026-11-09_evening SENT' in html
+    assert 'data-code="TWSE_LISTED_ONLY"' in html and 'title="2026-11-09_evening"' in html and 'data-code="SENT"' in html
 
 
 def test_strategy_center_items_carry_the_reference_state_and_levels(out):

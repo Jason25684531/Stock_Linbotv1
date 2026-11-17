@@ -62,7 +62,7 @@ docker logs stock_ai_mysql --tail 30
 | `/system` | 系統狀態（讀取 `pipeline_runs`） |
 | `/callback` | LINE webhook（POST） |
 
-主要 API：`/api/daily-signals`、`/api/market/*`、`/api/stock-analysis`、`/api/strategies`、`/api/backtest/run`、`/api/performance`。`/api/dashboard/health-check?symbol=2330` 是個股健檢 API，不是容器的健康檢查端點。
+主要 API：`/api/daily-signals`、`/api/market/*`、`/api/stock-analysis`、`/api/strategies`、`/api/backtest/run`、`/api/performance`。`/api/dashboard/health-check?symbol=2330` 是個股健檢 API，不是容器的健康檢查端點 (not the container health endpoint)。
 
 ---
 
@@ -77,7 +77,7 @@ docker logs stock_ai_mysql --tail 30
    | `GEMINI_KEY`、`GEMINI_MODEL` | 選填 | 早晨新聞摘要 |
    | `DB_URL`、`MCP_BASE_URL`、`MODEL_PATH` | 主機 jobs 用 | 見下方範例 |
 
-   主機上執行 jobs 時，透過 `localhost` 連到容器。應用程式一律以 MySQL 的 `trader` user 連線，不用 root：
+   主機上執行 jobs 時，透過 `localhost` 連到容器。應用程式一律以 MySQL 的 trader user 連線，不用 root：
 
    ```text
    DB_URL=mysql+pymysql://trader:<password>@localhost:3306/stock_ai_db
@@ -162,8 +162,10 @@ app/ ── Flask :1688（Web 頁面、JSON API、LINE webhook /callback）
 
 - `jobs/update_database.py`：依市場範圍與資料來源更新股價、法人、月營收、季財報及融資融券，最後預熱 Dashboard 快取。
 - `jobs/run_daily.py`：執行啟用中的策略，寫入 `daily_recommendations`。當天沒有候選股時也會寫一筆 heartbeat。
-- `jobs/run_daily_backtest_validation.py`：輕量檢查，由 `ENABLE_DAILY_BACKTEST_VALIDATION`（預設關閉）和 `DAILY_BACKTEST_WINDOW_DAYS`（預設 60）控制。它只對小範圍股票做短窗口驗證，不是完整歷史回測，也不是參數最佳化。
+- `jobs/run_daily_backtest_validation.py`：輕量檢查，由 `ENABLE_DAILY_BACKTEST_VALIDATION`（預設關閉）和 `DAILY_BACKTEST_WINDOW_DAYS`（預設 60）控制。它只對小範圍股票做短窗口驗證，不是完整歷史回測，也不是參數最佳化 (not full historical research backtesting, not parameter optimization)。
 - `jobs/push_to_line.py`：LINE 推播。
+
+`daily` 的執行順序：`jobs/update_database.py` -> `jobs/run_daily.py` -> `jobs/run_daily_backtest_validation.py` -> `jobs/push_to_line.py`
 
 其他行為：
 

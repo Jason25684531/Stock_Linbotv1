@@ -82,6 +82,15 @@ def health_check():
     ), 200
 
 
+@app.errorhandler(404)
+def page_not_found(error):
+    """A missing page gets a way back. API paths keep the default answer; the template is rendered without the context
+    processors so a missing page never queries system status."""
+    if request.path.startswith('/api/'):
+        return error
+    return app.jinja_env.get_template('not_found.html').render(), 404
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Redirect existing login bookmarks to the public dashboard."""

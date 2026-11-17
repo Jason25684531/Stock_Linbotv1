@@ -22,7 +22,7 @@ import threading
 import time
 from typing import ClassVar
 from urllib.parse import quote_plus
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 try:
     from google import genai

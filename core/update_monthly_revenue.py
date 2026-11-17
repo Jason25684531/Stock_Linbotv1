@@ -6,7 +6,6 @@
 """
 import sys
 import os
-import requests
 import pandas as pd
 import time
 import random

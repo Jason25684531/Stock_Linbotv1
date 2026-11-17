@@ -1,5 +1,63 @@
 # Deletion Candidates
 
+## 2026-11-17 one-off scripts and unused imports
+
+Change: `openspec/changes/2026-11-17-readable-surface-and-dead-code-round`. Baseline `1a67729`. At the start of
+the removals the working tree held only this change's own frontend edits (9 paths).
+
+Gate G4b was added during this round after an independent review: the 87-file identity closure does not cover every stored record.
+`stored_hash_gate.py` searches 62,699 evidence files under `outputs/`, `docs/` and `openspec/` for the HEAD content hash (LF and CRLF)
+of each changed or removed file. A hit outside the whole-repository snapshots means a stored record identifies code by those bytes,
+so the file is kept. Results: `stored_hash_gate.txt` (before restore) and `stored_hash_gate_final.txt`.
+
+Gates (design D3): G1 no static reference outside the candidate; G2 no dynamic reference (`importlib`, `getattr`,
+string dispatch, `__all__`, scheduler `JobSpec`, `execution/*.bat`, `*.ps1`, compose files); G3 no compatibility
+surface, active skill, main spec or active change names it; G4 not in the research identity closure
+(`outputs/refactor/hygiene_20261117/pinned_before_cleanup.json`, 87 files, measured with `identity_probe.py`).
+
+Search: `rg --hidden --no-ignore -F <name>` over the repository excluding `.git`, `myenv`, `data`, `ML_Data`,
+`outputs`, `artifacts`, `__pycache__`; then a second pass over `outputs` and `docs` for `*.json`, `*.jsonl`, `*.py`,
+`*.bat`, `*.ps1`.
+
+| Candidate | Lines | G1 to G3 evidence | G4 | Decision |
+|---|---|---|---|---|
+| `scripts/mops_yoy_remediation.py` | 163 | Hits: archived 2026-10-24 changes only, plus a stale `.pytest_cache` id. No code, test, launcher or skill. | G4b hit: its content hash is in a stored research baseline or task state | KEEP (removed, then restored byte-exact) |
+| `scripts/strategy_assessment.py` | 113 | Hits: `docs/research/2026-11-09-.../FINAL_ACCEPTANCE_REPORT.md` (history). | not pinned | REMOVED |
+| `scripts/research_admission_inventory.py` | 93 | Hits: a 2026-10-30 delivery note and an archived change. | not pinned | REMOVED |
+| `scripts/verify_tquant_change.py` | 74 | Hits: the 2026-10-19 verification note and archived changes. Its sibling `verify_tquant_cli.py` was removed on 2026-11-11. | G4b hit: its content hash is in a stored research baseline or task state | KEEP (removed, then restored byte-exact) |
+| `scripts/verify_tquant_browser.py` | 43 | Same as above. | not pinned | REMOVED |
+| `scripts/verify_od29_browser.py` | 64 | No hit outside the file. | not pinned | REMOVED |
+| `scripts/verify_data_readiness_browser.py` | 64 | Hits: a 2026-11-09 verification report and an archived change. | G4b hit: its content hash is in a stored research baseline or task state | KEEP (removed, then restored byte-exact) |
+| `scripts/verify_strategy_revalidation.py` | 61 | Hit: one archived verification note. | G4b hit: its content hash is in a stored research baseline or task state | KEEP (removed, then restored byte-exact) |
+| `scripts/mops_sample_check.py` | 247 | Named by the active skill `.claude/skills/data-audit/SKILL.md`. Fails G3. | not pinned | KEEP |
+| `scripts/engine_fix_baseline.py` | 65 | Named by a SHALL clause in `openspec/specs/backtest-corporate-action-accounting/spec.md:84`. Fails G3. | not pinned | KEEP |
+| `scripts/validate_fundamental_production_integration.py` | 221 | Operator validation client of `/api/daily-signals`; the active 2026-11-11 design lists it as a route consumer. Fails G3. | not pinned | KEEP |
+| 5 imported names in 4 files: `core/calc_indicators.py` (`_get_engine`), `core/news_agent.py` (`urlopen`), `core/update_monthly_revenue.py` (`requests`), `jobs/push_to_line.py` (`text`, `get_daily_recommendations`) | 5 | `pyflakes` unused; `unused_import_gate.py` finds no import, attribute use, dotted patch string or `setattr` from another file; full suite passes. G4b: their hashes appear only in whole-repository snapshots. | not pinned, G4b clear | REMOVED |
+| 20 imported names in 16 files (`core/research/**`, `core/runtime/fundamental_*.py`, `core/crawlers/quarterly_scraper.py`, `core/line_message_builder.py`, `jobs/run_daily.py`, `jobs/run_*validation.py`, `jobs/run_strategy_search.py`, `jobs/train_model.py`, `jobs/run_fundamental_pit_v3.py`, `jobs/run_factor_validation.py`) | about 25 | Removed, then restored byte-exact after the independent review: G4b finds their content hashes in run manifests and research baselines, for example `core/research/selection/universe.py` in 519 records. | G4b hit | KEEP |
+| `core/crawlers/chip_data_scraper.py::requests` | 1 | The gate passed it, then the full suite failed: `test/test_ingestion_source_contract.py:171` patches `chip.requests.get` through a module alias the gate does not see. Restored. | not pinned | KEEP |
+| `v31` to `v38` strategy aliases, `jobs/run_backtest.py::_seed_backtest_rng`, `services/mcp/server.py::requests` | — | Each has an importer or a test patch target. Compatibility surface. | — | KEEP |
+| Star re-exports in `core/research/*.py` and `jobs/run_backtest.py` | — | Facades. | — | KEEP |
+
+The stored evidence files that list the four removed scripts are source inventories and hash manifests
+(`outputs/final_system_acceptance/*`, `outputs/architecture_audit_20261116/baseline.json`,
+`outputs/research_repair/*/tracked_sha256.json`, `outputs/research_workflow/2026-10-29/*/preflight.json`,
+`outputs/dual_track_validation/2026-10-23/final_closure/*`). `scripts/system_acceptance_backup.py::restore` checks
+each backup ZIP against its own manifest, not against the live tree, and the ZIP still contains these scripts.
+Those records stay unchanged as history.
+
+Not decided here, left for the Owner (about 4,400 lines, see `outputs/refactor/hygiene_20261117/dead_code_report.md`):
+`scripts/research_v6_audit.py`, `scripts/research_h4_final.py`, `scripts/research_fundamental_g2g3.py`,
+`jobs/run_portfolio_validation.py`, `scripts/system_acceptance_{reports,inventory,data,web}.py`,
+`core/update_history_financials.py`, `verify_market_update.py`, `jobs/recover_research_universe.py`,
+`scheduler/market_update_task.ps1`, `scripts/research_h4_hist_fetch.py`, `scripts/research_h4_fund_recovery.py`,
+about 45 unused imports inside `scripts/` files that hash manifests record, `STRATEGY_V4_DELIVERY.md`,
+`WebUIUXDesign_ref/`, the empty root `static/`, `specs/`, root `ledger.jsonl`, and 25 modules referenced only by
+their own tests. Single-implementation seams (`FundamentalRuntimeAdapter`, `FingerprintProvider`,
+`FrozenIdentityProvider`, two chart wrappers) are reported and kept (design D4).
+
+Rollback: `git checkout 1a67729 -- <path>` for each removed script; revert the import edits per file.
+Verification: full offline suite, pinned-hash comparison, `git diff --check`, strict validation, live page walk.
+
 ## 2026-11-02 zero-reference symbols and one-off scripts
 
 Change: `openspec/changes/2026-11-02-architecture-hygiene-dead-code-audit`. Baseline `cd5b044`.

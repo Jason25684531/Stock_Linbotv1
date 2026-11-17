@@ -32,7 +32,7 @@
 <script id="vf-report-data" type="application/json">{{ {'dates': view.dates, 'nav': view.nav}|tojson }}</script>
 
 <div class="vf-grid vf-two">
-  <section class="vf-card" data-testid="health"><div class="vf-spread"><h2>策略體檢</h2><span class="vf-small vf-muted num">{{ 'VERIFIED ' ~ view.verified_span|join('～') if view.verified else '全期暫定' }}</span></div>
+  <section class="vf-card" data-testid="health"><div class="vf-spread"><h2>策略體檢</h2><span class="vf-small vf-muted" title="{{ 'VERIFIED' if view.verified else 'PROVISIONAL' }}">{{ '可信期間 ' ~ view.verified_span|join('～') if view.verified else '全期暫定' }}</span></div>
     {% for h in view.health %}<div class="vf-check" data-testid="health-{{ h.key }}"><div><strong>{{ h.question }}</strong>
       <p class="vf-small vf-muted">{% if h.lead %}{{ h.lead.name }} {{ iu.mv(h.lead.value, iu.health_kind.get(h.lead.name, 'num')) }}{% else %}沒有保存的項目{% endif %}</p></div>{{ vz.tag(h.status) }}</div>{% endfor %}
   </section>

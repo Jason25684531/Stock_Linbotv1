@@ -761,7 +761,7 @@ def fix_database_indicators():
     
     # 3. 安全寫回資料庫（使用 batch UPDATE，不 DROP 表）
     print("💾 正在升級資料庫 (批次更新指標欄位)...")
-    from core.db_helper import get_db_engine as _get_engine, ensure_indicator_columns
+    from core.db_helper import ensure_indicator_columns
     from sqlalchemy import text as _text
     
     # 確保欄位存在（自動 ALTER TABLE ADD COLUMN）

@@ -1,7 +1,9 @@
 /* Local utilities used by the research platform; its pages make no CDN requests. */
 * { box-sizing: border-box; }
 html, body { width: 100%; min-width: 0; }
-body { font-family: Arial, "Microsoft JhengHei", sans-serif; }
+body { font-family: "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif; }
+a { text-decoration: none; }
+body .num { font-family: "JetBrains Mono", Consolas, "Cascadia Mono", monospace; }
 main { width: 100%; max-width: 1500px; margin: 0 auto; padding: 1.25rem 1rem 6rem; }
 aside.desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); background: var(--bg-secondary); }
 aside.desktop-sidebar > a { display: flex; height: 5rem; align-items: center; gap: .75rem; border-bottom: 1px solid var(--border-color); padding: 0 1rem; }

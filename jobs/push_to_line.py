@@ -26,7 +26,6 @@ if sys.platform == 'win32':
 import argparse
 import pandas as pd
 from datetime import datetime
-from sqlalchemy import text
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi,
     TextMessage, FlexMessage, FlexBubble, FlexBox, FlexText, FlexCarousel,
@@ -37,7 +36,6 @@ from core.db_helper import (
     format_market_fallback_notice,
     get_actual_latest_date,
     get_db_engine,
-    get_daily_recommendations,
     get_market_trend,
     get_recommendations_with_market_fallback,
     get_stock_data,
