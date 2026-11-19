@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_viz.html" import tag, pct, line %}
+{% block title %}核心衛星研究 - Stock Linbot{% endblock %}
+{% block page_kicker %}回測分析{% endblock %}
+{% block page_heading %}核心衛星研究結果{% endblock %}
+{% block content %}
+{% set gate = {'NO_CHARTER': '尚未登記研究章程，這一輪還沒有任何預先登記的假說。',
+               'NO_DATA': '資料關卡未開：月營收與 0050 資料還沒建置（python -m scripts.strategy_v7_program data）。',
+               'NO_RESULTS': '資料已就緒，但還沒有跑完的結果。',
+               'CHAIN_BROKEN': '登錄或章程的雜湊連鎖不符。為避免顯示被改過的結果，本頁不顯示任何數字。'} %}
+<div class="space-y-5" data-testid="research-portfolio">
+{% for program, research in programs %}
+{% set th = research.thresholds %}
+<section class="space-y-5" data-testid="program-{{ program }}">
+    <h2 class="text-lg font-semibold">{{ program }} 研究結果</h2>
+    {% if research.labels or research.outcome %}<section class="vf-card" data-testid="research-labels"><p class="vf-row">{% for label in research.labels %}{{ tag(label) }} {% endfor %}{% if research.outcome %}<span>研究結論：</span>{{ tag(research.outcome) }}{% endif %}</p></section>{% endif %}
+    {% if th %}<section class="vf-card"><p class="vf-small">目標（預先登記，不可事後調整）：年化 ≥ {{ '%.0f'|format(th.base_cagr * 100) }}%，加倍成本後 ≥ {{ '%.0f'|format(th.stress_cagr * 100) }}%，最大回撤不深於 {{ '%.0f'|format(th.max_drawdown * 100) }}%。這是看過歷史資料的開發研究，不是投資建議；本頁只讀取已存檔的結果，不會觸發計算。</p></section>{% endif %}
+    {% if research.state in gate %}<section class="vf-card" data-testid="research-gate"><p>{{ gate[research.state] }}</p></section>{% endif %}
+    {% if research.invalid %}<section class="vf-card" data-testid="research-invalid"><p><span class="vf-tag vf-mid">注意</span> 以下結果檔與登記的雜湊不符，不予顯示：{{ research.invalid|join('、') }}</p></section>{% endif %}
+    <div class="vf-grid">
+    {% for c in research.cells %}
+        <article class="vf-card" data-testid="research-cell">
+            <header class="vf-row"><strong class="num">{{ c.hypothesis }}:{{ c.variant }}</strong> <span class="vf-small">{{ '保留期' if c.window == 'holdout' else '開發期' }} {{ c.span|join('–') }}{% if c.proxy %}（代理：無驗證區間）{% endif %}</span>
+                {{ tag(c.verdict) }}{% if c.failure %} {{ tag(c.failure) }}{% endif %}</header>
+            {% if c.span_mismatch %}<p class="vf-small" data-testid="span-mismatch"><span class="vf-tag vf-mid">注意</span> 實際只涵蓋 {{ c.covered.start }} 至 {{ c.covered.end }}（{{ '%.1f'|format(c.covered.years) }} 年），短於登錄區間；下方數字不能和其他格或大盤直接比較。</p>{% endif %}
+            {% if c.excluded_years %}<p class="vf-small" data-testid="span-cut"><span class="vf-tag vf-mid">注意</span> 只計入資料可信的年度 {{ c.span|join('–') }}；未計入 {{ c.excluded_years|join('、') }}。這些年份的漲跌不在下方數字內，所以這一格的判定（{{ tag(c.verdict) }}）只依據已計入的年度，不能當作接近目標的證據{% if c.diagnostic_drawdown is not none %}；同一次執行在登錄區間 {{ c.window_span|join('–') }} 的診斷回撤是 {{ pct(c.diagnostic_drawdown) }}（非登錄結果，只用來避免誤讀）{% endif %}。</p>{% endif %}
+            <dl class="vf-row">
+                <div><dt class="vf-small">年化報酬</dt><dd>{{ pct(c.cagr) }}</dd></div>
+                <div><dt class="vf-small">成本加倍後</dt><dd>{{ pct(c.cagr_stress) }}</dd></div>
+                <div><dt class="vf-small">最大回撤</dt><dd>{{ pct(c.max_drawdown) }}</dd></div>
+                <div><dt class="vf-small">加倍成本回撤</dt><dd>{{ pct(c.max_drawdown_stress) }}</dd></div>
+            </dl>
+            {% if c.benchmark and not c.span_mismatch %}<p class="vf-small" data-testid="benchmark">同期大盤：年化 {{ pct(c.benchmark.cagr) }}，最大回撤 {{ pct(c.benchmark.max_drawdown) }}</p>{% endif %}
+            {% if c.targets_met %}<p class="vf-small">三項目標皆達成。</p>
+            {% elif c.gaps %}<p class="vf-small">距目標：{% for g in c.gaps %}{{ {'cagr': '年化', 'stress': '成本後', 'drawdown': '回撤'}[g.name] }}還差 {{ '%.1f'|format(g.gap * 100) }} 個百分點{% if not loop.last %}；{% endif %}{% endfor %}</p>
+            {% else %}<p class="vf-small" data-testid="not-evidence"><span class="vf-tag vf-mid">注意</span> 未判定為達標：{{ tag(c.verdict) }}{% if c.failure %} {{ tag(c.failure) }}{% endif %}。數字沒有顯示缺口，但這一格不能當作達標證據。</p>{% endif %}
+            {% if c.spark %}<p class="vf-small">淨值（起點 = 1，成本為基本成本）</p>{% endif %}
+            {{ line(c.spark, 240, 48, 'vf-line-up', '淨值走勢') }}
+            {% if c.drawdown_spark %}<p class="vf-small">距前高回撤（0% 在最上方）</p>{% endif %}
+            {{ line(c.drawdown_spark, 240, 48, 'vf-line-down', '回撤走勢') }}
+            <details><summary class="vf-small">證據</summary>
+                <p class="vf-small num">{% if c.closed_trades %}交易 {{ c.closed_trades }} 筆；{% endif %}持有時間占比 {{ pct(c.invested_session_share, signed=False) }}；Run {{ c.run_identity }}</p>
+                {% if c.note %}<p class="vf-small">{{ c.note }}</p>{% endif %}
+            </details>
+        </article>
+    {% endfor %}
+    </div>
+</section>
+{% endfor %}
+</div>
+{% endblock %}

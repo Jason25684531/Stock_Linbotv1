@@ -1,5 +1,26 @@
 # Deletion Candidates
 
+## 2026-11-18 V5 and V6 scratch scripts
+
+Change: `openspec/changes/2026-11-18-core-satellite-portfolio-v7`, task 6.2 and 6.3. These files live under `outputs/` and are not tracked, so a
+git revert cannot restore them: they were first written to `outputs/strategy_v7/scratch_removed_20261118.zip` and the archive was checked entry by entry
+against the files' SHA-256 before anything was deleted.
+
+Gates: G1 no static reference (`grep -rI` for the file name over `outputs/strategy_v5`, `outputs/strategy_v6`, `outputs/strategy_v7`, `docs`, `openspec/changes`, `scripts`, `test`, `jobs`, `core`, `app`, `services`, `.claude`); G2 nothing imports or launches it; G3 no active skill, spec or change names it; G4 not in the pinned research identity closure; G4b no stored record under those folders contains the file's SHA-256. The search stayed inside those folders because a scan of all of `outputs/` did not finish in 280 seconds; the scripts are helpers of one program each, so a record outside the program's own folder is not expected.
+
+| Candidate | Lines | Evidence | Decision |
+|---|---|---|---|
+| `outputs/strategy_v5/tick.py`, `retick.py`, `v2_durations.py` | 15, 15, 14 | No hit outside the file; hash not recorded | REMOVED |
+| `outputs/strategy_v6/tick.py` | 15 | No hit; the V7 apply used a scratchpad script | REMOVED |
+| `outputs/strategy_v6/patch_runner.py`, `patch_report.py`, `patch_best.py` | 9, 10, 23 | One-off edit scripts; no hit except each other's section file | REMOVED |
+| `outputs/strategy_v6/runner_section.py`, `report_section.py` | 206, 138 | Source text those patch scripts inserted into `scripts/strategy_v6_program.py`; the text now lives there | REMOVED |
+| `outputs/strategy_v5/cache_key_check.py`, `restore_calc_indicators.py` | 18, 17 | Named in `outputs/strategy_v5/decisions.tsv` and `guard.py` | KEEP |
+| `outputs/strategy_v6/cache_equivalence.py`, `h1_recheck.py` | 37, 20 | Each produced a stored evidence file (`cache_equivalence.json`, `h1_recheck.json`) that the report cites | KEEP |
+| `outputs/strategy_v5/guard.py`, `outputs/strategy_v6/guard.py`, `outputs/strategy_v7/guard.py` | — | The guard of each program; named by the final-guard evidence | KEEP |
+| `outputs/strategy_v7/cache_equivalence.py` | 37 | A copy of the V6 script that wrote V7's own `cache_equivalence.json` | KEEP (evidence generator) |
+
+Total removed: 9 files, 445 lines. Rollback: extract the files from the archive. The standing items the Owner has not decided (about 4,400 lines, listed in the 2026-11-17 section below) were not touched.
+
 ## 2026-11-17 one-off scripts and unused imports
 
 Change: `openspec/changes/2026-11-17-readable-surface-and-dead-code-round`. Baseline `1a67729`. At the start of

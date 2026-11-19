@@ -80,9 +80,9 @@
         'strategy_v4_index': 'strategy_center', 'strategy_v4_detail': 'strategy_center', 'intelligence_forward': 'strategy_center',
         'backtest_runs': 'backtest', 'backtest_run_detail': 'backtest', 'multi_strategy_report': 'backtest', 'lab_combinations': 'backtest',
         'platform_backtest': 'backtest', 'platform_run': 'backtest', 'platform_portfolio': 'backtest', 'platform_portfolio_run': 'backtest',
-        'intelligence_portfolio': 'backtest', 'admin_data': 'system_status_page', 'platform_system': 'system_status_page'} %}
+        'intelligence_portfolio': 'backtest', 'research_portfolio': 'backtest', 'admin_data': 'system_status_page', 'platform_system': 'system_status_page'} %}
     {% set section_tabs = {
-        'backtest': [('backtest', '執行回測'), ('backtest_runs', '歷史 Run'), ('platform_backtest', '研究回測'), ('platform_portfolio', '策略組合'), ('lab_combinations', '組合研究')],
+        'backtest': [('backtest', '執行回測'), ('backtest_runs', '歷史 Run'), ('platform_backtest', '研究回測'), ('platform_portfolio', '策略組合'), ('lab_combinations', '組合研究'), ('research_portfolio', '核心衛星研究')],
         'system_status_page': [('system_status_page', '排程'), ('admin_data', '資料'), ('platform_system', '研究工作')]} %}
     {% set active = primary_of.get(request.endpoint, request.endpoint or '') %}
     <div class="min-h-screen">

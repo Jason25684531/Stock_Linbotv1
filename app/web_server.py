@@ -1389,6 +1389,14 @@ def system_status_page():
     return render_template('system.html', system_payload=payload, pipeline_steps=steps, system_components=components)
 
 
+@app.route('/backtest/research')
+def research_portfolio():
+    """研究組合結果頁（V7、V8，唯讀，不觸發任何計算）。"""
+    from services import research_portfolio as portfolio
+
+    return render_template('research_portfolio.html', programs=portfolio.programs())
+
+
 @app.route('/backtest', methods=['GET', 'POST'])
 def backtest():
     """回測頁面。"""
